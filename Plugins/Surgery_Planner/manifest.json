@@ -1,0 +1,38 @@
+{
+  "name": "Surgery_Planner",
+  "display_name": "Surgery Planner (OP Planner)",
+  "version": "0.1.0",
+  "description": "Automated surgery and embryo transfer scheduling plugin. Provides a Gantt-chart-based planner with configurable recovery rules, weekday constraints, blocked days, animal eligibility filtering, manual adjustments, calendar highlighting, and export to CSV, Excel, PNG, and JSON.",
+  "author": "DLL",
+  "SPDX-License-Identifier": "GPL-3.0-or-later",
+  "Copyright": "Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH",
+  "entry_point": "surgery_planner.SurgeryPlannerPlugin",
+  "dependencies": [
+    "PyQt6",
+    "pyqtgraph"
+  ],
+  "data_files": [
+    "Surgery_Planner.block-days.json",
+    "Surgery_Pre_Planner.schedule.json",
+    "Surgery_Planner.schedule.json",
+    "surgery_planner.config.json",
+    "surgery_planner.schedule.json"
+  ],
+  "min_progtrack_version": "RC 0.1.0",
+  "menu_location": "Tools",
+  "icon": "progtrack_icon.ico",
+  "optional": true,
+  "features": [
+    "surgery_transfer_scheduling",
+    "gantt_chart_planning",
+    "recovery_rule_configuration",
+    "weekday_constraints",
+    "blocked_days_management",
+    "animal_eligibility_filtering",
+    "manual_schedule_adjustments",
+    "calendar_highlighting",
+    "csv_excel_png_json_export"
+  ],
+  "warranty": "NO WARRANTY",
+  "disclaimer": "The plugin and documentation are provided without warranty to the extent permitted by law. No warranty is given for completeness, correctness, fitness for a particular purpose, or suitability for scientific, clinical, regulatory, or operational decisions."
+}

@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ProgTrack – User Guide</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 1100px;
+      margin: 2rem auto;
+      padding: 0 1.5rem 3rem;
+      line-height: 1.5;
+      color: #222;
+      background: #fafafa;
+    }
+    h1, h2, h3, h4 {
+      color: #14375a;
+      margin-top: 2rem;
+    }
+    h1 { margin-top: 0; }
+    nav.toc {
+      background: #fff;
+      border: 1px solid #ddd;
+      padding: 1rem 1.5rem;
+      border-radius: 6px;
+      margin-bottom: 2rem;
+    }
+    nav.toc ol { margin: 0 0 0 1.2rem; padding: 0; }
+    nav.toc li { margin: .2rem 0; }
+    code, kbd {
+      font-family: "Consolas", "SF Mono", Menlo, monospace;
+      font-size: 0.95em;
+      background: #f3f3f3;
+      padding: 0 0.2em;
+      border-radius: 3px;
+    }
+    kbd {
+      border: 1px solid #ccc;
+      box-shadow: 0 1px 0 #ccc;
+      padding: 0.1em 0.3em;
+    }
+    .hint {
+      background: #eef6ff;
+      border-left: 4px solid #4285f4;
+      padding: 0.6rem 0.9rem;
+      margin: 1rem 0;
+      width: 50%;
+      font-size: 0.95em;
+    }
+    .hint::before {
+      content: "";
+      display: block;
+      float: left;
+      width: 60px;
+      height: 60px;
+      margin-right: 0.6rem;
+      margin-bottom: 0.3rem;
+      background: url('../icons/information.png') no-repeat center center;
+      background-size: contain;
+    }
+    .warning {
+      background: #fff7e5;
+      border-left: 4px solid #f4b400;
+      padding: 0.6rem 0.9rem;
+      margin: 1rem 0;
+      width: 50%;
+      font-size: 0.95em;
+    }
+    .warning::before {
+      content: "";
+      display: block;
+      float: left;
+      width: 60px;
+      height: 60px;
+      margin-right: 0.6rem;
+      margin-bottom: 0.3rem;
+      background: url('../icons/warning.png') no-repeat center center;
+      background-size: contain;
+    }
+    .danger {
+      background: #ffecec;
+      border-left: 4px solid #d93025;
+      padding: 0.6rem 0.9rem;
+      margin: 1rem 0;
+      width: 50%;
+      font-size: 0.95em;
+    }
+    .danger::before {
+      content: "";
+      display: block;
+      float: left;
+      width: 60px;
+      height: 60px;
+      margin-right: 0.6rem;
+      margin-bottom: 0.3rem;
+      background: url('../icons/error.png') no-repeat center center;
+      background-size: contain;
+    }
+    .danger-deletion::before {
+      background: url('../icons/deletion.png') no-repeat center center;
+      background-size: contain;
+    }
+    .section-icon {
+      vertical-align: middle;
+      height: 60px;
+      width: auto;
+      margin-right: 0.4rem;
+    }
+    .inline-icon {
+      vertical-align: text-bottom;
+      width: 60px;
+      height: 60px;
+      margin: 0 0.25rem;
+    }
+    table.basic {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 0.75rem 0 1.25rem;
+      background: #fff;
+    }
+    table.basic th, table.basic td {
+      border: 1px solid #ddd;
+      padding: 0.4rem 0.6rem;
+      text-align: left;
+      vertical-align: top;
+      font-size: 0.95em;
+    }
+    table.basic th {
+      background: #f3f3f3;
+      font-weight: 600;
+    }
+    ul, ol { margin-top: 0.2rem; }
+    li { margin: 0.15rem 0; }
+  </style>
+</head>
+<body>
+  <nav class="language-switcher">
+    <a href="ProgTrack_User_Guide - en.html">EN</a> |
+    <a href="ProgTrack_User_Guide - de.html">DE</a> |
+    <a href="ProgTrack_User_Guide - ru.html">RU</a> |
+    <a href="ProgTrack_User_Guide - it.html">IT</a>
+  </nav>
+  <h1><img src="../icons/Splash.png" alt="" class="section-icon" />ProgTrack – User Guide</h1>
+  <p>
+    ProgTrack is an interactive application for tracking hormone levels, weights,
+    surgeries and reproductive events in laboratory animals. It visualizes time
+    series, enforces animal-specific limits, and provides planning and reporting
+    tools through optional plugins.
+  </p>
+
+  <nav class="toc" id="toc">
+    <strong>Contents</strong>
+    <ol>
+      <li><a href="#intro">Introduction &amp; key concepts</a></li>
+      <li><a href="#start">Starting ProgTrack &amp; data files</a></li>
+      <li><a href="#ui-overview">User interface overview</a></li>
+      <li><a href="#animals">Managing animals</a></li>
+      <li><a href="#measurements">Measurements &amp; importing data</a></li>
+      <li><a href="#plots">Plots &amp; data exploration</a></li>
+      <li><a href="#language-style">Language &amp; appearance</a></li>
+      <li><a href="#saving-export">Saving &amp; exporting</a></li>
+      <li><a href="#plugins">Plugins and modules</a></li>
+      <li><a href="#troubleshooting">Troubleshooting &amp; tips</a></li>
+      <li><a href="#license">Copyright and license notice</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="intro">1. Introduction &amp; key concepts</h2>
+  <p>
+    ProgTrack is built around individual animals. For each animal you can record
+    hormone measurements (blood progesterone, urine PdG), weights, sperm
+    parameters, operations and reproductive events. Data are visualized as
+    time-series plots and summarized in statistics.
+  </p>
+  <p>Important concepts:</p>
+  <ul>
+    <li><strong>Animal</strong> – one record in the left sidebar. Each animal has
+      a unique name and a specific role.</li>
+    <li><strong>Role</strong> – determines how the animal is used (e.g.
+      <em>Egg Donor</em>, <em>Surrogate</em>, <em>Sperm Donor</em>,
+      <em>Offspring</em>, <em>Partner</em>, <em>Breeding Animal</em>) and which
+      limits apply.</li>
+    <li><strong>Measurements</strong> – time-stamped data for progesterone,
+      PdG, weights and sperm quality.</li>
+    <li><strong>Events</strong> – operations, embryo transfers, pregnancies,
+      births, PGF/FSH injections and other reproductive events.</li>
+    <li><strong>Plugins</strong> – optional modules for advanced planning,
+      reporting, embryo tracking and team communication.</li>
+  </ul>
+<div class="hint">
+    <strong>Current structure:</strong> ProgTrack is modular. The core program owns the animal database, plots, imports, language/style settings, and the main tab shell. Plugins add tabs, dialogs, permission gates, report tools, and workflow-specific data stores. Some modules are full tabs, some are separate windows, and some are feature gates which enable additional controls.
+  </div>
+
+
+  <h2 id="start">2. Starting ProgTrack &amp; data files</h2>
+  <h3>2.1 Starting the program</h3>
+  <ul>
+    <li>Open <code>Launcher.exe</code> in the portable ProgTrack folder.</li>
+    <li>The launcher starts the first <code>ProgTrack.v.*.py</code> file it finds beside itself, in natural filename order. An explicit script can be passed with <code>--script</code>.</li>
+    <li>Keep <code>Plugins</code>, <code>icons</code>, <code>lang</code>, <code>manual</code>, and the active payload script beside <code>Launcher.exe</code>.</li>
+    <li>The compiled launcher already contains the required Python runtime; users of the portable bundle do not need to install Python packages.</li>
+  </ul>
+  <div class="hint"><strong>Tip:</strong> If the application does not start, check <code>launcher_error.log</code> and <code>launcher_fault.log</code> in the launcher folder.</div>
+  
+  <h3>2.2 Data and settings files</h3>
+  <p>ProgTrack stores data in JSON files in the program or working directory:</p>
+  <table class="basic">
+    <tr><th>File</th><th>Purpose</th></tr>
+    <tr><td><code>progtrack_daten.json</code></td><td>Main animal and
+      measurement database.</td></tr>
+    <tr><td><code>progtrack_settings.json</code></td><td>User interface and
+      plotting settings (language, colors, styles, etc.).</td></tr>
+  </table>
+
+  <div class="warning">
+    <strong>Do not edit these JSON files by hand</strong> unless you know
+    exactly what you are doing. Use the ProgTrack UI instead.
+  </div>
+
+  <div class="hint">
+    <strong>Tip:</strong> For safe manual backups, close ProgTrack and then copy <code>progtrack_daten.json</code>, <code>progtrack_settings.json</code> or the whole ProgTrack folder to a protected location.
+  </div>
+
+  <h3>2.3 Sample Excel files</h3>
+  <p>
+    The ProgTrack folder may contain example Excel files
+    (<code>Real_Blut.xlsx</code>, <code>Real_Urine.xlsx</code>,
+    <code>Real_Sperma.xlsx</code>, <code>Real_Gewichtel.xlsx</code>).
+    These show the expected structure for importing measurements.
+  </p>
+
+  <h2 id="ui-overview">3. User interface overview</h2>
+  <p>The main window is organized as follows:</p>
+  <ul>
+    <li><strong>Menu bar</strong> – File, Tools, Settings (Language &amp; Style),
+      Info (About the Program).</li>
+    <li><strong>Left sidebar</strong> – lists available and archived animals,
+      provides filters by cycle phase and quick actions (new, edit, import,
+      archive, restore, delete).</li>
+    <li><strong>Main area</strong> – usually two top-level tabs:
+      <em>Plots</em> (time-series graphics) and, if the Animal Reports plugin is
+      installed, <em>Reports</em> (per-animal PDF-style summaries).</li>
+    <li><strong>Status bar</strong> – messages about imports, errors and
+      processing steps. When the Master Track plugin is installed, the status
+      bar also shows the current user and login state (or &ldquo;Guest&rdquo;
+      in read-only mode). Click the status label to access a quick menu for
+      login, logout or password change.</li>
+  </ul>
+
+  <h3>3.1 Sidebar categories</h3>
+  <p>The category bar filters the animal list by workflow role. Empty role categories are hidden automatically; the All category remains available for overview and role correction. Female phase filters are shown only when Steroid Track is active.</p>
+  <table class="basic"><tr><th>Category</th><th>Meaning</th></tr>
+  <tr><td><strong>♀</strong></td><td>Egg donors &amp; surrogates</td></tr>
+  <tr><td><strong>♂</strong></td><td>Sperm donors</td></tr>
+  <tr><td><strong>👶</strong></td><td>Offspring</td></tr>
+  <tr><td><strong>🐾</strong></td><td>Partners</td></tr>
+  <tr><td><strong>⚤</strong></td><td>Breeding animals</td></tr>
+  <tr><td><strong>💡</strong></td><td>Experimental animals</td></tr>
+  <tr><td><strong>All</strong></td><td>All animals</td></tr>
+  </table>
+
+  <h3>3.2 Sidebar actions</h3>
+  <p>Buttons are context-sensitive: import buttons appear only where the active role and installed plugins can use them. The labels below are the labels from the active language file.</p>
+  <table class="basic"><tr><th>Button</th><th>Use</th></tr>
+  <tr><td><strong>➕ New Animal</strong></td><td>Create a new record.</td></tr>
+  <tr><td><strong>✏️ Edit</strong></td><td>Open the full editor for the selected animal.</td></tr>
+  <tr><td><strong>🫥 Edit Role</strong></td><td>Change role/category in the All view.</td></tr>
+  <tr><td><strong>📈 Load Blood Values</strong></td><td>Import blood progesterone values.</td></tr>
+  <tr><td><strong>📉 Load Urine Values</strong></td><td>Import urine PdG values.</td></tr>
+  <tr><td><strong>🎈 Load Sperm Values</strong></td><td>Import sperm measurements.</td></tr>
+  <tr><td><strong>⚖️ Load Weights</strong></td><td>Import weight measurements.</td></tr>
+  <tr><td><strong>📦 Archive</strong></td><td>Archive selected animals.</td></tr>
+  <tr><td><strong>⤴️ Restore</strong></td><td>Restore archived animals.</td></tr>
+  <tr><td><strong>🗑️ Delete</strong></td><td>Delete archived animals permanently.</td></tr>
+  </table>
+
+  
+  <h2 id="animals">4. Managing animals</h2>
+
+  <h3>4.1 Creating records</h3>
+  <p>Use the sidebar action to create a record. In the All category ProgTrack asks for the role first, then opens the matching editor. Required fields depend on the role; optional ID, project, origin, genotype, parent, housing, and limit fields are shown where relevant.</p>
+  <p><strong>➕ New Animal</strong> · <strong>Select Role</strong> · <strong>Save</strong></p>
+
+  <h3>4.2 Animal roles and category-specific editors</h3>
+  <p>The role determines which editor and data tabs are shown. Steroid-specific roles and controls are available only while Steroid Track is enabled.</p>
+  <table class="basic"><tr><th>Role label</th><th>Workflow role</th></tr>
+  <tr><td><strong>Egg Donor</strong></td><td>Egg donor / female donor</td></tr>
+  <tr><td><strong>Surrogate</strong></td><td>Surrogate / embryo recipient</td></tr>
+  <tr><td><strong>Sperm Donor</strong></td><td>Sperm donor</td></tr>
+  <tr><td><strong>Offspring</strong></td><td>Offspring</td></tr>
+  <tr><td><strong>Partner</strong></td><td>Partner animal</td></tr>
+  <tr><td><strong>Breeding Animal</strong></td><td>Breeding animal</td></tr>
+  <tr><td><strong>Experimental Animal</strong></td><td>Experimental animal</td></tr>
+  </table>
+
+  <h3>4.3 Editing data</h3>
+  <p>Select an animal and use the edit action. In the All category, Edit Role changes only the role/category; the separate Edit action opens the full role-specific editor.</p>
+  <p><strong>✏️ Edit</strong> · <strong>🫥 Edit Role</strong></p>
+  <table class="basic"><tr><th>Editor tab</th><th>Use</th></tr>
+  <tr><td><strong>Progesterone</strong></td><td>Shown when relevant for the selected role and installed modules.</td></tr>
+  <tr><td><strong>PdG</strong></td><td>Shown when relevant for the selected role and installed modules.</td></tr>
+  <tr><td><strong>Unified Prog.</strong></td><td>Shown when relevant for the selected role and installed modules.</td></tr>
+  <tr><td><strong>Weight</strong></td><td>Shown when relevant for the selected role and installed modules.</td></tr>
+  <tr><td><strong>Events</strong></td><td>Shown when relevant for the selected role and installed modules.</td></tr>
+  <tr><td><strong>Operations</strong></td><td>Shown when relevant for the selected role and installed modules.</td></tr>
+  <tr><td><strong>PGF</strong></td><td>Shown when relevant for the selected role and installed modules.</td></tr>
+  </table>
+
+  <h3>4.4 Archiving, restoring, and deleting</h3>
+  <p>Archive keeps data but removes the animal from routine active views. Restore moves an archived animal back. Delete is available for archived animals and permanently removes that record from the database.</p>
+  <p><strong>📦 Archive</strong> · <strong>⤴️ Restore</strong> · <strong>🗑️ Delete</strong></p>
+
+  
+  <h2 id="measurements">5. Measurements &amp; importing data</h2>
+
+  <h3>5.1 Measurement types</h3>
+  <table class="basic"><tr><th>Measurement</th><th>Current use</th></tr><tr><td><strong>Progesterone</strong></td><td>ng/ml; blood progesterone series.</td></tr><tr><td><strong>PdG</strong></td><td>µg/mg Cr; urine PdG series.</td></tr><tr><td><strong>Unified Prog.</strong></td><td>Computed progesterone-equivalent view from paired PdG/progesterone models.</td></tr><tr><td><strong>Weight</strong></td><td>g; body-weight series.</td></tr><tr><td><strong>Events</strong></td><td>Operations, embryo transfers, pregnancies, births, PGF/FSH, and lifecycle events.</td></tr><tr><td><strong>Sperm values:</strong></td><td>Sperm count, motility, and progressive motility for sperm donors.</td></tr></table>
+
+  <h3>5.2 Manual entry</h3>
+  <p>Use the role-specific edit dialogs to add, edit, or delete rows manually. The available tabs depend on the selected role and installed modules.</p>
+
+  <h3>5.3 Importing from Excel</h3>
+  <p>Excel imports are based on exact column names. Use the import button that matches the data type and clean invalid dates, empty names, or non-numeric values before importing.</p>
+  <table class="basic"><tr><th>Button</th><th>Required columns</th></tr><tr><td><strong>📈 Load Blood Values</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Load Urine Values</strong></td><td><code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Load Weights</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Load Sperm Values</strong></td><td><code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
+  <p>Optional sample identifiers are recognized from common columns such as Probennummer, Sample ID, Sample, Probe, ID, sample_id, or probe.</p>
+
+  
+  <h3>5.4 PdG &rarr; Progesterone Converter</h3>
+  <p>
+    ProgTrack can estimate blood progesterone values from urine PdG measurements using
+    a configurable conversion formula. The resulting estimates are used for the
+    <strong>Unified Prog.</strong> curve and can influence phase shading and decisions
+    in the plots.
+  </p>
+  <p>
+    Open the converter via <strong>Tools → PdG→Progesterone Converter</strong>.
+    First select an animal that has both blood progesterone and PdG measurements. The
+    dialog shows paired points where blood and PdG values are available for the same
+    day.
+  </p>
+  <p><strong>Workflow:</strong></p>
+  <ul>
+    <li>Use <strong>Auto Fit</strong> to calculate a best-fit conversion formula from PdG
+      to blood progesterone for the currently selected animal.</li>
+    <li>Optionally adjust the coefficients manually in the input fields (for example,
+      to try linear vs. log-like relationships or to match a known reference).</li>
+    <li>Click <strong>Save / Apply</strong> to store the formula for that animal
+      (or according to your local configuration, e.g. per role or globally).
+      The stored formula is then used for future recalculation of
+      <strong>Unified Prog.</strong> in plots and reports.</li>
+  </ul>
+  <div class="hint">
+    <strong>Recommendation:</strong> Fit the conversion formula on animals with good
+    parallel sampling (several days with both blood and PdG values). Changing the
+    formula will change the appearance of Unified Prog. and can affect phase
+    classification; document major changes for your team.
+  </div>
+
+  <h2 id="plots">6. Plots &amp; data exploration</h2>
+
+  <h3>6.1 Plot modes</h3>
+  <p>On the <strong>Plots</strong> tab:</p>
+  <ul>
+    <li>Choose one or more animals in the sidebar (up to a configured maximum).
+    </li>
+    <li>Select a mode:
+      <ul>
+        <li><strong>Combined</strong> – unified view of progesterone and PdG.
+        </li>
+        <li><strong>Blood (Pgr)</strong> – blood progesterone only.</li>
+        <li><strong>Urine (PdG)</strong> – urine PdG only.</li>
+      </ul>
+    </li>
+    <li>Toggle separate checkboxes for <em>Progesterone</em>, <em>Weight</em>
+      and <em>Events</em> to show/hide those curves or markers.</li>
+  </ul>
+  <p>
+    For readability and performance there is a maximum number of animals that can be
+    shown in one plot at the same time (by default up to 5 animals). If you select
+    more animals than allowed, extra selections are automatically deselected and only
+    up to the maximum are plotted.
+  </p>
+
+  <h3>6.2 Line styles, markers and colors</h3>
+  <p>
+    Use the <strong>Display</strong> / <strong>Line Style</strong> groups to
+    adjust how progesterone, weight and sperm series are drawn.
+  </p>
+  <p>
+    For a more global configuration, use
+    <strong>Settings → Style</strong> (see section
+    <a href="#language-style">7</a>).
+  </p>
+
+  <h3>6.3 Exporting plotted data</h3>
+  <p>
+    Use <strong>File → Export Reports (.xlsx)</strong> to export data for selected
+    animals and a given date range to Excel. You can then perform further
+    analysis or share the file.
+  </p>
+
+  <div class="hint">
+    <strong>Tip:</strong> Use Excel export to prepare figures and summaries for reports: select exactly the animals and time window you need in ProgTrack, then format and annotate the exported sheet in Excel or your statistics software.
+  </div>
+
+  <h2 id="language-style">7. Language &amp; appearance</h2>
+
+  <h3>7.1 Language selection</h3>
+  <p>
+    Open <strong>Settings → Language</strong> to switch the user interface
+    language. The available languages are listed by their own names
+    (autonyms), independent of the current UI language:
+  </p>
+  <ul>
+    <li><strong>English</strong></li>
+    <li><strong>Deutsch</strong></li>
+    <li><strong>Русский</strong></li>
+    <li><strong>Italiano</strong></li>
+  </ul>
+  <p>
+    Changing the language rebuilds menus, dialogs and labels using the
+    corresponding <code>messages_*.json</code> file.
+  </p>
+
+  <h3>7.2 Style settings</h3>
+  <p>
+    Use <strong>Settings → Style</strong> to open the style settings
+    dialog. Here you can configure:
+  </p>
+  <ul>
+    <li>Main colors for progesterone, weight, PdG and sperm curves.</li>
+    <li>Colors for FSH injections and event markers (PGF, embryo transfers,
+      operations, pregnancies, abortions, births, special measurements).</li>
+    <li>Markers for each measurement type (e.g. circle, triangle).</li>
+    <li>Line styles.</li>
+  </ul>
+  <p>
+    Use <strong>Reset to defaults</strong> if you want to restore the standard
+    color scheme.
+  </p>
+
+  <h2 id="saving-export">8. Saving &amp; exporting</h2>
+
+  <h3>8.1 Saving the database</h3>
+  <p>
+    Use <strong>File → Save Database</strong> to explicitly write the
+    current state to <code>progtrack_daten.json</code>. Automatic saving may
+    also occur during certain operations, but an explicit save is recommended
+    after larger editing sessions.
+  </p>
+
+  <div class="hint">
+    <strong>Tip:</strong> Get into the habit of saving just before bulk imports or complex plugin operations (for example the OP Planner). If anything unexpected happens, you can roll back to the last known-good JSON backup.
+  </div>
+
+  <h3>8.2 Excel export</h3>
+  <p>
+    <strong>File → Export Reports (.xlsx)</strong> opens a dialog where you:
+  </p>
+  <ul>
+    <li>Select animals and a date range.</li>
+    <li>Confirm to export all relevant measurements and events into an Excel
+      workbook.</li>
+  </ul>
+
+  <h3>8.3 PDF export (with Animal Reports plugin)</h3>
+  <p>
+    If the Animal Reports plugin is installed, the menu item
+    <strong>File → Export Reports (.pdf)</strong> becomes available. It uses the
+    Reports plugin to generate one PDF per animal and month. You can choose:</p>
+  <ul>
+    <li>Output directory.</li>
+    <li>Animal(s) to export.</li>
+    <li>Year and month.</li>
+    <li>Report language.</li>
+  </ul>
+
+  <h2 id="plugins">9. Plugins and modules</h2>
+  <p>Plugin availability is detected on startup. Checkable entries in the Tools menu show or hide main tabs; window-style tools open a separate dialog or window. Hidden tabs keep their data on disk.</p>
+  <table class="basic"><tr><th>Menu item</th><th>Kind</th><th>Current behavior and use</th></tr>
+  <tr><td><strong>Steroid Track</strong></td><td>Feature gate</td><td>Steroid Track is a real plugin without its own window. It enables female phase filters, blood progesterone import, urine PdG import, sperm import, hormone/event plot controls, sperm plot controls, and the PdG converter entry.</td></tr>
+  <tr><td><strong>PdG→Progesterone Converter</strong></td><td>Dialog</td><td>Fits animal-specific PdG to progesterone models from paired same-day PdG and blood progesterone measurements; fitted models enable Unified Prog. and combined plots.</td></tr>
+  <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Provides login, guest mode, users, jobs, permissions, sessions, and audit logs. Current access roles are lord, master, user, and guest; job bundles such as vet, keeper, manager, and researcher refine user permissions.</td></tr>
+  <tr><td><strong>Project Track</strong></td><td>Sidebar + optional tab</td><td>Adds project and species filters beside the animal list. The menu action refreshes projects; the Project Track management tab appears only when Master Track is active.</td></tr>
+  <tr><td><strong>Medi Track</strong></td><td>Main tab</td><td>Shows selected-animal medical history, active diagnoses, notes, treatments, observations, documents, status start/resolution, and PDF export.</td></tr>
+  <tr><td><strong>Animal Reports</strong></td><td>Main tab</td><td>Toggles Reports. Reports are selected-animal/month based and contain Date, Daily Data, Animal Scores, and Signatures; PDF export is available.</td></tr>
+  <tr><td><strong>Flow Track</strong></td><td>Main tab</td><td>Visualizes embryo flow between egg donors, sperm donors, surrogates, and freezer, with metrics, manual edits, settings, refresh from ProgTrack, and export.</td></tr>
+  <tr><td><strong>Heritage Track</strong></td><td>Main tab</td><td>Shows pedigree and relationship graphs, parent editing, Heritage-only placeholders, genotype/fill-color annotations, inbreeding coefficients, legend, grid, and settings.</td></tr>
+  <tr><td><strong>Cage Track</strong></td><td>Main tab</td><td>Manages units, rooms, cages, real animals, dummy animals, unassigned occupants, movement history, inspections, color settings, and PDF export.</td></tr>
+  <tr><td><strong>Sample Track</strong></td><td>Window</td><td>Tracks organ samples and time-series samples, uses localized tissue/type lookups, receives blood/PdG import notifications, and exports PDF.</td></tr>
+  <tr><td><strong>Embryo Track</strong></td><td>Dialog</td><td>Predicts marmoset gestation day from COL/TTL ultrasound measurements, embryo count, and measurement date; reference data and diagnostics are available.</td></tr>
+  <tr><td><strong>OP-Scheduler</strong></td><td>Dialog</td><td>Schedules surgeries and embryo transfers using current donor/surrogate animals, date rules, recovery settings, manual events, blocked dates, and schedule export.</td></tr>
+  <tr><td><strong>Network Track</strong></td><td>Window</td><td>Provides local file-based team chat with polling, optional bring-to-front behavior, and notification sound when Qt Multimedia is available.</td></tr>
+  </table>
+
+  <h2 id="troubleshooting">10. Troubleshooting &amp; tips</h2>
+
+  <h3>10.1 Plugins not available</h3>
+  <p>
+    If a plugin menu entry is disabled or displays a message such as
+    "plugin is not installed", check that the corresponding subfolder exists
+    under <code>Plugins</code> and contains the expected files.
+  </p>
+
+  <h3>10.2 Excel import errors</h3>
+  <ul>
+    <li><strong>Missing columns</strong> – use the current column names expected by the code: blood progesterone files need <code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, and <code>F</code>; PdG files need <code>Name</code>, <code>Datum</code>, and <code>PdG (µg/mg Cr)</code>; weight files need <code>Name</code>, <code>Datum</code>, and <code>Gewicht</code>; sperm files need <code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, and <code>Sperms/ml</code>.</li>
+    <li><strong>Missing runtime libraries</strong> – the portable launcher should already include the import libraries. If an import library is missing in a portable release, rebuild or replace the launcher bundle; only source-mode users need to install packages such as <code>openpyxl</code> or <code>pandas</code>.</li>
+    <li><strong>Invalid rows</strong> – rows with invalid dates, empty names, or non-numeric values are skipped; clean the Excel file and import again.</li>
+  </ul>
+
+  <h3>10.3 Performance and data safety</h3>
+  <ul>
+    <li>Avoid editing very large Excel files at once; consider importing data
+      in batches.</li>
+    <li>Use <strong>File → Save Database</strong> regularly.</li>
+    <li>Back up <code>progtrack_daten.json</code> periodically via your normal
+      file backup procedures.</li>
+  </ul>
+  <h2 id="license">11. Copyright and license notice</h2>
+  <p><strong>ProgTrack - Copyright and License Notice</strong></p>
+  <p>Copyright (C) 2026 Dimitri L. Lindenwald, PhD, Deutsches Primatenzentrum GmbH, Leibniz Institute for Primate Research, Kellnerweg 4, 37077 Goettingen, Germany.</p>
+  <p>This project is released under the GNU General Public License version 3.0 or later. You may use, modify, and redistribute the software under the terms of that license. A copy of the license is available at <code>https://www.gnu.org/licenses/gpl-3.0.html</code> and is included in this repository as the file <code>LICENSE</code>.</p>
+  <p>If a derivative work is prepared, that is based on or incorporates ProgTrack or any part thereof and that is made available to others, then a summary of the changes made to ProgTrack shall be included in any such work.</p>
+  <p><strong>Disclaimer of Warranty and Liability</strong></p>
+  <p>The software is provided without any warranty to the extent permitted by law. In particular, no warranty is given for functionality, freedom from errors, or fitness for a particular purpose. The developers and owners are not liable for direct or indirect damages, data loss, or other consequences resulting from use of the software, except if caused by willful intent or gross negligence or in cases of mandatory statutory liability.</p>
+  <p><strong>Third-Party Components</strong></p>
+  <p>The compiled launcher contains a portable Python runtime and third-party libraries. Those components remain the property of their respective rights holders and are governed by their own license terms. Known third-party notices are documented in <code>THIRD_PARTY_NOTICES.md</code> and <code>third_party_licenses/</code>.</p>
+  <p>The entire above notice shall be included in all copies, portions, or derivates of ProgTrack.</p>
+
+</body>
+</html>

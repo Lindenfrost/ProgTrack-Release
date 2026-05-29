@@ -1,0 +1,35 @@
+{
+  "name": "Master_Track",
+  "display_name": "Master Track",
+  "version": "0.1.0",
+  "description": "Authentication, user roles, job bundles, direct permissions, per-user sessions, and audit logging for ProgTrack. Supports Lord, Master, User, and Guest access levels with configurable job-based permission bundles.",
+  "author": "DLL",
+  "SPDX-License-Identifier": "GPL-3.0-or-later",
+  "Copyright": "Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH",
+  "entry_point": "plugin.MasterTrackPlugin",
+  "dependencies": [
+    "PyQt6"
+  ],
+  "data_files": [
+    "users.enc",
+    "settings.json",
+    "jobs.json",
+    "permissions_labels.json",
+    "sessions/*.json",
+    "audit_*.log"
+  ],
+  "min_progtrack_version": "RC 0.1.0",
+  "menu_location": "Tools",
+  "icon": "progtrack_icon.ico",
+  "optional": false,
+  "features": [
+    "authentication",
+    "lord_master_user_guest_roles",
+    "job_bundle_permissions",
+    "direct_permission_overrides",
+    "user_profile_management",
+    "per_user_session_persistence",
+    "audit_logging",
+    "audit_log_review_and_export"
+  ]
+}

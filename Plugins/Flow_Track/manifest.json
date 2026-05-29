@@ -1,0 +1,29 @@
+{
+  "name": "Flow_Track",
+  "display_name": "Flow Track",
+  "version": "0.1.0",
+  "description": "Visual embryo flow management plugin. Displays a three-rail layout connecting egg donors, sperm donors, and surrogates with interactive nodes and connection lines. Features freezer inventory management, efficiency metrics with color-coded lifebars, date range filtering, and Excel export.",
+  "author": "DLL",
+  "SPDX-License-Identifier": "GPL-3.0-or-later",
+  "Copyright": "Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH",
+  "entry_point": "flow_track_widget.FlowTrackWidget",
+  "dependencies": [
+    "PyQt6",
+    "matplotlib"
+  ],
+  "data_files": [],
+  "min_progtrack_version": "RC 0.1.0",
+  "menu_location": "Tab",
+  "icon": "progtrack_icon.ico",
+  "optional": true,
+  "features": [
+    "embryo_flow_visualization",
+    "egg_donor_sperm_donor_surrogate_links",
+    "interactive_node_positioning",
+    "freezer_inventory_management",
+    "efficiency_metrics",
+    "date_range_filtering",
+    "manual_flow_editing",
+    "excel_export"
+  ]
+}

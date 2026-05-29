@@ -1,0 +1,35 @@
+{
+  "name": "Sample_Track",
+  "display_name": "Sample Track",
+  "version": "0.1.0",
+  "description": "Biological and tissue sample tracking plugin. Manages organ samples and other biological samples with per-animal rows, localized sample lookup tables, aliquot locations, unit-based visibility, warning flags, filters, PDF export, Master Track audit logging, and automatic blood/urine sample creation from ProgTrack measurements.",
+  "author": "DLL",
+  "SPDX-License-Identifier": "GPL-3.0-or-later",
+  "Copyright": "Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH",
+  "entry_point": "__init__.initialize",
+  "dependencies": [
+    "PyQt6",
+    "reportlab"
+  ],
+  "data_files": [
+    "samples_*.json",
+    "organs.json",
+    "other.json"
+  ],
+  "min_progtrack_version": "RC 0.1.0",
+  "menu_location": "Tools",
+  "icon": "progtrack_icon.ico",
+  "optional": true,
+  "features": [
+    "organ_sample_tracking",
+    "other_biological_sample_tracking",
+    "localized_sample_lookup_tables",
+    "animal_autocomplete",
+    "aliquot_location_management",
+    "unit_based_visibility_filtering",
+    "date_and_type_filtering",
+    "pdf_export",
+    "blood_urine_auto_sample_creation",
+    "master_track_audit_logging"
+  ]
+}

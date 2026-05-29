@@ -1,0 +1,35 @@
+{
+  "name": "Medi_Track",
+  "display_name": "Medi Track",
+  "version": "0.1.0",
+  "description": "Medical history tracking plugin for individual animals. Adds 'Abnormal' status checkbox, medical condition categorization with hierarchical taxonomy, document management per animal, and comprehensive medical log reporting. Integrates with ProgTrack status system and Master Track audit logging.",
+  "author": "DLL",
+  "SPDX-License-Identifier": "GPL-3.0-or-later",
+  "Copyright": "Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH",
+  "entry_point": "medi_track_widget.MediTrackWidget",
+  "dependencies": [
+    "PyQt6",
+    "matplotlib",
+    "pathlib"
+  ],
+  "data_files": [
+    "medi_history.json",
+    "lang/conditions_*.json"
+  ],
+  "min_progtrack_version": "RC 0.1.0",
+  "menu_location": "Tab",
+  "icon": "progtrack_icon.ico",
+  "optional": true,
+  "features": [
+    "sick_and_abnormal_status_tracking",
+    "medical_condition_taxonomy",
+    "medical_history_logging",
+    "status_change_signatures",
+    "per_animal_document_management",
+    "medical_report_integration",
+    "filter_controls_integration",
+    "master_track_audit_logging"
+  ],
+  "warranty": "NO WARRANTY",
+  "disclaimer": "The plugin and documentation are provided without warranty to the extent permitted by law. No warranty is given for completeness, correctness, fitness for a particular purpose, or suitability for scientific, clinical, regulatory, or operational decisions."
+}

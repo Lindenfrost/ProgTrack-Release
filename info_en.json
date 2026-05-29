@@ -1,0 +1,47 @@
+<h1>ProgTrack©</h1>
+<p><strong>Version:</strong> RC v.1.0</p>
+<p><strong>Description:</strong> ProgTrack is a desktop application for managing, visualizing, and documenting hormone data in reproductive biology research on primates. It provides detailed tracking of progesterone and PdG measurements, along with reproductive events, weight data, pedigree analysis, cage management, and project coordination in a single unified platform.</p>
+
+<h2>Core Features:</h2>
+<ul>
+  <li>Record and track unlimited progesterone and PdG measurements per animal</li>
+  <li>Automatically convert PdG (urinary) values to progesterone equivalents using customizable formulas</li>
+  <li>Interactive graphs with phase overlays, weight curves, and event markers (PGF, embryo transfers, surgeries)</li>
+  <li>Editable per-animal data with role-based settings (Donor, Surrogate, Offspring, Partner, Breeding Animal)</li>
+  <li>Batch import/export of data in Excel format with flexible date filters</li>
+  <li>Archiving and restoration of animal records for longitudinal studies</li>
+  <li>Secure local JSON persistence with robust error handling</li>
+  <li>Fully localized (EN, DE, IT, RU), resizable PyQt6 interface with custom theming and icons</li>
+</ul>
+
+<h2>Plugins:</h2>
+<ul>
+  <li><strong>Surgery Planner</strong> – Gantt-chart-based surgery and embryo transfer scheduling with recovery rules and blocked days</li>
+  <li><strong>Animal Reports</strong> – Per-animal report generation with statistics, timelines, and PDF export</li>
+  <li><strong>Embryo Tracker</strong> – Gestation day prediction from cranial ultrasound measurements</li>
+  <li><strong>Flow Track</strong> – Visual embryo flow management connecting donors and surrogates with metrics</li>
+  <li><strong>Heritage Track</strong> – Pedigree visualization with kinship and inbreeding coefficient analysis</li>
+  <li><strong>Cage Track</strong> – Hierarchical animal housing management with movement history tracking</li>
+  <li><strong>PdG Converter</strong> – PdG to progesterone conversion with kink and linear model fitting</li>
+  <li><strong>Projects Track</strong> – Project-based animal filtering with sidebar tab integration</li>
+  <li><strong>Network Track</strong> – Multi-user team chat via shared file backend</li>
+  <li><strong>Master Track</strong> – Authentication, user roles, permission management, and audit logging</li>
+  <li><strong>Medi Track</strong> – Medical history tracking with hierarchical condition taxonomy and document management</li>
+  <li><strong>Sample Track</strong> – Biological and tissue sample tracking (organs, blood, DNA, RNA, etc.) with storage location management</li>
+</ul>
+
+<h2>ProgTrack - Copyright and License Notice</h2>
+
+<p>Copyright (C) 2026 Dimitri L. Lindenwald, PhD, Deutsches Primatenzentrum GmbH, Leibniz Institute for Primate Research, Kellnerweg 4, 37077 Goettingen, Germany.</p>
+
+<p>This project is released under the GNU General Public License version 3.0 or later. You may use, modify, and redistribute the software under the terms of that license. A copy of the license is available at https://www.gnu.org/licenses/gpl-3.0.html and is included in this repository as the file <code>LICENSE</code>.</p>
+
+<p>If a derivative work is prepared, that is based on or incorporates ProgTrack or any part thereof and that is made available to others, then a summary of the changes made to ProgTrack shall be included in any such work.</p>
+
+<h3>Disclaimer of Warranty and Liability</h3>
+<p>The software is provided without any warranty to the extent permitted by law. In particular, no warranty is given for functionality, freedom from errors, or fitness for a particular purpose. The developers and owners are not liable for direct or indirect damages, data loss, or other consequences resulting from use of the software, except if caused by willful intent or gross negligence or in cases of mandatory statutory liability.</p>
+
+<h3>Third-Party Components</h3>
+<p>The compiled launcher contains a portable Python runtime and third-party libraries. Those components remain the property of their respective rights holders and are governed by their own license terms. Known third-party notices are documented in <code>THIRD_PARTY_NOTICES.md</code> and <code>third_party_licenses/</code>.</p>
+
+<p>The entire above notice shall be included in all copies, portions, or derivates of ProgTrack.</p>

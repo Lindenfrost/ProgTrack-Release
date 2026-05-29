@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "projects": {
+    "Crossbreeding": {
+      "created_by": "",
+      "created_at": "",
+      "modified_by": "",
+      "modified_at": "",
+      "summary": {},
+      "iacuc": {},
+      "assoc_users": {},
+      "animals_config": {},
+      "arrive": {}
+    },
+    "OTOF": {
+      "created_by": "",
+      "created_at": "",
+      "modified_by": "",
+      "modified_at": "",
+      "summary": {},
+      "iacuc": {},
+      "assoc_users": {},
+      "animals_config": {},
+      "arrive": {}
+    },
+    "Zucht": {
+      "created_by": "",
+      "created_at": "",
+      "modified_by": "",
+      "modified_at": "",
+      "summary": {},
+      "iacuc": {},
+      "assoc_users": {},
+      "animals_config": {},
+      "arrive": {}
+    },
+    "OTOF-": {
+      "created_by": "Dr. Manager Plansdottir",
+      "created_at": "20.04.2026 10:49",
+      "modified_by": "Dr. Manager Plansdottir",
+      "modified_at": "20.04.2026 10:49",
+      "summary": {},
+      "iacuc": {},
+      "assoc_users": {},
+      "animals_config": {},
+      "arrive": {}
+    },
+    "Backcrossing": {
+      "created_by": "Dr. Manager Plansdottir",
+      "created_at": "20.04.2026 10:50",
+      "modified_by": "Dr. Manager Plansdottir",
+      "modified_at": "20.04.2026 10:50",
+      "summary": {},
+      "iacuc": {},
+      "assoc_users": {},
+      "animals_config": {},
+      "arrive": {}
+    }
+  }
+}

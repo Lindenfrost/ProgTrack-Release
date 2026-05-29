@@ -1,0 +1,435 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
+# Part of: ProgTrack 0.1.0 RC
+# Required ProgTrack version: see plugin manifest.
+# Module: Master Track core plugin logic.
+
+from __future__ import annotations
+
+import logging
+import os
+from datetime import date, datetime
+from typing import Any, Dict, Optional
+
+from .auth import UserDB
+from .permissions import (
+    ROLE_GUEST,
+    ROLE_LORD,
+    ROLE_MASTER,
+    ROLE_USER,
+    JOB_BUNDLES,
+    PERM_MASTER_CREATE_USERS,
+    ROLE_BASELINES,
+    DEFAULT_JOB_BUNDLES,
+    can as _perm_can,
+    resolve_effective_permissions,
+    get_permission_label,
+)
+from .session import SessionManager
+
+logger = logging.getLogger(__name__)
+
+
+class MasterTrackPlugin:
+    """Singleton-like plugin object created once and attached to the main app."""
+
+    def __init__(self, app: Any):
+        self.app = app
+        self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
+        self.user_db = UserDB(self.plugin_dir)
+        self.session_mgr = SessionManager(self.plugin_dir)
+
+        self._current_username: Optional[str] = None
+        self._current_role: str = ROLE_GUEST
+
+        # Settings (timeout etc.)
+        self._settings = self._load_settings()
+        self._timeout_minutes: int = self._settings.get("timeout_minutes", 30)
+
+        # Inactivity timeout timer
+        self._idle_timer: Optional[Any] = None
+        self._warning_timer: Optional[Any] = None
+        self._idle_warned = False
+
+        # Load job bundle overrides from jobs.json (if a Lord has edited them)
+        self._load_job_bundles()
+
+    # ------------------------------------------------------------------
+    # Settings persistence
+    # ------------------------------------------------------------------
+
+    def _settings_path(self) -> str:
+        return os.path.join(self.plugin_dir, "settings.json")
+
+    def _jobs_path(self) -> str:
+        return os.path.join(self.plugin_dir, "jobs.json")
+
+    def _load_settings(self) -> Dict[str, Any]:
+        import json
+        path = self._settings_path()
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {"timeout_minutes": 30}
+
+    def _save_settings(self) -> None:
+        import json
+        try:
+            with open(self._settings_path(), "w", encoding="utf-8") as f:
+                json.dump(self._settings, f, indent=2)
+        except Exception as exc:
+            logger.error("Failed to save Master_Track settings: %s", exc)
+
+    def _load_job_bundles(self) -> None:
+        """Load custom job bundle overrides from jobs.json if it exists."""
+        import json
+        path = self._jobs_path()
+        if not os.path.isfile(path):
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            if isinstance(raw, dict):
+                for job_name, perms in raw.items():
+                    if isinstance(perms, list):
+                        JOB_BUNDLES[job_name] = set(perms)
+        except Exception as exc:
+            logger.error("Failed to load jobs.json: %s", exc)
+
+    def save_job_bundles(self) -> None:
+        """Persist current JOB_BUNDLES to jobs.json."""
+        import json
+        try:
+            serializable = {k: sorted(v) for k, v in JOB_BUNDLES.items()}
+            with open(self._jobs_path(), "w", encoding="utf-8") as f:
+                json.dump(serializable, f, indent=2, ensure_ascii=False)
+        except Exception as exc:
+            logger.error("Failed to save jobs.json: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    @property
+    def current_username(self) -> Optional[str]:
+        return self._current_username
+
+    @property
+    def current_display_name(self) -> Optional[str]:
+        record = self._current_user_record()
+        if record:
+            return record.get("display_name") or self._current_username
+        return None
+
+    @property
+    def current_role(self) -> str:
+        return self._current_role
+
+    @property
+    def is_logged_in(self) -> bool:
+        return self._current_username is not None
+
+    def _current_user_record(self) -> Optional[Dict[str, Any]]:
+        if not self._current_username:
+            return None
+        return self.user_db.get_user(self._current_username)
+
+    def get_primary_role(self) -> str:
+        """Return the primary role string of the currently logged-in user."""
+        return self._current_role
+
+    def get_assigned_jobs(self):
+        """Return the job list for the current user."""
+        user = self._current_user_record()
+        if not user:
+            return []
+        return list(user.get("jobs", []))
+
+    def get_direct_permission_grants(self):
+        """Return directly granted permissions for the current user."""
+        user = self._current_user_record()
+        if not user:
+            return []
+        return list(user.get("permissions", {}).get("granted", []))
+
+    def get_direct_permission_revocations(self):
+        """Return directly revoked permissions for the current user."""
+        user = self._current_user_record()
+        if not user:
+            return []
+        return list(user.get("permissions", {}).get("revoked", []))
+
+    def get_effective_permissions(self):
+        """Return the full effective permission set for the current user."""
+        user = self._current_user_record()
+        if not user:
+            return resolve_effective_permissions(ROLE_GUEST, [], [], [])
+        return resolve_effective_permissions(
+            user["role"],
+            user.get("jobs", []),
+            user.get("permissions", {}).get("granted", []),
+            user.get("permissions", {}).get("revoked", []),
+        )
+
+    def has_direct_overrides(self) -> bool:
+        """Return True if the current user has any direct permission overrides."""
+        user = self._current_user_record()
+        if not user or user["role"] in (ROLE_LORD, ROLE_MASTER, ROLE_GUEST):
+            return False
+        perms = user.get("permissions", {})
+        return bool(perms.get("granted") or perms.get("revoked"))
+
+    def get_display_role_label(self) -> str:
+        """Return a display label such as 'user', 'vet', or 'vet+'.
+
+        A '+' suffix is appended only when the user has direct permission
+        overrides that go beyond what the role baseline + job bundles already
+        provide (extra grants or any explicit revocations).
+        """
+        if self._current_role == ROLE_LORD:
+            return ROLE_LORD
+        if self._current_role == ROLE_MASTER:
+            return ROLE_MASTER
+        if self._current_role == ROLE_GUEST:
+            return ROLE_GUEST
+        user = self._current_user_record()
+        if not user:
+            return self._current_role
+        jobs = user.get("jobs", [])
+        perms = user.get("permissions", {})
+        granted = set(perms.get("granted", []))
+        revoked = set(perms.get("revoked", []))
+
+        # Compute what role+jobs already cover (no direct overrides)
+        baseline = set(ROLE_BASELINES.get(self._current_role, set()))
+        job_combined: set = set()
+        for j in jobs:
+            job_combined |= JOB_BUNDLES.get(j, set())
+        covered = baseline | job_combined
+
+        # '+' only when there are grants not already covered, or any revocations
+        extra_grants = granted - covered
+        has_overrides = bool(extra_grants or revoked)
+        suffix = "+" if has_overrides else ""
+
+        if not jobs:
+            return ROLE_USER + suffix
+        return "/".join(f"{j}{suffix}" for j in jobs)
+
+    def can(self, action: str) -> bool:
+        """Central permission check used by ProgTrack core and all plugins."""
+        if self._current_role == ROLE_LORD:
+            return True
+        user = self._current_user_record()
+        if user:
+            return _perm_can(
+                user["role"],
+                user.get("jobs", []),
+                user.get("permissions", {}).get("granted", []),
+                user.get("permissions", {}).get("revoked", []),
+                action,
+            )
+        return _perm_can(ROLE_GUEST, [], [], [], action)
+
+    # ------------------------------------------------------------------
+    # Login / Logout
+    # ------------------------------------------------------------------
+
+    def startup(self) -> None:
+        """Run on app startup: show first-start wizard or login dialog."""
+        from .dialogs import CreateLordDialog, LoginDialog
+
+        messages = self.app.messages
+
+        self.user_db.load()
+
+        if not self.user_db.lord_exists():
+            dlg = CreateLordDialog(self.app, messages, self.user_db)
+            if dlg.exec():
+                self._login_as(dlg.created_user)
+                self._start_idle_timer()
+            else:
+                self._set_guest()
+        else:
+            dlg = LoginDialog(self.app, messages, self.user_db)
+            if dlg.exec():
+                self._login_as(dlg.logged_in_user)
+                self._start_idle_timer()
+            else:
+                self._set_guest()
+
+    def _login_as(self, username: str) -> None:
+        user = self.user_db.get_user(username)
+        if not user:
+            self._set_guest()
+            return
+        self._current_username = username
+        self._current_role = user["role"]
+        logger.info("Logged in as %s (role=%s)", username, self._current_role)
+
+        # forced password change
+        if user.get("must_change_password"):
+            from .dialogs import ChangePasswordDialog
+            dlg = ChangePasswordDialog(self.app, self.app.messages,
+                                       self.user_db, username, forced=True)
+            dlg.exec()
+
+        self.audit("login", username)
+
+    def _set_guest(self) -> None:
+        self._current_username = None
+        self._current_role = ROLE_GUEST
+        logger.info("Running in Guest (read-only) mode")
+
+    def logout(self) -> None:
+        """Log out the current user, save session, return to Guest."""
+        self._stop_idle_timer()
+        if self._current_username:
+            self.save_session()
+            self.audit("logout", self._current_username)
+        self._set_guest()
+
+    def login_interactive(self) -> bool:
+        """Show login dialog interactively (e.g. from Ctrl+L). Returns True on success."""
+        from .dialogs import LoginDialog
+
+        if self.is_logged_in:
+            self.save_session()
+
+        dlg = LoginDialog(self.app, self.app.messages, self.user_db)
+        if dlg.exec() and dlg.logged_in_user:
+            self._login_as(dlg.logged_in_user)
+            self._start_idle_timer()
+            return True
+        return False
+
+    # ------------------------------------------------------------------
+    # Inactivity timeout
+    # ------------------------------------------------------------------
+
+    def _start_idle_timer(self) -> None:
+        """Start (or restart) the inactivity timeout timer."""
+        if self._timeout_minutes <= 0 or not self.is_logged_in:
+            return
+        from PyQt6.QtCore import QTimer
+
+        self._stop_idle_timer()
+        self._idle_warned = False
+
+        timeout_ms = self._timeout_minutes * 60 * 1000
+        warning_ms = max(0, timeout_ms - 2 * 60 * 1000)  # warn 2 min before
+
+        # Warning timer (fires 2 min before logout)
+        if warning_ms > 0 and warning_ms < timeout_ms:
+            self._warning_timer = QTimer(self.app)
+            self._warning_timer.setSingleShot(True)
+            self._warning_timer.timeout.connect(self._on_idle_warning)
+            self._warning_timer.start(warning_ms)
+
+        # Logout timer
+        self._idle_timer = QTimer(self.app)
+        self._idle_timer.setSingleShot(True)
+        self._idle_timer.timeout.connect(self._on_idle_timeout)
+        self._idle_timer.start(timeout_ms)
+
+    def _stop_idle_timer(self) -> None:
+        if self._idle_timer is not None:
+            self._idle_timer.stop()
+            self._idle_timer = None
+        if self._warning_timer is not None:
+            self._warning_timer.stop()
+            self._warning_timer = None
+        self._idle_warned = False
+
+    def reset_idle_timer(self) -> None:
+        """Call on user interaction to reset the inactivity countdown."""
+        if self.is_logged_in and self._timeout_minutes > 0:
+            self._start_idle_timer()
+
+    def _on_idle_warning(self) -> None:
+        """Show a status bar warning 2 minutes before auto-logout."""
+        self._idle_warned = True
+        sb = self.app.statusBar()
+        if sb:
+            msg = self.app.messages.get(
+                "master_track.timeout.warning",
+                "Session expires in 2 minutes — interact to stay logged in.")
+            sb.showMessage(msg, 120_000)
+
+    def _on_idle_timeout(self) -> None:
+        """Auto-logout after inactivity period."""
+        if not self.is_logged_in:
+            return
+        logger.info("Session timed out for %s", self._current_username)
+        self.audit("timeout", self._current_username or "")
+        # Trigger logout via the app's method so UI is also updated
+        if hasattr(self.app, '_do_master_logout'):
+            self.app._do_master_logout()
+
+    # ------------------------------------------------------------------
+    # Session helpers
+    # ------------------------------------------------------------------
+
+    def load_session(self) -> Dict[str, Any]:
+        """Load the current user's session data (or defaults for Guest)."""
+        if not self._current_username:
+            return SessionManager._defaults("guest")
+        return self.session_mgr.load(self._current_username)
+
+    def save_session(self, extra: Optional[Dict[str, Any]] = None) -> None:
+        """Persist the current user's session state."""
+        if not self._current_username:
+            return
+        data = self.session_mgr.load(self._current_username)
+        if extra:
+            data.update(extra)
+        self.session_mgr.save(self._current_username, data)
+
+    # ------------------------------------------------------------------
+    # Audit log
+    # ------------------------------------------------------------------
+
+    def audit(self, action: str, target: str = "", details: str = "") -> None:
+        username = self._current_username or "guest"
+        ts = datetime.now().isoformat(timespec="seconds")
+        month = date.today().strftime("%Y-%m")
+        path = os.path.join(self.plugin_dir, f"audit_{month}.log")
+        line = f"[{ts}] [{username}] [{action}] [{target}] {details}\n"
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(line)
+        except Exception as exc:
+            logger.error("Audit log write failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Menu actions
+    # ------------------------------------------------------------------
+
+    def show_manage_users(self) -> None:
+        from .dialogs import ManageUsersDialog
+        dlg = ManageUsersDialog(self.app, self.app.messages,
+                                self.user_db, self._current_username or "",
+                                can_create_users=self.can(PERM_MASTER_CREATE_USERS),
+                                lang=self.app.lang)
+        dlg.exec()
+
+    def show_edit_jobs(self) -> None:
+        from .dialogs import EditJobsDialog
+        dlg = EditJobsDialog(self.app, self.app.messages, self)
+        dlg.exec()
+
+    def show_logs(self) -> None:
+        from .dialogs import AuditLogsDialog
+        dlg = AuditLogsDialog(self.app, self.app.messages, self.plugin_dir)
+        dlg.exec()
+
+    def show_change_password(self) -> None:
+        if not self._current_username:
+            return
+        from .dialogs import ChangePasswordDialog
+        dlg = ChangePasswordDialog(self.app, self.app.messages,
+                                   self.user_db, self._current_username)
+        dlg.exec()

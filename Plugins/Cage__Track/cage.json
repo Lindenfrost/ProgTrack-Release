@@ -1,0 +1,1769 @@
+{
+  "version": "1.0",
+  "structures": {
+    "buildings": {},
+    "rooms": {},
+    "cages": {
+      "cage_unassigned": {
+        "id": "cage_unassigned",
+        "parent_room_id": null,
+        "display_name": "Unassigned",
+        "order": 9999,
+        "is_virtual": true
+      }
+    }
+  },
+  "occupants": {
+    "Eluréd": {
+      "occupant_id": "Eluréd",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Elurín": {
+      "occupant_id": "Elurín",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Arwen": {
+      "occupant_id": "Arwen",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Isildur": {
+      "occupant_id": "Isildur",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Aragorn II": {
+      "occupant_id": "Aragorn II",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Eldarion": {
+      "occupant_id": "Eldarion",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Oropher": {
+      "occupant_id": "Oropher",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Ekaterina": {
+      "occupant_id": "Ekaterina",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Thranduil": {
+      "occupant_id": "Thranduil",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Olga": {
+      "occupant_id": "Olga",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Anton": {
+      "occupant_id": "Anton",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Svetlana": {
+      "occupant_id": "Svetlana",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Konstantin": {
+      "occupant_id": "Konstantin",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Legolas": {
+      "occupant_id": "Legolas",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Elladan": {
+      "occupant_id": "Elladan",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Elrohir": {
+      "occupant_id": "Elrohir",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Jessica": {
+      "occupant_id": "Jessica",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Aragorn I": {
+      "occupant_id": "Aragorn I",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Taylor": {
+      "occupant_id": "Taylor",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Gimli": {
+      "occupant_id": "Gimli",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Thrór": {
+      "occupant_id": "Thrór",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Frór": {
+      "occupant_id": "Frór",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Grór": {
+      "occupant_id": "Grór",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Gerda": {
+      "occupant_id": "Gerda",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Gudrun II": {
+      "occupant_id": "Gudrun II",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Thráin II": {
+      "occupant_id": "Thráin II",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Hilda": {
+      "occupant_id": "Hilda",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Thorin II": {
+      "occupant_id": "Thorin II",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Frerin": {
+      "occupant_id": "Frerin",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Dís": {
+      "occupant_id": "Dís",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Manfred": {
+      "occupant_id": "Manfred",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Fíli": {
+      "occupant_id": "Fíli",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Kíli": {
+      "occupant_id": "Kíli",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Náin III": {
+      "occupant_id": "Náin III",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Dáin II": {
+      "occupant_id": "Dáin II",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Dorothea": {
+      "occupant_id": "Dorothea",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Thorin III": {
+      "occupant_id": "Thorin III",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Claudia": {
+      "occupant_id": "Claudia",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Durin VII": {
+      "occupant_id": "Durin VII",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Farin": {
+      "occupant_id": "Farin",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Martina": {
+      "occupant_id": "Martina",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Fundin": {
+      "occupant_id": "Fundin",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Gróin": {
+      "occupant_id": "Gróin",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Marianne": {
+      "occupant_id": "Marianne",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Petra": {
+      "occupant_id": "Petra",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Balin": {
+      "occupant_id": "Balin",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Dwalin": {
+      "occupant_id": "Dwalin",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Óin II": {
+      "occupant_id": "Óin II",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Glóin II": {
+      "occupant_id": "Glóin II",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Simone": {
+      "occupant_id": "Simone",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Konrad II": {
+      "occupant_id": "Konrad II",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Heike": {
+      "occupant_id": "Heike",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Karl": {
+      "occupant_id": "Karl",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Wilhelm": {
+      "occupant_id": "Wilhelm",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Rita": {
+      "occupant_id": "Rita",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Erika II": {
+      "occupant_id": "Erika II",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Dori": {
+      "occupant_id": "Dori",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Nori": {
+      "occupant_id": "Nori",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Ori": {
+      "occupant_id": "Ori",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Albrecht": {
+      "occupant_id": "Albrecht",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Kunigunde": {
+      "occupant_id": "Kunigunde",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Joachim": {
+      "occupant_id": "Joachim",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Rudolf": {
+      "occupant_id": "Rudolf",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Beate II": {
+      "occupant_id": "Beate II",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Margarete": {
+      "occupant_id": "Margarete",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Bifur": {
+      "occupant_id": "Bifur",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Bofur": {
+      "occupant_id": "Bofur",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Bombur": {
+      "occupant_id": "Bombur",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Beate I": {
+      "occupant_id": "Beate I",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Boldog": {
+      "occupant_id": "Boldog",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Adèle": {
+      "occupant_id": "Adèle",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Gorgol": {
+      "occupant_id": "Gorgol",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Balcmeg": {
+      "occupant_id": "Balcmeg",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Othrod": {
+      "occupant_id": "Othrod",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Béatrice": {
+      "occupant_id": "Béatrice",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Grishnákh": {
+      "occupant_id": "Grishnákh",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Orcobal": {
+      "occupant_id": "Orcobal",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Camille": {
+      "occupant_id": "Camille",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Shagrat": {
+      "occupant_id": "Shagrat",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Lugdush": {
+      "occupant_id": "Lugdush",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Gorbag": {
+      "occupant_id": "Gorbag",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Orc-chieftain": {
+      "occupant_id": "Orc-chieftain",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Delphine": {
+      "occupant_id": "Delphine",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Hélène": {
+      "occupant_id": "Hélène",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Aurore": {
+      "occupant_id": "Aurore",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Lagduf": {
+      "occupant_id": "Lagduf",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Snaga I": {
+      "occupant_id": "Snaga I",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Muzgash": {
+      "occupant_id": "Muzgash",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Uglúk": {
+      "occupant_id": "Uglúk",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Élodie": {
+      "occupant_id": "Élodie",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Josiane": {
+      "occupant_id": "Josiane",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Isabelle": {
+      "occupant_id": "Isabelle",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Ufthak": {
+      "occupant_id": "Ufthak",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Lug": {
+      "occupant_id": "Lug",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Naglur-Danlo": {
+      "occupant_id": "Naglur-Danlo",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Mauhúr": {
+      "occupant_id": "Mauhúr",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Snaga II": {
+      "occupant_id": "Snaga II",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Florence": {
+      "occupant_id": "Florence",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Gisèle": {
+      "occupant_id": "Gisèle",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Josette": {
+      "occupant_id": "Josette",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Gothmog": {
+      "occupant_id": "Gothmog",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Lurz": {
+      "occupant_id": "Lurz",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Golfimbul": {
+      "occupant_id": "Golfimbul",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Blanche": {
+      "occupant_id": "Blanche",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Greatgoblin": {
+      "occupant_id": "Greatgoblin",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Cécile": {
+      "occupant_id": "Cécile",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Azog": {
+      "occupant_id": "Azog",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Diane": {
+      "occupant_id": "Diane",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Bolg": {
+      "occupant_id": "Bolg",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Estelle": {
+      "occupant_id": "Estelle",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Bodyguard": {
+      "occupant_id": "Bodyguard",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Fabienne": {
+      "occupant_id": "Fabienne",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Yellowfang": {
+      "occupant_id": "Yellowfang",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Gaëlle": {
+      "occupant_id": "Gaëlle",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Snot": {
+      "occupant_id": "Snot",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Gaston": {
+      "occupant_id": "Gaston",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Honoré": {
+      "occupant_id": "Honoré",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Marcel": {
+      "occupant_id": "Marcel",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Noémie": {
+      "occupant_id": "Noémie",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Elrond": {
+      "occupant_id": "Elrond",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    },
+    "Celebrían": {
+      "occupant_id": "Celebrían",
+      "type": "real",
+      "cage_id": "cage_unassigned",
+      "moved_at": "2026-04-16"
+    }
+  },
+  "movement_history": {
+    "Eluréd": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Elurín": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Arwen": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Isildur": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Aragorn II": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Eldarion": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Oropher": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Ekaterina": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Thranduil": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Olga": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Anton": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Svetlana": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Konstantin": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Legolas": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Elladan": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Elrohir": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Jessica": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Aragorn I": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Taylor": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Gimli": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Thrór": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Frór": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Grór": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Gerda": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Gudrun II": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Thráin II": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Hilda": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Thorin II": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Frerin": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Dís": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Manfred": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Fíli": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Kíli": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Náin III": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Dáin II": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Dorothea": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Thorin III": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Claudia": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Durin VII": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Farin": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Martina": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Fundin": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Gróin": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Marianne": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Petra": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Balin": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Dwalin": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Óin II": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Glóin II": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Simone": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Konrad II": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Heike": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Karl": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Wilhelm": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Rita": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Erika II": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Dori": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Nori": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Ori": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Albrecht": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Kunigunde": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Joachim": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Rudolf": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Beate II": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Margarete": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Bifur": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Bofur": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Bombur": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Beate I": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Boldog": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Adèle": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Gorgol": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Balcmeg": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Othrod": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Béatrice": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Grishnákh": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Orcobal": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Camille": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Shagrat": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Lugdush": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Gorbag": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Orc-chieftain": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Delphine": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Hélène": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Aurore": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Lagduf": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Snaga I": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Muzgash": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Uglúk": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Élodie": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Josiane": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Isabelle": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Ufthak": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Lug": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Naglur-Danlo": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Mauhúr": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Snaga II": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Florence": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Gisèle": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Josette": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Gothmog": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Lurz": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Golfimbul": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Blanche": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Greatgoblin": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Cécile": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Azog": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Diane": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Bolg": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Estelle": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Bodyguard": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Fabienne": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Yellowfang": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Gaëlle": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Snot": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Gaston": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Honoré": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Marcel": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Noémie": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Elrond": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Celebrían": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Testina": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Aegnor": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Amras": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Amrod": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ],
+    "Anairë": [
+      {
+        "cage_id": "cage_unassigned",
+        "moved_in": "2026-04-16",
+        "moved_out": null,
+        "cage_mates_snapshot": []
+      }
+    ]
+  },
+  "project_colors": {},
+  "ui_state": {
+    "expanded_buildings": [],
+    "expanded_rooms": [],
+    "view_position": {
+      "x": 0,
+      "y": 0
+    },
+    "zoom_level": 1.0,
+    "show_legend": true,
+    "legend_pos": [
+      368.4316186497065,
+      456.5434884337349
+    ]
+  }
+}

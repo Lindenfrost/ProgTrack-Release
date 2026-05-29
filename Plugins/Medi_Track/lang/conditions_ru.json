@@ -1,0 +1,1462 @@
+[
+  {
+    "key": "general",
+    "parent": null,
+    "label": "Общие"
+  },
+  {
+    "key": "general.fever",
+    "parent": "general",
+    "label": "Лихорадка"
+  },
+  {
+    "key": "general.fever.hyperthermia",
+    "parent": "general.fever",
+    "label": "Гипертермия"
+  },
+  {
+    "key": "general.fever.hypothermia",
+    "parent": "general.fever",
+    "label": "Гипотермия"
+  },
+  {
+    "key": "general.dehydration",
+    "parent": "general",
+    "label": "Обезвоживание"
+  },
+  {
+    "key": "general.dehydration.mild",
+    "parent": "general.dehydration",
+    "label": "Лёгкий"
+  },
+  {
+    "key": "general.dehydration.moderate",
+    "parent": "general.dehydration",
+    "label": "Умеренный"
+  },
+  {
+    "key": "general.dehydration.severe",
+    "parent": "general.dehydration",
+    "label": "Тяжёлый"
+  },
+  {
+    "key": "general.weight_loss",
+    "parent": "general",
+    "label": "Потеря массы тела"
+  },
+  {
+    "key": "general.weight_loss.acute",
+    "parent": "general.weight_loss",
+    "label": "Острый"
+  },
+  {
+    "key": "general.weight_loss.chronic",
+    "parent": "general.weight_loss",
+    "label": "Хронический"
+  },
+  {
+    "key": "general.poor_body_condition",
+    "parent": "general",
+    "label": "Плохое состояние тела"
+  },
+  {
+    "key": "general.poor_body_condition.mild",
+    "parent": "general.poor_body_condition",
+    "label": "Лёгкий"
+  },
+  {
+    "key": "general.poor_body_condition.moderate",
+    "parent": "general.poor_body_condition",
+    "label": "Умеренный"
+  },
+  {
+    "key": "general.poor_body_condition.severe",
+    "parent": "general.poor_body_condition",
+    "label": "Тяжёлый"
+  },
+  {
+    "key": "musculoskeletal",
+    "parent": null,
+    "label": "Опорно-двигательная система"
+  },
+  {
+    "key": "musculoskeletal.bones",
+    "parent": "musculoskeletal",
+    "label": "Кости"
+  },
+  {
+    "key": "musculoskeletal.bones.fracture",
+    "parent": "musculoskeletal.bones",
+    "label": "Перелом"
+  },
+  {
+    "key": "musculoskeletal.bones.osteoarthritis",
+    "parent": "musculoskeletal.bones",
+    "label": "Остеоартрит"
+  },
+  {
+    "key": "musculoskeletal.bones.osteomyelitis",
+    "parent": "musculoskeletal.bones",
+    "label": "Остеомиелит"
+  },
+  {
+    "key": "musculoskeletal.bones.bone_deformity",
+    "parent": "musculoskeletal.bones",
+    "label": "Деформация кости"
+  },
+  {
+    "key": "musculoskeletal.muscles",
+    "parent": "musculoskeletal",
+    "label": "Мышцы"
+  },
+  {
+    "key": "musculoskeletal.muscles.strain",
+    "parent": "musculoskeletal.muscles",
+    "label": "Растяжение"
+  },
+  {
+    "key": "musculoskeletal.muscles.tear",
+    "parent": "musculoskeletal.muscles",
+    "label": "Разрыв"
+  },
+  {
+    "key": "musculoskeletal.muscles.atrophy",
+    "parent": "musculoskeletal.muscles",
+    "label": "Атрофия"
+  },
+  {
+    "key": "musculoskeletal.muscles.myositis",
+    "parent": "musculoskeletal.muscles",
+    "label": "Миозит"
+  },
+  {
+    "key": "musculoskeletal.joints",
+    "parent": "musculoskeletal",
+    "label": "Суставы"
+  },
+  {
+    "key": "musculoskeletal.joints.dislocation",
+    "parent": "musculoskeletal.joints",
+    "label": "Вывих"
+  },
+  {
+    "key": "musculoskeletal.joints.luxation",
+    "parent": "musculoskeletal.joints",
+    "label": "Люксация"
+  },
+  {
+    "key": "musculoskeletal.joints.sprain",
+    "parent": "musculoskeletal.joints",
+    "label": "Растяжение связок"
+  },
+  {
+    "key": "skin",
+    "parent": null,
+    "label": "Кожа"
+  },
+  {
+    "key": "skin.dermatitis",
+    "parent": "skin",
+    "label": "Дерматит"
+  },
+  {
+    "key": "skin.dermatitis.contact",
+    "parent": "skin.dermatitis",
+    "label": "Контактный"
+  },
+  {
+    "key": "skin.dermatitis.allergic",
+    "parent": "skin.dermatitis",
+    "label": "Аллергический"
+  },
+  {
+    "key": "skin.dermatitis.atopic",
+    "parent": "skin.dermatitis",
+    "label": "Атопический"
+  },
+  {
+    "key": "skin.dermatitis.seborrheic",
+    "parent": "skin.dermatitis",
+    "label": "Себорейный"
+  },
+  {
+    "key": "skin.wounds",
+    "parent": "skin",
+    "label": "Раны"
+  },
+  {
+    "key": "skin.wounds.abrasion",
+    "parent": "skin.wounds",
+    "label": "Ссадина"
+  },
+  {
+    "key": "skin.wounds.laceration",
+    "parent": "skin.wounds",
+    "label": "Рваная рана"
+  },
+  {
+    "key": "skin.wounds.puncture",
+    "parent": "skin.wounds",
+    "label": "Прокол"
+  },
+  {
+    "key": "skin.wounds.burn",
+    "parent": "skin.wounds",
+    "label": "Ожог"
+  },
+  {
+    "key": "skin.wounds.bite",
+    "parent": "skin.wounds",
+    "label": "Укус"
+  },
+  {
+    "key": "skin.infections",
+    "parent": "skin",
+    "label": "Инфекции"
+  },
+  {
+    "key": "skin.infections.bacterial",
+    "parent": "skin.infections",
+    "label": "Бактериальный"
+  },
+  {
+    "key": "skin.infections.fungal",
+    "parent": "skin.infections",
+    "label": "Грибковый"
+  },
+  {
+    "key": "skin.infections.parasitic",
+    "parent": "skin.infections",
+    "label": "Паразитарный"
+  },
+  {
+    "key": "skin.masses",
+    "parent": "skin",
+    "label": "Образования"
+  },
+  {
+    "key": "skin.masses.lipoma",
+    "parent": "skin.masses",
+    "label": "Липома"
+  },
+  {
+    "key": "skin.masses.sebaceous_cyst",
+    "parent": "skin.masses",
+    "label": "Сальная киста"
+  },
+  {
+    "key": "skin.masses.papilloma",
+    "parent": "skin.masses",
+    "label": "Папиллома"
+  },
+  {
+    "key": "skin.masses.melanoma",
+    "parent": "skin.masses",
+    "label": "Меланома"
+  },
+  {
+    "key": "skin.alopecia",
+    "parent": "skin",
+    "label": "Алопеция"
+  },
+  {
+    "key": "skin.alopecia.localized",
+    "parent": "skin.alopecia",
+    "label": "Локализованный"
+  },
+  {
+    "key": "skin.alopecia.generalized",
+    "parent": "skin.alopecia",
+    "label": "Генерализованный"
+  },
+  {
+    "key": "skin.ulcers",
+    "parent": "skin",
+    "label": "Язвы"
+  },
+  {
+    "key": "skin.ulcers.pressure",
+    "parent": "skin.ulcers",
+    "label": "Пролежневый"
+  },
+  {
+    "key": "skin.ulcers.vascular",
+    "parent": "skin.ulcers",
+    "label": "Сосудистые"
+  },
+  {
+    "key": "skin.ulcers.traumatic",
+    "parent": "skin.ulcers",
+    "label": "Травматический"
+  },
+  {
+    "key": "skin.hematoma",
+    "parent": "skin",
+    "label": "Гематома"
+  },
+  {
+    "key": "skin.hematoma.injection",
+    "parent": "skin.hematoma",
+    "label": "Связанный с инъекцией"
+  },
+  {
+    "key": "skin.hematoma.sampling",
+    "parent": "skin.hematoma",
+    "label": "Связанный с забором проб"
+  },
+  {
+    "key": "skin.hematoma.postop",
+    "parent": "skin.hematoma",
+    "label": "Послеоперационный"
+  },
+  {
+    "key": "eyes",
+    "parent": null,
+    "label": "Глаза"
+  },
+  {
+    "key": "eyes.conjunctivitis",
+    "parent": "eyes",
+    "label": "Конъюнктивит"
+  },
+  {
+    "key": "eyes.conjunctivitis.bacterial",
+    "parent": "eyes.conjunctivitis",
+    "label": "Бактериальный"
+  },
+  {
+    "key": "eyes.conjunctivitis.viral",
+    "parent": "eyes.conjunctivitis",
+    "label": "Вирусный"
+  },
+  {
+    "key": "eyes.conjunctivitis.allergic",
+    "parent": "eyes.conjunctivitis",
+    "label": "Аллергический"
+  },
+  {
+    "key": "eyes.cornea",
+    "parent": "eyes",
+    "label": "Роговица"
+  },
+  {
+    "key": "eyes.cornea.ulcer",
+    "parent": "eyes.cornea",
+    "label": "Язва"
+  },
+  {
+    "key": "eyes.cornea.abrasion",
+    "parent": "eyes.cornea",
+    "label": "Ссадина"
+  },
+  {
+    "key": "eyes.cornea.laceration",
+    "parent": "eyes.cornea",
+    "label": "Рваная рана"
+  },
+  {
+    "key": "eyes.uveitis",
+    "parent": "eyes",
+    "label": "Увеит"
+  },
+  {
+    "key": "eyes.uveitis.anterior",
+    "parent": "eyes.uveitis",
+    "label": "Передний"
+  },
+  {
+    "key": "eyes.uveitis.posterior",
+    "parent": "eyes.uveitis",
+    "label": "Задний"
+  },
+  {
+    "key": "eyes.cataract",
+    "parent": "eyes",
+    "label": "Катаракта"
+  },
+  {
+    "key": "eyes.glaucoma",
+    "parent": "eyes",
+    "label": "Глаукома"
+  },
+  {
+    "key": "eyes.retina",
+    "parent": "eyes",
+    "label": "Сетчатка"
+  },
+  {
+    "key": "eyes.retina.detachment",
+    "parent": "eyes.retina",
+    "label": "Отслойка"
+  },
+  {
+    "key": "eyes.retina.degeneration",
+    "parent": "eyes.retina",
+    "label": "Дегенерация"
+  },
+  {
+    "key": "eyes.eyelids",
+    "parent": "eyes",
+    "label": "Веки"
+  },
+  {
+    "key": "eyes.eyelids.entropion",
+    "parent": "eyes.eyelids",
+    "label": "Энтропион"
+  },
+  {
+    "key": "eyes.eyelids.ectropion",
+    "parent": "eyes.eyelids",
+    "label": "Эктропион"
+  },
+  {
+    "key": "eyes.eyelids.blepharitis",
+    "parent": "eyes.eyelids",
+    "label": "Блефарит"
+  },
+  {
+    "key": "eyes.trauma",
+    "parent": "eyes",
+    "label": "Травма"
+  },
+  {
+    "key": "eyes.trauma.foreign_body",
+    "parent": "eyes.trauma",
+    "label": "Инородное тело"
+  },
+  {
+    "key": "teeth",
+    "parent": null,
+    "label": "Зубы"
+  },
+  {
+    "key": "teeth.periodontal",
+    "parent": "teeth",
+    "label": "Пародонтоз"
+  },
+  {
+    "key": "teeth.periodontal.gingivitis",
+    "parent": "teeth.periodontal",
+    "label": "Гингивит"
+  },
+  {
+    "key": "teeth.periodontal.periodontitis",
+    "parent": "teeth.periodontal",
+    "label": "Пародонтит"
+  },
+  {
+    "key": "teeth.dental_caries",
+    "parent": "teeth",
+    "label": "Кариес"
+  },
+  {
+    "key": "teeth.trauma",
+    "parent": "teeth",
+    "label": "Травма"
+  },
+  {
+    "key": "teeth.trauma.fractured_tooth",
+    "parent": "teeth.trauma",
+    "label": "Перелом зуба"
+  },
+  {
+    "key": "teeth.abscess",
+    "parent": "teeth",
+    "label": "Абсцесс"
+  },
+  {
+    "key": "teeth.malocclusion",
+    "parent": "teeth",
+    "label": "Неправильный прикус"
+  },
+  {
+    "key": "teeth.oral_mucosa",
+    "parent": "teeth",
+    "label": "Слизистая оболочка полости рта"
+  },
+  {
+    "key": "teeth.oral_mucosa.stomatitis",
+    "parent": "teeth.oral_mucosa",
+    "label": "Стоматит"
+  },
+  {
+    "key": "respiratory",
+    "parent": null,
+    "label": "Дыхательная система"
+  },
+  {
+    "key": "respiratory.upper",
+    "parent": "respiratory",
+    "label": "Верхние"
+  },
+  {
+    "key": "respiratory.upper.rhinitis",
+    "parent": "respiratory.upper",
+    "label": "Ринит"
+  },
+  {
+    "key": "respiratory.upper.sinusitis",
+    "parent": "respiratory.upper",
+    "label": "Синусит"
+  },
+  {
+    "key": "respiratory.upper.pharyngitis",
+    "parent": "respiratory.upper",
+    "label": "Фарингит"
+  },
+  {
+    "key": "respiratory.upper.tonsillitis",
+    "parent": "respiratory.upper",
+    "label": "Тонзиллит"
+  },
+  {
+    "key": "respiratory.upper.laryngitis",
+    "parent": "respiratory.upper",
+    "label": "Ларингит"
+  },
+  {
+    "key": "respiratory.lower",
+    "parent": "respiratory",
+    "label": "Нижние"
+  },
+  {
+    "key": "respiratory.lower.tracheitis",
+    "parent": "respiratory.lower",
+    "label": "Трахеит"
+  },
+  {
+    "key": "respiratory.lower.bronchitis",
+    "parent": "respiratory.lower",
+    "label": "Бронхит"
+  },
+  {
+    "key": "respiratory.lower.bronchiolitis",
+    "parent": "respiratory.lower",
+    "label": "Бронхиолит"
+  },
+  {
+    "key": "respiratory.lower.pneumonia",
+    "parent": "respiratory.lower",
+    "label": "Пневмония"
+  },
+  {
+    "key": "respiratory.lower.pneumonia.bacterial",
+    "parent": "respiratory.lower.pneumonia",
+    "label": "Бактериальный"
+  },
+  {
+    "key": "respiratory.lower.pneumonia.viral",
+    "parent": "respiratory.lower.pneumonia",
+    "label": "Вирусный"
+  },
+  {
+    "key": "respiratory.lower.pneumonia.fungal",
+    "parent": "respiratory.lower.pneumonia",
+    "label": "Грибковый"
+  },
+  {
+    "key": "respiratory.lower.pneumonia.aspiration",
+    "parent": "respiratory.lower.pneumonia",
+    "label": "Аспирация"
+  },
+  {
+    "key": "respiratory.lower.pleural_effusion",
+    "parent": "respiratory.lower",
+    "label": "Плевральный выпот"
+  },
+  {
+    "key": "respiratory.lower.pneumothorax",
+    "parent": "respiratory.lower",
+    "label": "Пневмоторакс"
+  },
+  {
+    "key": "respiratory.lower.pulmonary_edema",
+    "parent": "respiratory.lower",
+    "label": "Отёк лёгких"
+  },
+  {
+    "key": "cardiovascular",
+    "parent": null,
+    "label": "Сердечно-сосудистые"
+  },
+  {
+    "key": "cardiovascular.heart",
+    "parent": "cardiovascular",
+    "label": "Сердце"
+  },
+  {
+    "key": "cardiovascular.heart.arrhythmia",
+    "parent": "cardiovascular.heart",
+    "label": "Аритмия"
+  },
+  {
+    "key": "cardiovascular.heart.myocarditis",
+    "parent": "cardiovascular.heart",
+    "label": "Миокардит"
+  },
+  {
+    "key": "cardiovascular.heart.pericarditis",
+    "parent": "cardiovascular.heart",
+    "label": "Перикардит"
+  },
+  {
+    "key": "cardiovascular.heart.cardiomyopathy",
+    "parent": "cardiovascular.heart",
+    "label": "Кардиомиопатия"
+  },
+  {
+    "key": "cardiovascular.heart.valvular_disease",
+    "parent": "cardiovascular.heart",
+    "label": "Клапанная патология"
+  },
+  {
+    "key": "cardiovascular.heart.heart_failure",
+    "parent": "cardiovascular.heart",
+    "label": "Сердечная недостаточность"
+  },
+  {
+    "key": "cardiovascular.vascular",
+    "parent": "cardiovascular",
+    "label": "Сосудистые"
+  },
+  {
+    "key": "cardiovascular.vascular.hypertension",
+    "parent": "cardiovascular.vascular",
+    "label": "Гипертензия"
+  },
+  {
+    "key": "cardiovascular.vascular.hypotension",
+    "parent": "cardiovascular.vascular",
+    "label": "Гипотензия"
+  },
+  {
+    "key": "cardiovascular.vascular.aneurysm",
+    "parent": "cardiovascular.vascular",
+    "label": "Аневризма"
+  },
+  {
+    "key": "cardiovascular.vascular.thrombosis",
+    "parent": "cardiovascular.vascular",
+    "label": "Тромбоз"
+  },
+  {
+    "key": "cardiovascular.vascular.vasculitis",
+    "parent": "cardiovascular.vascular",
+    "label": "Васкулит"
+  },
+  {
+    "key": "digestive",
+    "parent": null,
+    "label": "Пищеварительная система"
+  },
+  {
+    "key": "digestive.upper",
+    "parent": "digestive",
+    "label": "Верхние"
+  },
+  {
+    "key": "digestive.upper.esophagitis",
+    "parent": "digestive.upper",
+    "label": "Эзофагит"
+  },
+  {
+    "key": "digestive.upper.gastritis",
+    "parent": "digestive.upper",
+    "label": "Гастрит"
+  },
+  {
+    "key": "digestive.upper.gastric_ulcer",
+    "parent": "digestive.upper",
+    "label": "Язва желудка"
+  },
+  {
+    "key": "digestive.lower",
+    "parent": "digestive",
+    "label": "Нижние"
+  },
+  {
+    "key": "digestive.lower.enteritis",
+    "parent": "digestive.lower",
+    "label": "Энтерит"
+  },
+  {
+    "key": "digestive.lower.colitis",
+    "parent": "digestive.lower",
+    "label": "Колит"
+  },
+  {
+    "key": "digestive.lower.ibd",
+    "parent": "digestive.lower",
+    "label": "Воспалительное заболевание кишечника"
+  },
+  {
+    "key": "digestive.lower.obstruction",
+    "parent": "digestive.lower",
+    "label": "Обструкция"
+  },
+  {
+    "key": "digestive.lower.malabsorption",
+    "parent": "digestive.lower",
+    "label": "Мальабсорбция"
+  },
+  {
+    "key": "digestive.liver",
+    "parent": "digestive",
+    "label": "Печень"
+  },
+  {
+    "key": "digestive.liver.hepatitis",
+    "parent": "digestive.liver",
+    "label": "Гепатит"
+  },
+  {
+    "key": "digestive.liver.cirrhosis",
+    "parent": "digestive.liver",
+    "label": "Цирроз"
+  },
+  {
+    "key": "digestive.liver.liver_failure",
+    "parent": "digestive.liver",
+    "label": "Печёночная недостаточность"
+  },
+  {
+    "key": "digestive.liver.fatty_liver",
+    "parent": "digestive.liver",
+    "label": "Жировая дистрофия печени"
+  },
+  {
+    "key": "digestive.pancreas",
+    "parent": "digestive",
+    "label": "Поджелудочная железа"
+  },
+  {
+    "key": "digestive.pancreas.pancreatitis",
+    "parent": "digestive.pancreas",
+    "label": "Панкреатит"
+  },
+  {
+    "key": "digestive.pancreas.pancreatic_cyst",
+    "parent": "digestive.pancreas",
+    "label": "Киста поджелудочной железы"
+  },
+  {
+    "key": "urinary",
+    "parent": null,
+    "label": "Мочевыделительная система"
+  },
+  {
+    "key": "urinary.kidneys",
+    "parent": "urinary",
+    "label": "Почки"
+  },
+  {
+    "key": "urinary.kidneys.nephritis",
+    "parent": "urinary.kidneys",
+    "label": "Нефрит"
+  },
+  {
+    "key": "urinary.kidneys.pyelonephritis",
+    "parent": "urinary.kidneys",
+    "label": "Пиелонефрит"
+  },
+  {
+    "key": "urinary.kidneys.kidney_stones",
+    "parent": "urinary.kidneys",
+    "label": "Камни почек"
+  },
+  {
+    "key": "urinary.kidneys.renal_failure",
+    "parent": "urinary.kidneys",
+    "label": "Почечная недостаточность"
+  },
+  {
+    "key": "urinary.bladder",
+    "parent": "urinary",
+    "label": "Мочевой пузырь"
+  },
+  {
+    "key": "urinary.bladder.cystitis",
+    "parent": "urinary.bladder",
+    "label": "Цистит"
+  },
+  {
+    "key": "urinary.bladder.bladder_stones",
+    "parent": "urinary.bladder",
+    "label": "Камни мочевого пузыря"
+  },
+  {
+    "key": "urinary.bladder.tumor",
+    "parent": "urinary.bladder",
+    "label": "Опухоль"
+  },
+  {
+    "key": "urinary.urethra",
+    "parent": "urinary",
+    "label": "Уретра"
+  },
+  {
+    "key": "urinary.urethra.urethritis",
+    "parent": "urinary.urethra",
+    "label": "Уретрит"
+  },
+  {
+    "key": "urinary.urethra.urethral_obstruction",
+    "parent": "urinary.urethra",
+    "label": "Обструкция уретры"
+  },
+  {
+    "key": "reproductive_female",
+    "parent": null,
+    "label": "Женская репродуктивная система"
+  },
+  {
+    "key": "reproductive_female.vagina",
+    "parent": "reproductive_female",
+    "label": "Влагалище"
+  },
+  {
+    "key": "reproductive_female.vagina.vaginitis",
+    "parent": "reproductive_female.vagina",
+    "label": "Вагинит"
+  },
+  {
+    "key": "reproductive_female.vagina.vaginal_prolapse",
+    "parent": "reproductive_female.vagina",
+    "label": "Выпадение влагалища"
+  },
+  {
+    "key": "reproductive_female.uterus",
+    "parent": "reproductive_female",
+    "label": "Матка"
+  },
+  {
+    "key": "reproductive_female.uterus.endometritis",
+    "parent": "reproductive_female.uterus",
+    "label": "Эндометрит"
+  },
+  {
+    "key": "reproductive_female.uterus.endometriosis",
+    "parent": "reproductive_female.uterus",
+    "label": "Эндометриоз"
+  },
+  {
+    "key": "reproductive_female.uterus.fibroids",
+    "parent": "reproductive_female.uterus",
+    "label": "Миома матки"
+  },
+  {
+    "key": "reproductive_female.ovaries",
+    "parent": "reproductive_female",
+    "label": "Яичники"
+  },
+  {
+    "key": "reproductive_female.ovaries.ovarian_cyst",
+    "parent": "reproductive_female.ovaries",
+    "label": "Киста яичника"
+  },
+  {
+    "key": "reproductive_female.ovaries.oophoritis",
+    "parent": "reproductive_female.ovaries",
+    "label": "Оофорит"
+  },
+  {
+    "key": "reproductive_female.mammary",
+    "parent": "reproductive_female",
+    "label": "Молочные железы"
+  },
+  {
+    "key": "reproductive_female.mammary.mastitis",
+    "parent": "reproductive_female.mammary",
+    "label": "Мастит"
+  },
+  {
+    "key": "reproductive_female.mammary.mammary_tumor",
+    "parent": "reproductive_female.mammary",
+    "label": "Опухоль молочной железы"
+  },
+  {
+    "key": "reproductive_male",
+    "parent": null,
+    "label": "Мужская репродуктивная система"
+  },
+  {
+    "key": "reproductive_male.testes",
+    "parent": "reproductive_male",
+    "label": "Семенники"
+  },
+  {
+    "key": "reproductive_male.testes.orchitis",
+    "parent": "reproductive_male.testes",
+    "label": "Орхит"
+  },
+  {
+    "key": "reproductive_male.testes.epididymitis",
+    "parent": "reproductive_male.testes",
+    "label": "Эпидидимит"
+  },
+  {
+    "key": "reproductive_male.testes.testicular_torsion",
+    "parent": "reproductive_male.testes",
+    "label": "Перекрут семенника"
+  },
+  {
+    "key": "reproductive_male.testes.testicular_tumor",
+    "parent": "reproductive_male.testes",
+    "label": "Опухоль семенника"
+  },
+  {
+    "key": "reproductive_male.prostate",
+    "parent": "reproductive_male",
+    "label": "Предстательная железа"
+  },
+  {
+    "key": "reproductive_male.prostate.prostatitis",
+    "parent": "reproductive_male.prostate",
+    "label": "Простатит"
+  },
+  {
+    "key": "reproductive_male.prostate.bph",
+    "parent": "reproductive_male.prostate",
+    "label": "Доброкачественная гиперплазия предстательной железы"
+  },
+  {
+    "key": "nervous",
+    "parent": null,
+    "label": "Нервная система"
+  },
+  {
+    "key": "nervous.central",
+    "parent": "nervous",
+    "label": "Центральная нервная система"
+  },
+  {
+    "key": "nervous.central.brain",
+    "parent": "nervous.central",
+    "label": "Головной мозг"
+  },
+  {
+    "key": "nervous.central.brain.meningitis",
+    "parent": "nervous.central.brain",
+    "label": "Менингит"
+  },
+  {
+    "key": "nervous.central.brain.encephalitis",
+    "parent": "nervous.central.brain",
+    "label": "Энцефалит"
+  },
+  {
+    "key": "nervous.central.brain.stroke",
+    "parent": "nervous.central.brain",
+    "label": "Инсульт"
+  },
+  {
+    "key": "nervous.central.brain.brain_tumor",
+    "parent": "nervous.central.brain",
+    "label": "Опухоль головного мозга"
+  },
+  {
+    "key": "nervous.central.brain.traumatic_brain_injury",
+    "parent": "nervous.central.brain",
+    "label": "Черепно-мозговая травма"
+  },
+  {
+    "key": "nervous.central.brain.epilepsy",
+    "parent": "nervous.central.brain",
+    "label": "Эпилепсия"
+  },
+  {
+    "key": "nervous.central.spinal_cord",
+    "parent": "nervous.central",
+    "label": "Спинной мозг"
+  },
+  {
+    "key": "nervous.central.spinal_cord.injury",
+    "parent": "nervous.central.spinal_cord",
+    "label": "Травма спинного мозга"
+  },
+  {
+    "key": "nervous.peripheral",
+    "parent": "nervous",
+    "label": "Периферическая"
+  },
+  {
+    "key": "nervous.peripheral.neuropathy",
+    "parent": "nervous.peripheral",
+    "label": "Нейропатия"
+  },
+  {
+    "key": "nervous.peripheral.nerve_injury",
+    "parent": "nervous.peripheral",
+    "label": "Повреждение периферического нерва"
+  },
+  {
+    "key": "nervous.peripheral.myasthenia_gravis",
+    "parent": "nervous.peripheral",
+    "label": "Миастения"
+  },
+  {
+    "key": "endocrine",
+    "parent": null,
+    "label": "Эндокринные"
+  },
+  {
+    "key": "endocrine.thyroid",
+    "parent": "endocrine",
+    "label": "Щитовидная железа"
+  },
+  {
+    "key": "endocrine.thyroid.hypothyroidism",
+    "parent": "endocrine.thyroid",
+    "label": "Гипотиреоз"
+  },
+  {
+    "key": "endocrine.thyroid.hyperthyroidism",
+    "parent": "endocrine.thyroid",
+    "label": "Гипертиреоз"
+  },
+  {
+    "key": "endocrine.thyroid.thyroiditis",
+    "parent": "endocrine.thyroid",
+    "label": "Тиреоидит"
+  },
+  {
+    "key": "endocrine.adrenal",
+    "parent": "endocrine",
+    "label": "Надпочечники"
+  },
+  {
+    "key": "endocrine.adrenal.adrenal_insufficiency",
+    "parent": "endocrine.adrenal",
+    "label": "Надпочечниковая недостаточность"
+  },
+  {
+    "key": "endocrine.adrenal.cushings",
+    "parent": "endocrine.adrenal",
+    "label": "Синдром Кушинга"
+  },
+  {
+    "key": "endocrine.pancreas_endo",
+    "parent": "endocrine",
+    "label": "Поджелудочная железа (эндокринная часть)"
+  },
+  {
+    "key": "endocrine.pancreas_endo.diabetes_mellitus",
+    "parent": "endocrine.pancreas_endo",
+    "label": "Сахарный диабет"
+  },
+  {
+    "key": "endocrine.pancreas_endo.hypoglycemia",
+    "parent": "endocrine.pancreas_endo",
+    "label": "Гипогликемия"
+  },
+  {
+    "key": "hematologic",
+    "parent": null,
+    "label": "Гематологические"
+  },
+  {
+    "key": "hematologic.anemia",
+    "parent": "hematologic",
+    "label": "Анемия"
+  },
+  {
+    "key": "hematologic.anemia.iron_deficiency",
+    "parent": "hematologic.anemia",
+    "label": "Дефицит железа"
+  },
+  {
+    "key": "hematologic.anemia.hemolytic",
+    "parent": "hematologic.anemia",
+    "label": "Гемолитический"
+  },
+  {
+    "key": "hematologic.anemia.aplastic",
+    "parent": "hematologic.anemia",
+    "label": "Апластический"
+  },
+  {
+    "key": "hematologic.coagulation",
+    "parent": "hematologic",
+    "label": "Коагуляция"
+  },
+  {
+    "key": "hematologic.coagulation.coagulopathy",
+    "parent": "hematologic.coagulation",
+    "label": "Коагулопатия"
+  },
+  {
+    "key": "hematologic.coagulation.thrombophilia",
+    "parent": "hematologic.coagulation",
+    "label": "Тромбофилия"
+  },
+  {
+    "key": "hematologic.wbc",
+    "parent": "hematologic",
+    "label": "Лейкоциты"
+  },
+  {
+    "key": "hematologic.wbc.leukocytosis",
+    "parent": "hematologic.wbc",
+    "label": "Лейкоцитоз"
+  },
+  {
+    "key": "hematologic.wbc.leukopenia",
+    "parent": "hematologic.wbc",
+    "label": "Лейкопения"
+  },
+  {
+    "key": "hematologic.wbc.leukemia",
+    "parent": "hematologic.wbc",
+    "label": "Лейкоз"
+  },
+  {
+    "key": "hematologic.lymphatic",
+    "parent": "hematologic",
+    "label": "Лимфатические"
+  },
+  {
+    "key": "hematologic.lymphatic.lymphadenopathy",
+    "parent": "hematologic.lymphatic",
+    "label": "Лимфаденопатия"
+  },
+  {
+    "key": "hematologic.lymphatic.lymphoma",
+    "parent": "hematologic.lymphatic",
+    "label": "Лимфома"
+  },
+  {
+    "key": "immune",
+    "parent": null,
+    "label": "Иммунные"
+  },
+  {
+    "key": "immune.immunodeficiency",
+    "parent": "immune",
+    "label": "Иммунодефицит"
+  },
+  {
+    "key": "immune.immunodeficiency.primary",
+    "parent": "immune.immunodeficiency",
+    "label": "Первичный"
+  },
+  {
+    "key": "immune.immunodeficiency.secondary",
+    "parent": "immune.immunodeficiency",
+    "label": "Вторичный"
+  },
+  {
+    "key": "immune.autoimmune",
+    "parent": "immune",
+    "label": "Аутоиммунный"
+  },
+  {
+    "key": "immune.autoimmune.sle",
+    "parent": "immune.autoimmune",
+    "label": "Системная красная волчанка"
+  },
+  {
+    "key": "immune.autoimmune.rheumatoid_arthritis",
+    "parent": "immune.autoimmune",
+    "label": "Ревматоидный артрит"
+  },
+  {
+    "key": "immune.autoimmune.multiple_sclerosis",
+    "parent": "immune.autoimmune",
+    "label": "Рассеянный склероз"
+  },
+  {
+    "key": "immune.allergy",
+    "parent": "immune",
+    "label": "Аллергия"
+  },
+  {
+    "key": "immune.allergy.food",
+    "parent": "immune.allergy",
+    "label": "Пищевая аллергия"
+  },
+  {
+    "key": "immune.allergy.environmental",
+    "parent": "immune.allergy",
+    "label": "Аллергия на факторы окружающей среды"
+  },
+  {
+    "key": "immune.allergy.drug",
+    "parent": "immune.allergy",
+    "label": "Лекарственная аллергия"
+  },
+  {
+    "key": "behavioral",
+    "parent": null,
+    "label": "Поведенческие"
+  },
+  {
+    "key": "behavioral.anxiety",
+    "parent": "behavioral",
+    "label": "Тревожность"
+  },
+  {
+    "key": "behavioral.anxiety.generalized",
+    "parent": "behavioral.anxiety",
+    "label": "Генерализованное тревожное расстройство"
+  },
+  {
+    "key": "behavioral.anxiety.phobia",
+    "parent": "behavioral.anxiety",
+    "label": "Фобия"
+  },
+  {
+    "key": "behavioral.anxiety.social",
+    "parent": "behavioral.anxiety",
+    "label": "Социальная тревожность"
+  },
+  {
+    "key": "behavioral.depression",
+    "parent": "behavioral",
+    "label": "Депрессия"
+  },
+  {
+    "key": "behavioral.aggression",
+    "parent": "behavioral",
+    "label": "Агрессия"
+  },
+  {
+    "key": "behavioral.aggression.inter_male",
+    "parent": "behavioral.aggression",
+    "label": "Межсамцовая"
+  },
+  {
+    "key": "behavioral.aggression.fear_related",
+    "parent": "behavioral.aggression",
+    "label": "Связанный со страхом"
+  },
+  {
+    "key": "behavioral.aggression.territorial",
+    "parent": "behavioral.aggression",
+    "label": "Территориальная"
+  },
+  {
+    "key": "behavioral.compulsive",
+    "parent": "behavioral",
+    "label": "Компульсивное поведение"
+  },
+  {
+    "key": "behavioral.compulsive.self_injury",
+    "parent": "behavioral.compulsive",
+    "label": "Самоповреждение"
+  },
+  {
+    "key": "behavioral.compulsive.stereotypy",
+    "parent": "behavioral.compulsive",
+    "label": "Стереотипия"
+  },
+  {
+    "key": "behavioral.compulsive.pica",
+    "parent": "behavioral.compulsive",
+    "label": "Пика"
+  },
+  {
+    "key": "behavioral.stress",
+    "parent": "behavioral",
+    "label": "Связанный со стрессом"
+  },
+  {
+    "key": "behavioral.stress.acute",
+    "parent": "behavioral.stress",
+    "label": "Острый стресс"
+  },
+  {
+    "key": "behavioral.stress.chronic",
+    "parent": "behavioral.stress",
+    "label": "Хронический стресс"
+  },
+  {
+    "key": "behavioral.stress.ptsd",
+    "parent": "behavioral.stress",
+    "label": "ПТСР"
+  },
+  {
+    "key": "toxicological",
+    "parent": null,
+    "label": "Токсикологические"
+  },
+  {
+    "key": "toxicological.poisoning",
+    "parent": "toxicological",
+    "label": "Отравление"
+  },
+  {
+    "key": "toxicological.poisoning.heavy_metals",
+    "parent": "toxicological.poisoning",
+    "label": "Тяжёлые металлы"
+  },
+  {
+    "key": "toxicological.poisoning.pesticides",
+    "parent": "toxicological.poisoning",
+    "label": "Пестициды"
+  },
+  {
+    "key": "toxicological.poisoning.plants",
+    "parent": "toxicological.poisoning",
+    "label": "Растения"
+  },
+  {
+    "key": "toxicological.poisoning.drugs",
+    "parent": "toxicological.poisoning",
+    "label": "Лекарственные средства"
+  },
+  {
+    "key": "toxicological.poisoning.environmental",
+    "parent": "toxicological.poisoning",
+    "label": "Экологический"
+  },
+  {
+    "key": "nutritional",
+    "parent": null,
+    "label": "Питательные нарушения"
+  },
+  {
+    "key": "nutritional.obesity",
+    "parent": "nutritional",
+    "label": "Ожирение"
+  },
+  {
+    "key": "nutritional.obesity.simple",
+    "parent": "nutritional.obesity",
+    "label": "Простой"
+  },
+  {
+    "key": "nutritional.obesity.morbid",
+    "parent": "nutritional.obesity",
+    "label": "Морбидный"
+  },
+  {
+    "key": "nutritional.malnutrition",
+    "parent": "nutritional",
+    "label": "Недоедание"
+  },
+  {
+    "key": "nutritional.malnutrition.protein_energy",
+    "parent": "nutritional.malnutrition",
+    "label": "Белково-энергетический"
+  },
+  {
+    "key": "nutritional.vitamin_deficiencies",
+    "parent": "nutritional",
+    "label": "Дефицит витаминов"
+  },
+  {
+    "key": "nutritional.vitamin_deficiencies.vitamin_a",
+    "parent": "nutritional.vitamin_deficiencies",
+    "label": "Витамин A"
+  },
+  {
+    "key": "nutritional.vitamin_deficiencies.vitamin_d",
+    "parent": "nutritional.vitamin_deficiencies",
+    "label": "Витамин D"
+  },
+  {
+    "key": "nutritional.mineral_deficiencies",
+    "parent": "nutritional",
+    "label": "Дефицит минералов"
+  },
+  {
+    "key": "nutritional.mineral_deficiencies.calcium",
+    "parent": "nutritional.mineral_deficiencies",
+    "label": "Кальций"
+  },
+  {
+    "key": "nutritional.mineral_deficiencies.iron",
+    "parent": "nutritional.mineral_deficiencies",
+    "label": "Железо"
+  },
+  {
+    "key": "nutritional.electrolyte_imbalances",
+    "parent": "nutritional",
+    "label": "Электролитные нарушения"
+  },
+  {
+    "key": "nutritional.electrolyte_imbalances.hyponatremia",
+    "parent": "nutritional.electrolyte_imbalances",
+    "label": "Гипонатриемия"
+  },
+  {
+    "key": "nutritional.electrolyte_imbalances.hypernatremia",
+    "parent": "nutritional.electrolyte_imbalances",
+    "label": "Гипернатриемия"
+  },
+  {
+    "key": "nutritional.electrolyte_imbalances.hypokalemia",
+    "parent": "nutritional.electrolyte_imbalances",
+    "label": "Гипокалиемия"
+  },
+  {
+    "key": "special",
+    "parent": null,
+    "label": "Особые состояния"
+  },
+  {
+    "key": "special.surgical_complications",
+    "parent": "special",
+    "label": "Хирургические осложнения"
+  },
+  {
+    "key": "special.surgical_complications.infection",
+    "parent": "special.surgical_complications",
+    "label": "Инфекция"
+  },
+  {
+    "key": "special.surgical_complications.dehiscence",
+    "parent": "special.surgical_complications",
+    "label": "Несостоятельность шва"
+  },
+  {
+    "key": "special.surgical_complications.hemorrhage",
+    "parent": "special.surgical_complications",
+    "label": "Кровотечение"
+  },
+  {
+    "key": "special.anesthesia_complications",
+    "parent": "special",
+    "label": "Осложнения анестезии"
+  },
+  {
+    "key": "special.anesthesia_complications.hypotension",
+    "parent": "special.anesthesia_complications",
+    "label": "Гипотензия"
+  },
+  {
+    "key": "special.anesthesia_complications.arrhythmia",
+    "parent": "special.anesthesia_complications",
+    "label": "Аритмия"
+  },
+  {
+    "key": "special.anesthesia_complications.anaphylaxis",
+    "parent": "special.anesthesia_complications",
+    "label": "Анафилаксия"
+  },
+  {
+    "key": "special.environmental",
+    "parent": "special",
+    "label": "Воздействия окружающей среды"
+  },
+  {
+    "key": "special.environmental.heat_stroke",
+    "parent": "special.environmental",
+    "label": "Тепловой удар"
+  },
+  {
+    "key": "special.environmental.heat_exhaustion",
+    "parent": "special.environmental",
+    "label": "Тепловое истощение"
+  },
+  {
+    "key": "special.environmental.hypothermia",
+    "parent": "special.environmental",
+    "label": "Гипотермия"
+  },
+  {
+    "key": "special.environmental.frostbite",
+    "parent": "special.environmental",
+    "label": "Обморожение"
+  }
+]

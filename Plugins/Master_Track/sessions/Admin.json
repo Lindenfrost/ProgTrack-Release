@@ -1,0 +1,28 @@
+{
+  "username": "Admin",
+  "disabled_plugins": [],
+  "last_active_tab": "tab.heritage_track",
+  "last_animal_group": "",
+  "last_category_index": 6,
+  "window_geometry": {
+    "x": 412,
+    "y": 166,
+    "w": 1400,
+    "h": 752
+  },
+  "active_species": null,
+  "active_project": "All",
+  "species_cache": [],
+  "max_parent_generations": 5,
+  "projects_sidebar_visible": true,
+  "species_sidebar_visible": true,
+  "style_settings": {},
+  "language": null,
+  "display_chk_prog": false,
+  "display_chk_weight": true,
+  "display_chk_events": false,
+  "display_chk_events_offspring": true,
+  "display_chk_events_breeding": true,
+  "display_chk_events_experimental": true,
+  "sidebar_visible": false
+}

@@ -1,0 +1,30 @@
+{
+  "name": "Network_Track",
+  "display_name": "Network Track",
+  "version": "0.1.0",
+  "description": "Lightweight multi-user chat system for team communication within a shared ProgTrack data directory. Messages are stored in a shared text file with automatic polling, notification sounds, and configurable display settings.",
+  "author": "DLL",
+  "SPDX-License-Identifier": "GPL-3.0-or-later",
+  "Copyright": "Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH",
+  "entry_point": "network_track.NetworkTrackWidget",
+  "dependencies": [
+    "PyQt6"
+  ],
+  "data_files": [
+    "chat_log.txt",
+    "network_track_settings.json",
+    "notification.wav"
+  ],
+  "min_progtrack_version": "RC 0.1.0",
+  "menu_location": "Tools",
+  "icon": "progtrack_icon.ico",
+  "optional": true,
+  "features": [
+    "shared_file_team_chat",
+    "multi_user_message_log",
+    "automatic_polling",
+    "notification_sounds",
+    "display_settings",
+    "master_track_identity_integration"
+  ]
+}

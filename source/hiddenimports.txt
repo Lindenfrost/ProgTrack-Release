@@ -1,0 +1,36 @@
+# Minimal hidden imports required by the portable ProgTrack launcher build.
+# Keep this list small; launcher_small.spec analyzes ProgTrack.v.*.py and
+# plugin source files directly, so most normal imports are discovered there.
+PyQt6.QtCore
+PyQt6.QtGui
+PyQt6.QtMultimedia
+PyQt6.QtMultimediaWidgets
+PyQt6.QtOpenGL
+PyQt6.QtOpenGLWidgets
+PyQt6.QtPrintSupport
+PyQt6.QtSvg
+PyQt6.QtSvgWidgets
+PyQt6.QtWidgets
+matplotlib.artist
+matplotlib.backends.backend_qt
+matplotlib.backends.backend_qt5agg
+matplotlib.backends.backend_qtagg
+matplotlib.backends.backend_pdf
+matplotlib.collections
+matplotlib.colors
+matplotlib.dates
+matplotlib.figure
+matplotlib.lines
+matplotlib.patches
+matplotlib.path
+matplotlib.text
+matplotlib.ticker
+matplotlib.transforms
+matplotlib.widgets
+openpyxl
+pandas
+reportlab.pdfbase.ttfonts
+scipy.interpolate
+scipy.optimize
+scipy.optimize._highspy._core
+scipy.optimize._highspy._highs_options

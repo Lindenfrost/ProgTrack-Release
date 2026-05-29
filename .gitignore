@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.log
+launcher_error.log
+build/
+.build_env/
+matplotlib_cache/
+runtime_plot_test.*
+.windsurf/
+ProgTrack.v.0.1.0.zip

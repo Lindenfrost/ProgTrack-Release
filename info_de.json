@@ -1,0 +1,47 @@
+<h1>ProgTrack©</h1>
+<p><strong>Version:</strong> RC v.1.0</p>
+<p><strong>Beschreibung:</strong> ProgTrack ist eine Desktop-Anwendung zur Verwaltung, Visualisierung und Dokumentation von Hormondaten in der reproduktionsbiologischen Primatenforschung. Sie ermöglicht die detaillierte Erfassung von Progesteron- und PdG-Messungen sowie reproduktiver Ereignisse, Gewichtsdaten, Pedigree-Analysen, Käfig-/Haltungsmanagement und Projektkoordination in einer einheitlichen Plattform.</p>
+
+<h2>Kernfunktionen:</h2>
+<ul>
+  <li>Erfassung und Nachverfolgung unbegrenzt vieler Progesteron- und PdG-Messungen pro Tier</li>
+  <li>Automatische Umrechnung von PdG-Werten (Urin) in Progesteron-Äquivalente mittels anpassbarer Formeln</li>
+  <li>Interaktive Diagramme mit Phasen-Overlays, Gewichtskurven und Ereignis-Markern (PGF, Embryotransfers, Operationen)</li>
+  <li>Editierbare tierindividuelle Daten mit rollenbasierten Einstellungen (Spender, Amme, Nachkomme, Partner, Zuchttier)</li>
+  <li>Stapel-Import/-Export von Daten im Excel-Format mit flexiblen Datumsfiltern</li>
+  <li>Archivierung und Wiederherstellung von Tierdatensätzen für longitudinale Studien</li>
+  <li>Sichere lokale JSON-Persistenz mit robuster Fehlerbehandlung</li>
+  <li>Vollständig lokalisiert (EN, DE, IT, RU), skalierbare PyQt6-Oberfläche mit individuellem Theming und Icons</li>
+</ul>
+
+<h2>Plugins:</h2>
+<ul>
+  <li><strong>OP-Planer</strong> – Gantt-Diagramm-basierte Planung von Operationen und Embryotransfers mit Erholungsregeln und Sperrtagen</li>
+  <li><strong>Tierberichte</strong> – Berichtserstellung pro Tier mit Statistiken, Zeitachsen und PDF-Export</li>
+  <li><strong>Embryo-Tracker</strong> – Vorhersage des Trächtigkeitstags anhand kranieller Ultraschallmessungen</li>
+  <li><strong>Flow Track</strong> – Visuelles Embryo-Flow-Management zur Verknüpfung von Spendern und Ammen mit Kennzahlen</li>
+  <li><strong>Heritage Track</strong> – Pedigree-Visualisierung mit Analyse von Verwandtschaft (Kinship) und Inzuchtkoeffizient</li>
+  <li><strong>Cage Track</strong> – Hierarchisches Haltungsmanagement mit Nachverfolgung der Bewegungshistorie</li>
+  <li><strong>PdG-Converter</strong> – PdG-zu-Progesteron-Umrechnung mit Knick- und linearer Modellanpassung</li>
+  <li><strong>Projects Track</strong> – Projektbasierte Tierfilterung mit Integration als Seitenleisten-Tab</li>
+  <li><strong>Network Track</strong> – Multi-User-Teamchat über ein gemeinsames Datei-Backend</li>
+  <li><strong>Master Track</strong> – Authentifizierung, Benutzerrollen, Berechtigungsverwaltung und Audit-Logging</li>
+  <li><strong>Medi Track</strong> – Medizinische Historie mit hierarchischer Kategorisierung von Zuständen und Dokumentenmanagement</li>
+  <li><strong>Sample Track</strong> – Biologisches und Gewebeproben-Tracking (Organe, Blut, DNA, RNA, etc.) mit Lagerverwaltung</li>
+</ul>
+
+<h2>ProgTrack - Copyright and License Notice</h2>
+
+<p>Copyright (C) 2026 Dimitri L. Lindenwald, PhD, Deutsches Primatenzentrum GmbH, Leibniz Institute for Primate Research, Kellnerweg 4, 37077 Goettingen, Germany.</p>
+
+<p>This project is released under the GNU General Public License version 3.0 or later. You may use, modify, and redistribute the software under the terms of that license. A copy of the license is available at https://www.gnu.org/licenses/gpl-3.0.html and is included in this repository as the file <code>LICENSE</code>.</p>
+
+<p>If a derivative work is prepared, that is based on or incorporates ProgTrack or any part thereof and that is made available to others, then a summary of the changes made to ProgTrack shall be included in any such work.</p>
+
+<h3>Disclaimer of Warranty and Liability</h3>
+<p>The software is provided without any warranty to the extent permitted by law. In particular, no warranty is given for functionality, freedom from errors, or fitness for a particular purpose. The developers and owners are not liable for direct or indirect damages, data loss, or other consequences resulting from use of the software, except if caused by willful intent or gross negligence or in cases of mandatory statutory liability.</p>
+
+<h3>Third-Party Components</h3>
+<p>The compiled launcher contains a portable Python runtime and third-party libraries. Those components remain the property of their respective rights holders and are governed by their own license terms. Known third-party notices are documented in <code>THIRD_PARTY_NOTICES.md</code> and <code>third_party_licenses/</code>.</p>
+
+<p>The entire above notice shall be included in all copies, portions, or derivates of ProgTrack.</p>

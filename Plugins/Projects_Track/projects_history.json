@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "projects": {
+    "OTOF": {
+      "archived": true,
+      "animals": []
+    },
+    "OTOF-": {
+      "archived": false,
+      "animals": [
+        {
+          "name": "Anton",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Ekaterina",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Konstantin",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Legolas",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Olga",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Oropher",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Svetlana",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Thranduil",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        }
+      ]
+    },
+    "Crossbreeding": {
+      "archived": true,
+      "animals": []
+    },
+    "Backcrossing": {
+      "archived": false,
+      "animals": [
+        {
+          "name": "Aragorn I",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Aragorn II",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Arwen",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Celebrían",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Eldarion",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Elladan",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Elrohir",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Elrond",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Isildur",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Jessica",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        },
+        {
+          "name": "Taylor",
+          "status": "active",
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "last_severity": null
+        }
+      ]
+    }
+  }
+}

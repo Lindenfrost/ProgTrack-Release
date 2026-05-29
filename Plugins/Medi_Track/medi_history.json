@@ -1,0 +1,732 @@
+{
+  "version": "1.7",
+  "animals": {
+    "Elurín": {
+      "animal_id": "",
+      "entries": [],
+      "documents": []
+    },
+    "Anton": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "a210e81b-ba9e-40d3-a02f-79d30436355e",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "a6fb1ddb-931f-433d-b4f9-d387e772fd7a",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Ekaterina": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "493d59ac-3969-4104-83e4-6bd134094750",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "f3c62378-3cea-4ed8-8592-4d82f0b4d360",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Konstantin": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "091b2f3d-8436-48b3-98eb-e766eedf99cc",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "b70b14e2-df6e-44c3-9786-4aa945761d18",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Legolas": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "9d81236c-adb4-490e-a8d2-aa5a459dbaf2",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "ae24be83-8454-422d-994b-2a72cde2a245",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Olga": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "d829eaa5-0037-4e69-a2d9-a19dff36af85",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "8f01bc90-6336-4406-b5a6-e83c24ef8f34",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Oropher": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "5a7f2a9b-f054-4ff0-a294-f7dade6460eb",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "6e4c8d67-8466-405f-bd73-a70e999e9716",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Svetlana": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "83501287-b10b-4cf1-9762-1119b7672ce9",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "cacf9222-1266-4e09-aa13-01462e18e887",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Thranduil": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "874094a9-d073-4358-bf7a-26325acb9708",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "27d92a35-c614-4998-86bb-f401550c2fa4",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Aragorn I": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "3e4a335d-db5b-400f-a617-e8bdb747b338",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "c9637147-18be-4aab-9810-05dce6c23cd3",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Aragorn II": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "534f481c-07c8-4df2-80bb-41b77cde70ec",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "b6c687bc-a04f-42b7-b5c0-b6e7ba00bf4e",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Arwen": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "8cbb0bbb-7270-4e36-9fbb-57720aa6ab38",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "932f975d-d4e8-443c-8347-8ce75c409d1e",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Celebrían": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "a668f033-1ead-47d6-8cc9-a80ea1577dd3",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "e3f7ab2a-cc80-40c1-9abb-4ffe85700d14",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Eldarion": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "0f807244-bc62-4d91-8b88-04b4b1fc402a",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "1960242b-870e-4198-83a1-7b997fb6d102",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Elladan": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "6dbee6fe-dbfd-43d5-8783-671389f48b6f",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "9d539d9a-df34-4ce1-8693-dd13d8bf9946",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Elrohir": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "9dc0fc53-1a81-4c06-8ad9-1db3ce4b619f",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "5faf44ea-6fb1-455a-861d-aba3c5b4c1cb",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Elrond": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "ea69deae-b195-4e48-9feb-391b3b9b0653",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "75379162-ea1c-484e-8020-13b98dc58f23",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Isildur": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "541aa4f5-83a5-492c-ae84-18769b3032d4",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "4cb4b470-689d-43f4-9139-077a2b3535a7",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Jessica": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "17232659-4a06-4d3d-a5f1-936f521d10a7",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "745b8545-8ba7-4d5d-8e21-a4ba772bce02",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    },
+    "Taylor": {
+      "animal_id": "",
+      "entries": [
+        {
+          "id": "e88aec3a-7381-4dd2-9416-4e71f96216f3",
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        },
+        {
+          "id": "ec25b7ac-bdaa-47d6-a906-f18b07616b50",
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "status_type": "other",
+          "issue_id": "",
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "condition_language": "en",
+          "condition_depth": 0,
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "linked_document_ids": []
+        }
+      ],
+      "documents": []
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "username": "Manager",
+  "disabled_plugins": [],
+  "last_active_tab": "tab.plots",
+  "last_animal_group": "",
+  "last_category_index": 0,
+  "window_geometry": {
+    "x": 341,
+    "y": 144,
+    "w": 1400,
+    "h": 800
+  },
+  "active_species": null,
+  "active_project": "All",
+  "species_cache": [],
+  "max_parent_generations": 3,
+  "projects_sidebar_visible": true,
+  "species_sidebar_visible": true,
+  "style_settings": {},
+  "language": null,
+  "display_chk_prog": true,
+  "display_chk_weight": true,
+  "display_chk_events": true,
+  "display_chk_events_offspring": true,
+  "display_chk_events_breeding": true,
+  "display_chk_events_experimental": true
+}

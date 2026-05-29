@@ -1,0 +1,15 @@
+{
+  "recovery_op": 60,
+  "recovery_transfer": 30,
+  "cycle_active_days": 60,
+  "cycle_break_days": 30,
+  "transfer_offset_days": 6,
+  "donors_per_surgery": 3,
+  "surrogates_per_transfer": 2,
+  "surgery_weekdays": [
+    2
+  ],
+  "transfer_weekdays": [
+    1
+  ]
+}

@@ -1,0 +1,1462 @@
+[
+  {
+    "key": "general",
+    "parent": null,
+    "label": "Generale"
+  },
+  {
+    "key": "general.fever",
+    "parent": "general",
+    "label": "Febbre"
+  },
+  {
+    "key": "general.fever.hyperthermia",
+    "parent": "general.fever",
+    "label": "Ipertermia"
+  },
+  {
+    "key": "general.fever.hypothermia",
+    "parent": "general.fever",
+    "label": "Ipotermia"
+  },
+  {
+    "key": "general.dehydration",
+    "parent": "general",
+    "label": "Disidratazione"
+  },
+  {
+    "key": "general.dehydration.mild",
+    "parent": "general.dehydration",
+    "label": "Lieve"
+  },
+  {
+    "key": "general.dehydration.moderate",
+    "parent": "general.dehydration",
+    "label": "Moderato"
+  },
+  {
+    "key": "general.dehydration.severe",
+    "parent": "general.dehydration",
+    "label": "Grave"
+  },
+  {
+    "key": "general.weight_loss",
+    "parent": "general",
+    "label": "Perdita di peso"
+  },
+  {
+    "key": "general.weight_loss.acute",
+    "parent": "general.weight_loss",
+    "label": "Acuto"
+  },
+  {
+    "key": "general.weight_loss.chronic",
+    "parent": "general.weight_loss",
+    "label": "Cronico"
+  },
+  {
+    "key": "general.poor_body_condition",
+    "parent": "general",
+    "label": "Scarse condizioni corporee"
+  },
+  {
+    "key": "general.poor_body_condition.mild",
+    "parent": "general.poor_body_condition",
+    "label": "Lieve"
+  },
+  {
+    "key": "general.poor_body_condition.moderate",
+    "parent": "general.poor_body_condition",
+    "label": "Moderato"
+  },
+  {
+    "key": "general.poor_body_condition.severe",
+    "parent": "general.poor_body_condition",
+    "label": "Grave"
+  },
+  {
+    "key": "musculoskeletal",
+    "parent": null,
+    "label": "Muscoloscheletrico"
+  },
+  {
+    "key": "musculoskeletal.bones",
+    "parent": "musculoskeletal",
+    "label": "Ossa"
+  },
+  {
+    "key": "musculoskeletal.bones.fracture",
+    "parent": "musculoskeletal.bones",
+    "label": "Frattura"
+  },
+  {
+    "key": "musculoskeletal.bones.osteoarthritis",
+    "parent": "musculoskeletal.bones",
+    "label": "Osteoartrite"
+  },
+  {
+    "key": "musculoskeletal.bones.osteomyelitis",
+    "parent": "musculoskeletal.bones",
+    "label": "Osteomielite"
+  },
+  {
+    "key": "musculoskeletal.bones.bone_deformity",
+    "parent": "musculoskeletal.bones",
+    "label": "Deformità ossea"
+  },
+  {
+    "key": "musculoskeletal.muscles",
+    "parent": "musculoskeletal",
+    "label": "Muscoli"
+  },
+  {
+    "key": "musculoskeletal.muscles.strain",
+    "parent": "musculoskeletal.muscles",
+    "label": "Stiramento"
+  },
+  {
+    "key": "musculoskeletal.muscles.tear",
+    "parent": "musculoskeletal.muscles",
+    "label": "Rottura"
+  },
+  {
+    "key": "musculoskeletal.muscles.atrophy",
+    "parent": "musculoskeletal.muscles",
+    "label": "Atrofia"
+  },
+  {
+    "key": "musculoskeletal.muscles.myositis",
+    "parent": "musculoskeletal.muscles",
+    "label": "Miosite"
+  },
+  {
+    "key": "musculoskeletal.joints",
+    "parent": "musculoskeletal",
+    "label": "Articolazioni"
+  },
+  {
+    "key": "musculoskeletal.joints.dislocation",
+    "parent": "musculoskeletal.joints",
+    "label": "Lussazione"
+  },
+  {
+    "key": "musculoskeletal.joints.luxation",
+    "parent": "musculoskeletal.joints",
+    "label": "Lussazione"
+  },
+  {
+    "key": "musculoskeletal.joints.sprain",
+    "parent": "musculoskeletal.joints",
+    "label": "Distorsione"
+  },
+  {
+    "key": "skin",
+    "parent": null,
+    "label": "Cute"
+  },
+  {
+    "key": "skin.dermatitis",
+    "parent": "skin",
+    "label": "Dermatite"
+  },
+  {
+    "key": "skin.dermatitis.contact",
+    "parent": "skin.dermatitis",
+    "label": "Da contatto"
+  },
+  {
+    "key": "skin.dermatitis.allergic",
+    "parent": "skin.dermatitis",
+    "label": "Allergico"
+  },
+  {
+    "key": "skin.dermatitis.atopic",
+    "parent": "skin.dermatitis",
+    "label": "Atopico"
+  },
+  {
+    "key": "skin.dermatitis.seborrheic",
+    "parent": "skin.dermatitis",
+    "label": "Seborroico"
+  },
+  {
+    "key": "skin.wounds",
+    "parent": "skin",
+    "label": "Ferite"
+  },
+  {
+    "key": "skin.wounds.abrasion",
+    "parent": "skin.wounds",
+    "label": "Abrasione"
+  },
+  {
+    "key": "skin.wounds.laceration",
+    "parent": "skin.wounds",
+    "label": "Lacerazione"
+  },
+  {
+    "key": "skin.wounds.puncture",
+    "parent": "skin.wounds",
+    "label": "Puntura"
+  },
+  {
+    "key": "skin.wounds.burn",
+    "parent": "skin.wounds",
+    "label": "Ustione"
+  },
+  {
+    "key": "skin.wounds.bite",
+    "parent": "skin.wounds",
+    "label": "Morso"
+  },
+  {
+    "key": "skin.infections",
+    "parent": "skin",
+    "label": "Infezioni"
+  },
+  {
+    "key": "skin.infections.bacterial",
+    "parent": "skin.infections",
+    "label": "Batterico"
+  },
+  {
+    "key": "skin.infections.fungal",
+    "parent": "skin.infections",
+    "label": "Micotico"
+  },
+  {
+    "key": "skin.infections.parasitic",
+    "parent": "skin.infections",
+    "label": "Parassitario"
+  },
+  {
+    "key": "skin.masses",
+    "parent": "skin",
+    "label": "Masse"
+  },
+  {
+    "key": "skin.masses.lipoma",
+    "parent": "skin.masses",
+    "label": "Lipoma"
+  },
+  {
+    "key": "skin.masses.sebaceous_cyst",
+    "parent": "skin.masses",
+    "label": "Cisti sebacea"
+  },
+  {
+    "key": "skin.masses.papilloma",
+    "parent": "skin.masses",
+    "label": "Papilloma"
+  },
+  {
+    "key": "skin.masses.melanoma",
+    "parent": "skin.masses",
+    "label": "Melanoma"
+  },
+  {
+    "key": "skin.alopecia",
+    "parent": "skin",
+    "label": "Alopecia"
+  },
+  {
+    "key": "skin.alopecia.localized",
+    "parent": "skin.alopecia",
+    "label": "Localizzato"
+  },
+  {
+    "key": "skin.alopecia.generalized",
+    "parent": "skin.alopecia",
+    "label": "Generalizzato"
+  },
+  {
+    "key": "skin.ulcers",
+    "parent": "skin",
+    "label": "Ulcere"
+  },
+  {
+    "key": "skin.ulcers.pressure",
+    "parent": "skin.ulcers",
+    "label": "Da pressione"
+  },
+  {
+    "key": "skin.ulcers.vascular",
+    "parent": "skin.ulcers",
+    "label": "Vascolare"
+  },
+  {
+    "key": "skin.ulcers.traumatic",
+    "parent": "skin.ulcers",
+    "label": "Traumatico"
+  },
+  {
+    "key": "skin.hematoma",
+    "parent": "skin",
+    "label": "Ematoma"
+  },
+  {
+    "key": "skin.hematoma.injection",
+    "parent": "skin.hematoma",
+    "label": "Correlato all’iniezione"
+  },
+  {
+    "key": "skin.hematoma.sampling",
+    "parent": "skin.hematoma",
+    "label": "Correlato al campionamento"
+  },
+  {
+    "key": "skin.hematoma.postop",
+    "parent": "skin.hematoma",
+    "label": "Postoperatorio"
+  },
+  {
+    "key": "eyes",
+    "parent": null,
+    "label": "Occhi"
+  },
+  {
+    "key": "eyes.conjunctivitis",
+    "parent": "eyes",
+    "label": "Congiuntivite"
+  },
+  {
+    "key": "eyes.conjunctivitis.bacterial",
+    "parent": "eyes.conjunctivitis",
+    "label": "Batterico"
+  },
+  {
+    "key": "eyes.conjunctivitis.viral",
+    "parent": "eyes.conjunctivitis",
+    "label": "Virale"
+  },
+  {
+    "key": "eyes.conjunctivitis.allergic",
+    "parent": "eyes.conjunctivitis",
+    "label": "Allergico"
+  },
+  {
+    "key": "eyes.cornea",
+    "parent": "eyes",
+    "label": "Cornea"
+  },
+  {
+    "key": "eyes.cornea.ulcer",
+    "parent": "eyes.cornea",
+    "label": "Ulcera"
+  },
+  {
+    "key": "eyes.cornea.abrasion",
+    "parent": "eyes.cornea",
+    "label": "Abrasione"
+  },
+  {
+    "key": "eyes.cornea.laceration",
+    "parent": "eyes.cornea",
+    "label": "Lacerazione"
+  },
+  {
+    "key": "eyes.uveitis",
+    "parent": "eyes",
+    "label": "Uveite"
+  },
+  {
+    "key": "eyes.uveitis.anterior",
+    "parent": "eyes.uveitis",
+    "label": "Anteriore"
+  },
+  {
+    "key": "eyes.uveitis.posterior",
+    "parent": "eyes.uveitis",
+    "label": "Posteriore"
+  },
+  {
+    "key": "eyes.cataract",
+    "parent": "eyes",
+    "label": "Cataratta"
+  },
+  {
+    "key": "eyes.glaucoma",
+    "parent": "eyes",
+    "label": "Glaucoma"
+  },
+  {
+    "key": "eyes.retina",
+    "parent": "eyes",
+    "label": "Retina"
+  },
+  {
+    "key": "eyes.retina.detachment",
+    "parent": "eyes.retina",
+    "label": "Distacco"
+  },
+  {
+    "key": "eyes.retina.degeneration",
+    "parent": "eyes.retina",
+    "label": "Degenerazione"
+  },
+  {
+    "key": "eyes.eyelids",
+    "parent": "eyes",
+    "label": "Palpebre"
+  },
+  {
+    "key": "eyes.eyelids.entropion",
+    "parent": "eyes.eyelids",
+    "label": "Entropion"
+  },
+  {
+    "key": "eyes.eyelids.ectropion",
+    "parent": "eyes.eyelids",
+    "label": "Ectropion"
+  },
+  {
+    "key": "eyes.eyelids.blepharitis",
+    "parent": "eyes.eyelids",
+    "label": "Blefarite"
+  },
+  {
+    "key": "eyes.trauma",
+    "parent": "eyes",
+    "label": "Trauma"
+  },
+  {
+    "key": "eyes.trauma.foreign_body",
+    "parent": "eyes.trauma",
+    "label": "Corpo estraneo"
+  },
+  {
+    "key": "teeth",
+    "parent": null,
+    "label": "Denti"
+  },
+  {
+    "key": "teeth.periodontal",
+    "parent": "teeth",
+    "label": "Malattia parodontale"
+  },
+  {
+    "key": "teeth.periodontal.gingivitis",
+    "parent": "teeth.periodontal",
+    "label": "Gengivite"
+  },
+  {
+    "key": "teeth.periodontal.periodontitis",
+    "parent": "teeth.periodontal",
+    "label": "Parodontite"
+  },
+  {
+    "key": "teeth.dental_caries",
+    "parent": "teeth",
+    "label": "Caries dentale"
+  },
+  {
+    "key": "teeth.trauma",
+    "parent": "teeth",
+    "label": "Trauma"
+  },
+  {
+    "key": "teeth.trauma.fractured_tooth",
+    "parent": "teeth.trauma",
+    "label": "Dente fratturato"
+  },
+  {
+    "key": "teeth.abscess",
+    "parent": "teeth",
+    "label": "Ascesso"
+  },
+  {
+    "key": "teeth.malocclusion",
+    "parent": "teeth",
+    "label": "Malocclusione"
+  },
+  {
+    "key": "teeth.oral_mucosa",
+    "parent": "teeth",
+    "label": "Mucosa orale"
+  },
+  {
+    "key": "teeth.oral_mucosa.stomatitis",
+    "parent": "teeth.oral_mucosa",
+    "label": "Stomatite"
+  },
+  {
+    "key": "respiratory",
+    "parent": null,
+    "label": "Respiratorio"
+  },
+  {
+    "key": "respiratory.upper",
+    "parent": "respiratory",
+    "label": "Superiore"
+  },
+  {
+    "key": "respiratory.upper.rhinitis",
+    "parent": "respiratory.upper",
+    "label": "Rinite"
+  },
+  {
+    "key": "respiratory.upper.sinusitis",
+    "parent": "respiratory.upper",
+    "label": "Sinusite"
+  },
+  {
+    "key": "respiratory.upper.pharyngitis",
+    "parent": "respiratory.upper",
+    "label": "Faringite"
+  },
+  {
+    "key": "respiratory.upper.tonsillitis",
+    "parent": "respiratory.upper",
+    "label": "Tonsillite"
+  },
+  {
+    "key": "respiratory.upper.laryngitis",
+    "parent": "respiratory.upper",
+    "label": "Laringite"
+  },
+  {
+    "key": "respiratory.lower",
+    "parent": "respiratory",
+    "label": "Inferiore"
+  },
+  {
+    "key": "respiratory.lower.tracheitis",
+    "parent": "respiratory.lower",
+    "label": "Tracheite"
+  },
+  {
+    "key": "respiratory.lower.bronchitis",
+    "parent": "respiratory.lower",
+    "label": "Bronchite"
+  },
+  {
+    "key": "respiratory.lower.bronchiolitis",
+    "parent": "respiratory.lower",
+    "label": "Bronchiolite"
+  },
+  {
+    "key": "respiratory.lower.pneumonia",
+    "parent": "respiratory.lower",
+    "label": "Polmonite"
+  },
+  {
+    "key": "respiratory.lower.pneumonia.bacterial",
+    "parent": "respiratory.lower.pneumonia",
+    "label": "Batterico"
+  },
+  {
+    "key": "respiratory.lower.pneumonia.viral",
+    "parent": "respiratory.lower.pneumonia",
+    "label": "Virale"
+  },
+  {
+    "key": "respiratory.lower.pneumonia.fungal",
+    "parent": "respiratory.lower.pneumonia",
+    "label": "Micotico"
+  },
+  {
+    "key": "respiratory.lower.pneumonia.aspiration",
+    "parent": "respiratory.lower.pneumonia",
+    "label": "Aspirazione"
+  },
+  {
+    "key": "respiratory.lower.pleural_effusion",
+    "parent": "respiratory.lower",
+    "label": "Versamento pleurico"
+  },
+  {
+    "key": "respiratory.lower.pneumothorax",
+    "parent": "respiratory.lower",
+    "label": "Pneumotorace"
+  },
+  {
+    "key": "respiratory.lower.pulmonary_edema",
+    "parent": "respiratory.lower",
+    "label": "Edema polmonare"
+  },
+  {
+    "key": "cardiovascular",
+    "parent": null,
+    "label": "Cardiovascolare"
+  },
+  {
+    "key": "cardiovascular.heart",
+    "parent": "cardiovascular",
+    "label": "Cuore"
+  },
+  {
+    "key": "cardiovascular.heart.arrhythmia",
+    "parent": "cardiovascular.heart",
+    "label": "Aritmia"
+  },
+  {
+    "key": "cardiovascular.heart.myocarditis",
+    "parent": "cardiovascular.heart",
+    "label": "Miocardite"
+  },
+  {
+    "key": "cardiovascular.heart.pericarditis",
+    "parent": "cardiovascular.heart",
+    "label": "Pericardite"
+  },
+  {
+    "key": "cardiovascular.heart.cardiomyopathy",
+    "parent": "cardiovascular.heart",
+    "label": "Cardiomiopatia"
+  },
+  {
+    "key": "cardiovascular.heart.valvular_disease",
+    "parent": "cardiovascular.heart",
+    "label": "Valvulopatia"
+  },
+  {
+    "key": "cardiovascular.heart.heart_failure",
+    "parent": "cardiovascular.heart",
+    "label": "Insufficienza cardiaca"
+  },
+  {
+    "key": "cardiovascular.vascular",
+    "parent": "cardiovascular",
+    "label": "Vascolare"
+  },
+  {
+    "key": "cardiovascular.vascular.hypertension",
+    "parent": "cardiovascular.vascular",
+    "label": "Ipertensione"
+  },
+  {
+    "key": "cardiovascular.vascular.hypotension",
+    "parent": "cardiovascular.vascular",
+    "label": "Ipotensione"
+  },
+  {
+    "key": "cardiovascular.vascular.aneurysm",
+    "parent": "cardiovascular.vascular",
+    "label": "Aneurisma"
+  },
+  {
+    "key": "cardiovascular.vascular.thrombosis",
+    "parent": "cardiovascular.vascular",
+    "label": "Trombosi"
+  },
+  {
+    "key": "cardiovascular.vascular.vasculitis",
+    "parent": "cardiovascular.vascular",
+    "label": "Vasculite"
+  },
+  {
+    "key": "digestive",
+    "parent": null,
+    "label": "Apparato digerente"
+  },
+  {
+    "key": "digestive.upper",
+    "parent": "digestive",
+    "label": "Superiore"
+  },
+  {
+    "key": "digestive.upper.esophagitis",
+    "parent": "digestive.upper",
+    "label": "Esofagite"
+  },
+  {
+    "key": "digestive.upper.gastritis",
+    "parent": "digestive.upper",
+    "label": "Gastrite"
+  },
+  {
+    "key": "digestive.upper.gastric_ulcer",
+    "parent": "digestive.upper",
+    "label": "Ulcera gastrica"
+  },
+  {
+    "key": "digestive.lower",
+    "parent": "digestive",
+    "label": "Inferiore"
+  },
+  {
+    "key": "digestive.lower.enteritis",
+    "parent": "digestive.lower",
+    "label": "Enterite"
+  },
+  {
+    "key": "digestive.lower.colitis",
+    "parent": "digestive.lower",
+    "label": "Colite"
+  },
+  {
+    "key": "digestive.lower.ibd",
+    "parent": "digestive.lower",
+    "label": "Malattia infiammatoria intestinale"
+  },
+  {
+    "key": "digestive.lower.obstruction",
+    "parent": "digestive.lower",
+    "label": "Ostruzione"
+  },
+  {
+    "key": "digestive.lower.malabsorption",
+    "parent": "digestive.lower",
+    "label": "Malassorbimento"
+  },
+  {
+    "key": "digestive.liver",
+    "parent": "digestive",
+    "label": "Fegato"
+  },
+  {
+    "key": "digestive.liver.hepatitis",
+    "parent": "digestive.liver",
+    "label": "Epatite"
+  },
+  {
+    "key": "digestive.liver.cirrhosis",
+    "parent": "digestive.liver",
+    "label": "Cirrosi"
+  },
+  {
+    "key": "digestive.liver.liver_failure",
+    "parent": "digestive.liver",
+    "label": "Insufficienza epatica"
+  },
+  {
+    "key": "digestive.liver.fatty_liver",
+    "parent": "digestive.liver",
+    "label": "Steatosi epatica"
+  },
+  {
+    "key": "digestive.pancreas",
+    "parent": "digestive",
+    "label": "Pancreas"
+  },
+  {
+    "key": "digestive.pancreas.pancreatitis",
+    "parent": "digestive.pancreas",
+    "label": "Pancreatite"
+  },
+  {
+    "key": "digestive.pancreas.pancreatic_cyst",
+    "parent": "digestive.pancreas",
+    "label": "Cisti pancreatica"
+  },
+  {
+    "key": "urinary",
+    "parent": null,
+    "label": "Urinario"
+  },
+  {
+    "key": "urinary.kidneys",
+    "parent": "urinary",
+    "label": "Reni"
+  },
+  {
+    "key": "urinary.kidneys.nephritis",
+    "parent": "urinary.kidneys",
+    "label": "Nefrite"
+  },
+  {
+    "key": "urinary.kidneys.pyelonephritis",
+    "parent": "urinary.kidneys",
+    "label": "Pielonefrite"
+  },
+  {
+    "key": "urinary.kidneys.kidney_stones",
+    "parent": "urinary.kidneys",
+    "label": "Calcoli renali"
+  },
+  {
+    "key": "urinary.kidneys.renal_failure",
+    "parent": "urinary.kidneys",
+    "label": "Insufficienza renale"
+  },
+  {
+    "key": "urinary.bladder",
+    "parent": "urinary",
+    "label": "Vescica"
+  },
+  {
+    "key": "urinary.bladder.cystitis",
+    "parent": "urinary.bladder",
+    "label": "Cistite"
+  },
+  {
+    "key": "urinary.bladder.bladder_stones",
+    "parent": "urinary.bladder",
+    "label": "Calcoli vescicali"
+  },
+  {
+    "key": "urinary.bladder.tumor",
+    "parent": "urinary.bladder",
+    "label": "Tumore"
+  },
+  {
+    "key": "urinary.urethra",
+    "parent": "urinary",
+    "label": "Uretra"
+  },
+  {
+    "key": "urinary.urethra.urethritis",
+    "parent": "urinary.urethra",
+    "label": "Uretrite"
+  },
+  {
+    "key": "urinary.urethra.urethral_obstruction",
+    "parent": "urinary.urethra",
+    "label": "Ostruzione uretrale"
+  },
+  {
+    "key": "reproductive_female",
+    "parent": null,
+    "label": "Riproduttivo femminile"
+  },
+  {
+    "key": "reproductive_female.vagina",
+    "parent": "reproductive_female",
+    "label": "Vagina"
+  },
+  {
+    "key": "reproductive_female.vagina.vaginitis",
+    "parent": "reproductive_female.vagina",
+    "label": "Vaginite"
+  },
+  {
+    "key": "reproductive_female.vagina.vaginal_prolapse",
+    "parent": "reproductive_female.vagina",
+    "label": "Prolasso vaginale"
+  },
+  {
+    "key": "reproductive_female.uterus",
+    "parent": "reproductive_female",
+    "label": "Utero"
+  },
+  {
+    "key": "reproductive_female.uterus.endometritis",
+    "parent": "reproductive_female.uterus",
+    "label": "Endometrite"
+  },
+  {
+    "key": "reproductive_female.uterus.endometriosis",
+    "parent": "reproductive_female.uterus",
+    "label": "Endometriosi"
+  },
+  {
+    "key": "reproductive_female.uterus.fibroids",
+    "parent": "reproductive_female.uterus",
+    "label": "Fibromi uterini"
+  },
+  {
+    "key": "reproductive_female.ovaries",
+    "parent": "reproductive_female",
+    "label": "Ovaie"
+  },
+  {
+    "key": "reproductive_female.ovaries.ovarian_cyst",
+    "parent": "reproductive_female.ovaries",
+    "label": "Cisti ovarica"
+  },
+  {
+    "key": "reproductive_female.ovaries.oophoritis",
+    "parent": "reproductive_female.ovaries",
+    "label": "Ooforite"
+  },
+  {
+    "key": "reproductive_female.mammary",
+    "parent": "reproductive_female",
+    "label": "Ghiandole mammarie"
+  },
+  {
+    "key": "reproductive_female.mammary.mastitis",
+    "parent": "reproductive_female.mammary",
+    "label": "Mastite"
+  },
+  {
+    "key": "reproductive_female.mammary.mammary_tumor",
+    "parent": "reproductive_female.mammary",
+    "label": "Tumore mammario"
+  },
+  {
+    "key": "reproductive_male",
+    "parent": null,
+    "label": "Riproduttivo maschile"
+  },
+  {
+    "key": "reproductive_male.testes",
+    "parent": "reproductive_male",
+    "label": "Testicoli"
+  },
+  {
+    "key": "reproductive_male.testes.orchitis",
+    "parent": "reproductive_male.testes",
+    "label": "Orchite"
+  },
+  {
+    "key": "reproductive_male.testes.epididymitis",
+    "parent": "reproductive_male.testes",
+    "label": "Epididimite"
+  },
+  {
+    "key": "reproductive_male.testes.testicular_torsion",
+    "parent": "reproductive_male.testes",
+    "label": "Torsione testicolare"
+  },
+  {
+    "key": "reproductive_male.testes.testicular_tumor",
+    "parent": "reproductive_male.testes",
+    "label": "Tumore testicolare"
+  },
+  {
+    "key": "reproductive_male.prostate",
+    "parent": "reproductive_male",
+    "label": "Prostata"
+  },
+  {
+    "key": "reproductive_male.prostate.prostatitis",
+    "parent": "reproductive_male.prostate",
+    "label": "Prostatite"
+  },
+  {
+    "key": "reproductive_male.prostate.bph",
+    "parent": "reproductive_male.prostate",
+    "label": "Iperplasia prostatica benigna"
+  },
+  {
+    "key": "nervous",
+    "parent": null,
+    "label": "Sistema nervoso"
+  },
+  {
+    "key": "nervous.central",
+    "parent": "nervous",
+    "label": "Sistema nervoso centrale"
+  },
+  {
+    "key": "nervous.central.brain",
+    "parent": "nervous.central",
+    "label": "Cervello"
+  },
+  {
+    "key": "nervous.central.brain.meningitis",
+    "parent": "nervous.central.brain",
+    "label": "Meningite"
+  },
+  {
+    "key": "nervous.central.brain.encephalitis",
+    "parent": "nervous.central.brain",
+    "label": "Encefalite"
+  },
+  {
+    "key": "nervous.central.brain.stroke",
+    "parent": "nervous.central.brain",
+    "label": "Ictus"
+  },
+  {
+    "key": "nervous.central.brain.brain_tumor",
+    "parent": "nervous.central.brain",
+    "label": "Tumore cerebrale"
+  },
+  {
+    "key": "nervous.central.brain.traumatic_brain_injury",
+    "parent": "nervous.central.brain",
+    "label": "Trauma cranico"
+  },
+  {
+    "key": "nervous.central.brain.epilepsy",
+    "parent": "nervous.central.brain",
+    "label": "Epilessia"
+  },
+  {
+    "key": "nervous.central.spinal_cord",
+    "parent": "nervous.central",
+    "label": "Midollo spinale"
+  },
+  {
+    "key": "nervous.central.spinal_cord.injury",
+    "parent": "nervous.central.spinal_cord",
+    "label": "Lesione del midollo spinale"
+  },
+  {
+    "key": "nervous.peripheral",
+    "parent": "nervous",
+    "label": "Periferico"
+  },
+  {
+    "key": "nervous.peripheral.neuropathy",
+    "parent": "nervous.peripheral",
+    "label": "Neuropatia"
+  },
+  {
+    "key": "nervous.peripheral.nerve_injury",
+    "parent": "nervous.peripheral",
+    "label": "Lesione del nervo periferico"
+  },
+  {
+    "key": "nervous.peripheral.myasthenia_gravis",
+    "parent": "nervous.peripheral",
+    "label": "Miastenia gravis"
+  },
+  {
+    "key": "endocrine",
+    "parent": null,
+    "label": "Endocrino"
+  },
+  {
+    "key": "endocrine.thyroid",
+    "parent": "endocrine",
+    "label": "Tiroide"
+  },
+  {
+    "key": "endocrine.thyroid.hypothyroidism",
+    "parent": "endocrine.thyroid",
+    "label": "Ipotiroidismo"
+  },
+  {
+    "key": "endocrine.thyroid.hyperthyroidism",
+    "parent": "endocrine.thyroid",
+    "label": "Ipertiroidismo"
+  },
+  {
+    "key": "endocrine.thyroid.thyroiditis",
+    "parent": "endocrine.thyroid",
+    "label": "Tiroidite"
+  },
+  {
+    "key": "endocrine.adrenal",
+    "parent": "endocrine",
+    "label": "Surrene"
+  },
+  {
+    "key": "endocrine.adrenal.adrenal_insufficiency",
+    "parent": "endocrine.adrenal",
+    "label": "Insufficienza surrenalica"
+  },
+  {
+    "key": "endocrine.adrenal.cushings",
+    "parent": "endocrine.adrenal",
+    "label": "Sindrome di Cushing"
+  },
+  {
+    "key": "endocrine.pancreas_endo",
+    "parent": "endocrine",
+    "label": "Pancreas (endocrino)"
+  },
+  {
+    "key": "endocrine.pancreas_endo.diabetes_mellitus",
+    "parent": "endocrine.pancreas_endo",
+    "label": "Diabete mellito"
+  },
+  {
+    "key": "endocrine.pancreas_endo.hypoglycemia",
+    "parent": "endocrine.pancreas_endo",
+    "label": "Ipoglicemia"
+  },
+  {
+    "key": "hematologic",
+    "parent": null,
+    "label": "Ematologico"
+  },
+  {
+    "key": "hematologic.anemia",
+    "parent": "hematologic",
+    "label": "Anemia"
+  },
+  {
+    "key": "hematologic.anemia.iron_deficiency",
+    "parent": "hematologic.anemia",
+    "label": "Carenza di ferro"
+  },
+  {
+    "key": "hematologic.anemia.hemolytic",
+    "parent": "hematologic.anemia",
+    "label": "Emolitico"
+  },
+  {
+    "key": "hematologic.anemia.aplastic",
+    "parent": "hematologic.anemia",
+    "label": "Aplastico"
+  },
+  {
+    "key": "hematologic.coagulation",
+    "parent": "hematologic",
+    "label": "Coagulazione"
+  },
+  {
+    "key": "hematologic.coagulation.coagulopathy",
+    "parent": "hematologic.coagulation",
+    "label": "Coagulopatia"
+  },
+  {
+    "key": "hematologic.coagulation.thrombophilia",
+    "parent": "hematologic.coagulation",
+    "label": "Trombofilia"
+  },
+  {
+    "key": "hematologic.wbc",
+    "parent": "hematologic",
+    "label": "Globuli bianchi"
+  },
+  {
+    "key": "hematologic.wbc.leukocytosis",
+    "parent": "hematologic.wbc",
+    "label": "Leucocitosi"
+  },
+  {
+    "key": "hematologic.wbc.leukopenia",
+    "parent": "hematologic.wbc",
+    "label": "Leucopenia"
+  },
+  {
+    "key": "hematologic.wbc.leukemia",
+    "parent": "hematologic.wbc",
+    "label": "Leucemia"
+  },
+  {
+    "key": "hematologic.lymphatic",
+    "parent": "hematologic",
+    "label": "Linfatico"
+  },
+  {
+    "key": "hematologic.lymphatic.lymphadenopathy",
+    "parent": "hematologic.lymphatic",
+    "label": "Linfoadenopatia"
+  },
+  {
+    "key": "hematologic.lymphatic.lymphoma",
+    "parent": "hematologic.lymphatic",
+    "label": "Linfoma"
+  },
+  {
+    "key": "immune",
+    "parent": null,
+    "label": "Immunitario"
+  },
+  {
+    "key": "immune.immunodeficiency",
+    "parent": "immune",
+    "label": "Immunodeficienza"
+  },
+  {
+    "key": "immune.immunodeficiency.primary",
+    "parent": "immune.immunodeficiency",
+    "label": "Primario"
+  },
+  {
+    "key": "immune.immunodeficiency.secondary",
+    "parent": "immune.immunodeficiency",
+    "label": "Secondario"
+  },
+  {
+    "key": "immune.autoimmune",
+    "parent": "immune",
+    "label": "Autoimmune"
+  },
+  {
+    "key": "immune.autoimmune.sle",
+    "parent": "immune.autoimmune",
+    "label": "Lupus eritematoso sistemico"
+  },
+  {
+    "key": "immune.autoimmune.rheumatoid_arthritis",
+    "parent": "immune.autoimmune",
+    "label": "Artrite reumatoide"
+  },
+  {
+    "key": "immune.autoimmune.multiple_sclerosis",
+    "parent": "immune.autoimmune",
+    "label": "Sclerosi multipla"
+  },
+  {
+    "key": "immune.allergy",
+    "parent": "immune",
+    "label": "Allergia"
+  },
+  {
+    "key": "immune.allergy.food",
+    "parent": "immune.allergy",
+    "label": "Allergia alimentare"
+  },
+  {
+    "key": "immune.allergy.environmental",
+    "parent": "immune.allergy",
+    "label": "Allergia ambientale"
+  },
+  {
+    "key": "immune.allergy.drug",
+    "parent": "immune.allergy",
+    "label": "Allergia ai farmaci"
+  },
+  {
+    "key": "behavioral",
+    "parent": null,
+    "label": "Comportamentale"
+  },
+  {
+    "key": "behavioral.anxiety",
+    "parent": "behavioral",
+    "label": "Ansia"
+  },
+  {
+    "key": "behavioral.anxiety.generalized",
+    "parent": "behavioral.anxiety",
+    "label": "Disturbo d’ansia generalizzato"
+  },
+  {
+    "key": "behavioral.anxiety.phobia",
+    "parent": "behavioral.anxiety",
+    "label": "Fobia"
+  },
+  {
+    "key": "behavioral.anxiety.social",
+    "parent": "behavioral.anxiety",
+    "label": "Ansia sociale"
+  },
+  {
+    "key": "behavioral.depression",
+    "parent": "behavioral",
+    "label": "Depressione"
+  },
+  {
+    "key": "behavioral.aggression",
+    "parent": "behavioral",
+    "label": "Aggressività"
+  },
+  {
+    "key": "behavioral.aggression.inter_male",
+    "parent": "behavioral.aggression",
+    "label": "Tra maschi"
+  },
+  {
+    "key": "behavioral.aggression.fear_related",
+    "parent": "behavioral.aggression",
+    "label": "Correlato alla paura"
+  },
+  {
+    "key": "behavioral.aggression.territorial",
+    "parent": "behavioral.aggression",
+    "label": "Territoriale"
+  },
+  {
+    "key": "behavioral.compulsive",
+    "parent": "behavioral",
+    "label": "Comportamenti compulsivi"
+  },
+  {
+    "key": "behavioral.compulsive.self_injury",
+    "parent": "behavioral.compulsive",
+    "label": "Autolesionismo"
+  },
+  {
+    "key": "behavioral.compulsive.stereotypy",
+    "parent": "behavioral.compulsive",
+    "label": "Stereotipia"
+  },
+  {
+    "key": "behavioral.compulsive.pica",
+    "parent": "behavioral.compulsive",
+    "label": "Pica"
+  },
+  {
+    "key": "behavioral.stress",
+    "parent": "behavioral",
+    "label": "Correlato allo stress"
+  },
+  {
+    "key": "behavioral.stress.acute",
+    "parent": "behavioral.stress",
+    "label": "Stress acuto"
+  },
+  {
+    "key": "behavioral.stress.chronic",
+    "parent": "behavioral.stress",
+    "label": "Stress cronico"
+  },
+  {
+    "key": "behavioral.stress.ptsd",
+    "parent": "behavioral.stress",
+    "label": "PTSD"
+  },
+  {
+    "key": "toxicological",
+    "parent": null,
+    "label": "Tossicologico"
+  },
+  {
+    "key": "toxicological.poisoning",
+    "parent": "toxicological",
+    "label": "Avvelenamento"
+  },
+  {
+    "key": "toxicological.poisoning.heavy_metals",
+    "parent": "toxicological.poisoning",
+    "label": "Metalli pesanti"
+  },
+  {
+    "key": "toxicological.poisoning.pesticides",
+    "parent": "toxicological.poisoning",
+    "label": "Pesticidi"
+  },
+  {
+    "key": "toxicological.poisoning.plants",
+    "parent": "toxicological.poisoning",
+    "label": "Piante"
+  },
+  {
+    "key": "toxicological.poisoning.drugs",
+    "parent": "toxicological.poisoning",
+    "label": "Farmaci"
+  },
+  {
+    "key": "toxicological.poisoning.environmental",
+    "parent": "toxicological.poisoning",
+    "label": "Ambientale"
+  },
+  {
+    "key": "nutritional",
+    "parent": null,
+    "label": "Nutrizionale"
+  },
+  {
+    "key": "nutritional.obesity",
+    "parent": "nutritional",
+    "label": "Obesità"
+  },
+  {
+    "key": "nutritional.obesity.simple",
+    "parent": "nutritional.obesity",
+    "label": "Semplice"
+  },
+  {
+    "key": "nutritional.obesity.morbid",
+    "parent": "nutritional.obesity",
+    "label": "Morboso"
+  },
+  {
+    "key": "nutritional.malnutrition",
+    "parent": "nutritional",
+    "label": "Malnutrizione"
+  },
+  {
+    "key": "nutritional.malnutrition.protein_energy",
+    "parent": "nutritional.malnutrition",
+    "label": "Proteico-energetico"
+  },
+  {
+    "key": "nutritional.vitamin_deficiencies",
+    "parent": "nutritional",
+    "label": "Carenze vitaminiche"
+  },
+  {
+    "key": "nutritional.vitamin_deficiencies.vitamin_a",
+    "parent": "nutritional.vitamin_deficiencies",
+    "label": "Vitamina A"
+  },
+  {
+    "key": "nutritional.vitamin_deficiencies.vitamin_d",
+    "parent": "nutritional.vitamin_deficiencies",
+    "label": "Vitamina D"
+  },
+  {
+    "key": "nutritional.mineral_deficiencies",
+    "parent": "nutritional",
+    "label": "Carenze minerali"
+  },
+  {
+    "key": "nutritional.mineral_deficiencies.calcium",
+    "parent": "nutritional.mineral_deficiencies",
+    "label": "Calcio"
+  },
+  {
+    "key": "nutritional.mineral_deficiencies.iron",
+    "parent": "nutritional.mineral_deficiencies",
+    "label": "Ferro"
+  },
+  {
+    "key": "nutritional.electrolyte_imbalances",
+    "parent": "nutritional",
+    "label": "Squilibri elettrolitici"
+  },
+  {
+    "key": "nutritional.electrolyte_imbalances.hyponatremia",
+    "parent": "nutritional.electrolyte_imbalances",
+    "label": "Iponatriemia"
+  },
+  {
+    "key": "nutritional.electrolyte_imbalances.hypernatremia",
+    "parent": "nutritional.electrolyte_imbalances",
+    "label": "Ipernatriemia"
+  },
+  {
+    "key": "nutritional.electrolyte_imbalances.hypokalemia",
+    "parent": "nutritional.electrolyte_imbalances",
+    "label": "Ipokaliemia"
+  },
+  {
+    "key": "special",
+    "parent": null,
+    "label": "Speciale"
+  },
+  {
+    "key": "special.surgical_complications",
+    "parent": "special",
+    "label": "Complicanze chirurgiche"
+  },
+  {
+    "key": "special.surgical_complications.infection",
+    "parent": "special.surgical_complications",
+    "label": "Infezione"
+  },
+  {
+    "key": "special.surgical_complications.dehiscence",
+    "parent": "special.surgical_complications",
+    "label": "Deiscenza"
+  },
+  {
+    "key": "special.surgical_complications.hemorrhage",
+    "parent": "special.surgical_complications",
+    "label": "Emorragia"
+  },
+  {
+    "key": "special.anesthesia_complications",
+    "parent": "special",
+    "label": "Complicanze anestesiologiche"
+  },
+  {
+    "key": "special.anesthesia_complications.hypotension",
+    "parent": "special.anesthesia_complications",
+    "label": "Ipotensione"
+  },
+  {
+    "key": "special.anesthesia_complications.arrhythmia",
+    "parent": "special.anesthesia_complications",
+    "label": "Aritmia"
+  },
+  {
+    "key": "special.anesthesia_complications.anaphylaxis",
+    "parent": "special.anesthesia_complications",
+    "label": "Anafilassi"
+  },
+  {
+    "key": "special.environmental",
+    "parent": "special",
+    "label": "Condizioni ambientali"
+  },
+  {
+    "key": "special.environmental.heat_stroke",
+    "parent": "special.environmental",
+    "label": "Colpo di calore"
+  },
+  {
+    "key": "special.environmental.heat_exhaustion",
+    "parent": "special.environmental",
+    "label": "Esaurimento da calore"
+  },
+  {
+    "key": "special.environmental.hypothermia",
+    "parent": "special.environmental",
+    "label": "Ipotermia"
+  },
+  {
+    "key": "special.environmental.frostbite",
+    "parent": "special.environmental",
+    "label": "Congelamento"
+  }
+]
