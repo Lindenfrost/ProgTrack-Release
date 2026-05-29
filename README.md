@@ -1,11 +1,15 @@
 # ProgTrack 0.1.0 RC
 
-![ProgTrack splash](icons/Splash.png)
+<p align="center">
+  <img src="icons/Splash.png" alt="ProgTrack splash">
+</p>
 
-![Version](https://img.shields.io/badge/version-0.1.0%20RC-blue)
-![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
-![Runtime](https://img.shields.io/badge/runtime-portable%20Python-green)
-![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
+<p align="center">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.1.0%20RC-blue">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
+  <img alt="Runtime" src="https://img.shields.io/badge/runtime-portable%20Python-green">
+  <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue">
+</p>
 
 **ProgTrack** is a portable, modular desktop application for animal-centered
 research workflows. It brings hormone measurements, reproductive events,
