@@ -2,6 +2,7 @@
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
 # Part of: ProgTrack 0.1.0 RC
 # Required ProgTrack version: see plugin manifest.
+# Required Launcher version: 0.1.0 RC or newer.
 # Module: Medi Track medical-history widget and plugin logic.
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from PyQt6.QtCore import Qt, QDate, QSize, QStandardPaths
+from PyQt6.QtCore import Qt, QDate, QSize, QStandardPaths, QTimer
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -49,6 +50,7 @@ from PyQt6.QtWidgets import (
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
+    QApplication,
 )
 
 logger = logging.getLogger(__name__)
@@ -1552,6 +1554,20 @@ class MediTrackPlugin:
 
     # ── helpers ──
 
+    def _refresh_current_animal_when_safe(self, animal_name: str) -> None:
+        if not self._widget or self._widget._current_animal != animal_name:
+            return
+        if QApplication.activeModalWidget() is not None:
+            QTimer.singleShot(
+                250,
+                lambda name=animal_name: self._refresh_current_animal_when_safe(name),
+            )
+            return
+        try:
+            self._widget.show_animal(animal_name)
+        except RuntimeError:
+            pass
+
     def _detect_lang(self) -> str:
         msgs = getattr(self.app, "messages", {}) or {}
         lang = msgs.get("_lang_code", "en")
@@ -1621,8 +1637,7 @@ class MediTrackPlugin:
             self.store.add_entry(animal_name, entry)
         except Exception as exc:
             logger.error("open_status_dialog add_entry: %s", exc)
-        if self._widget and self._widget._current_animal == animal_name:
-            self._widget.show_animal(animal_name)
+        self._refresh_current_animal_when_safe(animal_name)
         return True
 
     def get_tab_widget(self) -> QWidget:
@@ -1896,8 +1911,7 @@ class MediTrackPlugin:
             self.store.add_entry(animal_name, entry)
         except Exception as exc:
             logger.error("log_severity_change: %s", exc)
-        if self._widget and self._widget._current_animal == animal_name:
-            self._widget.show_animal(animal_name)
+        self._refresh_current_animal_when_safe(animal_name)
 
     def log_project_change(
         self,

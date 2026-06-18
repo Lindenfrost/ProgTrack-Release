@@ -1,28 +1,6 @@
 {
   "version": 1,
   "projects": {
-    "Crossbreeding": {
-      "created_by": "",
-      "created_at": "",
-      "modified_by": "",
-      "modified_at": "",
-      "summary": {},
-      "iacuc": {},
-      "assoc_users": {},
-      "animals_config": {},
-      "arrive": {}
-    },
-    "OTOF": {
-      "created_by": "",
-      "created_at": "",
-      "modified_by": "",
-      "modified_at": "",
-      "summary": {},
-      "iacuc": {},
-      "assoc_users": {},
-      "animals_config": {},
-      "arrive": {}
-    },
     "Zucht": {
       "created_by": "",
       "created_at": "",
@@ -38,18 +16,127 @@
       "created_by": "Dr. Manager Plansdottir",
       "created_at": "20.04.2026 10:49",
       "modified_by": "Dr. Manager Plansdottir",
-      "modified_at": "20.04.2026 10:49",
-      "summary": {},
-      "iacuc": {},
-      "assoc_users": {},
-      "animals_config": {},
-      "arrive": {}
+      "modified_at": "15.06.2026 14:51",
+      "summary": {
+        "title": "",
+        "contact1_login": "",
+        "contact2_login": "",
+        "contacts_other_logins": [],
+        "species": "Callitrix jacchus",
+        "comment": ""
+      },
+      "iacuc": {
+        "short_title": "OTOF-",
+        "protocol_id": "",
+        "internal_number": "",
+        "authorization_nr": "",
+        "unit": "",
+        "purpose": "",
+        "authorized": "",
+        "approved": "",
+        "pi_login": "",
+        "di_login": "",
+        "welfare_login": ""
+      },
+      "assoc_users": {
+        "applicant_login": "",
+        "planning_login": "",
+        "staff_logins": []
+      },
+      "animals_config": {
+        "approved_count": 0,
+        "roles": [],
+        "departed_with_sev_no_legal": 0
+      },
+      "arrive": {
+        "study_design": "",
+        "sample_size": "",
+        "inclusion_exclusion": "",
+        "randomisation": "",
+        "blinding": "",
+        "outcome_measures": "",
+        "statistical_methods": "",
+        "experimental_animals": "",
+        "experimental_procedures": "",
+        "results": "",
+        "abstract": "",
+        "background": "",
+        "objectives": "",
+        "ethical_statement": "",
+        "housing_husbandry": "",
+        "animal_care": "",
+        "interpretation": "",
+        "protocol_registration": "",
+        "data_access": "",
+        "declaration_interests": ""
+      }
     },
     "Backcrossing": {
       "created_by": "Dr. Manager Plansdottir",
       "created_at": "20.04.2026 10:50",
       "modified_by": "Dr. Manager Plansdottir",
-      "modified_at": "20.04.2026 10:50",
+      "modified_at": "15.06.2026 14:48",
+      "summary": {
+        "title": "",
+        "contact1_login": "",
+        "contact2_login": "",
+        "contacts_other_logins": [],
+        "species": "Callitrix jacchus",
+        "comment": ""
+      },
+      "iacuc": {
+        "short_title": "Backcrossing",
+        "protocol_id": "",
+        "internal_number": "",
+        "authorization_nr": "",
+        "unit": "",
+        "purpose": "",
+        "authorized": "",
+        "approved": "",
+        "pi_login": "",
+        "di_login": "",
+        "welfare_login": ""
+      },
+      "assoc_users": {
+        "applicant_login": "Admin",
+        "planning_login": "Researcher",
+        "staff_logins": [
+          "Keeper"
+        ]
+      },
+      "animals_config": {
+        "approved_count": 0,
+        "roles": [],
+        "departed_with_sev_no_legal": 0
+      },
+      "arrive": {
+        "study_design": "",
+        "sample_size": "",
+        "inclusion_exclusion": "",
+        "randomisation": "",
+        "blinding": "",
+        "outcome_measures": "",
+        "statistical_methods": "",
+        "experimental_animals": "",
+        "experimental_procedures": "",
+        "results": "",
+        "abstract": "",
+        "background": "",
+        "objectives": "",
+        "ethical_statement": "",
+        "housing_husbandry": "",
+        "animal_care": "",
+        "interpretation": "",
+        "protocol_registration": "",
+        "data_access": "",
+        "declaration_interests": ""
+      }
+    },
+    "Anode": {
+      "created_by": "Dr. Manager Plansdottir",
+      "created_at": "16.06.2026 16:55",
+      "modified_by": "Dr. Manager Plansdottir",
+      "modified_at": "16.06.2026 16:55",
       "summary": {},
       "iacuc": {},
       "assoc_users": {},

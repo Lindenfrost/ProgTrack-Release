@@ -1,14 +1,14 @@
 {
   "username": "Manager",
   "disabled_plugins": [],
-  "last_active_tab": "tab.plots",
+  "last_active_tab": "tab.cage_track",
   "last_animal_group": "",
-  "last_category_index": 0,
+  "last_category_index": 6,
   "window_geometry": {
-    "x": 341,
-    "y": 144,
-    "w": 1400,
-    "h": 800
+    "x": 0,
+    "y": 23,
+    "w": 1366,
+    "h": 705
   },
   "active_species": null,
   "active_project": "All",
@@ -17,11 +17,12 @@
   "projects_sidebar_visible": true,
   "species_sidebar_visible": true,
   "style_settings": {},
-  "language": null,
-  "display_chk_prog": true,
-  "display_chk_weight": true,
-  "display_chk_events": true,
+  "language": "en",
+  "display_chk_prog": false,
+  "display_chk_weight": false,
+  "display_chk_events": false,
   "display_chk_events_offspring": true,
   "display_chk_events_breeding": true,
-  "display_chk_events_experimental": true
+  "display_chk_events_experimental": true,
+  "sidebar_visible": true
 }

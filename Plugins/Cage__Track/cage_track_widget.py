@@ -2,6 +2,7 @@
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
 # Part of: ProgTrack 0.1.0 RC
 # Required ProgTrack version: see plugin manifest.
+# Required Launcher version: 0.1.0 RC or newer.
 # Module: Cage Track main visualization widget.
 
 from __future__ import annotations
@@ -796,6 +797,14 @@ class CageTrackWidget(QWidget):
         self._hit_map: List[Tuple[Tuple[float, float, float, float], str, str]] = []
         # (x0, y0, x1, y1), entity_id, entity_type
 
+        self._project_color_cache: Dict[str, str] = {}
+        self._active_project_cache: Set[str] = set()
+        self._role_color_cache: Dict[str, str] = {}
+        self._animal_project_color_cache: Dict[str, str] = {}
+        self._project_rgba_cache: Dict[str, List[float]] = {}
+        self._hierarchy_cache: Optional[List[Dict[str, Any]]] = None
+        self._unassigned_cache: Optional[List[Dict[str, Any]]] = None
+
         # Minimum pixel widths for cages (cage_id -> min pixel width)
         self._cage_min_pixel_widths: Dict[str, float] = {}
         # Actual data widths of cages (cage_id -> data coordinate width)
@@ -837,6 +846,14 @@ class CageTrackWidget(QWidget):
         self.add_btn.setToolTip(self.messages.get("cage_track.toolbar.add", "Add"))
         self.add_btn.clicked.connect(self._on_add)
 
+        self.refresh_assignments_btn = QPushButton("🔄")
+        self.refresh_assignments_btn.setToolTip(
+            self.messages.get(
+                "cage_track.toolbar.refresh_assignments",
+                "Refresh cage assignments"))
+        self.refresh_assignments_btn.setFixedSize(28, 28)
+        self.refresh_assignments_btn.clicked.connect(self._on_refresh_assignments)
+
         self.inspection_btn = QPushButton(
             self.messages.get("cage_track.toolbar.inspection", "Inspection"))
         self.inspection_btn.setToolTip(
@@ -850,6 +867,7 @@ class CageTrackWidget(QWidget):
 
         toolbar.addStretch()
         toolbar.addWidget(self.add_btn)
+        toolbar.addWidget(self.refresh_assignments_btn)
         toolbar.addWidget(self.inspection_btn)
         toolbar.addWidget(self.settings_btn)
         root.addLayout(toolbar)
@@ -891,43 +909,67 @@ class CageTrackWidget(QWidget):
         self.messages = messages
         self.add_btn.setText(messages.get("cage_track.toolbar.add", "Add"))
         self.add_btn.setToolTip(messages.get("cage_track.toolbar.add", "Add"))
+        self.refresh_assignments_btn.setToolTip(
+            messages.get(
+                "cage_track.toolbar.refresh_assignments",
+                "Refresh cage assignments"))
         self.inspection_btn.setText(
             messages.get("cage_track.toolbar.inspection", "Inspection"))
         self.inspection_btn.setToolTip(
             messages.get("cage_track.toolbar.inspection", "Inspection"))
         self.settings_btn.setToolTip(messages.get("cage_track.toolbar.settings", "Settings"))
-        self.refresh_view()
+        self.refresh_view(sync_animals=False)
 
     # ------------------------------------------------------------------
     # Drawing
     # ------------------------------------------------------------------
 
-    def refresh_view(self) -> None:
-        """Full redraw of the cage hierarchy."""
+    def refresh_view(self, sync_animals: bool = True) -> None:
+        """Redraw the cage hierarchy.
+
+        Keep animal synchronization for full refreshes, but skip it for
+        UI-only redraws such as expand/collapse or selection highlighting.
+        """
         # Auto-sync ProgTrack animals so unassigned ones appear
         animals_dict = self._get_animals_dict()
         archived_dict = self._get_archived_dict()
-        if animals_dict:
+        if sync_animals and animals_dict:
             self.store.sync_from_progtrack(animals_dict, archived_dict)
+            if hasattr(self.plugin, "mark_cage_assignments_clean"):
+                self.plugin.mark_cage_assignments_clean()
 
         self.ax.clear()
         self.ax.set_aspect("auto")
         self.ax.axis("off")
         self._hit_map.clear()
 
-        hierarchy = self.engine.build_hierarchy()
+        if sync_animals or self._hierarchy_cache is None or self._unassigned_cache is None:
+            hierarchy = self.engine.build_hierarchy()
+            self._hierarchy_cache = hierarchy
+            self._unassigned_cache = self.store.get_unassigned_occupants()
+        else:
+            hierarchy = self._hierarchy_cache
         ui_state = self.store.get_ui_state()
         expanded_buildings = set(ui_state.get("expanded_buildings", []))
         expanded_rooms = set(ui_state.get("expanded_rooms", []))
 
-        project_colors = self._build_project_color_map(animals_dict)
+        if sync_animals or not self._project_color_cache:
+            project_colors = self._build_project_color_map(animals_dict)
+            self._project_color_cache = dict(project_colors)
+            self._active_project_cache = self._get_active_projects(animals_dict)
+        else:
+            project_colors = dict(self._project_color_cache)
+
+        self._role_color_cache.clear()
+        self._animal_project_color_cache.clear()
+        self._project_rgba_cache.clear()
 
         x_cursor = SPACING
         max_y = 0
 
         # Draw unassigned section at top if occupants exist
         unassigned = [
-            occ for occ in self.store.get_unassigned_occupants()
+            occ for occ in (self._unassigned_cache or [])
             if not (
                 (animals_dict.get(occ.get('occupant_id', ''), {}) or {}).get('death_date') or
                 (archived_dict.get(occ.get('occupant_id', ''), {}) or {}).get('death_date')
@@ -968,7 +1010,7 @@ class CageTrackWidget(QWidget):
 
         legend_project_colors = {
             project: project_colors[project]
-            for project in sorted(self._get_active_projects(animals_dict), key=str.lower)
+            for project in sorted(self._active_project_cache, key=str.lower)
             if project in project_colors
         }
 
@@ -1034,6 +1076,28 @@ class CageTrackWidget(QWidget):
         if project and project in project_colors:
             return project_colors[project]
         return "#000000"
+
+    def _cached_animal_project_color(self, animal_name: str, animals_dict: Dict[str, Any],
+                                     project_colors: Dict[str, str]) -> str:
+        if animal_name not in self._animal_project_color_cache:
+            self._animal_project_color_cache[animal_name] = self._get_animal_project_color(
+                animal_name, animals_dict, project_colors)
+        return self._animal_project_color_cache[animal_name]
+
+    def _cached_project_rgba(self, project_color: str) -> List[float]:
+        if project_color not in self._project_rgba_cache:
+            try:
+                rgba = list(mcolors.to_rgba(project_color))
+                rgba[3] = 0.25
+            except Exception:
+                rgba = [0.8, 0.8, 0.8, 0.25]
+            self._project_rgba_cache[project_color] = rgba
+        return self._project_rgba_cache[project_color]
+
+    def _cached_animal_role_color(self, animal_name: str, animals_dict: Dict[str, Any]) -> str:
+        if animal_name not in self._role_color_cache:
+            self._role_color_cache[animal_name] = self._get_animal_role_color(animal_name, animals_dict)
+        return self._role_color_cache[animal_name]
 
     @staticmethod
     def _get_animal_role_color(animal_name: str, animals_dict: Dict[str, Any]) -> str:
@@ -1223,9 +1287,15 @@ class CageTrackWidget(QWidget):
         self.ax.text(x + 6, y + TITLE_H * 0.6, f"{arrow} {ua_label} ({n})",
                      **FONT_CAGE, color="#F57F17", zorder=3)
 
-        # Draw occupant names with colored scatter circles in a grid layout
+        # Keep circles batched for speed, but draw names per row so they stay
+        # aligned with the corresponding circle.
         ox = x + CAGE_PAD
         oy = y + TITLE_H + CAGE_PAD
+        scatter_x: List[float] = []
+        scatter_y: List[float] = []
+        face_colors: List[str] = []
+        edge_colors: List[str] = []
+        text_rows: List[Tuple[float, float, str]] = []
         for i, occ in enumerate(occupants):
             col_idx = i % 4
             row_idx = i // 4
@@ -1235,16 +1305,24 @@ class CageTrackWidget(QWidget):
             is_archived = occ.get("archived", False)
             if is_archived:
                 color = ARCHIVED_COLOR
-                style = "italic"
+                project_color = ARCHIVED_COLOR
             else:
-                color = self._get_animal_role_color(occ_id, animals_dict)
-                style = "normal"
-            self.ax.scatter([tx + 5], [ty], s=50, marker="o",
-                            facecolors=color, edgecolors="#424242",
-                            linewidths=0.6, zorder=4, clip_on=True)
-            self.ax.text(tx + 13, ty, occ_id, fontsize=7.5, color="#212121",
-                         fontstyle=style, zorder=3, clip_on=True, verticalalignment="center")
+                color = self._cached_animal_role_color(occ_id, animals_dict)
+                project_color = self._cached_animal_project_color(occ_id, animals_dict, project_colors)
+            scatter_x.append(tx + 5)
+            scatter_y.append(ty)
+            face_colors.append(color)
+            edge_colors.append(project_color if project_color != "#000000" else "#424242")
+            text_rows.append((tx + 13, ty, occ_id))
             self._hit_map.append(((tx - 2, ty - 6, tx + 100, ty + 8), occ_id, "occupant"))
+
+        if scatter_x:
+            self.ax.scatter(scatter_x, scatter_y, s=42, marker="o",
+                            facecolors=face_colors, edgecolors=edge_colors,
+                            linewidths=0.8, zorder=4, clip_on=True)
+        for tx, ty, occ_id in text_rows:
+            self.ax.text(tx, ty, occ_id, fontsize=7.5, color="#212121",
+                         zorder=3, clip_on=True, verticalalignment="center")
 
         self._hit_map.append(((x, y, x + w, y + h), UNASSIGNED_CAGE_ID, "cage"))
         self._hit_map.append(((x, y, x + w, y + TITLE_H), UNASSIGNED_CAGE_ID, "unassigned_title"))
@@ -1343,36 +1421,33 @@ class CageTrackWidget(QWidget):
         self._hit_map.append(((x, y, x + w, y + h), cage_id, "cage"))
         self._hit_map.append(((x, y, x + w, y + TITLE_H), cage_id, "cage_title"))
 
-        # Draw occupants – horizontal per-animal project background + role-coloured circle
+        # Keep circles batched for speed, but draw names per row so they stay
+        # aligned with the corresponding circle.
         oy = y + TITLE_H + CAGE_PAD
+        scatter_x: List[float] = []
+        scatter_y: List[float] = []
+        face_colors: List[str] = []
+        edge_colors: List[str] = []
+        text_rows: List[Tuple[float, float, str]] = []
         for occ in occupants:
             occ_id = occ["occupant_id"]
-            # Horizontal project-colour background strip behind each animal row
-            proj_color = self._get_animal_project_color(occ_id, animals_dict, project_colors)
-            try:
-                rgba = list(mcolors.to_rgba(proj_color))
-                rgba[3] = 0.25
-            except Exception:
-                rgba = [0.8, 0.8, 0.8, 0.25]
-            self._draw_flat_rect(x + 1, oy - OCCUPANT_LINE_H * 0.4,
-                                 w - 2, OCCUPANT_LINE_H * 0.85,
-                                 rgba, "none", zorder=3.5)
-
-            # Circle colour = role colour
-            circle_color = self._get_animal_role_color(occ_id, animals_dict)
-            style = "normal"
-            highlight = self._highlight_occupant == occ_id
-            weight = "bold" if highlight else "normal"
-            self.ax.scatter([x + CAGE_PAD + 5], [oy], s=50, marker="o",
-                            facecolors=circle_color, edgecolors="#424242",
-                            linewidths=0.6, zorder=6, clip_on=True)
-            self.ax.text(x + CAGE_PAD + 13, oy, occ_id,
-                         fontsize=7.5, color="#212121", fontstyle=style,
-                         fontweight=weight, zorder=5, clip_on=True,
-                         verticalalignment="center")
+            circle_color = self._cached_animal_role_color(occ_id, animals_dict)
+            project_color = self._cached_animal_project_color(occ_id, animals_dict, project_colors)
+            scatter_x.append(x + CAGE_PAD + 5)
+            scatter_y.append(oy)
+            face_colors.append(circle_color)
+            edge_colors.append(project_color if project_color != "#000000" else "#424242")
+            text_rows.append((x + CAGE_PAD + 13, oy, occ_id))
             self._hit_map.append(((x + CAGE_PAD - 2, oy - 6, x + w - CAGE_PAD, oy + 8),
                                   occ_id, "occupant"))
             oy += OCCUPANT_LINE_H
+        if scatter_x:
+            self.ax.scatter(scatter_x, scatter_y, s=42, marker="o",
+                            facecolors=face_colors, edgecolors=edge_colors,
+                            linewidths=0.8, zorder=6, clip_on=True)
+        for tx, ty, occ_id in text_rows:
+            self.ax.text(tx, ty, occ_id, fontsize=7.5, color="#212121",
+                         zorder=5, clip_on=True, verticalalignment="center")
 
     def _draw_legend(self, project_colors: Dict[str, str], total_w: float,
                      total_h: float, stored_pos: Optional[List[float]] = None) -> None:
@@ -1456,14 +1531,14 @@ class CageTrackWidget(QWidget):
 
                 if etype == "occupant":
                     self._highlight_occupant = eid
-                    self.refresh_view()
+                    self.refresh_view(sync_animals=False)
                     return
                 elif etype in ("building_title", "room_title", "cage_title", "unassigned_title"):
                     self._toggle_expand(eid, etype)
                     return
                 elif etype in ("building", "room", "cage"):
                     self.selected_cage_id = eid
-                    self.refresh_view()
+                    self.refresh_view(sync_animals=False)
                     return
 
         # Right-click → context menu
@@ -1616,7 +1691,7 @@ class CageTrackWidget(QWidget):
             current = ui_state.get("show_unassigned", True)
             self.store.set_ui_state({"show_unassigned": not current})
 
-        self.refresh_view()
+        self.refresh_view(sync_animals=False)
 
     # ------------------------------------------------------------------
     # Context menu
@@ -1972,6 +2047,11 @@ class CageTrackWidget(QWidget):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self.refresh_view()
 
+    def _on_refresh_assignments(self) -> None:
+        if hasattr(self.plugin, "mark_cage_assignments_dirty"):
+            self.plugin.mark_cage_assignments_dirty()
+        self.refresh_view(sync_animals=True)
+
     # ------------------------------------------------------------------
     # External integration
     # ------------------------------------------------------------------
@@ -1981,7 +2061,6 @@ class CageTrackWidget(QWidget):
         if not animal_names:
             self._highlight_occupant = None
             self.selected_cage_id = None
-            self.refresh_view()
             return
 
         name = animal_names[0]
@@ -1989,26 +2068,8 @@ class CageTrackWidget(QWidget):
         cage_id = self.store.get_occupant_cage(name)
         if cage_id and cage_id != UNASSIGNED_CAGE_ID:
             self.selected_cage_id = cage_id
-            # Auto-expand to show selected animal
-            addr = self.store.get_address_for_dialog(name)
-            ui_state = self.store.get_ui_state()
-            expanded_bld = list(ui_state.get("expanded_buildings", []))
-            expanded_rooms = list(ui_state.get("expanded_rooms", []))
-            bld_id = addr.get("building_id")
-            room_id = addr.get("room_id")
-            changed = False
-            if bld_id and bld_id not in expanded_bld:
-                expanded_bld.append(bld_id)
-                changed = True
-            if room_id and room_id not in expanded_rooms:
-                expanded_rooms.append(room_id)
-                changed = True
-            if changed:
-                self.store.set_ui_state({
-                    "expanded_buildings": expanded_bld,
-                    "expanded_rooms": expanded_rooms,
-                })
-        self.refresh_view()
+        else:
+            self.selected_cage_id = None
 
 
 # ======================================================================
@@ -2026,6 +2087,7 @@ class CageTrackPlugin:
         self.store.load_data()
 
         self.widget: Optional[CageTrackWidget] = None
+        self._cage_assignments_dirty = True
         self.settings: Dict[str, Any] = {
             "show_unassigned": True,
             "show_legend": True,
@@ -2057,13 +2119,27 @@ class CageTrackPlugin:
                 self.widget = None
 
     def refresh_if_visible(self) -> None:
+        # Keep this hook deliberately light. ProgTrack calls it after selection
+        # and persistence changes; doing a visible full sync here makes active
+        # Cage Track interactions slow and shows address changes before the
+        # user presses the explicit refresh button.
+        return
+
+    def refresh_on_tab_activated(self) -> None:
         if self.widget is None:
             return
+        if not self._cage_assignments_dirty:
+            return
         try:
-            if self.widget.isVisible():
-                self.widget.refresh_view()
+            self.widget.refresh_view(sync_animals=True)
         except RuntimeError:
             self.widget = None
+
+    def mark_cage_assignments_dirty(self) -> None:
+        self._cage_assignments_dirty = True
+
+    def mark_cage_assignments_clean(self) -> None:
+        self._cage_assignments_dirty = False
 
     # ------------------------------------------------------------------
     # Address integration for ProgTrack dialog
@@ -2088,6 +2164,7 @@ class CageTrackPlugin:
         after_address = self.store.get_address_for_dialog(animal_name)
         if before_address == after_address:
             return
+        self.mark_cage_assignments_dirty()
 
         app = getattr(self, "app", None)
         audit_fn = getattr(app, "_master_audit", None) if app is not None else None
@@ -2106,7 +2183,7 @@ class CageTrackPlugin:
     # ------------------------------------------------------------------
 
     def sync_animal_data(self, animals: Dict[str, Any]) -> None:
-        self.store.sync_from_progtrack(animals)
+        self.mark_cage_assignments_dirty()
 
     def get_structures_for_address(self) -> Dict[str, List[Dict[str, Any]]]:
         """Return all structures for populating address dropdowns."""

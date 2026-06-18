@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "updated_at": "2026-05-29T11:08:54.214426Z",
+  "updated_at": "2026-06-17T10:59:53.511455Z",
   "animals": {
     "Eluréd": {
       "egg_donor": "Nimloth",
@@ -27,7 +27,7 @@
       "species": "",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-05-08T13:26:57.539883Z",
+      "updated_at": "2026-06-17T09:53:21.906719Z",
       "inbreeding_f": 0.0
     },
     "Dior": {
@@ -41,7 +41,7 @@
       "species": "",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-05-08T13:26:57.539883Z",
+      "updated_at": "2026-06-17T09:53:21.906602Z",
       "inbreeding_f": 0.0
     },
     "Elurín": {
@@ -125,7 +125,7 @@
       "species": "",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-05-29T09:36:12.702238Z",
+      "updated_at": "2026-06-17T09:53:21.907027Z",
       "inbreeding_f": 0.0
     },
     "Elros": {
@@ -139,7 +139,7 @@
       "species": "",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-05-29T09:36:12.702238Z",
+      "updated_at": "2026-06-17T09:53:21.906920Z",
       "inbreeding_f": 0.0
     },
     "Aragorn II": {
@@ -1847,7 +1847,7 @@
       "species": "",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-05-08T13:26:57.539883Z",
+      "updated_at": "2026-06-17T09:53:21.906815Z",
       "inbreeding_f": 0.0
     },
     "Eärendil": {
@@ -1861,7 +1861,7 @@
       "species": "",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-05-08T13:26:57.539883Z",
+      "updated_at": "2026-06-17T09:53:21.906212Z",
       "inbreeding_f": 0.0
     },
     "Galadriel": {
@@ -1875,7 +1875,7 @@
       "species": "",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-05-08T13:26:57.539883Z",
+      "updated_at": "2026-06-17T09:41:31.477443Z",
       "inbreeding_f": 0.0
     },
     "Celeborn": {
@@ -1889,7 +1889,7 @@
       "species": "",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-05-08T13:26:57.539883Z",
+      "updated_at": "2026-06-17T09:41:31.477895Z",
       "inbreeding_f": 0.0
     },
     "Míriel": {
@@ -2029,7 +2029,7 @@
       "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "core",
-      "updated_at": "2026-05-08T13:26:57.539212Z",
+      "updated_at": "2026-06-17T09:41:31.476028Z",
       "inbreeding_f": 0.0
     },
     "Maedhros": {
@@ -2239,7 +2239,7 @@
       "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "core",
-      "updated_at": "2026-05-08T13:26:57.539212Z",
+      "updated_at": "2026-06-17T09:53:21.905128Z",
       "inbreeding_f": 0.0
     },
     "Eöl": {
@@ -2295,7 +2295,7 @@
       "species": "",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-05-08T13:26:57.540558Z",
+      "updated_at": "2026-06-17T09:41:31.481736Z",
       "inbreeding_f": 0.0
     },
     "Angrod": {
@@ -2407,7 +2407,7 @@
       "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "core",
-      "updated_at": "2026-05-08T13:26:57.539883Z",
+      "updated_at": "2026-06-17T09:53:21.906098Z",
       "inbreeding_f": 0.0
     },
     "Thingol": {
@@ -2983,6 +2983,216 @@
       "source": "plugin",
       "updated_at": "2026-04-16T11:55:10.470514Z",
       "inbreeding_f": 0.0
+    },
+    "Animal_A": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "female",
+      "species": "Callitrix jacchus",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-15T13:33:42.985905Z",
+      "inbreeding_f": null
+    },
+    "Animal_C": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "female",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-15T13:34:39.678166Z",
+      "inbreeding_f": null
+    },
+    "Animal_A_": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-15T13:40:06.145672Z",
+      "inbreeding_f": null
+    },
+    "Animal_B_": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-15T13:37:57.891758Z",
+      "inbreeding_f": null
+    },
+    "Animal_C_": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-15T13:36:53.845121Z",
+      "inbreeding_f": null
+    },
+    "Animal_A!": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "female",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-16T10:11:26.750707Z",
+      "inbreeding_f": null
+    },
+    "Zeta": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-16T11:27:05.919931Z",
+      "inbreeding_f": null
+    },
+    "Betta": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-16T12:32:55.573068Z",
+      "inbreeding_f": null
+    },
+    "Andy": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "female",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-17T10:41:40.504732Z",
+      "inbreeding_f": null
+    },
+    "Bobby": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "male",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-17T10:43:58.848448Z",
+      "inbreeding_f": null
+    },
+    "Cindy": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-17T10:44:25.955111Z",
+      "inbreeding_f": null
+    },
+    "AAA": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-16T13:58:35.987886Z",
+      "inbreeding_f": null
+    },
+    "Dana": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-17T10:44:43.346695Z",
+      "inbreeding_f": null
+    },
+    "Echo": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-16T15:09:05.259445Z",
+      "inbreeding_f": null
+    },
+    "Fredi": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "",
+      "species": "",
+      "heritage_only": false,
+      "source": "plugin",
+      "updated_at": "2026-06-17T09:07:16.901849Z",
+      "inbreeding_f": null
     }
   },
   "genotype_colors": {

@@ -2,6 +2,7 @@
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
 # Part of: ProgTrack 0.1.0 RC
 # Required ProgTrack version: see plugin manifest.
+# Required Launcher version: 0.1.0 RC or newer.
 # Module: Cage Track hierarchy business logic.
 
 from __future__ import annotations
@@ -29,6 +30,10 @@ class CageEngine:
         buildings = sorted(structures["buildings"].values(), key=lambda b: b.get("order", 0))
         rooms = structures["rooms"]
         cages = structures["cages"]
+        occupants_by_cage: Dict[str, List[Dict[str, Any]]] = {}
+        for occupant in data.get("occupants", {}).values():
+            cage_id = occupant.get("cage_id") or UNASSIGNED_CAGE_ID
+            occupants_by_cage.setdefault(cage_id, []).append(occupant)
 
         tree = []
         for bld in buildings:
@@ -50,7 +55,7 @@ class CageEngine:
                 )
                 cage_nodes = []
                 for cage in room_cages:
-                    occupants = self.get_occupants_in_cage(cage["id"])
+                    occupants = occupants_by_cage.get(cage["id"], [])
                     cage_nodes.append({**cage, "occupants": occupants})
                 room_nodes.append({**room, "cages": cage_nodes})
             tree.append({**bld, "rooms": room_nodes})

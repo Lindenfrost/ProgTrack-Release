@@ -1,10 +1,6 @@
 {
   "version": 1,
   "projects": {
-    "OTOF": {
-      "archived": true,
-      "animals": []
-    },
     "OTOF-": {
       "archived": false,
       "animals": [
@@ -65,10 +61,6 @@
           "last_severity": null
         }
       ]
-    },
-    "Crossbreeding": {
-      "archived": true,
-      "animals": []
     },
     "Backcrossing": {
       "archived": false,
@@ -149,6 +141,83 @@
           "date_entered": "20.04.2026",
           "date_left": null,
           "last_severity": null
+        }
+      ]
+    },
+    "Anode": {
+      "archived": false,
+      "animals": [
+        {
+          "name": "Andy",
+          "status": "former",
+          "date_entered": "16.06.2026",
+          "date_left": "16.06.2026",
+          "last_severity": "SV2",
+          "previous_project_snapshot": [],
+          "previous_experimental_snapshot": [],
+          "previous_in_experiment": true,
+          "had_in_experiment": true
+        },
+        {
+          "name": "Cindy",
+          "status": "former",
+          "date_entered": "16.06.2026",
+          "date_left": "16.06.2026",
+          "last_severity": "SV2",
+          "previous_project_snapshot": [],
+          "previous_experimental_snapshot": [],
+          "previous_in_experiment": false
+        },
+        {
+          "name": "Dana",
+          "status": "former",
+          "date_entered": "16.06.2026",
+          "date_left": "16.06.2026",
+          "last_severity": null,
+          "previous_project_snapshot": [],
+          "previous_experimental_snapshot": [],
+          "previous_in_experiment": true,
+          "had_in_experiment": true
+        }
+      ]
+    },
+    "Zucht": {
+      "archived": false,
+      "animals": [
+        {
+          "name": "Andy",
+          "status": "active",
+          "date_entered": "17.06.2026",
+          "date_left": null,
+          "last_severity": null,
+          "previous_project_snapshot": [
+            {
+              "name": "Andy",
+              "status": "former",
+              "date_entered": "16.06.2026",
+              "date_left": "16.06.2026",
+              "last_severity": "SV2",
+              "previous_project_snapshot": [],
+              "previous_experimental_snapshot": [],
+              "previous_in_experiment": true,
+              "had_in_experiment": true,
+              "project": "Anode"
+            }
+          ],
+          "previous_experimental_snapshot": [
+            {
+              "name": "Andy",
+              "status": "former",
+              "date_entered": "16.06.2026",
+              "date_left": "16.06.2026",
+              "last_severity": "SV2",
+              "previous_project_snapshot": [],
+              "previous_experimental_snapshot": [],
+              "previous_in_experiment": true,
+              "had_in_experiment": true,
+              "project": "Anode"
+            }
+          ]
         }
       ]
     }

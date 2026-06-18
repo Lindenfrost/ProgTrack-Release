@@ -2,6 +2,7 @@
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
 # Part of: ProgTrack 0.1.0 RC
 # Required ProgTrack version: see plugin manifest.
+# Required Launcher version: 0.1.0 RC or newer.
 # Module: Projects Track sidebar-filter plugin implementation.
 
 import json
@@ -10,8 +11,8 @@ import os
 from typing import Any, Callable, Dict, List, Optional
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                              QLabel, QButtonGroup, QFrame, QScrollArea,
-                             QSizePolicy)
-from PyQt6.QtCore import Qt, QRect, QSize
+                             QSizePolicy, QApplication)
+from PyQt6.QtCore import Qt, QRect, QSize, QTimer
 from PyQt6.QtGui import QColor, QPainter, QFont
 
 
@@ -164,24 +165,70 @@ class HistoryStore:
         from datetime import date
         return date.today().strftime("%d.%m.%Y")
 
+    def _is_previous_experimental_record(self, record: dict) -> bool:
+        if "previous_in_experiment" in record:
+            return bool(record.get("previous_in_experiment"))
+        return bool(record.get("last_severity"))
+
     def record_added(self, project: str, animal: str):
         proj = self._proj(project)
         for r in proj["animals"]:
-            if r["name"] == animal and r["status"] == "active":
+            if r.get("name") == animal and r.get("status") == "active":
                 return
+        previous_snapshot = [
+            dict(record)
+            for record in self.previous_project_records(animal, exclude=project)
+        ]
         proj["animals"].append({
             "name": animal, "status": "active",
             "date_entered": self._today(),
-            "date_left": None, "last_severity": None})
+            "date_left": None, "last_severity": None,
+            "previous_project_snapshot": previous_snapshot,
+            "previous_experimental_snapshot": [
+                dict(record)
+                for record in previous_snapshot
+                if self._is_previous_experimental_record(record)
+            ]})
         self._save()
 
-    def record_removed(self, project: str, animal: str, severity: str = None):
+    def record_removed(self, project: str, animal: str, severity: str = None,
+                       previous_in_experiment: bool = None):
         for r in self._proj(project)["animals"]:
-            if r["name"] == animal and r["status"] == "active":
+            if r.get("name") == animal and r.get("status") == "active":
+                had_in_experiment = bool(
+                    r.get("previous_in_experiment") or r.get("had_in_experiment"))
                 r["status"] = "former"
                 r["date_left"] = self._today()
-                r["last_severity"] = severity or None
+                r["last_severity"] = severity or r.get("last_severity") or None
+                if previous_in_experiment is not None:
+                    r["previous_in_experiment"] = (
+                        had_in_experiment or bool(previous_in_experiment))
+                elif had_in_experiment:
+                    r["previous_in_experiment"] = True
         self._save()
+
+    def record_experiment_status(self, project: str, animal: str,
+                                 had_in_experiment: bool,
+                                 severity: str = None) -> None:
+        project = (project or '').strip()
+        animal = (animal or '').strip()
+        if not project or not animal or not had_in_experiment:
+            return
+        changed = False
+        for r in self._proj(project)["animals"]:
+            if r.get("name") == animal and r.get("status") == "active":
+                if not r.get("previous_in_experiment"):
+                    r["previous_in_experiment"] = True
+                    changed = True
+                if not r.get("had_in_experiment"):
+                    r["had_in_experiment"] = True
+                    changed = True
+                if severity and r.get("last_severity") != severity:
+                    r["last_severity"] = severity
+                    changed = True
+                break
+        if changed:
+            self._save()
 
     def is_archived(self, project: str) -> bool:
         return self._data["projects"].get(project, {}).get("archived", False)
@@ -209,8 +256,33 @@ class HistoryStore:
         for pname, pdata in self._data["projects"].items():
             if pname == exclude:
                 continue
-            if any(r["name"] == animal for r in pdata.get("animals", [])):
+            if any(
+                r.get("name") == animal and r.get("status") == "former"
+                for r in pdata.get("animals", [])
+            ):
                 result.append(pname)
+        return result
+
+    def previous_project_records(self, animal: str, exclude: str = None) -> list:
+        result = []
+        for pname, pdata in self._data["projects"].items():
+            if pname == exclude:
+                continue
+            for record in pdata.get("animals", []):
+                if record.get("name") != animal:
+                    continue
+                if record.get("status") != "former":
+                    continue
+                entry = dict(record)
+                entry["project"] = pname
+                result.append(entry)
+        return result
+
+    def previous_experimental_records(self, animal: str, exclude: str = None) -> list:
+        result = []
+        for record in self.previous_project_records(animal, exclude=exclude):
+            if self._is_previous_experimental_record(record):
+                result.append(record)
         return result
 
 
@@ -262,6 +334,7 @@ class ProjectsTrackPlugin:
 
         # Scope-change callbacks (called whenever project or species changes)
         self.scope_changed_callbacks: List = []
+        self._project_ui_refresh_pending = False
 
         # History store for project membership tracking
         self._history = HistoryStore(os.path.dirname(__file__))
@@ -739,6 +812,28 @@ class ProjectsTrackPlugin:
         else:
             pass  # Main app does not support project filtering yet
         self.notify_scope_changed()
+
+    def _schedule_project_ui_refresh(self) -> None:
+        """Refresh project UI after the current dialog/save event has returned."""
+        if self._project_ui_refresh_pending:
+            return
+        self._project_ui_refresh_pending = True
+        QTimer.singleShot(0, self._refresh_project_ui_after_change)
+
+    def _refresh_project_ui_after_change(self) -> None:
+        if QApplication.activeModalWidget() is not None:
+            QTimer.singleShot(250, self._refresh_project_ui_after_change)
+            return
+        self._project_ui_refresh_pending = False
+        try:
+            self._discover_projects()
+            if self.tabs_inner_widget:
+                self._rebuild_tabs()
+            pt_w = getattr(self.app, 'project_track_widget', None)
+            if pt_w and hasattr(pt_w, '_refresh_project_list'):
+                pt_w._refresh_project_list()
+        except Exception:
+            logging.exception("ProjectsTrack: failed to refresh project UI after animal project change")
     
     def get_animal_project(self, animal_name):
         """Get the project assigned to an animal.
@@ -760,13 +855,25 @@ class ProjectsTrackPlugin:
             project_name: Project name to assign (None to clear)
         """
         if animal_name in self.app.animals:
+            old_project = (self.app.animals[animal_name].get('project') or '').strip()
+            new_project = (project_name or '').strip()
             if project_name and project_name.strip():
-                self.app.animals[animal_name]['project'] = project_name.strip()
+                self.app.animals[animal_name]['project'] = new_project
             else:
                 self.app.animals[animal_name].pop('project', None)
+            if old_project != new_project:
+                cage = getattr(self.app, 'cage_track_plugin', None)
+                mark_dirty = getattr(cage, 'mark_cage_assignments_dirty', None) if cage else None
+                if callable(mark_dirty):
+                    try:
+                        mark_dirty()
+                    except Exception:
+                        logging.exception(
+                            "ProjectsTrack: failed to mark Cage Track assignments dirty for %s project change",
+                            animal_name)
             
             # Refresh projects if this is a new project name
-            if project_name and project_name.strip() and project_name.strip() not in self.all_projects:
+            if new_project and new_project not in self.all_projects:
                 self._discover_projects()
                 self._rebuild_tabs()
     
@@ -778,13 +885,7 @@ class ProjectsTrackPlugin:
             return
         self._history.record_added(project, animal_name)
         is_new_project = project not in self.all_projects
-        if is_new_project:
-            self._discover_projects()
-            self._rebuild_tabs()
-        # Refresh the Project Track tab widget if it exists
         pt_w = getattr(self.app, 'project_track_widget', None)
-        if pt_w and hasattr(pt_w, '_refresh_project_list'):
-            pt_w._refresh_project_list()
         # If this is a new project created via animal dialog, initialize its metadata
         if is_new_project:
             from datetime import datetime
@@ -830,6 +931,16 @@ class ProjectsTrackPlugin:
                             json.dump(project_data, f, indent=2, ensure_ascii=False)
                     except Exception as e:
                         logging.warning("Failed to save project metadata: %s", e)
+        self._schedule_project_ui_refresh()
+
+    def on_animal_experiment_status_changed(self, animal_name: str,
+                                            project: str,
+                                            had_in_experiment: bool,
+                                            severity: str = None) -> None:
+        """Remember experiment history for the active project association."""
+        self._history.record_experiment_status(
+            project, animal_name, had_in_experiment, severity)
+        self._schedule_project_ui_refresh()
     
     def on_animal_removed(self, animal_name):
         """Called by main app when an animal is removed.
@@ -842,9 +953,10 @@ class ProjectsTrackPlugin:
         pass  # Optional: could check if project is now empty
     
     def on_animal_project_removed(self, animal_name: str,
-                                   old_project: str, severity: str = None) -> None:
+                                   old_project: str, severity: str = None,
+                                   previous_in_experiment: bool = None) -> None:
         """Called when the project field is cleared or changed to a different value."""
         if old_project:
-            self._history.record_removed(old_project.strip(), animal_name, severity)
-        from PyQt6.QtCore import QTimer
-        QTimer.singleShot(0, self._on_refresh_clicked)
+            self._history.record_removed(
+                old_project.strip(), animal_name, severity, previous_in_experiment)
+        self._schedule_project_ui_refresh()

@@ -3,7 +3,7 @@
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack Launcher 0.1.0 RC
+# Part of: ProgTrack Launcher 0.1.1-log-menu
 # Module: Portable Windows launcher for external ProgTrack payload scripts.
 # Default target: first ProgTrack.v.*.py script in the launcher directory.
 
@@ -16,18 +16,23 @@ import os
 import re
 import sys
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 DEFAULT_SCRIPT_PATTERN = "ProgTrack.v.*.py"
+LAUNCHER_VERSION = "0.1.1-log-menu"
+LAUNCHER_BUILD_NOTE = "Updated launcher variant with central logs folder support."
+LOG_DIR_NAME = "logs"
 ERROR_LOG_NAME = "launcher_error.log"
 FAULT_LOG_NAME = "launcher_fault.log"
 MPL_CONFIG_DIR_NAME = "matplotlib_cache"
 _FAULT_LOG_HANDLE = None
+_LOG_DIR = None
 
 
 def setup_environment() -> Path:
     """Resolve launcher directory, set CWD, and prepend it to sys.path."""
-    global _FAULT_LOG_HANDLE
+    global _FAULT_LOG_HANDLE, _LOG_DIR
 
     if getattr(sys, "frozen", False):
         launcher_dir = Path(sys.executable).resolve().parent
@@ -44,8 +49,14 @@ def setup_environment() -> Path:
     else:
         launcher_dir = Path(__file__).resolve().parent
 
+    _LOG_DIR = launcher_dir / LOG_DIR_NAME
     try:
-        _FAULT_LOG_HANDLE = (launcher_dir / FAULT_LOG_NAME).open("a", encoding="utf-8")
+        _LOG_DIR.mkdir(exist_ok=True)
+    except OSError:
+        _LOG_DIR = launcher_dir
+
+    try:
+        _FAULT_LOG_HANDLE = (_LOG_DIR / FAULT_LOG_NAME).open("a", encoding="utf-8")
         faulthandler.enable(file=_FAULT_LOG_HANDLE, all_threads=True)
     except OSError:
         pass
@@ -62,6 +73,10 @@ def setup_environment() -> Path:
     launcher_dir_str = str(launcher_dir)
     if launcher_dir_str not in sys.path:
         sys.path.insert(0, launcher_dir_str)
+    if getattr(sys, "frozen", False):
+        internal_dir_str = str(launcher_dir / "_internal")
+        if internal_dir_str not in sys.path:
+            sys.path.insert(1, internal_dir_str)
 
     return launcher_dir
 
@@ -158,10 +173,12 @@ def execute_script(script_path: Path, script_args: list[str], launcher_dir: Path
         print(message, file=sys.stderr)
         print(details, file=sys.stderr)
         try:
-            (launcher_dir / ERROR_LOG_NAME).write_text(
-                f"{message}\n\n{details}",
-                encoding="utf-8",
-            )
+            log_dir = _LOG_DIR or launcher_dir
+            with (log_dir / ERROR_LOG_NAME).open("a", encoding="utf-8") as handle:
+                handle.write(
+                    f"[{datetime.now().isoformat(timespec='seconds')}] "
+                    f"{message}\n\n{details}\n"
+                )
         except OSError:
             pass
         raise SystemExit(1)

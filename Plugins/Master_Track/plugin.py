@@ -2,12 +2,15 @@
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
 # Part of: ProgTrack 0.1.0 RC
 # Required ProgTrack version: see plugin manifest.
+# Required Launcher version: 0.1.1-log-menu or newer.
 # Module: Master Track core plugin logic.
 
 from __future__ import annotations
 
 import logging
 import os
+import subprocess
+import sys
 from datetime import date, datetime
 from typing import Any, Dict, Optional
 
@@ -425,6 +428,49 @@ class MasterTrackPlugin:
         from .dialogs import AuditLogsDialog
         dlg = AuditLogsDialog(self.app, self.app.messages, self.plugin_dir)
         dlg.exec()
+
+    def logs_dir(self) -> str:
+        app_root = os.path.abspath(os.path.join(self.plugin_dir, os.pardir, os.pardir))
+        return os.path.join(app_root, "logs")
+
+    def _write_log_locations_file(self, logs_dir: str) -> None:
+        app_root = os.path.abspath(os.path.join(self.plugin_dir, os.pardir, os.pardir))
+        locations_path = os.path.join(logs_dir, "log_locations.txt")
+        lines = [
+            "ProgTrack log locations",
+            "",
+            f"Application log: {os.path.join(logs_dir, 'progtrack.log')}",
+            f"Launcher error log: {os.path.join(logs_dir, 'launcher_error.log')}",
+            f"Launcher fault log: {os.path.join(logs_dir, 'launcher_fault.log')}",
+            f"Master Track audit logs: {os.path.join(self.plugin_dir, 'audit_YYYY-MM.log')}",
+            "",
+            f"Application folder: {app_root}",
+        ]
+        with open(locations_path, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+
+    def open_logs_folder(self) -> None:
+        messages = getattr(self.app, "messages", {}) or {}
+        title = messages.get("master_track.logs_folder.title", "Logs folder")
+        if self._current_role not in (ROLE_LORD, ROLE_MASTER):
+            return
+        logs_dir = self.logs_dir()
+        try:
+            os.makedirs(logs_dir, exist_ok=True)
+            self._write_log_locations_file(logs_dir)
+            if sys.platform.startswith("win"):
+                os.startfile(logs_dir)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", logs_dir])
+            else:
+                subprocess.Popen(["xdg-open", logs_dir])
+        except Exception as exc:
+            from PyQt6.QtWidgets import QMessageBox
+            template = messages.get(
+                "master_track.logs_folder.open_failed",
+                "Could not open logs folder: {error}",
+            )
+            QMessageBox.warning(self.app, title, template.replace("{error}", str(exc)))
 
     def show_change_password(self) -> None:
         if not self._current_username:

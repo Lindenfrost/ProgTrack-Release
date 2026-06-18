@@ -1,11 +1,11 @@
-# ProgTrack 0.1.0 RC
+# ProgTrack 0.1.1
 
 <p align="center">
   <img src="icons/Splash.png" alt="ProgTrack splash">
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.1.0%20RC-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.1.1-blue">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-portable%20Python-green">
   <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue">
@@ -16,7 +16,7 @@ research workflows. It brings hormone measurements, reproductive events,
 animal roles, medical history, cage placement, pedigree data, sample tracking,
 project assignment, reports, and planning tools into one Windows bundle.
 
-> 🌱 **Release status:** `0.1.0 RC` is an early public testing release.  
+> 🌱 **Release status:** `0.1.1` is an early public testing release.  
 > It is meant for evaluation, feedback, bug reports, and workflow testing.
 
 ## 💡 Why ProgTrack?
@@ -126,7 +126,7 @@ This release combines two layers:
 
 The editable application payload:
 
-- `ProgTrack.v.0.1.0.py`
+- `ProgTrack.v.0.1.1.py`
 - `Plugins/`
 - `icons/`
 - `lang/`
@@ -139,7 +139,6 @@ The portable Windows runtime wrapper:
 
 - `Launcher.exe`
 - `_internal/`
-- `source/`
 - third-party license notices
 
 The launcher starts ProgTrack, but the ProgTrack payload itself remains visible
@@ -164,7 +163,7 @@ temporary directory.
 To launch a specific script manually:
 
 ```text
-Launcher.exe --script ProgTrack.v.0.1.0.py
+Launcher.exe --script ProgTrack.v.0.1.1.py
 ```
 
 > 💡 The ProgTrack application is **not compiled into** `Launcher.exe`.  
@@ -176,13 +175,13 @@ Launcher.exe --script ProgTrack.v.0.1.0.py
 | --- | --- |
 | `Launcher.exe` | 🚀 Portable Windows launcher. |
 | `_internal/` | 🧰 Bundled Python runtime and third-party libraries. |
-| `ProgTrack.v.0.1.0.py` | 🧬 Main ProgTrack application script. |
+| `ProgTrack.v.0.1.1.py` | 🧬 Main ProgTrack application script. |
 | `Plugins/` | 🔌 ProgTrack modules and plugin data. |
 | `icons/` | 🎨 Icons and visual resources. |
 | `lang/` | 🌍 User-interface translation files. |
 | `manual/` | 📖 HTML user guides. |
-| `source/` | 🏗️ Launcher source and build files. |
 | `progtrack_daten.json` | 💾 Main animal and measurement database. |
+| `Username + 123456 password.png` | 🔑 Starter-account reference image. |
 | `LICENSE` | ⚖️ GPL license text. |
 | `LICENSE_NOTICE.md` | 🧾 ProgTrack copyright and license notice. |
 | `THIRD_PARTY_NOTICES.md` | 📦 Third-party component overview. |
@@ -375,14 +374,14 @@ Recommended backup routine:
 
 Check:
 
-- `launcher_error.log`
-- `launcher_fault.log`
+- the `logs/` folder beside `Launcher.exe`
+- `Master Track` -> `Open tech logs`, if ProgTrack starts and you are logged in as Lord/Master
 
 Also confirm that these are still in the same folder:
 
 - `Launcher.exe`
 - `_internal/`
-- `ProgTrack.v.0.1.0.py`
+- `ProgTrack.v.0.1.1.py`
 - `Plugins/`
 - `icons/`
 - `lang/`
@@ -423,7 +422,8 @@ plugins, exports, troubleshooting, and licensing.
 
 ## 🏗️ Build Source
 
-The launcher build source is included in `source/`.
+Launcher build source is available in the GitHub repository under `source/`.
+It is not part of the compact portable release ZIP.
 
 Important files:
 
@@ -443,7 +443,18 @@ beside `Launcher.exe`.
 
 | Version | Focus |
 | --- | --- |
-| `0.1.0` | Publish current launcher/program for testing. |
+| `0.1.1` | Phase 0 stabilization and release hardening. |
+| `0.1.0` | Initial public testing package. |
+
+### 0.1.1 Release Note
+
+`0.1.1` is the first stabilization release after the public testing package. It focuses on making core project workflows safer, clearer, and more predictable before the next feature phase.
+
+Project tracking now preserves and displays previous project history more reliably, including departed severity and previous experimental-history state. Manager permissions for associated users, SOPs, and project documents were aligned with the Master Track permission model. Technical logs are easier to reach through a Lord/Master-only `Open tech logs` action.
+
+The release also improves day-to-day UI stability: lazy-loaded tabs no longer flash unrelated module content, Cage Track avoids unnecessary refresh work during ordinary navigation, and Heritage Track now requires a deliberate double-click to clear the current graph selection from empty space.
+
+The launcher/runtime package was refreshed for this release. The new `0.1.1-log-menu` launcher records its version, supports the updated technical-log workflow, includes the ReportLab runtime imports needed for report export, and keeps the portable Windows structure: `Launcher.exe`, `_internal/`, the editable ProgTrack script, plugins, manuals, language files, demo data, icons, and license notices.
 
 ### 0.1.0 RC Release Note
 

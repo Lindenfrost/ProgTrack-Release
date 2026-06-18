@@ -2,6 +2,7 @@
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
 # Part of: ProgTrack 0.1.0 RC
 # Required ProgTrack version: see plugin manifest.
+# Required Launcher version: 0.1.0 RC or newer.
 # Module: Heritage Track main plugin implementation.
 
 from __future__ import annotations
@@ -370,7 +371,8 @@ class HeritageTrackWidget(QWidget):
         # Double-click detection state (timer-based for reliability across backends)
         self._last_click_time: float = 0.0
         self._last_click_node: Optional[str] = None
-        self._double_click_threshold_ms: float = 300.0  # Windows default is typically 500ms, but 300ms feels more responsive
+        self._last_empty_click_time: float = 0.0
+        self._double_click_threshold_ms: float = 500.0
 
         # Pending selection for double-click detection (delayed to avoid refresh interfering with 2nd click)
         self._pending_selection: Optional[str] = None
@@ -2560,19 +2562,35 @@ class HeritageTrackWidget(QWidget):
             return
 
         # Left mouse button -> single click on node adds to selection (multi-select)
-        # Left click on empty space clears filter-based selection and starts fresh
+        # Double-click on empty space clears filter-based selection and starts fresh
         if event.button == 1:
             if not node:
-                # Click on empty space: clear filter selection, start fresh
-                self._clear_filter_selection()
+                current_time = time.time() * 1000
+                is_empty_double_click = (
+                    current_time - self._last_empty_click_time
+                ) < self._double_click_threshold_ms
+                self._last_empty_click_time = current_time
+                self._last_click_time = 0.0
+                self._last_click_node = None
+                if self._pending_selection_timer:
+                    self._pending_selection_timer.stop()
+                    self._pending_selection_timer = None
+                self._pending_selection = None
+                if is_empty_double_click:
+                    self._last_empty_click_time = 0.0
+                    self._clear_filter_selection()
                 return
 
             # Check for double-click using timer-based detection (more reliable than event.dblclick)
             current_time = time.time() * 1000  # Convert to milliseconds
             is_double_click = (
                 node_kind == "animal" and
-                self._last_click_node == node and
-                (current_time - self._last_click_time) < self._double_click_threshold_ms
+                (
+                    bool(getattr(event, "dblclick", False)) or (
+                        self._last_click_node == node and
+                        (current_time - self._last_click_time) < self._double_click_threshold_ms
+                    )
+                )
             )
 
             if is_double_click:

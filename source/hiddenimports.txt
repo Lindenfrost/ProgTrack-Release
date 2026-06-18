@@ -29,7 +29,17 @@ matplotlib.transforms
 matplotlib.widgets
 openpyxl
 pandas
+reportlab
 reportlab.pdfbase.ttfonts
+reportlab.lib
+reportlab.lib.colors
+reportlab.lib.pagesizes
+reportlab.lib.styles
+reportlab.lib.units
+reportlab.lib.enums
+reportlab.platypus
+reportlab.pdfbase
+reportlab.pdfbase.pdfmetrics
 scipy.interpolate
 scipy.optimize
 scipy.optimize._highspy._core

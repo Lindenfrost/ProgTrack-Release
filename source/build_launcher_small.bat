@@ -39,9 +39,9 @@ if not defined PYTHON_EXE (
             "%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)" >nul 2>nul && set "BOOTSTRAP_PY=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
         )
     )
-    if not defined BOOTSTRAP_PY python -c "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 12) else 1)" >nul 2>nul && set "BOOTSTRAP_PY=python"
+    if not defined BOOTSTRAP_PY python -c "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 13) else 1)" >nul 2>nul && set "BOOTSTRAP_PY=python"
     if not defined BOOTSTRAP_PY (
-        echo ERROR: No usable Python 3.10, 3.11, or 3.12 found. Python 3.13 is not used for this Qt launcher build.
+        echo ERROR: No usable Python 3.10, 3.11, 3.12, or 3.13 found.
         exit /b 1
     )
     !BOOTSTRAP_PY! -m venv "%LOCAL_ENV%"
@@ -56,9 +56,9 @@ if not defined PYTHON_EXE (
 )
 
 echo Using Python: %PYTHON_EXE%
-"%PYTHON_EXE%" -c "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 12) else 1)"
+"%PYTHON_EXE%" -c "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 13) else 1)"
 if errorlevel 1 (
-    echo ERROR: Local build environment must use Python 3.10, 3.11, or 3.12. Remove %LOCAL_ENV% and rebuild.
+    echo ERROR: Local build environment must use Python 3.10, 3.11, 3.12, or 3.13. Remove %LOCAL_ENV% and rebuild.
     exit /b 1
 )
 "%PYTHON_EXE%" -m ensurepip --upgrade >nul 2>nul

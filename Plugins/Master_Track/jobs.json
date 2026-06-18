@@ -18,6 +18,7 @@
     "network.create_entry",
     "network.edit_entry",
     "network.view",
+    "project.upload_document",
     "project.view",
     "reports.view"
   ],
@@ -86,6 +87,8 @@
     "project.set_in_experiment",
     "project.unset_in_experiment",
     "project.upload_document",
+    "project.upload_sop",
+    "project.delete_sop",
     "project.view",
     "reports.view"
   ],
@@ -119,6 +122,7 @@
     "op_scheduler.view",
     "pdg_converter.use",
     "project.set_in_experiment",
+    "project.upload_document",
     "project.view",
     "reports.view",
     "reports.write",

@@ -2,6 +2,7 @@
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
 # Part of: ProgTrack 0.1.0 RC
 # Compatibility: bundled with ProgTrack 0.1.0 RC.
+# Required Launcher version: 0.1.0 RC or newer.
 # Module: Shared plugin capability helpers.
 
 from __future__ import annotations

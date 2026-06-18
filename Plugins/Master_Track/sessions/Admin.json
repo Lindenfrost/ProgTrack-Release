@@ -1,14 +1,14 @@
 {
   "username": "Admin",
   "disabled_plugins": [],
-  "last_active_tab": "tab.heritage_track",
+  "last_active_tab": "tab.cage_track",
   "last_animal_group": "",
-  "last_category_index": 6,
+  "last_category_index": 1,
   "window_geometry": {
-    "x": 412,
-    "y": 166,
-    "w": 1400,
-    "h": 752
+    "x": 0,
+    "y": 23,
+    "w": 1366,
+    "h": 705
   },
   "active_species": null,
   "active_project": "All",

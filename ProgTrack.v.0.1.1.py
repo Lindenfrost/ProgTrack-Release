@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.1.1
+# Required Launcher version: 0.1.1-log-menu or newer.
 # Module: Main application entry point and core user interface.
 # Minimum Python version: 3.9.
 
@@ -57,8 +58,29 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple, Callable, TYPE_CHECKING
 
-# Set up basic logging once
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+APP_BASE_DIR = Path(__file__).resolve().parent
+LOG_DIR = APP_BASE_DIR / "logs"
+APP_LOG_PATH = LOG_DIR / "progtrack.log"
+
+
+def _configure_logging() -> None:
+    formatter = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+    )
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    handlers = [stream_handler]
+    try:
+        LOG_DIR.mkdir(exist_ok=True)
+        file_handler = logging.FileHandler(APP_LOG_PATH, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        handlers.append(file_handler)
+    except OSError:
+        pass
+    logging.basicConfig(level=logging.INFO, handlers=handlers, force=True)
+
+
+_configure_logging()
 logger = logging.getLogger(__name__)
 
 # Lazy loading system for heavy dependencies
@@ -113,17 +135,9 @@ else:
 # # ================================================================ #
 # # 2. Logging Setup                                                   #
 # # ================================================================ #
-# Configure file handler only if not already configured
-if not logging.root.handlers:
-    file_handler = logging.FileHandler('progtrack.log')
-    file_handler.setFormatter(
-        logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    )
-    logging.root.addHandler(file_handler)
-    logging.root.setLevel(logging.INFO)
-    # Disable matplotlib debug logging
-    logging.getLogger('matplotlib').setLevel(logging.WARNING)
-    logging.getLogger('PIL').setLevel(logging.WARNING)
+# Disable noisy third-party debug logging.
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger('PIL').setLevel(logging.WARNING)
 
 # # ================================================================ #
 # # 3. Constants and Enums                                             #
@@ -2731,6 +2745,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._mt_logs_action.setEnabled(self.master_track.can("master.view_audit"))
             self._master_menu.addAction(self._mt_logs_action)
 
+            self._mt_open_logs_folder_action = QAction(
+                self.messages.get("master_track.menu.open_logs_folder", "Open tech logs"), self)
+            self._mt_open_logs_folder_action.triggered.connect(self.master_track.open_logs_folder)
+            self._mt_open_logs_folder_action.setEnabled(
+                self.master_track.current_role in ("lord", "master"))
+            self._master_menu.addAction(self._mt_open_logs_folder_action)
+
             self._mt_changepw_action = QAction(
                 self.messages.get("master_track.menu.change_pw", "Change Password"), self)
             self._mt_changepw_action.triggered.connect(self.master_track.show_change_password)
@@ -3150,17 +3171,31 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # 7.10 Write JSON Data
     #   Serialize and save the provided configuration data to disk.
     # ------------------------
-    def _write_json(self, data: Dict[str, Any]) -> None:
+    def _write_json(
+        self,
+        data: Dict[str, Any],
+        audit_after_save: bool = True,
+    ) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
         """Write persistence data (animals/archived_animals) safely to JSON file with atomic write."""
+        self._save_trace(
+            "write_json.enter",
+            audit_after_save=audit_after_save,
+            animal_count=len(data.get('animals', {})) if isinstance(data, dict) else None,
+            archived_count=len(data.get('archived_animals', {})) if isinstance(data, dict) else None,
+        )
         # Check if running in read-only mode
         if self.read_only_mode:
+            self._save_trace("write_json.read_only_skip")
             logger.warning("Attempted to write data in READ-ONLY mode - operation skipped")
-            return
+            return None
 
         try:
+            self._save_trace("write_json.read_before_snapshot.before")
             before_snapshot = self._read_json()
+            self._save_trace("write_json.read_before_snapshot.after")
         except Exception:
             before_snapshot = {}
+            self._save_trace("write_json.read_before_snapshot.exception")
         
         # Build output structure with schema version
         out = {
@@ -3280,33 +3315,51 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         rec_copy['embryo'].append(d)
 
                 out[section][name] = rec_copy
+            self._save_trace(
+                "write_json.section_serialized",
+                section=section,
+                count=len(out.get(section, {})),
+            )
 
         # Atomic write: temp file → fsync → replace
         target_dir = os.path.dirname(DATEN_DATEI) or '.'
         os.makedirs(target_dir, exist_ok=True)
+        self._save_trace("write_json.tempfile.before", target_dir=target_dir)
         fd, tmp_path = tempfile.mkstemp(prefix="progtrack_", suffix=".tmp", dir=target_dir)
+        self._save_trace("write_json.tempfile.after", tmp_path=tmp_path)
         try:
+            self._save_trace("write_json.dump.before", tmp_path=tmp_path)
             with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 json.dump(out, f, ensure_ascii=False, indent=2)
                 f.flush()
                 os.fsync(f.fileno())
+            self._save_trace("write_json.dump.after", tmp_path=tmp_path)
             # Atomic replace (works on Windows and Unix)
+            self._save_trace("write_json.replace.before", tmp_path=tmp_path, target=DATEN_DATEI)
             os.replace(tmp_path, DATEN_DATEI)
+            self._save_trace("write_json.replace.after", target=DATEN_DATEI)
             logging.info(f"Successfully saved data to {DATEN_DATEI}")
-            try:
-                self._audit_data_snapshot_diff(before_snapshot, out)
-            except Exception as audit_error:
-                logging.error(f"Failed to audit data diff after save: {audit_error}")
+            if audit_after_save:
+                self._save_trace("write_json.audit_immediate.before")
+                self._audit_data_snapshot_diff_when_safe(before_snapshot, out)
+                self._save_trace("write_json.audit_immediate.after")
+            else:
+                self._save_trace("write_json.return_audit_snapshots")
+                return before_snapshot, out
         except Exception as e:
+            self._save_trace("write_json.primary.exception", error=e)
             # Clean up temp file on error
             try:
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
+                    self._save_trace("write_json.temp_cleanup.after", tmp_path=tmp_path)
             except Exception:
+                self._save_trace("write_json.temp_cleanup.exception", tmp_path=tmp_path)
                 pass
             # Try fallback save to user home directory
             fallback_path = os.path.expanduser(f"~/progtrack_daten_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
             try:
+                self._save_trace("write_json.fallback.before", fallback_path=fallback_path)
                 logging.warning(f"Primary save failed: {e}. Attempting fallback to {fallback_path}")
                 with open(fallback_path, 'w', encoding='utf-8') as f:
                     json.dump(out, f, ensure_ascii=False, indent=2)
@@ -3314,10 +3367,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     os.fsync(f.fileno())
                 self._show_message("warning.write_json.fallback", target=DATEN_DATEI, fallback_path=fallback_path)
                 logging.info(f"Fallback save successful to {fallback_path}")
+                self._save_trace("write_json.fallback.after", fallback_path=fallback_path)
             except Exception as fallback_error:
+                self._save_trace("write_json.fallback.exception", error=fallback_error)
                 self._show_message("error.write_json.fallback_failure", error=fallback_error)
                 logging.error(f"Failed to save to fallback {fallback_path}: {fallback_error}")
                 raise  # Re-raise original error
+        self._save_trace("write_json.exit")
+        return None
 
     # ------------------------
     # 7.11 Show Message Dialog
@@ -5123,8 +5180,30 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # 7.15.0 Tab Management
     #     Handle lazy loading of Reports tab.
     # ------------------------
+    def _replace_lazy_tab(self, index: int, widget: QWidget, label: str) -> None:
+        """Replace a lazy placeholder without exposing intermediate tab states."""
+        if index < 0 or index >= self.main_tabs.count():
+            return
+        tabs = self.main_tabs
+        previous_signal_state = tabs.blockSignals(True)
+        tabs.setUpdatesEnabled(False)
+        self._lazy_tab_replacing = True
+        try:
+            tabs.removeTab(index)
+            tabs.insertTab(index, widget, label)
+            tabs.setCurrentIndex(index)
+        finally:
+            self._lazy_tab_replacing = False
+            tabs.setUpdatesEnabled(True)
+            tabs.blockSignals(previous_signal_state)
+            tabs.update()
+
     def _on_tab_changed(self, index: int) -> None:
         """Handle tab changes and lazy load Reports/Flow/Heritage tabs if needed."""
+        if getattr(self, '_lazy_tab_replacing', False):
+            return
+        if index < 0:
+            return
         # Determine which tab we're switching to
         tab_text = self.main_tabs.tabText(index)
         tab_widget = self.main_tabs.widget(index)
@@ -5166,10 +5245,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Build the Reports tab
             self.reports_tab = self._build_reports_tab()
             
-            # Replace placeholder with actual tab
-            self.main_tabs.removeTab(index)
-            self.main_tabs.insertTab(index, self.reports_tab, self.messages.get("tab.reports", "Reports"))
-            self.main_tabs.setCurrentIndex(index)
+            self._replace_lazy_tab(
+                index,
+                self.reports_tab,
+                self.messages.get("tab.reports", "Reports"),
+            )
             
             # Update reports if an animal is selected (use last selected animal only)
             if self.selected_animals:
@@ -5189,10 +5269,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.flow_track_widget = FlowTrackWidget(self, self.messages)
                 self.flow_track_tab = self.flow_track_widget.get_widget()
                 
-                # Replace placeholder with actual tab
-                self.main_tabs.removeTab(index)
-                self.main_tabs.insertTab(index, self.flow_track_tab, self.messages.get("tab.flow_track", "Flow Track"))
-                self.main_tabs.setCurrentIndex(index)
+                self._replace_lazy_tab(
+                    index,
+                    self.flow_track_tab,
+                    self.messages.get("tab.flow_track", "Flow Track"),
+                )
                 
                 logging.info("Flow Track tab loaded successfully")
             except Exception as e:
@@ -5211,10 +5292,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.heritage_track_widget = self.heritage_plugin.get_tab_widget()
                 self.heritage_track_tab = self.heritage_track_widget
 
-                # Replace placeholder with actual tab
-                self.main_tabs.removeTab(index)
-                self.main_tabs.insertTab(index, self.heritage_track_tab, self.messages.get("tab.heritage_track", "Heritage Track"))
-                self.main_tabs.setCurrentIndex(index)
+                self._replace_lazy_tab(
+                    index,
+                    self.heritage_track_tab,
+                    self.messages.get("tab.heritage_track", "Heritage Track"),
+                )
 
                 if hasattr(self.heritage_track_widget, 'refresh_graph'):
                     self.heritage_track_widget.refresh_graph()
@@ -5239,10 +5321,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.cage_track_widget = self.cage_track_plugin.get_tab_widget()
                 self.cage_track_tab = self.cage_track_widget
 
-                # Replace placeholder with actual tab
-                self.main_tabs.removeTab(index)
-                self.main_tabs.insertTab(index, self.cage_track_tab, self.messages.get("tab.cage_track", "Cage Track"))
-                self.main_tabs.setCurrentIndex(index)
+                self._replace_lazy_tab(
+                    index,
+                    self.cage_track_tab,
+                    self.messages.get("tab.cage_track", "Cage Track"),
+                )
 
                 if hasattr(self.cage_track_widget, 'refresh_view'):
                     self.cage_track_widget.refresh_view()
@@ -5264,10 +5347,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.medi_track_widget = self.medi_track_plugin.get_tab_widget()
                 self.medi_track_tab = self.medi_track_widget
 
-                # Replace placeholder with actual tab
-                self.main_tabs.removeTab(index)
-                self.main_tabs.insertTab(index, self.medi_track_tab, self.messages.get("tab.medi_track", "Medi Track"))
-                self.main_tabs.setCurrentIndex(index)
+                self._replace_lazy_tab(
+                    index,
+                    self.medi_track_tab,
+                    self.messages.get("tab.medi_track", "Medi Track"),
+                )
 
                 # Show currently selected animal if any (filter heritage-only animals)
                 if self.selected_animals:
@@ -5292,10 +5376,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self, self.messages,
                     history_store=self.projects_plugin._history)
                 self.project_track_tab = self.project_track_widget
-                self.main_tabs.removeTab(index)
-                self.main_tabs.insertTab(index, self.project_track_tab,
-                    self.messages.get("tab.project_track", "Project Track"))
-                self.main_tabs.setCurrentIndex(index)
+                self._replace_lazy_tab(
+                    index,
+                    self.project_track_tab,
+                    self.messages.get("tab.project_track", "Project Track"),
+                )
                 if self.projects_plugin.current_project not in (None, 'All'):
                     self.project_track_widget.select_project(
                         self.projects_plugin.current_project)
@@ -5359,10 +5444,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self.flow_track_widget._redraw_canvas()
 
             elif cage_track_selected and getattr(self, 'cage_track_tab', None) is not None:
-                # Switching to Cage Track tab - refresh visualization
-                if hasattr(self, 'cage_track_widget') and self.cage_track_widget is not None:
-                    if hasattr(self.cage_track_widget, 'refresh_view'):
-                        self.cage_track_widget.refresh_view()
+                # Switching to an already-loaded Cage Track tab should not
+                # rebuild unless Cage Track knows assignments changed.
+                cage_plugin = getattr(self, 'cage_track_plugin', None)
+                if cage_plugin is not None and hasattr(cage_plugin, 'refresh_on_tab_activated'):
+                    cage_plugin.refresh_on_tab_activated()
 
             elif medi_track_selected and getattr(self, 'medi_track_tab', None) is not None:
                 # Switching to Medi Track tab - refresh view for current selection
@@ -6321,6 +6407,203 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     old_sv_lbl, new_sv_lbl)
             except Exception as exc:
                 logging.error(f"_log_project_change: {exc}")
+
+    def _connect_project_severity_reset(self, project_combo, severity_combo):
+        """Reset project severity after a completed project selection/edit."""
+        def _reset_severity():
+            try:
+                QTimer.singleShot(0, lambda: severity_combo.setCurrentIndex(0))
+            except RuntimeError:
+                pass
+        try:
+            project_combo.activated.connect(lambda _idx: _reset_severity())
+            line_edit = project_combo.lineEdit()
+            if line_edit is not None:
+                line_edit.editingFinished.connect(_reset_severity)
+        except RuntimeError:
+            pass
+
+    def _coerce_in_experiment_for_project(self, requested: bool, project: str) -> bool:
+        """Do not allow experimental status without a project association."""
+        if requested and not (project or '').strip():
+            self._show_message("warning.in_experiment_requires_project")
+            return False
+        return bool(requested)
+
+    def _notify_project_track_assignment_change(
+        self,
+        animal_name: str,
+        old_project: str,
+        new_project: str,
+        old_severity: str = '',
+        old_in_experiment: bool = False,
+    ) -> None:
+        pt = getattr(self, 'projects_plugin', None)
+        if not pt:
+            return
+        old_proj = (old_project or '').strip()
+        new_proj = (new_project or '').strip()
+        try:
+            if old_proj and old_proj != new_proj:
+                pt.on_animal_project_removed(
+                    animal_name, old_proj, old_severity or '', old_in_experiment)
+            if new_proj and new_proj != old_proj:
+                pt.on_animal_added(animal_name)
+        except Exception:
+            logging.exception(
+                "Project Track update failed for %s while changing project from %s to %s",
+                animal_name, old_proj, new_proj)
+
+    def _mark_cage_assignments_dirty_for_project_change(
+        self,
+        animal_name: str,
+        old_project: str,
+        new_project: str,
+    ) -> None:
+        old_proj = (old_project or '').strip()
+        new_proj = (new_project or '').strip()
+        if old_proj == new_proj:
+            return
+        cage = getattr(self, 'cage_track_plugin', None)
+        if not (getattr(self, 'has_cage_track_plugin', False) and cage):
+            return
+        mark_dirty = getattr(cage, 'mark_cage_assignments_dirty', None)
+        if not callable(mark_dirty):
+            return
+        try:
+            mark_dirty()
+            self._save_trace(
+                "post_animal_project_updates.cage_dirty_marked",
+                animal_name=animal_name,
+                old_project=old_proj,
+                new_project=new_proj,
+            )
+        except Exception:
+            logging.exception(
+                "Failed to mark Cage Track assignments dirty for project change: %s %r -> %r",
+                animal_name, old_proj, new_proj)
+
+    def _schedule_post_animal_save_project_updates(
+        self,
+        animal_name: str,
+        old_project: str,
+        new_project: str,
+        old_severity: str = '',
+        new_severity: str = '',
+        old_in_experiment: bool = False,
+        new_in_experiment: bool = False,
+        creating: bool = False,
+    ) -> None:
+        self._save_trace(
+            "post_animal_project_updates.schedule.enter",
+            animal_name=animal_name,
+            old_project=old_project,
+            new_project=new_project,
+            old_severity=old_severity,
+            new_severity=new_severity,
+            old_in_experiment=old_in_experiment,
+            new_in_experiment=new_in_experiment,
+            creating=creating,
+        )
+        if old_project == new_project and old_severity == new_severity and old_in_experiment == new_in_experiment:
+            self._save_trace("post_animal_project_updates.schedule.no_change", animal_name=animal_name)
+            return
+
+        def _run_post_save_updates():
+            if QApplication.activeModalWidget() is not None:
+                self._save_trace("post_animal_project_updates.run.modal_wait", animal_name=animal_name)
+                QTimer.singleShot(250, _run_post_save_updates)
+                return
+            try:
+                self._save_trace("post_animal_project_updates.run.enter", animal_name=animal_name)
+                logging.info(
+                    "Post-save project updates begin: animal=%s old_project=%r new_project=%r old_severity=%r new_severity=%r",
+                    animal_name, old_project, new_project, old_severity, new_severity)
+                self._mark_cage_assignments_dirty_for_project_change(
+                    animal_name, old_project, new_project)
+                self._log_project_change(
+                    animal_name, old_project, new_project, old_severity, new_severity)
+                self._save_trace("post_animal_project_updates.run.project_log.after", animal_name=animal_name)
+                self._log_severity_change(
+                    animal_name, old_project, new_project, old_severity, new_severity, creating)
+                self._save_trace("post_animal_project_updates.run.severity_log.after", animal_name=animal_name)
+                if new_in_experiment != old_in_experiment:
+                    self._save_trace("post_animal_project_updates.run.experiment_log.before", animal_name=animal_name)
+                    self._log_experiment_change(animal_name, new_in_experiment)
+                    self._save_trace("post_animal_project_updates.run.experiment_log.after", animal_name=animal_name)
+                self._notify_project_track_assignment_change(
+                    animal_name, old_project, new_project, old_severity, old_in_experiment)
+                self._save_trace("post_animal_project_updates.run.project_track_notify.after", animal_name=animal_name)
+                pt = getattr(self, 'projects_plugin', None)
+                if pt and hasattr(pt, 'on_animal_experiment_status_changed'):
+                    active_project = (new_project or '').strip()
+                    had_in_experiment = bool(old_in_experiment or new_in_experiment)
+                    if active_project and had_in_experiment:
+                        pt.on_animal_experiment_status_changed(
+                            animal_name, active_project, had_in_experiment,
+                            new_severity or old_severity or '')
+                        self._save_trace(
+                            "post_animal_project_updates.run.project_track_experiment_history.after",
+                            animal_name=animal_name)
+                if pt and hasattr(pt, '_schedule_project_ui_refresh'):
+                    pt._schedule_project_ui_refresh()
+                    self._save_trace("post_animal_project_updates.run.project_track_refresh.after", animal_name=animal_name)
+                self._save_persistence()
+                self._save_trace("post_animal_project_updates.run.persistence.after", animal_name=animal_name)
+                logging.info("Post-save project updates completed: animal=%s", animal_name)
+                self._save_trace("post_animal_project_updates.run.exit", animal_name=animal_name)
+            except Exception:
+                self._save_trace("post_animal_project_updates.run.exception", animal_name=animal_name)
+                logging.exception("Post-save project updates failed for %s", animal_name)
+
+        self._save_trace("post_animal_project_updates.timer.before", animal_name=animal_name)
+        QTimer.singleShot(250, _run_post_save_updates)
+        self._save_trace("post_animal_project_updates.timer.after", animal_name=animal_name)
+
+    def _save_trace(self, step: str, **fields: Any) -> None:
+        """Write crash-resistant save diagnostics with immediate flush/fsync."""
+        try:
+            LOG_DIR.mkdir(exist_ok=True)
+            safe_fields = []
+            for key, value in fields.items():
+                try:
+                    text = repr(value)
+                except Exception:
+                    text = f"<unreprable {type(value).__name__}>"
+                if len(text) > 300:
+                    text = text[:297] + "..."
+                safe_fields.append(f"{key}={text}")
+            line = (
+                f"{datetime.now().isoformat(timespec='milliseconds')} "
+                f"{step}"
+            )
+            if safe_fields:
+                line += " | " + " | ".join(safe_fields)
+            path = LOG_DIR / "save_trace.log"
+            with open(path, "a", encoding="utf-8") as trace_file:
+                trace_file.write(line + "\n")
+                trace_file.flush()
+                os.fsync(trace_file.fileno())
+            logging.info("SAVE_TRACE %s %s", step, " ".join(safe_fields))
+        except Exception:
+            pass
+
+    def _save_trace_record_summary(
+        self,
+        rec: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        if not isinstance(rec, dict):
+            return {"type": type(rec).__name__}
+        summary: Dict[str, Any] = {}
+        for key in (
+            "rolle", "project", "severity", "species", "in_experiment",
+            "sick", "abnormal_current", "birth_date", "death_date",
+        ):
+            summary[key] = rec.get(key)
+        for key in ("daten", "pdg", "gewicht", "events", "sperm"):
+            value = rec.get(key)
+            summary[f"{key}_len"] = len(value) if isinstance(value, list) else None
+        return summary
 
     def _log_severity_change(
         self,
@@ -11596,6 +11879,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._mt_logs_action.setEnabled(self.master_track.can("master.view_audit"))
             self._master_menu.addAction(self._mt_logs_action)
 
+            if hasattr(self, '_mt_open_logs_folder_action'):
+                self._mt_open_logs_folder_action.setText(
+                    self.messages.get("master_track.menu.open_logs_folder", "Open tech logs"))
+            else:
+                self._mt_open_logs_folder_action = QAction(
+                    self.messages.get("master_track.menu.open_logs_folder", "Open tech logs"), self)
+                self._mt_open_logs_folder_action.triggered.connect(self.master_track.open_logs_folder)
+            self._mt_open_logs_folder_action.setEnabled(
+                self.master_track.current_role in ("lord", "master"))
+            self._master_menu.addAction(self._mt_open_logs_folder_action)
+
             if hasattr(self, '_mt_changepw_action'):
                 self._mt_changepw_action.setText(
                     self.messages.get("master_track.menu.change_pw", "Change Password"))
@@ -12959,7 +13253,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not self._master_can('project.manage_severity'):
             severity_cb.setEnabled(False)
             severity_cb.setStyleSheet('QComboBox { background: #f0f0f0; color: #666; }')
-        project_le.currentTextChanged.connect(lambda _txt, _cb=severity_cb: _cb.setCurrentIndex(0))
+        self._connect_project_severity_reset(project_le, severity_cb)
         _proj_sev_w = QWidget()
         _proj_sev_l = QHBoxLayout(_proj_sev_w)
         _proj_sev_l.setContentsMargins(0, 0, 0, 0)
@@ -13214,8 +13508,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         vbox.addWidget(save_btn)
 
         def on_save() -> None:
+            self._save_trace("partner.save.enter", editing=editing, original_name=name)
             # Basic validation
             new_name = name_le.text().strip()
+            self._save_trace("partner.save.name_read", new_name=new_name)
             if not new_name:
                 self._show_message("error.empty_name", self.messages.get("dialog.partner.error.empty_name", "Name cannot be empty."))
                 return
@@ -13230,6 +13526,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             _orig_name = new_name
             if not editing:
                 new_name = self._resolve_animal_key(new_name, selected_species)
+            self._save_trace(
+                "partner.save.identity_resolved",
+                new_name=new_name,
+                selected_species=selected_species,
+            )
 
             # parse ref weight
             try:
@@ -13292,11 +13593,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 _perm_p = ('project.unset_in_experiment' if old_in_exp_p else 'project.set_in_experiment')
                 if _mt_p is None or not _mt_p.can(_perm_p):
                     new_in_exp_p = old_in_exp_p
+            new_in_exp_p = self._coerce_in_experiment_for_project(
+                new_in_exp_p, rec_obj.get('project', ''))
             rec_obj['in_experiment'] = new_in_exp_p
             # lists expected elsewhere in code
             rec_obj['daten']    = rec_obj.get('daten', [])
             rec_obj['events']   = rec_obj.get('events', [])
             rec_obj['gewicht']  = new_weights
+            self._save_trace(
+                "partner.save.record_built",
+                new_name=new_name,
+                record=self._save_trace_record_summary(rec_obj),
+                old_project=_old_project,
+                old_severity=_old_severity,
+            )
 
             if (
                 getattr(self, 'has_heritage_plugin', False)
@@ -13304,6 +13614,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and heritage_parent_fields is not None
             ):
                 try:
+                    self._save_trace("partner.save.heritage_parent.before", new_name=new_name)
                     parent_values = self.heritage_plugin.read_parent_group(heritage_parent_fields)
                     self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
                     # Create heritage-only placeholders for non-existing parents
@@ -13311,7 +13622,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     father = parent_values.get("sperm_donor", "")
                     species = rec_obj.get("species", "")
                     self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
+                    self._save_trace("partner.save.heritage_parent.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("partner.save.heritage_parent.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track parent save failed for {new_name}: {e}")
 
             if (
@@ -13320,33 +13633,39 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and cage_address_fields is not None
             ):
                 try:
+                    self._save_trace("partner.save.cage_address.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_values = extract_address_values(cage_address_fields)
                     self.cage_track_plugin.save_address_from_dialog(new_name, addr_values)
+                    self._save_trace("partner.save.cage_address.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("partner.save.cage_address.exception", new_name=new_name, error=e)
                     logging.error(f"Cage_Track address save failed for {new_name}: {e}")
 
+            self._save_trace("partner.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
+            self._save_trace("partner.save.commit.after", new_name=new_name, animal_count=len(self.animals))
             # Sync to Heritage Track (including sex from dialog)
             if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
                 try:
+                    self._save_trace("partner.save.heritage_sync.before", new_name=new_name)
                     self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
+                    self._save_trace("partner.save.heritage_sync.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("partner.save.heritage_sync.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track sync failed for partner {new_name}: {e}")
-            self._log_project_change(new_name, _old_project, rec_obj['project'], _old_severity, rec_obj.get('severity', ''))
-            self._log_severity_change(new_name, _old_project, rec_obj['project'], _old_severity, rec_obj['severity'])
-            if new_in_exp_p != old_in_exp_p:
-                self._log_experiment_change(new_name, new_in_exp_p)
-            pt = getattr(self, 'projects_plugin', None)
-            if pt:
-                old_proj = (_old_project or '').strip()
-                new_proj = (rec_obj.get('project', '') or '').strip()
-                if old_proj and old_proj != new_proj:
-                    pt.on_animal_project_removed(new_name, old_proj, _old_severity or '')
-                if new_proj and new_proj != old_proj:
-                    pt.on_animal_added(new_name)
-            self._save_persistence()
+            self._save_trace("partner.save.project_updates.schedule.before", new_name=new_name)
+            self._schedule_post_animal_save_project_updates(
+                new_name, _old_project, rec_obj.get('project', ''),
+                _old_severity, rec_obj.get('severity', ''),
+                old_in_exp_p, new_in_exp_p)
+            self._save_trace("partner.save.project_updates.schedule.after", new_name=new_name)
+            self._save_trace("partner.save.persistence.before", new_name=new_name)
+            self._save_persistence(defer_post_save_work=True)
+            self._save_trace("partner.save.persistence.after", new_name=new_name)
+            self._save_trace("partner.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
+            self._save_trace("partner.save.dialog_accept.after", new_name=new_name)
             # Force heritage visible to show newly created parent placeholders
             _heritage_fields_present = (
                 getattr(self, 'has_heritage_plugin', False)
@@ -13475,7 +13794,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not self._master_can('project.manage_severity'):
             severity_cb.setEnabled(False)
             severity_cb.setStyleSheet('QComboBox { background: #f0f0f0; color: #666; }')
-        project_le.currentTextChanged.connect(lambda _txt, _cb=severity_cb: _cb.setCurrentIndex(0))
+        self._connect_project_severity_reset(project_le, severity_cb)
         _proj_sev_w = QWidget()
         _proj_sev_l = QHBoxLayout(_proj_sev_w)
         _proj_sev_l.setContentsMargins(0, 0, 0, 0)
@@ -13775,8 +14094,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # --- Save button ---
         save_btn = QPushButton(self.messages.get("button.save", "Save"))
         def on_save() -> None:
+            self._save_trace("sperm_donor.save.enter", editing=editing, original_name=name)
             # gather name
             new_name = name_le.text().strip()
+            self._save_trace("sperm_donor.save.name_read", new_name=new_name)
             if not editing:
                 if not new_name:
                     self._show_message(
@@ -13801,6 +14122,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             _orig_name = new_name
             if not editing:
                 new_name = self._resolve_animal_key(new_name, selected_species)
+            self._save_trace(
+                "sperm_donor.save.identity_resolved",
+                new_name=new_name,
+                selected_species=selected_species,
+            )
 
             # parse numeric fields
             try:
@@ -13878,6 +14204,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 _perm_s = ('project.unset_in_experiment' if old_in_exp_s else 'project.set_in_experiment')
                 if _mt_s is None or not _mt_s.can(_perm_s):
                     new_in_exp_s = old_in_exp_s
+            new_in_exp_s = self._coerce_in_experiment_for_project(
+                new_in_exp_s, rec_obj.get('project', ''))
             rec_obj['in_experiment'] = new_in_exp_s
             # update or set lists
             rec_obj['sperm']          = new_sperm
@@ -13886,6 +14214,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj.setdefault('daten', [])
             rec_obj.setdefault('events', [])
             rec_obj.setdefault('pdg', [])
+            self._save_trace(
+                "sperm_donor.save.record_built",
+                new_name=new_name,
+                record=self._save_trace_record_summary(rec_obj),
+                old_project=_old_project,
+                old_severity=_old_severity,
+            )
 
             if (
                 getattr(self, 'has_heritage_plugin', False)
@@ -13893,6 +14228,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and heritage_parent_fields is not None
             ):
                 try:
+                    self._save_trace("sperm_donor.save.heritage_parent.before", new_name=new_name)
                     parent_values = self.heritage_plugin.read_parent_group(heritage_parent_fields)
                     self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
                     # Create heritage-only placeholders for non-existing parents
@@ -13900,7 +14236,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     father = parent_values.get("sperm_donor", "")
                     species = rec_obj.get("species", "")
                     self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
+                    self._save_trace("sperm_donor.save.heritage_parent.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("sperm_donor.save.heritage_parent.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track parent save failed for {new_name}: {e}")
 
             if (
@@ -13909,35 +14247,39 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and cage_address_fields is not None
             ):
                 try:
+                    self._save_trace("sperm_donor.save.cage_address.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_values = extract_address_values(cage_address_fields)
                     self.cage_track_plugin.save_address_from_dialog(new_name, addr_values)
+                    self._save_trace("sperm_donor.save.cage_address.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("sperm_donor.save.cage_address.exception", new_name=new_name, error=e)
                     logging.error(f"Cage_Track address save failed for {new_name}: {e}")
 
             # update animals mapping
+            self._save_trace("sperm_donor.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
             # if the name was changed on edit, remove old entry
             if editing and new_name != name:
                 self.animals.pop(name, None)
-            self._log_project_change(new_name, _old_project, rec_obj['project'], _old_severity, rec_obj.get('severity', ''))
-            self._log_severity_change(new_name, _old_project, rec_obj['project'], _old_severity, rec_obj['severity'])
-            if new_in_exp_s != old_in_exp_s:
-                self._log_experiment_change(new_name, new_in_exp_s)
-            pt = getattr(self, 'projects_plugin', None)
-            if pt:
-                old_proj = (_old_project or '').strip()
-                new_proj = (rec_obj.get('project', '') or '').strip()
-                if old_proj and old_proj != new_proj:
-                    pt.on_animal_project_removed(new_name, old_proj, _old_severity or '')
-                if new_proj and new_proj != old_proj:
-                    pt.on_animal_added(new_name)
-            self._save_persistence()
+            self._save_trace("sperm_donor.save.commit.after", new_name=new_name, animal_count=len(self.animals))
+            self._save_trace("sperm_donor.save.project_updates.schedule.before", new_name=new_name)
+            self._schedule_post_animal_save_project_updates(
+                new_name, _old_project, rec_obj.get('project', ''),
+                _old_severity, rec_obj.get('severity', ''),
+                old_in_exp_s, new_in_exp_s)
+            self._save_trace("sperm_donor.save.project_updates.schedule.after", new_name=new_name)
+            self._save_trace("sperm_donor.save.persistence.before", new_name=new_name)
+            self._save_persistence(defer_post_save_work=True)
+            self._save_trace("sperm_donor.save.persistence.after", new_name=new_name)
             # Sync to Heritage Track (including role-determined sex)
             if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
                 try:
+                    self._save_trace("sperm_donor.save.heritage_sync.before", new_name=new_name)
                     self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
+                    self._save_trace("sperm_donor.save.heritage_sync.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("sperm_donor.save.heritage_sync.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track sync failed for samenspender {new_name}: {e}")
             # Force heritage visible to show newly created parent placeholders
             _heritage_fields_present = (
@@ -14061,7 +14403,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not self._master_can('project.manage_severity'):
             severity_cb.setEnabled(False)
             severity_cb.setStyleSheet('QComboBox { background: #f0f0f0; color: #666; }')
-        project_le.currentTextChanged.connect(lambda _txt, _cb=severity_cb: _cb.setCurrentIndex(0))
+        self._connect_project_severity_reset(project_le, severity_cb)
         _proj_sev_w = QWidget()
         _proj_sev_l = QHBoxLayout(_proj_sev_w)
         _proj_sev_l.setContentsMargins(0, 0, 0, 0)
@@ -14381,8 +14723,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Save button
         save_btn2 = QPushButton(self.messages.get("dialog.offspring.button.save", "Save"))
         def on_save_offspring() -> None:
+            self._save_trace("offspring.save.enter", editing=editing, original_name=name)
             # determine name
             new_name = name_le.text().strip()
+            self._save_trace("offspring.save.name_read", new_name=new_name)
             if not editing:
                 if not new_name:
                     QMessageBox.critical(
@@ -14407,6 +14751,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             _orig_name = new_name
             if not editing:
                 new_name = self._resolve_animal_key(new_name, selected_species)
+            self._save_trace("offspring.save.identity_resolved", new_name=new_name, selected_species=selected_species)
 
             # collect fields
             rec_obj = self.animals.get(new_name, {}) if editing else {}
@@ -14445,6 +14790,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 _perm_o = ('project.unset_in_experiment' if old_in_exp_o else 'project.set_in_experiment')
                 if _mt_o is None or not _mt_o.can(_perm_o):
                     new_in_exp_o = old_in_exp_o
+            new_in_exp_o = self._coerce_in_experiment_for_project(
+                new_in_exp_o, rec_obj.get('project', ''))
             rec_obj['in_experiment'] = new_in_exp_o
             # weights
             weights_list = []
@@ -14476,9 +14823,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Ensure only necessary keys exist (no deprecated arrays for new animals)
             rec_obj.setdefault('daten', [])
             rec_obj.setdefault('pdg', [])
+            self._save_trace(
+                "offspring.save.record_built",
+                new_name=new_name,
+                record=self._save_trace_record_summary(rec_obj),
+                old_project=_old_project,
+                old_severity=_old_severity,
+            )
 
             if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
                 try:
+                    self._save_trace("offspring.save.heritage.before", new_name=new_name)
                     # Offspring is in main animals list, so in_main_animals=True
                     self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
                     # Save parentage to heritage store
@@ -14494,7 +14849,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     father = rec_obj.get('samenspender', '')
                     species = rec_obj.get('species', '')
                     self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
+                    self._save_trace("offspring.save.heritage.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("offspring.save.heritage.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track sync failed for offspring {new_name}: {e}")
 
             if (
@@ -14503,36 +14860,41 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and cage_address_fields is not None
             ):
                 try:
+                    self._save_trace("offspring.save.cage.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_vals = extract_address_values(cage_address_fields)
                     self.cage_track_plugin.save_address_from_dialog(new_name, addr_vals)
+                    self._save_trace("offspring.save.cage.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("offspring.save.cage.exception", new_name=new_name, error=e)
                     logging.error(f"Cage_Track address save failed for offspring {new_name}: {e}")
 
             # update mapping
+            self._save_trace("offspring.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
             if editing and new_name != name:
                 self.animals.pop(name, None)
-            self._log_project_change(new_name, _old_project, rec_obj['project'], _old_severity, rec_obj.get('severity', ''))
-            self._log_severity_change(new_name, _old_project, rec_obj['project'], _old_severity, rec_obj['severity'])
-            if new_in_exp_o != old_in_exp_o:
-                self._log_experiment_change(new_name, new_in_exp_o)
-            pt = getattr(self, 'projects_plugin', None)
-            if pt:
-                old_proj = (_old_project or '').strip()
-                new_proj = (rec_obj.get('project', '') or '').strip()
-                if old_proj and old_proj != new_proj:
-                    pt.on_animal_project_removed(new_name, old_proj, _old_severity or '')
-                if new_proj and new_proj != old_proj:
-                    pt.on_animal_added(new_name)
-            self._save_persistence()
+            self._save_trace("offspring.save.commit.after", new_name=new_name, animal_count=len(self.animals))
+            self._save_trace("offspring.save.project_updates.schedule.before", new_name=new_name)
+            self._schedule_post_animal_save_project_updates(
+                new_name, _old_project, rec_obj.get('project', ''),
+                _old_severity, rec_obj.get('severity', ''),
+                old_in_exp_o, new_in_exp_o)
+            self._save_trace("offspring.save.project_updates.schedule.after", new_name=new_name)
+            self._save_trace("offspring.save.persistence.before", new_name=new_name)
+            self._save_persistence(defer_post_save_work=True)
+            self._save_trace("offspring.save.persistence.after", new_name=new_name)
             # Force heritage visible to show newly created parent placeholders
             _heritage_fields_present = (
                 getattr(self, 'has_heritage_plugin', False)
                 and getattr(self, 'heritage_plugin', None)
             )
+            self._save_trace("offspring.save.refresh_list.before", new_name=new_name)
             self._refresh_list(update_tab_visibility=True, force_heritage_visible=_heritage_fields_present)
+            self._save_trace("offspring.save.refresh_list.after", new_name=new_name)
+            self._save_trace("offspring.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
+            self._save_trace("offspring.save.dialog_accept.after", new_name=new_name)
             # Refresh report table if Reports tab is active
             if self.reports_enabled and hasattr(self, 'report_current_animal'):
                 if self.report_current_animal == new_name:
@@ -14669,7 +15031,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not self._master_can('project.manage_severity'):
             severity_cb.setEnabled(False)
             severity_cb.setStyleSheet('QComboBox { background: #f0f0f0; color: #666; }')
-        project_le.currentTextChanged.connect(lambda _txt, _cb=severity_cb: _cb.setCurrentIndex(0))
+        self._connect_project_severity_reset(project_le, severity_cb)
         _proj_sev_w = QWidget()
         _proj_sev_l = QHBoxLayout(_proj_sev_w)
         _proj_sev_l.setContentsMargins(0, 0, 0, 0)
@@ -15022,8 +15384,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         save_btn = QPushButton(self.messages.get("dialog.zuchttier.button.save", "Save"))
         
         def on_save_zuchttier() -> None:
+            self._save_trace("zuchttier.save.enter", editing=editing, original_name=name)
             # Determine name
             new_name = name_le.text().strip()
+            self._save_trace("zuchttier.save.name_read", new_name=new_name)
             if not editing:
                 if not new_name:
                     QMessageBox.critical(
@@ -15048,6 +15412,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             _orig_name = new_name
             if not editing:
                 new_name = self._resolve_animal_key(new_name, selected_species)
+            self._save_trace("zuchttier.save.identity_resolved", new_name=new_name, selected_species=selected_species)
             
             # Collect fields
             rec_obj = self.animals.get(new_name, {}) if editing else {}
@@ -15082,6 +15447,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 _perm_z = ('project.unset_in_experiment' if old_in_exp_z else 'project.set_in_experiment')
                 if _mt_z is None or not _mt_z.can(_perm_z):
                     new_in_exp_z = old_in_exp_z
+            new_in_exp_z = self._coerce_in_experiment_for_project(
+                new_in_exp_z, rec_obj.get('project', ''))
             rec_obj['in_experiment'] = new_in_exp_z
             rec_obj['max_pregnancies'] = maxpr_sb.value()
             rec_obj['max_geburten'] = maxb_sb.value()
@@ -15119,9 +15486,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Ensure necessary keys exist
             rec_obj.setdefault('daten', [])
             rec_obj.setdefault('pdg', [])
+            self._save_trace(
+                "zuchttier.save.record_built",
+                new_name=new_name,
+                record=self._save_trace_record_summary(rec_obj),
+                old_project=_old_project,
+                old_severity=_old_severity,
+            )
 
             if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
                 try:
+                    self._save_trace("zuchttier.save.heritage.before", new_name=new_name)
                     # Zuchttier is in main animals list, so in_main_animals=True
                     self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
                     # Save parentage to heritage store
@@ -15137,7 +15512,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     father = rec_obj.get('samenspender', '')
                     species = rec_obj.get('species', '')
                     self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
+                    self._save_trace("zuchttier.save.heritage.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("zuchttier.save.heritage.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track sync failed for zuchttier {new_name}: {e}")
 
             if (
@@ -15146,36 +15523,41 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and cage_address_fields is not None
             ):
                 try:
+                    self._save_trace("zuchttier.save.cage.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_vals = extract_address_values(cage_address_fields)
                     self.cage_track_plugin.save_address_from_dialog(new_name, addr_vals)
+                    self._save_trace("zuchttier.save.cage.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("zuchttier.save.cage.exception", new_name=new_name, error=e)
                     logging.error(f"Cage_Track address save failed for zuchttier {new_name}: {e}")
 
             # Update mapping
+            self._save_trace("zuchttier.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
             if editing and new_name != name:
                 self.animals.pop(name, None)
-            self._log_project_change(new_name, _old_project, rec_obj['project'], _old_severity, rec_obj.get('severity', ''))
-            self._log_severity_change(new_name, _old_project, rec_obj['project'], _old_severity, rec_obj['severity'])
-            if new_in_exp_z != old_in_exp_z:
-                self._log_experiment_change(new_name, new_in_exp_z)
-            pt = getattr(self, 'projects_plugin', None)
-            if pt:
-                old_proj = (_old_project or '').strip()
-                new_proj = (rec_obj.get('project', '') or '').strip()
-                if old_proj and old_proj != new_proj:
-                    pt.on_animal_project_removed(new_name, old_proj, _old_severity or '')
-                if new_proj and new_proj != old_proj:
-                    pt.on_animal_added(new_name)
-            self._save_persistence()
+            self._save_trace("zuchttier.save.commit.after", new_name=new_name, animal_count=len(self.animals))
+            self._save_trace("zuchttier.save.project_updates.schedule.before", new_name=new_name)
+            self._schedule_post_animal_save_project_updates(
+                new_name, _old_project, rec_obj.get('project', ''),
+                _old_severity, rec_obj.get('severity', ''),
+                old_in_exp_z, new_in_exp_z)
+            self._save_trace("zuchttier.save.project_updates.schedule.after", new_name=new_name)
+            self._save_trace("zuchttier.save.persistence.before", new_name=new_name)
+            self._save_persistence(defer_post_save_work=True)
+            self._save_trace("zuchttier.save.persistence.after", new_name=new_name)
             # Force heritage visible to show newly created parent placeholders
             _heritage_fields_present = (
                 getattr(self, 'has_heritage_plugin', False)
                 and getattr(self, 'heritage_plugin', None)
             )
+            self._save_trace("zuchttier.save.refresh_list.before", new_name=new_name)
             self._refresh_list(update_tab_visibility=True, force_heritage_visible=_heritage_fields_present)
+            self._save_trace("zuchttier.save.refresh_list.after", new_name=new_name)
+            self._save_trace("zuchttier.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
+            self._save_trace("zuchttier.save.dialog_accept.after", new_name=new_name)
             # Refresh report table if Reports tab is active
             if self.reports_enabled and hasattr(self, 'report_current_animal'):
                 if self.report_current_animal == new_name:
@@ -15293,7 +15675,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not self._master_can('project.manage_severity'):
             severity_cb.setEnabled(False)
             severity_cb.setStyleSheet('QComboBox { background: #f0f0f0; color: #666; }')
-        project_le.currentTextChanged.connect(lambda _txt, _cb=severity_cb: _cb.setCurrentIndex(0))
+        self._connect_project_severity_reset(project_le, severity_cb)
         _proj_sev_w = QWidget()
         _proj_sev_l = QHBoxLayout(_proj_sev_w)
         _proj_sev_l.setContentsMargins(0, 0, 0, 0)
@@ -15587,7 +15969,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             else self._master_can('core.edit_animal_core'))
 
         def on_save_versuchstier():
+            self._save_trace("versuchstier.save.enter", editing=editing, original_name=name)
             new_name = name_le.text().strip()
+            self._save_trace("versuchstier.save.name_read", new_name=new_name)
             if not new_name:
                 self._show_message_raw(
                     self.messages.get('error.title', 'Error'),
@@ -15605,6 +15989,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             _orig_name = new_name
             if not editing:
                 new_name = self._resolve_animal_key(new_name, selected_species)
+            self._save_trace("versuchstier.save.identity_resolved", new_name=new_name, selected_species=selected_species)
             try:
                 ref_w = float(ref_w_le.text()) if ref_w_le.text() else DEFAULT_REF_WEIGHT
             except ValueError:
@@ -15674,35 +16059,46 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                       else 'project.set_in_experiment')
                 if _mt_save is None or not _mt_save.can(_p):
                     new_in_exp_vt = old_in_exp_vt
+            new_in_exp_vt = self._coerce_in_experiment_for_project(
+                new_in_exp_vt, rec_obj.get('project', ''))
             rec_obj['in_experiment'] = new_in_exp_vt
+            self._save_trace(
+                "versuchstier.save.record_built",
+                new_name=new_name,
+                record=self._save_trace_record_summary(rec_obj),
+                old_project=_old_project,
+                old_severity=_old_severity,
+            )
 
             if cage_address_fields is not None:
                 try:
+                    self._save_trace("versuchstier.save.cage.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_vals = extract_address_values(cage_address_fields)
                     self.cage_track_plugin.save_address_from_dialog(new_name, addr_vals)
+                    self._save_trace("versuchstier.save.cage.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("versuchstier.save.cage.exception", new_name=new_name, error=e)
                     logging.error(f'Cage_Track address save failed for {new_name}: {e}')
 
+            self._save_trace("versuchstier.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
             if editing and new_name != name:
                 self.animals.pop(name, None)
-            self._log_project_change(new_name, _old_project, rec_obj['project'],
-                                     _old_severity, rec_obj.get('severity', ''))
-            self._log_severity_change(new_name, _old_project, rec_obj['project'],
-                                      _old_severity, rec_obj['severity'])
-            pt = getattr(self, 'projects_plugin', None)
-            if pt:
-                old_proj = (_old_project or '').strip()
-                new_proj = (rec_obj.get('project', '') or '').strip()
-                if old_proj and old_proj != new_proj:
-                    pt.on_animal_project_removed(new_name, old_proj, _old_severity or '')
-                if new_proj and new_proj != old_proj:
-                    pt.on_animal_added(new_name)
-            self._save_persistence()
+            self._save_trace("versuchstier.save.commit.after", new_name=new_name, animal_count=len(self.animals))
+            self._save_trace("versuchstier.save.project_updates.schedule.before", new_name=new_name)
+            self._schedule_post_animal_save_project_updates(
+                new_name, _old_project, rec_obj.get('project', ''),
+                _old_severity, rec_obj.get('severity', ''),
+                old_in_exp_vt, new_in_exp_vt)
+            self._save_trace("versuchstier.save.project_updates.schedule.after", new_name=new_name)
+            self._save_trace("versuchstier.save.persistence.before", new_name=new_name)
+            self._save_persistence(defer_post_save_work=True)
+            self._save_trace("versuchstier.save.persistence.after", new_name=new_name)
             # Sync to Heritage Track (including sex from dialog)
             if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
                 try:
+                    self._save_trace("versuchstier.save.heritage.before", new_name=new_name)
                     self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
                     # Save parentage to heritage store
                     parent_values = {
@@ -15717,15 +16113,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     father = rec_obj.get('samenspender', '')
                     species = rec_obj.get('species', '')
                     self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
+                    self._save_trace("versuchstier.save.heritage.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("versuchstier.save.heritage.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track sync failed for versuchstier {new_name}: {e}")
             # Force heritage visible to show newly created parent placeholders
             _heritage_fields_present = (
                 getattr(self, 'has_heritage_plugin', False)
                 and getattr(self, 'heritage_plugin', None)
             )
+            self._save_trace("versuchstier.save.refresh_list.before", new_name=new_name)
             self._refresh_list(update_tab_visibility=True, force_heritage_visible=_heritage_fields_present)
+            self._save_trace("versuchstier.save.refresh_list.after", new_name=new_name)
+            self._save_trace("versuchstier.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
+            self._save_trace("versuchstier.save.dialog_accept.after", new_name=new_name)
 
         save_btn.clicked.connect(on_save_versuchstier)
         layout.addWidget(save_btn)
@@ -15830,7 +16232,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not self._master_can('project.manage_severity'):
             severity_cb.setEnabled(False)
             severity_cb.setStyleSheet('QComboBox { background: #f0f0f0; color: #666; }')
-        project_le.currentTextChanged.connect(lambda _txt, _cb=severity_cb: _cb.setCurrentIndex(0))
+        self._connect_project_severity_reset(project_le, severity_cb)
         _proj_sev_w = QWidget()
         _proj_sev_l = QHBoxLayout(_proj_sev_w)
         _proj_sev_l.setContentsMargins(0, 0, 0, 0)
@@ -16200,7 +16602,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ---------------- Save (single standard button) ----------------
         save_btn = QPushButton(self.messages.get("button.save", "Save"))
         def on_save() -> None:
+            self._save_trace(
+                "female_like.save.enter",
+                editing=not creating,
+                creating=creating,
+                original_name=name,
+            )
             new_name = name_le.text().strip()
+            self._save_trace("female_like.save.name_read", new_name=new_name)
             if not new_name:
                 self._show_message(
                     self.messages.get('error.title', 'Error'), 
@@ -16224,6 +16633,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             _orig_name = new_name
             if creating:
                 new_name = self._resolve_animal_key(new_name, selected_species)
+            self._save_trace(
+                "female_like.save.identity_resolved",
+                new_name=new_name,
+                selected_species=selected_species,
+            )
 
             # Get PdG widgets from plugin-created tab if available
             pdg_w = []
@@ -16238,6 +16652,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Read the internal role code from the combobox userData so
             # storage and logic stay independent of the localized label.
             role_code = role_cb.currentData() or Role.SPENDER.value
+            self._save_trace("female_like.save.role_read", new_name=new_name, role_code=role_code)
             # role change cleanups
             if not creating and rec.get('rolle') != role_code:
                 if role_code == Role.AMME.value and rec.get('op'):
@@ -16307,8 +16722,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     _perm_f = ('project.unset_in_experiment' if old_in_exp_f else 'project.set_in_experiment')
                     if _mt_f is None or not _mt_f.can(_perm_f):
                         new_in_exp_f = old_in_exp_f
+                new_in_exp_f = self._coerce_in_experiment_for_project(
+                    new_in_exp_f, rec.get('project', ''))
                 rec['in_experiment'] = new_in_exp_f
+                self._save_trace(
+                    "female_like.save.scalars_written",
+                    new_name=new_name,
+                    record=self._save_trace_record_summary(rec),
+                    old_project=_old_project,
+                    old_severity=_old_severity,
+                    new_in_experiment=new_in_exp_f,
+                )
             except ValueError:
+                self._save_trace("female_like.save.scalars.value_error", new_name=new_name)
                 self._show_message(
                     self.messages.get('error.title', 'Error'),
                     self.messages.get('error.invalid_numbers', 'Invalid numbers.'),
@@ -16319,6 +16745,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Sample_Track: snapshot existing measurement dates before mutation
             _st_old_daten = {e['datum'] for e in rec.get('daten', [])}
             _st_old_pdg   = {e['datum'] for e in rec.get('pdg', [])}
+            self._save_trace(
+                "female_like.save.sample_snapshot_done",
+                new_name=new_name,
+                old_daten_count=len(_st_old_daten),
+                old_pdg_count=len(_st_old_pdg),
+            )
 
             # Progesteron
             if steroid_active:
@@ -16471,6 +16903,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec['op'] = rec.get('op', [])
                 rec['pgf'] = rec.get('pgf', [])
                 rec['events'] = rec.get('events', [])
+            self._save_trace(
+                "female_like.save.measurements_events_done",
+                new_name=new_name,
+                record=self._save_trace_record_summary(rec),
+            )
 
             if (
                 getattr(self, 'has_heritage_plugin', False)
@@ -16478,6 +16915,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and heritage_parent_fields is not None
             ):
                 try:
+                    self._save_trace("female_like.save.heritage_parent.before", new_name=new_name)
                     parent_values = self.heritage_plugin.read_parent_group(heritage_parent_fields)
                     self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
                     # Create heritage-only placeholders for non-existing parents
@@ -16485,7 +16923,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     father = parent_values.get("sperm_donor", "")
                     species = rec.get("species", "")
                     self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
+                    self._save_trace("female_like.save.heritage_parent.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("female_like.save.heritage_parent.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track parent save failed for {new_name}: {e}")
 
             if (
@@ -16494,36 +16934,40 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and cage_address_fields is not None
             ):
                 try:
+                    self._save_trace("female_like.save.cage_address.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_values = extract_address_values(cage_address_fields)
                     self.cage_track_plugin.save_address_from_dialog(new_name, addr_values)
+                    self._save_trace("female_like.save.cage_address.after", new_name=new_name)
                 except Exception as e:
+                    self._save_trace("female_like.save.cage_address.exception", new_name=new_name, error=e)
                     logging.error(f"Cage_Track address save failed for {new_name}: {e}")
 
             # Commit
             key = new_name if creating else name
+            self._save_trace("female_like.save.commit.before", key=key, new_name=new_name)
             self.animals[key] = rec
             if creating and key != name:
                 # ensure no leftover incomplete entry
                 self.animals.pop(name, None)
-            self._log_project_change(key, _old_project, rec['project'], _old_severity, rec.get('severity', ''))
-            self._log_severity_change(key, _old_project, rec['project'], _old_severity, rec.get('severity', ''), creating)
-            if new_in_exp_f != old_in_exp_f:
-                self._log_experiment_change(key, new_in_exp_f)
-            pt = getattr(self, 'projects_plugin', None)
-            if pt:
-                old_proj = (_old_project or '').strip()
-                new_proj = (rec.get('project', '') or '').strip()
-                if old_proj and old_proj != new_proj:
-                    pt.on_animal_project_removed(key, old_proj, _old_severity or '')
-                if new_proj and new_proj != old_proj:
-                    pt.on_animal_added(key)
-            self._save_persistence()
+            self._save_trace("female_like.save.commit.after", key=key, animal_count=len(self.animals))
+            self._save_trace("female_like.save.project_updates.schedule.before", key=key)
+            self._schedule_post_animal_save_project_updates(
+                key, _old_project, rec.get('project', ''),
+                _old_severity, rec.get('severity', ''),
+                old_in_exp_f, new_in_exp_f, creating)
+            self._save_trace("female_like.save.project_updates.schedule.after", key=key)
+            self._save_trace("female_like.save.persistence.before", key=key)
+            self._save_persistence(defer_post_save_work=True)
+            self._save_trace("female_like.save.persistence.after", key=key)
             # Sync to Heritage Track (including role-determined sex)
             if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
                 try:
+                    self._save_trace("female_like.save.heritage_sync.before", key=key)
                     self.heritage_plugin.sync_from_record(key, rec, in_main_animals=True)
+                    self._save_trace("female_like.save.heritage_sync.after", key=key)
                 except Exception as e:
+                    self._save_trace("female_like.save.heritage_sync.exception", key=key, error=e)
                     logging.error(f"Heritage_Track sync failed for female animal {key}: {e}")
             # Sample_Track: notify for newly added blood/urine measurements
             if getattr(self, 'has_sample_track_plugin', False) and self.sample_track_plugin:
@@ -16532,17 +16976,23 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     _d = _e.get('datum')
                     if _d and _d not in _st_old_daten:
                         try:
+                            self._save_trace("female_like.save.sample_blood.before", key=key, date=_d)
                             self.sample_track_plugin.notify_blood_sample(
                                 _st_anim, _d.strftime(DATE_FORMAT))
+                            self._save_trace("female_like.save.sample_blood.after", key=key, date=_d)
                         except Exception:
+                            self._save_trace("female_like.save.sample_blood.exception", key=key, date=_d)
                             pass
                 for _e in rec.get('pdg', []):
                     _d = _e.get('datum')
                     if _d and _d not in _st_old_pdg:
                         try:
+                            self._save_trace("female_like.save.sample_urine.before", key=key, date=_d)
                             self.sample_track_plugin.notify_urine_sample(
                                 _st_anim, _d.strftime(DATE_FORMAT))
+                            self._save_trace("female_like.save.sample_urine.after", key=key, date=_d)
                         except Exception:
+                            self._save_trace("female_like.save.sample_urine.exception", key=key, date=_d)
                             pass
             # Force heritage visible to show newly created parent placeholders
             _heritage_fields_present = (
@@ -16550,14 +17000,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and getattr(self, 'heritage_plugin', None)
                 and heritage_parent_fields is not None
             )
+            self._save_trace("female_like.save.refresh_list.before", key=key)
             self._refresh_list(update_tab_visibility=True, force_heritage_visible=_heritage_fields_present)
+            self._save_trace("female_like.save.refresh_list.after", key=key)
             
             self.selected_animals = [key]
+            self._save_trace("female_like.save.dialog_accept.before", key=key)
             dlg.accept()
+            self._save_trace("female_like.save.dialog_accept.after", key=key)
             # Refresh report table if Reports tab is active
             if self.reports_enabled and hasattr(self, 'report_current_animal'):
                 if self.report_current_animal == key:
+                    self._save_trace("female_like.save.report_update.before", key=key)
                     self._update_report_table()
+                    self._save_trace("female_like.save.report_update.after", key=key)
 
         save_btn.clicked.connect(on_save)
         v.addWidget(save_btn)
@@ -17349,21 +17805,107 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------
     # 7.27.4 Save all animal data to persistent storage
     # ------------------------
-    def _save_persistence(self):
-        """Save current data to JSON."""
-        data = {'animals': self.animals, 'archived_animals': self.archived}
-        self._write_json(data)
+    def _audit_data_snapshot_diff_when_safe(
+        self,
+        before_snapshot: Dict[str, Any],
+        after_snapshot: Dict[str, Any],
+    ) -> None:
+        """Run data-save audit after modal dialogs have closed."""
+        self._save_trace("audit_snapshot_diff.safe.enter")
+        if QApplication.activeModalWidget() is not None:
+            self._save_trace("audit_snapshot_diff.safe.modal_wait")
+            QTimer.singleShot(
+                250,
+                lambda before=before_snapshot, after=after_snapshot:
+                    self._audit_data_snapshot_diff_when_safe(before, after)
+            )
+            return
+        try:
+            self._save_trace("audit_snapshot_diff.before")
+            self._audit_data_snapshot_diff(before_snapshot, after_snapshot)
+            self._save_trace("audit_snapshot_diff.after")
+        except Exception as audit_error:
+            self._save_trace("audit_snapshot_diff.exception", error=audit_error)
+            logging.error(f"Failed to audit data diff after save: {audit_error}")
+
+    def _run_post_persistence_sync(
+        self,
+        audit_snapshots: Optional[Tuple[Dict[str, Any], Dict[str, Any]]] = None,
+    ) -> None:
+        """Run plugin sync work after modal dialogs have closed."""
+        self._save_trace(
+            "post_persistence_sync.enter",
+            has_audit_snapshots=audit_snapshots is not None,
+        )
+        if QApplication.activeModalWidget() is not None:
+            self._save_trace("post_persistence_sync.modal_wait")
+            QTimer.singleShot(
+                250,
+                lambda snapshots=audit_snapshots:
+                    self._run_post_persistence_sync(snapshots)
+            )
+            return
+
+        logging.info("Post-persistence plugin sync begin")
+        if audit_snapshots is not None:
+            self._save_trace("post_persistence_sync.audit.before")
+            before_snapshot, after_snapshot = audit_snapshots
+            self._audit_data_snapshot_diff_when_safe(before_snapshot, after_snapshot)
+            self._save_trace("post_persistence_sync.audit.after")
+
         if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
             try:
+                self._save_trace("post_persistence_sync.heritage.before")
                 self.heritage_plugin.store.sync_from_animals(self.animals)
+                self._save_trace("post_persistence_sync.heritage.after")
             except Exception as e:
+                self._save_trace("post_persistence_sync.heritage.exception", error=e)
                 logging.error(f"Heritage_Track sync during persistence save failed: {e}")
 
         if getattr(self, 'has_cage_track_plugin', False) and getattr(self, 'cage_track_plugin', None):
             try:
+                self._save_trace("post_persistence_sync.cage.before")
                 self.cage_track_plugin.sync_animal_data(self.animals)
+                self._save_trace("post_persistence_sync.cage.after")
             except Exception as e:
+                self._save_trace("post_persistence_sync.cage.exception", error=e)
                 logging.error(f"Cage_Track sync during persistence save failed: {e}")
+        logging.info("Post-persistence plugin sync completed")
+        self._save_trace("post_persistence_sync.exit")
+
+    def _save_persistence(self, defer_post_save_work: bool = False):
+        """Save current data to JSON."""
+        self._save_trace("save_persistence.enter", defer_post_save_work=defer_post_save_work)
+        logging.info(
+            "Persistence save begin; defer_post_save_work=%s",
+            defer_post_save_work,
+        )
+        data = {'animals': self.animals, 'archived_animals': self.archived}
+        audit_snapshots = self._write_json(
+            data,
+            audit_after_save=not defer_post_save_work,
+        )
+        self._save_trace(
+            "save_persistence.write_json.after",
+            defer_post_save_work=defer_post_save_work,
+            has_audit_snapshots=audit_snapshots is not None,
+        )
+        logging.info(
+            "Persistence JSON save completed; defer_post_save_work=%s",
+            defer_post_save_work,
+        )
+        if defer_post_save_work:
+            self._save_trace("save_persistence.defer_timer.before")
+            QTimer.singleShot(
+                250,
+                lambda snapshots=audit_snapshots:
+                    self._run_post_persistence_sync(snapshots)
+            )
+            self._save_trace("save_persistence.defer_timer.after")
+        else:
+            self._save_trace("save_persistence.sync_now.before")
+            self._run_post_persistence_sync()
+            self._save_trace("save_persistence.sync_now.after")
 
     # ------------------------
     # 7.27.5 Archive the currently selected animal

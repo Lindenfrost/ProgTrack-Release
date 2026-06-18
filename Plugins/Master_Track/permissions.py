@@ -2,6 +2,7 @@
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
 # Part of: ProgTrack 0.1.0 RC
 # Required ProgTrack version: see plugin manifest.
+# Required Launcher version: 0.1.0 RC or newer.
 # Module: Master Track permission definitions and resolution logic.
 
 from __future__ import annotations
@@ -114,6 +115,8 @@ PERM_PROJECT_MANAGE              = "project.manage"
 PERM_PROJECT_ARCHIVE             = "project.archive_project"
 PERM_PROJECT_UPLOAD_DOCUMENT     = "project.upload_document"
 PERM_PROJECT_DELETE_DOCUMENT     = "project.delete_document"
+PERM_PROJECT_UPLOAD_SOP          = "project.upload_sop"
+PERM_PROJECT_DELETE_SOP          = "project.delete_sop"
 
 # reports — Animal Reports
 PERM_REPORTS_VIEW = "reports.view"
@@ -179,6 +182,7 @@ ALL_PERMISSIONS: List[str] = [
     PERM_PROJECT_SET_IN_EXPERIMENT, PERM_PROJECT_UNSET_IN_EXPERIMENT,
     PERM_PROJECT_MANAGE, PERM_PROJECT_ARCHIVE,
     PERM_PROJECT_UPLOAD_DOCUMENT, PERM_PROJECT_DELETE_DOCUMENT,
+    PERM_PROJECT_UPLOAD_SOP, PERM_PROJECT_DELETE_SOP,
     PERM_REPORTS_VIEW, PERM_REPORTS_WRITE,
     PERM_PLOTS_VIEW,
     PERM_PDG_CONVERTER_USE,
@@ -231,6 +235,7 @@ DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
         PERM_PROJECT_SET_IN_EXPERIMENT, PERM_PROJECT_UNSET_IN_EXPERIMENT,
         PERM_PROJECT_MANAGE, PERM_PROJECT_ARCHIVE,
         PERM_PROJECT_UPLOAD_DOCUMENT, PERM_PROJECT_DELETE_DOCUMENT,
+        PERM_PROJECT_UPLOAD_SOP, PERM_PROJECT_DELETE_SOP,
         PERM_MEDI_VIEW, PERM_MEDI_FILTER_USE, PERM_MEDI_ADD_DOCS,
         PERM_REPORTS_VIEW,
     },

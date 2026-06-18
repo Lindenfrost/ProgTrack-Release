@@ -6310,6 +6310,280 @@
         }
       ],
       "project_entry_date": "20.04.2026"
+    },
+    "Andy": {
+      "rolle": "Samenspender",
+      "id": "",
+      "chip_nr": "",
+      "origin": "",
+      "project": "Zucht",
+      "severity": "",
+      "birth_date": "",
+      "death_date": "",
+      "special_status": "",
+      "species": "",
+      "ref_weight": 450.0,
+      "max_spermaproben": 100,
+      "recovery_time": 60,
+      "sick": false,
+      "sick_times": [],
+      "abnormal_current": false,
+      "in_experiment": false,
+      "sperm": [],
+      "gewicht": [],
+      "daten": [],
+      "events": [],
+      "pdg": [],
+      "edits": {
+        "2026-06-16": {
+          "project_note": "Assigned to project: Anode (SV2 - mild or very mild); Left project: Anode (SV2 - mild or very mild); Assigned to project: Bonode; Left project: Bonode; Assigned to project: Bonoden",
+          "severity_note": "Severity in Anode changed from undefined to SV2 - mild or very mild",
+          "experiment_note": "Experiment ended"
+        },
+        "2026-06-17": {
+          "project_note": "Left project: Bonoden; Assigned to project: Zucht"
+        }
+      },
+      "project_entry_date": "17.06.2026",
+      "project_severity": "",
+      "project_history": [
+        {
+          "project": "Anode",
+          "entry_date": "16.06.2026",
+          "leave_date": "16.06.2026",
+          "severity": "SV2"
+        },
+        {
+          "project": "Bonode",
+          "entry_date": "16.06.2026",
+          "leave_date": "16.06.2026",
+          "severity": ""
+        },
+        {
+          "project": "Bonoden",
+          "entry_date": "16.06.2026",
+          "leave_date": "17.06.2026",
+          "severity": ""
+        }
+      ],
+      "op": [],
+      "pgf": [],
+      "embryo": [],
+      "sick_start_date": null,
+      "sick_end_date": null
+    },
+    "Bobby": {
+      "rolle": "Samenspender",
+      "id": "",
+      "chip_nr": "",
+      "origin": "",
+      "project": "",
+      "severity": "",
+      "birth_date": "",
+      "death_date": "",
+      "special_status": "",
+      "species": "",
+      "ref_weight": 450.0,
+      "max_spermaproben": 100,
+      "recovery_time": 60,
+      "sick": false,
+      "sick_times": [],
+      "abnormal_current": false,
+      "in_experiment": false,
+      "sperm": [],
+      "gewicht": [],
+      "daten": [],
+      "events": [],
+      "pdg": [],
+      "edits": {
+        "2026-06-16": {
+          "project_note": "Assigned to project: Bonode"
+        },
+        "2026-06-17": {
+          "project_note": "Left project: Bonode"
+        }
+      },
+      "project_entry_date": "16.06.2026",
+      "project_severity": "",
+      "op": [],
+      "pgf": [],
+      "embryo": [],
+      "sick_start_date": null,
+      "sick_end_date": null,
+      "project_history": [
+        {
+          "project": "Bonode",
+          "entry_date": "16.06.2026",
+          "leave_date": "17.06.2026",
+          "severity": ""
+        }
+      ]
+    },
+    "Cindy": {
+      "rolle": "Samenspender",
+      "id": "",
+      "chip_nr": "",
+      "origin": "",
+      "project": "",
+      "severity": "",
+      "birth_date": "",
+      "death_date": "",
+      "special_status": "",
+      "species": "",
+      "ref_weight": 450.0,
+      "max_spermaproben": 100,
+      "recovery_time": 60,
+      "sick": false,
+      "sick_times": [],
+      "abnormal_current": false,
+      "in_experiment": false,
+      "sperm": [],
+      "gewicht": [],
+      "daten": [],
+      "events": [],
+      "pdg": [],
+      "edits": {
+        "2026-06-16": {
+          "project_note": "Assigned to project: Anode; Left project: Anode (SV2 - mild or very mild); Assigned to project: Bonode",
+          "severity_note": "Severity in Anode changed from undefined to SV2 - mild or very mild"
+        },
+        "2026-06-17": {
+          "project_note": "Left project: Bonode"
+        }
+      },
+      "project_entry_date": "16.06.2026",
+      "project_severity": "",
+      "project_history": [
+        {
+          "project": "Anode",
+          "entry_date": "16.06.2026",
+          "leave_date": "16.06.2026",
+          "severity": "SV2"
+        },
+        {
+          "project": "Bonode",
+          "entry_date": "16.06.2026",
+          "leave_date": "17.06.2026",
+          "severity": ""
+        }
+      ],
+      "op": [],
+      "pgf": [],
+      "embryo": [],
+      "sick_start_date": null,
+      "sick_end_date": null
+    },
+    "Dana": {
+      "rolle": "Samenspender",
+      "id": "",
+      "chip_nr": "",
+      "origin": "",
+      "project": "",
+      "severity": "",
+      "birth_date": "",
+      "death_date": "",
+      "special_status": "",
+      "species": "",
+      "ref_weight": 450.0,
+      "max_spermaproben": 100,
+      "recovery_time": 60,
+      "sick": false,
+      "sick_times": [],
+      "abnormal_current": false,
+      "in_experiment": false,
+      "sperm": [],
+      "gewicht": [],
+      "daten": [],
+      "events": [],
+      "pdg": [],
+      "edits": {
+        "2026-06-16": {
+          "project_note": "Assigned to project: Anode; Left project: Anode; Assigned to project: Bonode",
+          "experiment_note": "Experiment ended"
+        },
+        "2026-06-17": {
+          "project_note": "Left project: Bonode"
+        }
+      },
+      "project_entry_date": "16.06.2026",
+      "project_severity": "",
+      "project_history": [
+        {
+          "project": "Anode",
+          "entry_date": "16.06.2026",
+          "leave_date": "16.06.2026",
+          "severity": ""
+        },
+        {
+          "project": "Bonode",
+          "entry_date": "16.06.2026",
+          "leave_date": "17.06.2026",
+          "severity": ""
+        }
+      ],
+      "op": [],
+      "pgf": [],
+      "embryo": [],
+      "sick_start_date": null,
+      "sick_end_date": null
+    },
+    "Echo": {
+      "rolle": "Samenspender",
+      "id": "",
+      "chip_nr": "",
+      "origin": "",
+      "project": "",
+      "severity": "",
+      "birth_date": "",
+      "death_date": "",
+      "special_status": "",
+      "species": "",
+      "ref_weight": 450.0,
+      "max_spermaproben": 100,
+      "recovery_time": 60,
+      "sick": false,
+      "sick_times": [],
+      "abnormal_current": false,
+      "in_experiment": false,
+      "sperm": [],
+      "gewicht": [],
+      "daten": [],
+      "events": [],
+      "pdg": [],
+      "op": [],
+      "pgf": [],
+      "embryo": [],
+      "sick_start_date": null,
+      "sick_end_date": null
+    },
+    "Fredi": {
+      "rolle": "Samenspender",
+      "id": "",
+      "chip_nr": "",
+      "origin": "",
+      "project": "",
+      "severity": "",
+      "birth_date": "",
+      "death_date": "",
+      "special_status": "",
+      "species": "",
+      "ref_weight": 450.0,
+      "max_spermaproben": 100,
+      "recovery_time": 60,
+      "sick": false,
+      "sick_times": [],
+      "abnormal_current": false,
+      "in_experiment": false,
+      "sperm": [],
+      "gewicht": [],
+      "daten": [],
+      "events": [],
+      "pdg": [],
+      "op": [],
+      "pgf": [],
+      "embryo": [],
+      "sick_start_date": null,
+      "sick_end_date": null
     }
   },
   "archived_animals": {
@@ -12571,6 +12845,64 @@
       "project_severity": "",
       "severity": "",
       "special_status": ""
+    },
+    "Betta": {
+      "rolle": "Spenderin",
+      "ref_weight": 450.0,
+      "max_messungen": 100,
+      "max_pgf": 12,
+      "max_embryo": 0,
+      "max_op": 0,
+      "max_fsh": 0,
+      "max_pregnancies": 0,
+      "max_geburten": 0,
+      "recovery_time": 60,
+      "daten": [],
+      "pdg": [],
+      "gewicht": [],
+      "events": [],
+      "species": "",
+      "id": "",
+      "chip_nr": "",
+      "origin": "",
+      "project": "Zeta-1",
+      "severity": "SV1",
+      "birth_date": "",
+      "death_date": "",
+      "special_status": "",
+      "sick": false,
+      "sick_times": [],
+      "abnormal_current": false,
+      "in_experiment": false,
+      "op": [],
+      "pgf": [],
+      "edits": {
+        "2026-06-16": {
+          "project_note": "Assigned to project: Betta-1 (SV0 - no severity); Left project: Betta-1 (SV0 - no severity); Assigned to project: Betta-2 (SV2 - mild or very mild); Left project: Betta-2 (SV2 - mild or very mild); Assigned to project: Zeta-1 (SV1 - non-recovery)",
+          "severity_note": "Severity in Betta-1 changed from undefined to SV0 - no severity",
+          "experiment_note": "Experiment ended"
+        }
+      },
+      "project_entry_date": "16.06.2026",
+      "project_severity": "SV1",
+      "project_history": [
+        {
+          "project": "Betta-1",
+          "entry_date": "16.06.2026",
+          "leave_date": "16.06.2026",
+          "severity": "SV0"
+        },
+        {
+          "project": "Betta-2",
+          "entry_date": "16.06.2026",
+          "leave_date": "16.06.2026",
+          "severity": "SV2"
+        }
+      ],
+      "sperm": [],
+      "embryo": [],
+      "sick_start_date": null,
+      "sick_end_date": null
     }
   },
   "settings": {}

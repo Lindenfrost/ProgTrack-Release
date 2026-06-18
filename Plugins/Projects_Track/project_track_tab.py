@@ -2,6 +2,7 @@
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
 # Part of: ProgTrack 0.1.0 RC
 # Required ProgTrack version: see plugin manifest.
+# Required Launcher version: 0.1.0 RC or newer.
 # Module: Projects Track main tab widget.
 
 from __future__ import annotations
@@ -22,6 +23,11 @@ _DOCS_SUBDIR   = "documents"
 _SOP_SUBDIR    = "sop"
 _DATA_FILENAME = "project_data.json"
 _ALL_DOC_FILTER = "Documents (*.jpg *.jpeg *.png *.pdf *.txt *.md *.xls *.xlsx *.csv)"
+
+def _clean_text(value) -> str:
+    if value is None:
+        return ''
+    return str(value).strip()
 
 def _m(messages, key, fallback):
     return messages.get(key, fallback) if isinstance(messages, dict) else fallback
@@ -322,7 +328,9 @@ class ProjectTrackTab(QWidget):
 
     def _can(self, perm):
         mt=getattr(self._app,'master_track',None)
-        return True if mt is None else bool(getattr(mt,'can',lambda _:False)(perm))
+        if mt is None:
+            return True
+        return bool(getattr(mt, 'can', lambda _: False)(perm))
 
     def _current_sig(self):
         mt=getattr(self._app,'master_track',None)
@@ -504,7 +512,7 @@ class ProjectTrackTab(QWidget):
     def _build_detail(self, name):
         self._clear_right()
         can_manage = self._can('project.manage')
-        can_assign = self._can('project.assign')
+        can_assign = self._can('project.project_assign')
         rec = self._project_record(name)
 
         # ── Meta ──────────────────────────────────────────────────────────
@@ -632,7 +640,7 @@ class ProjectTrackTab(QWidget):
 
         # ── Animals (1 column with expandable sub-sections) ───────────────
         sec_an = CollapsibleSection(_m(self._messages, "project.section.animals", "Animals"), collapsed=True)
-        sec_an._btn.toggled.connect(lambda on: self._refresh_animals_section(name) if on else None)
+        sec_an._btn.toggled.connect(lambda on: self._refresh_animals_section_safe(name) if on else None)
         cl4 = sec_an.content_layout()
         animals_cfg = rec.get('animals_config', {})
         form_an = _mk_form()
@@ -750,17 +758,65 @@ class ProjectTrackTab(QWidget):
         ah = self._history.get_animals(name)
         aa = getattr(self._app, 'animals', {}) or {}
         arch_aa = getattr(self._app, 'archived', {}) or {}
-        active_hist = [r['name'] for r in ah
-                       if r.get('status') == 'active' and (r['name'] in aa or r['name'] in arch_aa)]
+        history_records = [r for r in ah if isinstance(r, dict)]
+        active_hist = []
+        for record in history_records:
+            animal_name = _clean_text(record.get('name'))
+            if not animal_name:
+                logger.warning("Project Track: skipping history record without animal name for project %s", name)
+                continue
+            if record.get('status') == 'active' and (animal_name in aa or animal_name in arch_aa):
+                active_hist.append(animal_name)
         direct_active   = [n for n, d in aa.items()
                            if (d.get('project') or '').strip() == name and n not in active_hist]
         direct_archived = [n for n, d in arch_aa.items()
                            if (d.get('project') or '').strip() == name and n not in active_hist]
         active = list(dict.fromkeys(active_hist + direct_active + direct_archived))
-        former_no  = [r['name'] for r in ah if r.get('status') == 'former' and not r.get('last_severity')]
-        former_sev = [r['name'] for r in ah if r.get('status') == 'former' and r.get('last_severity')]
-        reused = [r['name'] for r in ah if self._history.previous_projects(r['name'], exclude=name)]
-        return active, former_no, former_sev, reused
+        former_no = []
+        former_sev = []
+        previous = []
+        for record in history_records:
+            animal_name = _clean_text(record.get('name'))
+            if not animal_name:
+                continue
+            if record.get('status') == 'former':
+                if _clean_text(record.get('last_severity')):
+                    former_sev.append(animal_name)
+                else:
+                    former_no.append(animal_name)
+            snapshot = record.get('previous_project_snapshot')
+            if isinstance(snapshot, list):
+                has_previous = bool(snapshot)
+            else:
+                has_previous = bool(self._history.previous_projects(animal_name, exclude=name))
+            if has_previous:
+                previous.append(animal_name)
+        return (
+            active,
+            list(dict.fromkeys(former_no)),
+            list(dict.fromkeys(former_sev)),
+            list(dict.fromkeys(previous)),
+        )
+
+    def _refresh_animals_section_safe(self, name):
+        try:
+            self._refresh_animals_section(name)
+        except Exception:
+            logger.exception("Project Track: failed to refresh Animals section for project %s", name)
+            if not hasattr(self, '_animals_stats_v'):
+                return
+            while self._animals_stats_v.count():
+                item = self._animals_stats_v.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            msg = QLabel(_m(
+                self._messages,
+                'project.animals.refresh_failed',
+                'Animal statistics could not be loaded. See technical logs.',
+            ))
+            msg.setWordWrap(True)
+            msg.setStyleSheet('color:#b00020;padding:4px;font-size:9pt;')
+            self._animals_stats_v.addWidget(msg)
 
     def _refresh_animals_section(self, name):
         from collections import defaultdict
@@ -771,11 +827,10 @@ class ProjectTrackTab(QWidget):
         aa = getattr(self._app, 'animals', {}) or {}
         arch_aa = getattr(self._app, 'archived', {}) or {}
         all_known = {**arch_aa, **aa}
-        active, former_no, former_sev, reused = self._compute_animal_stats(name)
+        ah = self._history.get_animals(name)
+        active, former_no, former_sev, previous = self._compute_animal_stats(name)
         in_exp   = [n for n in active if all_known.get(n, {}).get('in_experiment', False)]
         not_in   = [n for n in active if n not in in_exp]
-        no_prev  = [n for n in not_in if n not in reused]
-        with_prev= [n for n in not_in if n in reused]
         m = self._messages
         rec = self._project_record(name)
         role_max = {r['role']: r['count']
@@ -809,11 +864,103 @@ class ProjectTrackTab(QWidget):
                 return '#FF7788' if ('female' in sex or 'weiblich' in sex) else '#00FFDD'
             return _ROLE_COLORS.get(role_val, '#333333')
 
-        def _make_name_btn(aname):
+        def _association_records(aname):
+            result = []
+            for rec in ah:
+                if not isinstance(rec, dict):
+                    continue
+                if _clean_text(rec.get('name')) != aname:
+                    continue
+                if rec.get('status') not in ('active', 'former'):
+                    continue
+                result.append(rec)
+            return result
+
+        def _snapshot_records(aname, key, fallback_lookup_name):
+            records = []
+            snapshot_seen = False
+            for assoc in _association_records(aname):
+                snapshot = assoc.get(key)
+                if isinstance(snapshot, list):
+                    snapshot_seen = True
+                    records.extend(
+                        dict(rec) for rec in snapshot if isinstance(rec, dict)
+                    )
+            if snapshot_seen:
+                return records
+            lookup = getattr(self._history, fallback_lookup_name, None)
+            if lookup is None:
+                return []
+            return lookup(aname, exclude=name)
+
+        def _previous_history_text(aname):
+            lookup = getattr(self._history, 'previous_project_records', None)
+            if lookup is None:
+                projects = self._history.previous_projects(aname, exclude=name)
+                return '; '.join(projects)
+            records = _snapshot_records(
+                aname,
+                'previous_project_snapshot',
+                'previous_project_records',
+            )
+            parts = []
+            no_sev = _m(self._messages, 'project.animals.no_severity_recorded', 'no severity recorded')
+            left_label = _m(self._messages, 'project.animals.left_on', 'left')
+            for rec in records:
+                project = (rec.get('project') or '').strip()
+                severity = (rec.get('last_severity') or '').strip() or no_sev
+                left = (rec.get('date_left') or '').strip()
+                text = f"{project}: {severity}" if project else severity
+                if left:
+                    text += f", {left_label} {left}"
+                parts.append(text)
+            return '; '.join(parts)
+
+        def _previous_experimental_records(aname):
+            records = _snapshot_records(
+                aname,
+                'previous_experimental_snapshot',
+                'previous_experimental_records',
+            )
+            if records:
+                return records
+            snapshot_seen = any(
+                isinstance(assoc.get('previous_experimental_snapshot'), list)
+                for assoc in _association_records(aname)
+            )
+            return [] if snapshot_seen else records
+
+        def _departed_severity_details():
+            template = _m(
+                self._messages,
+                'project.animals.departed_with_severity_detail',
+                'departed with {severity}',
+            )
+            details = {}
+            for rec in ah:
+                if not isinstance(rec, dict):
+                    continue
+                animal_name = _clean_text(rec.get('name'))
+                severity = _clean_text(rec.get('last_severity'))
+                if rec.get('status') != 'former' or not animal_name or not severity:
+                    continue
+                details[animal_name] = str(template).replace('{severity}', severity)
+            return details
+
+        total_all = active + former_no + former_sev
+        history_scope = list(dict.fromkeys(total_all))
+        previous_experimental = [
+            n for n in history_scope if _previous_experimental_records(n)
+        ]
+        no_prev = [n for n in history_scope if n not in previous_experimental]
+
+        def _make_name_btn(aname, detail=''):
             is_arch = aname in arch_aa and aname not in aa
             color = '#888888' if is_arch else _name_color(aname)
             animal_id = (all_known.get(aname, {}).get('id') or '').strip()
             display = ('   \u2022 ' + aname + ' (' + animal_id + ')') if animal_id else ('   \u2022 ' + aname)
+            if detail:
+                display += ' - ' + detail
             lbl = QLabel(display)
             style = 'color:' + color + ';padding:0;font-size:9pt;'
             if is_arch:
@@ -824,7 +971,8 @@ class ProjectTrackTab(QWidget):
                                   'This animal is archived.'))
             return lbl
 
-        def _grp(lkey, fb, names):
+        def _grp(lkey, fb, names, details=None):
+            details = details or {}
             sec = CollapsibleSection(f"{_m(m, lkey, fb)}  {len(names)}", collapsed=True)
             if names:
                 role_groups = defaultdict(list)
@@ -852,19 +1000,23 @@ class ProjectTrackTab(QWidget):
                         hdg_lbl.setStyleSheet('padding-left:8px;font-size:9pt;')
                         sec.content_layout().addWidget(hdg_lbl)
                     for aname in grp_names:
-                        sec.content_layout().addWidget(_make_name_btn(aname))
+                        sec.content_layout().addWidget(_make_name_btn(aname, details.get(aname, '')))
             self._animals_stats_v.addWidget(sec)
 
-        total_all = active + former_no + former_sev
+        previous_details = {aname: _previous_history_text(aname) for aname in previous}
+        previous_experimental_details = {
+            aname: _previous_history_text(aname) for aname in previous_experimental
+        }
+        departed_severity_details = _departed_severity_details()
         _grp('project.animals.total_booked',          'Total booked',                          total_all)
         _grp('project.animals.currently_in_exp',      'Currently in experiment',               in_exp)
         _grp('project.animals.alive_not_in_exp',      'Alive, not in experiment',              not_in)
         _grp('project.animals.departed_total',        'Departed total',                        former_no + former_sev)
         _grp('project.animals.departed_no_severity',  'Departed without severity',             former_no)
-        _grp('project.animals.departed_with_severity','Departed with severity',                former_sev)
-        _grp('project.animals.reused',                'Reused (previous experimental history)',reused)
+        _grp('project.animals.departed_with_severity','Departed with severity',                former_sev, departed_severity_details)
+        _grp('project.animals.previously_in_projects','Previously in other projects',           previous, previous_details)
         _grp('project.animals.no_prev_history',       'No previous experimental history',      no_prev)
-        _grp('project.animals.with_prev_history',     'With previous experimental history',    with_prev)
+        _grp('project.animals.with_prev_history',     'With previous experimental history',    previous_experimental, previous_experimental_details)
 
     def _doc_dir(self, name):
         safe="".join(c if (c.isalnum() or c in '-_()') else '_' for c in name)
@@ -894,6 +1046,8 @@ class ProjectTrackTab(QWidget):
                 logger.error('doc open: %s', exc)
 
     def _on_doc_upload(self, name):
+        if not self._can('project.upload_document'):
+            return
         files,_=QFileDialog.getOpenFileNames(self,_m(self._messages,"project.docs.upload_dialog","Select Documents"),"",_ALL_DOC_FILTER)
         if not files: return
         doc_dir=self._doc_dir(name); os.makedirs(doc_dir,exist_ok=True)
@@ -903,6 +1057,8 @@ class ProjectTrackTab(QWidget):
         self._refresh_docs(name)
 
     def _on_doc_delete(self, name):
+        if not self._can('project.delete_document'):
+            return
         item = self._docs_list.currentItem()
         if not item: return
         display = item.text()
@@ -943,6 +1099,8 @@ class ProjectTrackTab(QWidget):
                 logger.error('sop open: %s', exc)
 
     def _on_sop_upload(self, name):
+        if not self._can('project.upload_sop'):
+            return
         files,_=QFileDialog.getOpenFileNames(self,_m(self._messages,"project.sops.upload_dialog","Select SOPs"),"",_ALL_DOC_FILTER)
         if not files: return
         sop_dir=self._sop_dir(name); os.makedirs(sop_dir,exist_ok=True)
@@ -952,6 +1110,8 @@ class ProjectTrackTab(QWidget):
         self._refresh_sops(name)
 
     def _on_sop_delete(self, name):
+        if not self._can('project.delete_sop'):
+            return
         item = self._sops_list.currentItem()
         if not item: return
         display = item.text()

@@ -24,6 +24,7 @@ icon_candidates = [
     project_dir / "icons" / "progtrack_icon.ico",
 ]
 icon_path = next((path for path in icon_candidates if path.exists()), None)
+version_info_path = project_dir / "launcher_version_info.txt"
 
 
 def package_dir(module_name):
@@ -228,6 +229,7 @@ exe = EXE(
     upx=True,
     console=False,
     icon=str(icon_path) if icon_path else None,
+    version=str(version_info_path) if version_info_path.exists() else None,
 )
 
 coll = COLLECT(
