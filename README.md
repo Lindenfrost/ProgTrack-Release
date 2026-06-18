@@ -200,8 +200,7 @@ shown.
 
 | Role | Typical Use |
 | --- | --- |
-| ♀️ `Egg Donor` | Female donor / steroid workflow animal. |
-| ☉ `Surrogate` | Embryo recipient / pregnancy workflow animal. |
+| ♀️ `Egg Donor` / `Surrogate` | Steroid workflow animals. |
 | ♂️ `Sperm Donor` | Sperm measurements and donor workflows. |
 | 👶 `Offspring` | Young animals and offspring-specific records. |
 | 🐾 `Partner` | Partner animals with lighter records. |
@@ -298,8 +297,8 @@ normal `user` account, but still receive the `vet`, `keeper`, `manager`, or
 | --- | --- | --- |
 | ![Lord](icons/job_lord.png) | `lord` | Highest authority. Lord has the wildcard permission and can perform all actions, including lord-exclusive actions such as creating users and controlling Master Track itself. |
 | ![Master](icons/job_master.png) | `master` | Administrative account with almost all known permissions. Master can manage most users, jobs, permissions, audits, and application workflows, but deliberately lacks the lord-exclusive permissions to create new user accounts and to disable user permission management plugin. |
-| | `user` | Standard logged-in account. Effective permissions come from the user baseline, assigned jobs, direct grants, and revoked permissions. |
-| | `guest` | Read-oriented fallback account. Guest uses a fixed guest permission baseline; direct grants and revocations are ignored. |
+| ![User](icons/information.png) | `user` | Standard logged-in account. Effective permissions come from the user baseline, assigned jobs, direct grants, and revoked permissions. |
+| ![Guest](icons/question.png) | `guest` | Read-oriented fallback account. Guest uses a fixed guest permission baseline; direct grants and revocations are ignored. |
 
 **Lord vs Master in short:**  
 `lord` is the owner-level account and always has every permission. `master` is
@@ -317,7 +316,7 @@ The current release contains these job bundles in
 | ![Keeper](icons/job_keeper.png) | `keeper` | Housing, cage assignment, cage inspections, animal core data, measurements, Medi Track visibility, reports, and team communication. |
 | ![Manager](icons/job_manager.png) | `manager` | Animal creation, imports/exports, archiving/deleting, project management, cage management, SOP/project documents, severity handling, and experiment assignment. |
 | ![Researcher](icons/job_researcher.png) | `researcher` | Measurement editing, research data, imports/exports, reports, PdG conversion, OP scheduling, embryo tools, flow tools, sample tools, and project visibility. |
-| | `tester` | Restricted testing bundle for read-oriented workflows, selected plugin access, measurements/research checks, and team communication. |
+| ![Tester](icons/job_tester.png) | `tester` | Restricted testing bundle for read-oriented workflows, selected plugin access, measurements/research checks, and team communication. |
 
 Job bundles and their associated permissions are not fixed in the source code
 only. They can be modified for a local installation by users with the

@@ -28,6 +28,7 @@ rights to use, modify, and redistribute these assets under its terms.
 - `job_manager.png`
 - `job_master.png`
 - `job_researcher.png`
+- `job_tester.png`
 - `job_vet.png`
 - `progtrack_icon.ico`
 - `question.png`
