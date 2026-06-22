@@ -399,9 +399,10 @@ class MasterTrackPlugin:
         username = self._current_username or "guest"
         ts = datetime.now().isoformat(timespec="seconds")
         month = date.today().strftime("%Y-%m")
-        path = os.path.join(self.plugin_dir, f"audit_{month}.log")
+        path = os.path.join(self.audit_logs_dir(), f"audit_{month}.log")
         line = f"[{ts}] [{username}] [{action}] [{target}] {details}\n"
         try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "a", encoding="utf-8") as f:
                 f.write(line)
         except Exception as exc:
@@ -426,12 +427,22 @@ class MasterTrackPlugin:
 
     def show_logs(self) -> None:
         from .dialogs import AuditLogsDialog
-        dlg = AuditLogsDialog(self.app, self.app.messages, self.plugin_dir)
+        dlg = AuditLogsDialog(self.app, self.app.messages, self.plugin_dir, self.audit_logs_dir())
         dlg.exec()
 
+    def app_root(self) -> str:
+        return os.path.abspath(os.path.join(self.plugin_dir, os.pardir, os.pardir))
+
+    def runtime_root(self) -> str:
+        app_root = self.app_root()
+        runtime_root = os.path.join(app_root, "_internal")
+        return runtime_root if os.path.isdir(runtime_root) else app_root
+
+    def audit_logs_dir(self) -> str:
+        return os.path.join(self.runtime_root(), "logs", "Master_Track")
+
     def logs_dir(self) -> str:
-        app_root = os.path.abspath(os.path.join(self.plugin_dir, os.pardir, os.pardir))
-        return os.path.join(app_root, "logs")
+        return os.path.join(self.runtime_root(), "logs")
 
     def _write_log_locations_file(self, logs_dir: str) -> None:
         app_root = os.path.abspath(os.path.join(self.plugin_dir, os.pardir, os.pardir))
@@ -442,7 +453,7 @@ class MasterTrackPlugin:
             f"Application log: {os.path.join(logs_dir, 'progtrack.log')}",
             f"Launcher error log: {os.path.join(logs_dir, 'launcher_error.log')}",
             f"Launcher fault log: {os.path.join(logs_dir, 'launcher_fault.log')}",
-            f"Master Track audit logs: {os.path.join(self.plugin_dir, 'audit_YYYY-MM.log')}",
+            f"Master Track audit logs: {os.path.join(self.audit_logs_dir(), 'audit_YYYY-MM.log')}",
             "",
             f"Application folder: {app_root}",
         ]

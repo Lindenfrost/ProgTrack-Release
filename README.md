@@ -455,6 +455,8 @@ The release also improves day-to-day UI stability: lazy-loaded tabs no longer fl
 
 The launcher/runtime package was refreshed for this release. The new `0.1.1-log-menu` launcher records its version, supports the updated technical-log workflow, includes the ReportLab runtime imports needed for report export, and keeps the portable Windows structure: `Launcher.exe`, `_internal/`, the editable ProgTrack script, plugins, manuals, language files, demo data, icons, and license notices.
 
+The published `0.1.1` package was replaced after release testing with an updated build under the same version number. This replacement keeps the `0.1.1` version, but fixes portable startup packaging by keeping the PyInstaller runtime archive `_internal/base_library.zip`, and routes technical logs, launcher logs, Matplotlib cache files, and Master Track audit logs into `_internal/` runtime folders instead of creating top-level runtime folders.
+
 ### 0.1.0 RC Release Note
 
 `0.1.0 RC` publishes the current portable Windows launcher and ProgTrack

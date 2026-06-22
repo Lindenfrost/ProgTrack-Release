@@ -30,6 +30,11 @@ _FAULT_LOG_HANDLE = None
 _LOG_DIR = None
 
 
+def _runtime_state_dir(launcher_dir: Path) -> Path:
+    internal_dir = launcher_dir / "_internal"
+    return internal_dir if internal_dir.exists() else launcher_dir
+
+
 def setup_environment() -> Path:
     """Resolve launcher directory, set CWD, and prepend it to sys.path."""
     global _FAULT_LOG_HANDLE, _LOG_DIR
@@ -49,11 +54,13 @@ def setup_environment() -> Path:
     else:
         launcher_dir = Path(__file__).resolve().parent
 
-    _LOG_DIR = launcher_dir / LOG_DIR_NAME
+    runtime_state_dir = _runtime_state_dir(launcher_dir)
+
+    _LOG_DIR = runtime_state_dir / LOG_DIR_NAME
     try:
-        _LOG_DIR.mkdir(exist_ok=True)
+        _LOG_DIR.mkdir(parents=True, exist_ok=True)
     except OSError:
-        _LOG_DIR = launcher_dir
+        _LOG_DIR = runtime_state_dir
 
     try:
         _FAULT_LOG_HANDLE = (_LOG_DIR / FAULT_LOG_NAME).open("a", encoding="utf-8")
@@ -61,9 +68,9 @@ def setup_environment() -> Path:
     except OSError:
         pass
 
-    mpl_config_dir = launcher_dir / MPL_CONFIG_DIR_NAME
+    mpl_config_dir = runtime_state_dir / MPL_CONFIG_DIR_NAME
     try:
-        mpl_config_dir.mkdir(exist_ok=True)
+        mpl_config_dir.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("MPLCONFIGDIR", str(mpl_config_dir))
     except OSError:
         pass

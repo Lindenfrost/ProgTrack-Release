@@ -59,8 +59,20 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple, Callable, TYPE_CHECKING
 
 APP_BASE_DIR = Path(__file__).resolve().parent
-LOG_DIR = APP_BASE_DIR / "logs"
+APP_RUNTIME_DIR = (
+    APP_BASE_DIR / "_internal"
+    if (APP_BASE_DIR / "_internal").exists()
+    else APP_BASE_DIR
+)
+LOG_DIR = APP_RUNTIME_DIR / "logs"
 APP_LOG_PATH = LOG_DIR / "progtrack.log"
+MPL_CONFIG_DIR = APP_RUNTIME_DIR / "matplotlib_cache"
+
+try:
+    MPL_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("MPLCONFIGDIR", str(MPL_CONFIG_DIR))
+except OSError:
+    pass
 
 
 def _configure_logging() -> None:
@@ -71,7 +83,7 @@ def _configure_logging() -> None:
     stream_handler.setFormatter(formatter)
     handlers = [stream_handler]
     try:
-        LOG_DIR.mkdir(exist_ok=True)
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(APP_LOG_PATH, encoding="utf-8")
         file_handler.setFormatter(formatter)
         handlers.append(file_handler)
@@ -6563,7 +6575,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _save_trace(self, step: str, **fields: Any) -> None:
         """Write crash-resistant save diagnostics with immediate flush/fsync."""
         try:
-            LOG_DIR.mkdir(exist_ok=True)
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
             safe_fields = []
             for key, value in fields.items():
                 try:

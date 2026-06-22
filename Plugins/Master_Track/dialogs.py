@@ -1060,10 +1060,17 @@ class EditJobsDialog(QDialog):
 class AuditLogsDialog(QDialog):
     """Read and display Master_Track audit logs in a filterable table."""
 
-    def __init__(self, parent: Optional[QWidget], messages: Dict[str, Any], plugin_dir: str):
+    def __init__(
+        self,
+        parent: Optional[QWidget],
+        messages: Dict[str, Any],
+        plugin_dir: str,
+        audit_dir: Optional[str] = None,
+    ):
         super().__init__(parent)
         self.messages = messages
         self.plugin_dir = plugin_dir
+        self.audit_dir = audit_dir or plugin_dir
         self._cage_name_map: Dict[str, str] = {}
         self._all_rows: List[Dict[str, Any]] = []
 
@@ -1157,17 +1164,18 @@ class AuditLogsDialog(QDialog):
 
     def _audit_files(self) -> List[str]:
         paths: List[str] = []
-        try:
-            names = os.listdir(self.plugin_dir)
-        except Exception:
-            return paths
+        for folder in dict.fromkeys([self.audit_dir, self.plugin_dir]):
+            try:
+                names = os.listdir(folder)
+            except Exception:
+                continue
 
-        for name in names:
-            low = name.lower()
-            if low == "audit.log" or (low.startswith("audit_") and low.endswith(".log")):
-                full = os.path.join(self.plugin_dir, name)
-                if os.path.isfile(full):
-                    paths.append(full)
+            for name in names:
+                low = name.lower()
+                if low == "audit.log" or (low.startswith("audit_") and low.endswith(".log")):
+                    full = os.path.join(folder, name)
+                    if os.path.isfile(full):
+                        paths.append(full)
         return sorted(paths)
 
     def _parse_details(self, details_text: str) -> Dict[str, str]:
