@@ -9,11 +9,12 @@ import json
 import logging
 import os
 from typing import Any, Callable, Dict, List, Optional
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLabel, QButtonGroup, QFrame, QScrollArea,
                              QSizePolicy, QApplication)
 from PyQt6.QtCore import Qt, QRect, QSize, QTimer
 from PyQt6.QtGui import QColor, QPainter, QFont
+from Plugins.core.project_visibility import animal_visible_by_project_scope
 
 
 class ProjectTabButton(QPushButton):
@@ -369,6 +370,8 @@ class ProjectsTrackPlugin:
             return
         
         for animal_name, animal_data in self.app.animals.items():
+            if hasattr(self.app, '_animal_visible_to_current_user') and not self.app._animal_visible_to_current_user(animal_data):
+                continue
             # Check for 'project' field in animal record
             project = animal_data.get('project')
             if project and isinstance(project, str) and project.strip():
@@ -376,7 +379,9 @@ class ProjectsTrackPlugin:
         
         # Sort alphabetically, case-insensitive
         self.all_projects = sorted(projects, key=str.lower)
-        
+        if self.current_project != 'All' and self.current_project not in self.all_projects:
+            self.current_project = 'All'
+
         # Always save to cache (even if empty)
         self._save_cache()
     
@@ -789,8 +794,15 @@ class ProjectsTrackPlugin:
         """Return the list of animal names matching the current project + species filter."""
         animals = getattr(self.app, 'animals', {}) or {}
         result = []
+        unrestricted, visible_projects = (
+            self.app._project_visibility_scope()
+            if hasattr(self.app, '_project_visibility_scope')
+            else (True, set())
+        )
         for name, rec in animals.items():
             if not isinstance(rec, dict):
+                continue
+            if not animal_visible_by_project_scope(rec, unrestricted, visible_projects):
                 continue
             if self.current_project and self.current_project != 'All':
                 if rec.get('project') != self.current_project:

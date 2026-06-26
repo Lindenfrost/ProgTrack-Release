@@ -19,6 +19,7 @@ from .permissions import (
     ROLE_GUEST,
     ROLE_LORD,
     ROLE_MASTER,
+    ROLE_ANIMAL_WELFARE,
     ROLE_USER,
     JOB_BUNDLES,
     PERM_MASTER_CREATE_USERS,
@@ -180,7 +181,7 @@ class MasterTrackPlugin:
     def has_direct_overrides(self) -> bool:
         """Return True if the current user has any direct permission overrides."""
         user = self._current_user_record()
-        if not user or user["role"] in (ROLE_LORD, ROLE_MASTER, ROLE_GUEST):
+        if not user or user["role"] in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE, ROLE_GUEST):
             return False
         perms = user.get("permissions", {})
         return bool(perms.get("granted") or perms.get("revoked"))
@@ -196,6 +197,8 @@ class MasterTrackPlugin:
             return ROLE_LORD
         if self._current_role == ROLE_MASTER:
             return ROLE_MASTER
+        if self._current_role == ROLE_ANIMAL_WELFARE:
+            return "animal welfare officer"
         if self._current_role == ROLE_GUEST:
             return ROLE_GUEST
         user = self._current_user_record()
@@ -236,6 +239,39 @@ class MasterTrackPlugin:
                 action,
             )
         return _perm_can(ROLE_GUEST, [], [], [], action)
+
+    def current_user_is_project_unrestricted(self) -> bool:
+        return self._current_role in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE)
+
+    def get_project_visibility_cache(self) -> Dict[str, Any]:
+        cache = self.load_session().get("project_visibility_cache")
+        if not isinstance(cache, dict):
+            cache = {"dirty": True, "projects": []}
+        cache.setdefault("dirty", True)
+        cache.setdefault("projects", [])
+        return cache
+
+    def set_project_visibility_cache(self, projects: list[str], dirty: bool = False) -> None:
+        self.save_session({
+            "project_visibility_cache": {
+                "dirty": bool(dirty),
+                "projects": sorted({str(p) for p in projects if str(p).strip()}),
+            }
+        })
+
+    def mark_project_visibility_dirty(self, usernames) -> None:
+        if isinstance(usernames, str):
+            usernames = [usernames]
+        for username in usernames or []:
+            if not username:
+                continue
+            data = self.session_mgr.load(username)
+            cache = data.get("project_visibility_cache")
+            if not isinstance(cache, dict):
+                cache = {"projects": []}
+            cache["dirty"] = True
+            data["project_visibility_cache"] = cache
+            self.session_mgr.save(username, data)
 
     # ------------------------------------------------------------------
     # Login / Logout
@@ -463,7 +499,7 @@ class MasterTrackPlugin:
     def open_logs_folder(self) -> None:
         messages = getattr(self.app, "messages", {}) or {}
         title = messages.get("master_track.logs_folder.title", "Logs folder")
-        if self._current_role not in (ROLE_LORD, ROLE_MASTER):
+        if self._current_role not in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE):
             return
         logs_dir = self.logs_dir()
         try:

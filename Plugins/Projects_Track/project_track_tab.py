@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QPushButton, QScrollArea, QSpinBox, QSplitter,
     QTextEdit, QVBoxLayout, QWidget,
 )
+from Plugins.core.project_visibility import diff_project_associated_users
 logger = logging.getLogger(__name__)
 _DOCS_SUBDIR   = "documents"
 _SOP_SUBDIR    = "sop"
@@ -392,6 +393,10 @@ class ProjectTrackTab(QWidget):
                 if isinstance(ad,dict):
                     proj=(ad.get('project') or '').strip()
                     if proj: all_names=sorted(set(all_names)|{proj})
+        if hasattr(self._app, '_project_visibility_scope'):
+            unrestricted, visible_projects = self._app._project_visibility_scope()
+            if not unrestricted:
+                all_names = [n for n in all_names if n in visible_projects]
         active_names = [n for n in all_names if not self._history.is_archived(n)]
         arch_names   = [n for n in all_names if self._history.is_archived(n)]
         for name in active_names:
@@ -1126,6 +1131,7 @@ class ProjectTrackTab(QWidget):
 
     def _save_detail(self, name):
         rec = self._project_record(name); sig = self._current_sig()
+        before_rec = json.loads(json.dumps(rec))
         now_str = datetime.now().strftime('%d.%m.%Y %H:%M')
         if not rec.get('created_by'): rec['created_by'] = sig; rec['created_at'] = now_str
         rec['modified_by'] = sig; rec['modified_at'] = now_str
@@ -1158,6 +1164,10 @@ class ProjectTrackTab(QWidget):
         }
         rec['arrive'] = {k: v.toPlainText().strip() for k, v in self._arrive_fields.items()}
         self._save_data()
+        changed_users = diff_project_associated_users(before_rec, rec)
+        mt_dirty = getattr(self._app, 'master_track', None)
+        if changed_users and mt_dirty and hasattr(mt_dirty, 'mark_project_visibility_dirty'):
+            mt_dirty.mark_project_visibility_dirty(sorted(changed_users))
         mt = getattr(self._app, 'master_track', None)
         if mt and hasattr(mt, 'audit'):
             try: mt.audit('edit_project', name)

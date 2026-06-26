@@ -38,6 +38,7 @@ def _load_permission_labels() -> Dict[str, Dict[str, str]]:
 
 ROLE_LORD = "lord"
 ROLE_MASTER = "master"
+ROLE_ANIMAL_WELFARE = "animal_welfare_officer"
 ROLE_USER = "user"
 ROLE_GUEST = "guest"
 
@@ -292,6 +293,7 @@ _GUEST_BASELINE: Set[str] = {
 ROLE_BASELINES: Dict[str, Set[str]] = {
     ROLE_LORD: {"*"},      # wildcard — all permissions always granted
     ROLE_MASTER: set(),    # resolved dynamically — see resolve_effective_permissions
+    ROLE_ANIMAL_WELFARE: set(),  # master-equivalent until a dedicated profile exists
     ROLE_USER: _USER_BASELINE,
     ROLE_GUEST: _GUEST_BASELINE,
 }
@@ -317,7 +319,7 @@ def resolve_effective_permissions(
     """
     if role == ROLE_LORD:
         return {"*"}
-    if role == ROLE_MASTER:
+    if role in (ROLE_MASTER, ROLE_ANIMAL_WELFARE):
         # All known permissions except the two that are lord-exclusive
         return {p for p in ALL_PERMISSIONS if p not in _MASTER_EXCLUDED}
     if role == ROLE_GUEST:
@@ -347,7 +349,7 @@ def can(
     """
     if role == ROLE_LORD:
         return True
-    if role == ROLE_MASTER:
+    if role in (ROLE_MASTER, ROLE_ANIMAL_WELFARE):
         return permission_name not in _MASTER_EXCLUDED
     effective = resolve_effective_permissions(role, jobs, granted, revoked)
     return "*" in effective or permission_name in effective

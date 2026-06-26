@@ -63,6 +63,7 @@ from .permissions import (
     ROLE_GUEST,
     ROLE_LORD,
     ROLE_MASTER,
+    ROLE_ANIMAL_WELFARE,
     ROLE_USER,
 )
 
@@ -497,7 +498,7 @@ class ManageUsersDialog(QDialog):
             ]):
                 item = QTableWidgetItem(str(val) if val else "—")
                 item.setFlags(no_edit)
-                if u["role"] in (ROLE_LORD, ROLE_MASTER):
+                if u["role"] in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE):
                     font = item.font()
                     font.setBold(True)
                     item.setFont(font)
@@ -738,25 +739,31 @@ class _EditUserDialog(QDialog):
         prof_section.content_layout().addWidget(prof_form_w)
         layout.addWidget(prof_section)
 
-        is_lord_or_master = user["role"] in (ROLE_LORD, ROLE_MASTER)
+        is_lord_or_master = user["role"] in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE)
 
         # --- Primary role ---
         role_group = QGroupBox(_msg(messages, "master_track.label.role", "Primary Role"))
         role_layout = QHBoxLayout(role_group)
         self._role_lord_rb   = QRadioButton(_msg(messages, "master_track.role.lord",   "Lord"))
         self._role_master_rb = QRadioButton(_msg(messages, "master_track.role.master", "Master"))
+        self._role_welfare_rb = QRadioButton(_msg(
+            messages, "master_track.role.animal_welfare_officer", "Animal Welfare Officer"))
         self._role_user_rb   = QRadioButton(_msg(messages, "master_track.role.user",   "User"))
         if user["role"] == ROLE_LORD:
             self._role_lord_rb.setChecked(True)
         elif user["role"] == ROLE_MASTER:
             self._role_master_rb.setChecked(True)
+        elif user["role"] == ROLE_ANIMAL_WELFARE:
+            self._role_welfare_rb.setChecked(True)
         else:
             self._role_user_rb.setChecked(True)
         self._role_lord_rb.toggled.connect(self._on_role_changed)
         self._role_master_rb.toggled.connect(self._on_role_changed)
+        self._role_welfare_rb.toggled.connect(self._on_role_changed)
         self._role_user_rb.toggled.connect(self._on_role_changed)
         role_layout.addWidget(self._role_lord_rb)
         role_layout.addWidget(self._role_master_rb)
+        role_layout.addWidget(self._role_welfare_rb)
         role_layout.addWidget(self._role_user_rb)
         role_layout.addStretch()
         layout.addWidget(role_group)
@@ -821,7 +828,7 @@ class _EditUserDialog(QDialog):
 
     def _on_role_changed(self, *_) -> None:
         new_role = self._get_selected_role()
-        is_elevated = new_role in (ROLE_LORD, ROLE_MASTER)
+        is_elevated = new_role in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE)
         for cb in self._job_checks.values():
             cb.setEnabled(not is_elevated)
         self._refresh_perm_styles()
@@ -831,6 +838,8 @@ class _EditUserDialog(QDialog):
             return ROLE_LORD
         if self._role_master_rb.isChecked():
             return ROLE_MASTER
+        if self._role_welfare_rb.isChecked():
+            return ROLE_ANIMAL_WELFARE
         return ROLE_USER
 
     def _on_job_changed(self) -> None:
@@ -895,7 +904,7 @@ class _EditUserDialog(QDialog):
 
         self.user_db.set_role(self.username, new_role)
 
-        if new_role not in (ROLE_LORD, ROLE_MASTER):
+        if new_role not in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE):
             new_jobs = [j for j, cb in self._job_checks.items() if cb.isChecked()]
             self.user_db.set_jobs(self.username, new_jobs)
 

@@ -1140,6 +1140,7 @@ class AnimalReportsWidget(QMainWindow):
             'reference_weight': animal_data.get('referenz_gewicht', 
                                              animal_data.get('referenzgewicht', 0)),
             'species': animal_data.get('species', ''),
+            'project': animal_data.get('project', ''),
             'birth_date': animal_data.get('birth_date', ''),
             'notes': '',
             'measurements': [],
@@ -1483,7 +1484,14 @@ class AnimalReportsWidget(QMainWindow):
                         if not self._is_widget_valid(self.animal_list):
                             logger.warning("Widget was deleted during list population")
                             return False
-                            
+
+                        if (
+                            self.parent()
+                            and hasattr(self.parent(), '_animal_visible_to_current_user')
+                            and not self.parent()._animal_visible_to_current_user(animal_data)
+                        ):
+                            continue
+
                         animal_name = str(animal_name).strip()
                         if not animal_name:
                             logger.warning("Skipping animal with empty name")

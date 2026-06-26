@@ -56,6 +56,12 @@ import shutil
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
+from Plugins.core.project_visibility import (
+    animal_matches_name_filter,
+    animal_visible_by_project_scope,
+    is_unrestricted_project_role,
+    visible_projects_for_user,
+)
 from typing import List, Dict, Any, Optional, Tuple, Callable, TYPE_CHECKING
 
 APP_BASE_DIR = Path(__file__).resolve().parent
@@ -1664,6 +1670,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _apply_plugin_state(self, plugin_key: str, enabled: bool) -> None:
         """Show/hide plugin tab or sidebar widget based on enabled state."""
+        enabled = enabled and self._role_allows_plugin_key(plugin_key)
         tabs = getattr(self, 'main_tabs', None)
         if tabs is not None:
             tab_map = {
@@ -2761,7 +2768,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.messages.get("master_track.menu.open_logs_folder", "Open tech logs"), self)
             self._mt_open_logs_folder_action.triggered.connect(self.master_track.open_logs_folder)
             self._mt_open_logs_folder_action.setEnabled(
-                self.master_track.current_role in ("lord", "master"))
+                self.master_track.current_role in ("lord", "master", "animal_welfare_officer"))
             self._master_menu.addAction(self._mt_open_logs_folder_action)
 
             self._mt_changepw_action = QAction(
@@ -2886,6 +2893,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             tools_menu.addAction(self.steroid_track_action)
 
         self.setMenuBar(menubar)
+        self._refresh_role_restricted_tool_states()
         # Add Program > Language Settings submenu
         self._build_language_menu()
 
@@ -4087,8 +4095,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.lst.itemSelectionChanged.connect(self._on_select)
         self.lst.setMinimumWidth(200)
         content_layout.addWidget(self.lst, 1)  # Stretch factor
-        
+
         sidebar.addWidget(content_container, 1)  # Add to main sidebar with stretch
+
+        self._animal_name_filter = ""
+        self.animal_name_filter_edit = QLineEdit()
+        self.animal_name_filter_edit.setPlaceholderText(
+            self.messages.get("sidebar.animal_name_filter.placeholder", "Filter animals by name"))
+        self.animal_name_filter_edit.setToolTip(
+            self.messages.get("sidebar.animal_name_filter.tooltip", "Filter the visible animal list by name"))
+        self.animal_name_filter_edit.setClearButtonEnabled(True)
+        self.animal_name_filter_edit.textChanged.connect(self._on_animal_name_filter_changed)
+        sidebar.addWidget(self.animal_name_filter_edit)
 
         # Sidebar action buttons with dynamic visibility
         self.btn_new = QPushButton(self.messages["button.sidebar.new_animal"])
@@ -5546,6 +5564,58 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return sorted(d.get('projects', {}).keys())
         except Exception:
             return []
+
+    def _load_project_records_for_visibility(self) -> Dict[str, Dict[str, Any]]:
+        try:
+            import json as _json
+            p = Path(__file__).parent / 'Plugins' / 'Projects_Track' / 'project_data.json'
+            if not p.exists():
+                return {}
+            data = _json.loads(p.read_text(encoding='utf-8'))
+            projects = data.get('projects', {}) if isinstance(data, dict) else {}
+            return {str(k): v for k, v in projects.items() if isinstance(v, dict)}
+        except Exception as exc:
+            logging.warning(f"Could not load project visibility records: {exc}")
+            return {}
+
+    def _project_visibility_scope(self) -> tuple[bool, set[str]]:
+        mt = getattr(self, 'master_track', None)
+        mt_disabled = "master_track" in getattr(self, '_disabled_plugins', set())
+        if mt is None or mt_disabled:
+            return True, set(self._load_project_names())
+
+        username = getattr(mt, 'current_username', None)
+        role = getattr(mt, 'current_role', None)
+        if is_unrestricted_project_role(role):
+            return True, set(self._load_project_names())
+
+        cache = mt.get_project_visibility_cache() if hasattr(mt, 'get_project_visibility_cache') else {"dirty": True}
+        cached_projects = set(cache.get("projects") or [])
+        if username and not cache.get("dirty", True):
+            return False, cached_projects
+
+        unrestricted, visible = visible_projects_for_user(
+            self._load_project_records_for_visibility(),
+            username,
+            role,
+        )
+        if username and hasattr(mt, 'set_project_visibility_cache'):
+            mt.set_project_visibility_cache(sorted(visible), dirty=False)
+        return unrestricted, visible
+
+    def _animal_visible_to_current_user(self, animal_data: Dict[str, Any]) -> bool:
+        unrestricted, visible_projects = self._project_visibility_scope()
+        return animal_visible_by_project_scope(animal_data, unrestricted, visible_projects)
+
+    def _current_animal_name_filter_text(self) -> str:
+        line_edit = getattr(self, 'animal_name_filter_edit', None)
+        if line_edit is None:
+            return getattr(self, '_animal_name_filter', '')
+        return line_edit.text()
+
+    def _on_animal_name_filter_changed(self, text: str) -> None:
+        self._animal_name_filter = text
+        self._refresh_list()
 
     def _get_localized_role(self, rolle: str, messages: Optional[Dict[str, str]] = None) -> str:
         """Return a localized, human-readable role name for display."""
@@ -7666,6 +7736,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not animal_data:
             self._show_reports_splash()
             return
+        if not self._animal_visible_to_current_user(animal_data):
+            self._show_reports_splash()
+            return
         
         # Show content widget (hide splash)
         if hasattr(self, 'reports_stack') and self.reports_stack is not None:
@@ -7750,7 +7823,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # remember what was selected (use stored key, not display text)
         sel = [item.data(Qt.ItemDataRole.UserRole) for item in self.lst.selectedItems()]
-        self.selected_animals = [n for n in sel if n and n in self.animals]
+        if sel:
+            self.selected_animals = [n for n in sel if n and n in self.animals]
         # Track selected heritage-only animals separately
         self._selected_heritage_only = []
         if getattr(self, 'has_heritage_plugin', False):
@@ -7794,6 +7868,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         project_filter = getattr(self, '_current_project_filter', 'All')
         has_projects_plugin = self.has_projects_plugin and self.projects_plugin is not None
         active_species = getattr(self.projects_plugin, 'active_species', None) if has_projects_plugin else None
+        name_filter = self._current_animal_name_filter_text()
+        unrestricted_projects, visible_projects = self._project_visibility_scope()
         has_medi_track = getattr(self, 'has_medi_track_plugin', False)
         medi_tab_open = False
         medi_plugin = None
@@ -7816,6 +7892,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         active_medi_filter = medi_widget.active_filter()
         
         for name, data in sorted(self.animals.items()):
+            if not animal_visible_by_project_scope(data, unrestricted_projects, visible_projects):
+                continue
             # Filter by rolle
             if not cat_pred(data):
                 continue
@@ -7842,6 +7920,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if active_species:
                 if data.get('species', '') != active_species:
                     continue
+
+            if not animal_matches_name_filter(name, data, name_filter):
+                continue
 
             # build item + status
             status = self._get_status(name)
@@ -8026,6 +8107,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # --- Show archived animals below separator when checkbox is checked ---
         if getattr(self, 'chk_show_archived', None) and self.chk_show_archived.isChecked() and self.archived:
             def _arch_filter(name: str, data: dict) -> bool:
+                if not animal_visible_by_project_scope(data, unrestricted_projects, visible_projects):
+                    return False
                 if not cat_pred(data):
                     return False
                 # Apply project filter
@@ -8056,6 +8139,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if active_species:
                         if data.get('species', '') != active_species:
                             return False
+                if not animal_matches_name_filter(name, data, name_filter):
+                    return False
                 return True
             arch_to_show = {k: v for k, v in self.archived.items() if _arch_filter(k, v)}
             if arch_to_show:
@@ -10453,6 +10538,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # Organize animals by role (exclude archived)
         for name, data in sorted(self.animals.items()):
+            if not self._animal_visible_to_current_user(data):
+                continue
             role = data.get('rolle')
             if role == Role.SAMENSP.value and not steroid_active:
                 continue
@@ -11899,7 +11986,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self.messages.get("master_track.menu.open_logs_folder", "Open tech logs"), self)
                 self._mt_open_logs_folder_action.triggered.connect(self.master_track.open_logs_folder)
             self._mt_open_logs_folder_action.setEnabled(
-                self.master_track.current_role in ("lord", "master"))
+                self.master_track.current_role in ("lord", "master", "animal_welfare_officer"))
             self._master_menu.addAction(self._mt_open_logs_folder_action)
 
             if hasattr(self, '_mt_changepw_action'):
@@ -11981,7 +12068,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             action = QAction(self.messages.get("menu.tools.op_planner", "OP Scheduler"), self)
             action.triggered.connect(self._launch_op_planner)
             self.op_planner_action = action
-        action.setEnabled(self._op_planner_available())
+        action.setEnabled(
+            self._op_planner_available() and self._master_can('op_scheduler.use'))
         tools_menu.addAction(action)
 
         if getattr(self, 'has_sample_track_plugin', False):
@@ -12076,6 +12164,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.steroid_track_action = action
             self._style_plugin_action("steroid_track", "steroid_track" not in self._disabled_plugins)
             tools_menu.addAction(action)
+
+        self._refresh_role_restricted_tool_states()
 
         # Program → Language
         self._build_language_menu()
@@ -12183,6 +12273,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         elif hasattr(self, 'archived_label'):
             self.archived_label.setText(self.messages.get("sidebar.archived_animals",
                                                           "Archived Animals:"))
+        if hasattr(self, 'animal_name_filter_edit'):
+            self.animal_name_filter_edit.setPlaceholderText(
+                self.messages.get("sidebar.animal_name_filter.placeholder", "Filter animals by name"))
+            self.animal_name_filter_edit.setToolTip(
+                self.messages.get("sidebar.animal_name_filter.tooltip", "Filter the visible animal list by name"))
         self.btn_restore.setText(self.messages["button.sidebar.restore"])
         self.btn_delete.setText(self.messages["button.sidebar.delete"])
 
@@ -12499,6 +12594,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     action.blockSignals(True)
                     action.setChecked(enabled)
                     action.blockSignals(False)
+        self._refresh_role_restricted_tool_states()
 
     def _refresh_master_menu_states(self):
         """Enable/disable Master_Track submenu items based on login state."""
@@ -12511,6 +12607,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._mt_edit_jobs_action.setEnabled(mt.can("master.manage_job_bundles"))
         if hasattr(self, '_mt_logs_action'):
             self._mt_logs_action.setEnabled(mt.can("master.view_audit"))
+        if hasattr(self, '_mt_open_logs_folder_action'):
+            self._mt_open_logs_folder_action.setEnabled(
+                mt.current_role in ("lord", "master", "animal_welfare_officer"))
         if hasattr(self, '_mt_changepw_action'):
             self._mt_changepw_action.setEnabled(mt.is_logged_in)
         if hasattr(self, '_mt_logout_action'):
@@ -12525,14 +12624,61 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.messages.get("master_track.menu.enable", "Enable Master Track")
             )
             self._mt_toggle_action.setEnabled(mt.can("toggle_master_track"))
-        # Refresh Tools menu items
-        if hasattr(self, 'op_planner_action'):
-            self.op_planner_action.setEnabled(
-                self._op_planner_available() and self._master_can('op_scheduler.use'))
-        if hasattr(self, 'embryo_tracker_action'):
-            self.embryo_tracker_action.setEnabled(self._master_can('embryo_track.view'))
-        if hasattr(self, 'sample_track_action'):
-            self.sample_track_action.setEnabled(self._master_can('sample_track.use'))
+        self._refresh_role_restricted_tool_states()
+
+    def _tool_permission_for_action(self, action_attr: str) -> Optional[str]:
+        return {
+            'network_track_action': 'network.view',
+            'embryo_tracker_action': 'embryo_track.view',
+            'op_planner_action': 'op_scheduler.use',
+            'sample_track_action': 'sample_track.use',
+            'animal_reports_action': 'reports.view',
+            'flow_track_action': 'flow_track.open',
+            'projects_track_action': 'project.view',
+            'heritage_track_action': 'heritage.view',
+            'cage_track_action': 'cage.view',
+            'medi_track_action': 'medi_track.view',
+            'steroid_track_action': 'core.view',
+        }.get(action_attr)
+
+    def _plugin_permission_for_key(self, plugin_key: str) -> Optional[str]:
+        return {
+            'animal_reports': 'reports.view',
+            'flow_track': 'flow_track.open',
+            'projects_track': 'project.view',
+            'heritage_track': 'heritage.view',
+            'cage_track': 'cage.view',
+            'medi_track': 'medi_track.view',
+            'steroid_track': 'core.view',
+        }.get(plugin_key)
+
+    def _role_allows_tool_action(self, action_attr: str) -> bool:
+        if action_attr == 'op_planner_action' and not self._op_planner_available():
+            return False
+        perm = self._tool_permission_for_action(action_attr)
+        return True if not perm else self._master_can(perm)
+
+    def _role_allows_plugin_key(self, plugin_key: str) -> bool:
+        perm = self._plugin_permission_for_key(plugin_key)
+        return True if not perm else self._master_can(perm)
+
+    def _refresh_role_restricted_tool_states(self) -> None:
+        for action_attr in (
+            'network_track_action',
+            'embryo_tracker_action',
+            'op_planner_action',
+            'sample_track_action',
+            'animal_reports_action',
+            'flow_track_action',
+            'projects_track_action',
+            'heritage_track_action',
+            'cage_track_action',
+            'medi_track_action',
+            'steroid_track_action',
+        ):
+            action = getattr(self, action_attr, None)
+            if action is not None:
+                action.setEnabled(self._role_allows_tool_action(action_attr))
 
     def _update_master_status_bar(self):
         """Update the status bar with the current user/role."""
