@@ -2767,8 +2767,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._mt_open_logs_folder_action = QAction(
                 self.messages.get("master_track.menu.open_logs_folder", "Open tech logs"), self)
             self._mt_open_logs_folder_action.triggered.connect(self.master_track.open_logs_folder)
-            self._mt_open_logs_folder_action.setEnabled(
-                self.master_track.current_role in ("lord", "master", "animal_welfare_officer"))
+            self._mt_open_logs_folder_action.setEnabled(self.master_track.can("master.view_audit"))
             self._master_menu.addAction(self._mt_open_logs_folder_action)
 
             self._mt_changepw_action = QAction(
@@ -5586,7 +5585,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         username = getattr(mt, 'current_username', None)
         role = getattr(mt, 'current_role', None)
-        if is_unrestricted_project_role(role):
+        can_view_all = mt.can("project.view_all") if hasattr(mt, 'can') else False
+        if can_view_all or is_unrestricted_project_role(role):
             return True, set(self._load_project_names())
 
         cache = mt.get_project_visibility_cache() if hasattr(mt, 'get_project_visibility_cache') else {"dirty": True}
@@ -5598,6 +5598,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._load_project_records_for_visibility(),
             username,
             role,
+            can_view_all_projects=can_view_all,
         )
         if username and hasattr(mt, 'set_project_visibility_cache'):
             mt.set_project_visibility_cache(sorted(visible), dirty=False)
@@ -11985,8 +11986,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self._mt_open_logs_folder_action = QAction(
                     self.messages.get("master_track.menu.open_logs_folder", "Open tech logs"), self)
                 self._mt_open_logs_folder_action.triggered.connect(self.master_track.open_logs_folder)
-            self._mt_open_logs_folder_action.setEnabled(
-                self.master_track.current_role in ("lord", "master", "animal_welfare_officer"))
+            self._mt_open_logs_folder_action.setEnabled(self.master_track.can("master.view_audit"))
             self._master_menu.addAction(self._mt_open_logs_folder_action)
 
             if hasattr(self, '_mt_changepw_action'):
@@ -12608,8 +12608,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if hasattr(self, '_mt_logs_action'):
             self._mt_logs_action.setEnabled(mt.can("master.view_audit"))
         if hasattr(self, '_mt_open_logs_folder_action'):
-            self._mt_open_logs_folder_action.setEnabled(
-                mt.current_role in ("lord", "master", "animal_welfare_officer"))
+            self._mt_open_logs_folder_action.setEnabled(mt.can("master.view_audit"))
         if hasattr(self, '_mt_changepw_action'):
             self._mt_changepw_action.setEnabled(mt.is_logged_in)
         if hasattr(self, '_mt_logout_action'):

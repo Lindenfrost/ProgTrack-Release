@@ -33,13 +33,26 @@ class Phase1VisibilityAndFiltersTest(unittest.TestCase):
         self.assertFalse(unrestricted)
         self.assertEqual(projects, {"Alpha"})
 
-    def test_master_equivalent_roles_are_unrestricted(self):
-        unrestricted, projects = visible_projects_for_user(PROJECTS, "anyone", ANIMAL_WELFARE_ROLE)
+    def test_animal_welfare_full_visibility_is_permission_based(self):
+        unrestricted, projects = visible_projects_for_user(PROJECTS, "welfare", ANIMAL_WELFARE_ROLE)
+
+        self.assertFalse(unrestricted)
+        self.assertEqual(projects, {"Alpha"})
+
+        unrestricted, projects = visible_projects_for_user(
+            PROJECTS,
+            "welfare",
+            ANIMAL_WELFARE_ROLE,
+            can_view_all_projects=True,
+        )
 
         self.assertTrue(unrestricted)
         self.assertEqual(projects, {"Alpha", "Beta"})
         self.assertTrue(can(ANIMAL_WELFARE_ROLE, [], [], [], "project.view"))
+        self.assertTrue(can(ANIMAL_WELFARE_ROLE, [], [], [], "project.view_all"))
         self.assertTrue(can(ANIMAL_WELFARE_ROLE, [], [], [], "reports.view"))
+        self.assertFalse(can(ANIMAL_WELFARE_ROLE, [], [], [], "master.create_users"))
+        self.assertFalse(can(ANIMAL_WELFARE_ROLE, [], [], [], "master.view_audit"))
 
     def test_animal_scope_hides_unassociated_or_projectless_animals(self):
         self.assertTrue(animal_visible_by_project_scope({"project": "Alpha"}, False, {"Alpha"}))

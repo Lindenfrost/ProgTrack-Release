@@ -9,7 +9,7 @@ from typing import Any, Iterable, Mapping
 
 
 ANIMAL_WELFARE_ROLE = "animal_welfare_officer"
-UNRESTRICTED_PROJECT_ROLES = {"lord", "master", ANIMAL_WELFARE_ROLE}
+UNRESTRICTED_PROJECT_ROLES = {"lord", "master"}
 
 
 def _clean(value: Any) -> str:
@@ -47,9 +47,10 @@ def visible_projects_for_user(
     project_records: Mapping[str, Mapping[str, Any]],
     username: str | None,
     role: str | None,
+    can_view_all_projects: bool = False,
 ) -> tuple[bool, set[str]]:
     """Return (unrestricted, visible project names) for the current user."""
-    if is_unrestricted_project_role(role):
+    if can_view_all_projects or is_unrestricted_project_role(role):
         return True, {name for name in project_records if _clean(name)}
     login = _clean(username).lower()
     if not login:

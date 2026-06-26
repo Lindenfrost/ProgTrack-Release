@@ -106,6 +106,7 @@ PERM_CAGE_EXPORT_PDF = "cage.export_pdf"
 
 # project — Project_Track scope
 PERM_PROJECT_VIEW = "project.view"
+PERM_PROJECT_VIEW_ALL = "project.view_all"
 PERM_PROJECT_ASSIGN = "project.project_assign"
 PERM_PROJECT_CREATE = "project.create"
 PERM_PROJECT_MANAGE_SEVERITY = "project.manage_severity"
@@ -178,7 +179,7 @@ ALL_PERMISSIONS: List[str] = [
     PERM_CAGE_VIEW, PERM_CAGE_RECORD_INSPECTION,
     PERM_CAGE_ASSIGN_LOCATIONS, PERM_CAGE_MANAGE_ROOMS_BUILDINGS, PERM_CAGE_EDIT,
     PERM_CAGE_EXPORT_PDF,
-    PERM_PROJECT_VIEW, PERM_PROJECT_ASSIGN, PERM_PROJECT_CREATE,
+    PERM_PROJECT_VIEW, PERM_PROJECT_VIEW_ALL, PERM_PROJECT_ASSIGN, PERM_PROJECT_CREATE,
     PERM_PROJECT_MANAGE_SEVERITY, PERM_PROJECT_MANAGE_SPECIES_SCOPE,
     PERM_PROJECT_SET_IN_EXPERIMENT, PERM_PROJECT_UNSET_IN_EXPERIMENT,
     PERM_PROJECT_MANAGE, PERM_PROJECT_ARCHIVE,
@@ -290,10 +291,14 @@ _GUEST_BASELINE: Set[str] = {
     PERM_PROJECT_VIEW,
 }
 
+_ANIMAL_WELFARE_BASELINE: Set[str] = set(_USER_BASELINE) | {
+    PERM_PROJECT_VIEW_ALL,
+}
+
 ROLE_BASELINES: Dict[str, Set[str]] = {
     ROLE_LORD: {"*"},      # wildcard — all permissions always granted
     ROLE_MASTER: set(),    # resolved dynamically — see resolve_effective_permissions
-    ROLE_ANIMAL_WELFARE: set(),  # master-equivalent until a dedicated profile exists
+    ROLE_ANIMAL_WELFARE: _ANIMAL_WELFARE_BASELINE,
     ROLE_USER: _USER_BASELINE,
     ROLE_GUEST: _GUEST_BASELINE,
 }
@@ -319,7 +324,7 @@ def resolve_effective_permissions(
     """
     if role == ROLE_LORD:
         return {"*"}
-    if role in (ROLE_MASTER, ROLE_ANIMAL_WELFARE):
+    if role == ROLE_MASTER:
         # All known permissions except the two that are lord-exclusive
         return {p for p in ALL_PERMISSIONS if p not in _MASTER_EXCLUDED}
     if role == ROLE_GUEST:
@@ -349,7 +354,7 @@ def can(
     """
     if role == ROLE_LORD:
         return True
-    if role in (ROLE_MASTER, ROLE_ANIMAL_WELFARE):
+    if role == ROLE_MASTER:
         return permission_name not in _MASTER_EXCLUDED
     effective = resolve_effective_permissions(role, jobs, granted, revoked)
     return "*" in effective or permission_name in effective

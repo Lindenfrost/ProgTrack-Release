@@ -498,7 +498,7 @@ class ManageUsersDialog(QDialog):
             ]):
                 item = QTableWidgetItem(str(val) if val else "—")
                 item.setFlags(no_edit)
-                if u["role"] in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE):
+                if u["role"] in (ROLE_LORD, ROLE_MASTER):
                     font = item.font()
                     font.setBold(True)
                     item.setFont(font)
@@ -739,7 +739,7 @@ class _EditUserDialog(QDialog):
         prof_section.content_layout().addWidget(prof_form_w)
         layout.addWidget(prof_section)
 
-        is_lord_or_master = user["role"] in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE)
+        is_lord_or_master = user["role"] in (ROLE_LORD, ROLE_MASTER)
 
         # --- Primary role ---
         role_group = QGroupBox(_msg(messages, "master_track.label.role", "Primary Role"))
@@ -828,7 +828,7 @@ class _EditUserDialog(QDialog):
 
     def _on_role_changed(self, *_) -> None:
         new_role = self._get_selected_role()
-        is_elevated = new_role in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE)
+        is_elevated = new_role in (ROLE_LORD, ROLE_MASTER)
         for cb in self._job_checks.values():
             cb.setEnabled(not is_elevated)
         self._refresh_perm_styles()
@@ -904,7 +904,7 @@ class _EditUserDialog(QDialog):
 
         self.user_db.set_role(self.username, new_role)
 
-        if new_role not in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE):
+        if new_role not in (ROLE_LORD, ROLE_MASTER):
             new_jobs = [j for j, cb in self._job_checks.items() if cb.isChecked()]
             self.user_db.set_jobs(self.username, new_jobs)
 

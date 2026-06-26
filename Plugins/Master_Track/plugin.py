@@ -181,7 +181,7 @@ class MasterTrackPlugin:
     def has_direct_overrides(self) -> bool:
         """Return True if the current user has any direct permission overrides."""
         user = self._current_user_record()
-        if not user or user["role"] in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE, ROLE_GUEST):
+        if not user or user["role"] in (ROLE_LORD, ROLE_MASTER, ROLE_GUEST):
             return False
         perms = user.get("permissions", {})
         return bool(perms.get("granted") or perms.get("revoked"))
@@ -241,7 +241,7 @@ class MasterTrackPlugin:
         return _perm_can(ROLE_GUEST, [], [], [], action)
 
     def current_user_is_project_unrestricted(self) -> bool:
-        return self._current_role in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE)
+        return self.can("project.view_all")
 
     def get_project_visibility_cache(self) -> Dict[str, Any]:
         cache = self.load_session().get("project_visibility_cache")
@@ -499,7 +499,7 @@ class MasterTrackPlugin:
     def open_logs_folder(self) -> None:
         messages = getattr(self.app, "messages", {}) or {}
         title = messages.get("master_track.logs_folder.title", "Logs folder")
-        if self._current_role not in (ROLE_LORD, ROLE_MASTER, ROLE_ANIMAL_WELFARE):
+        if not self.can("master.view_audit"):
             return
         logs_dir = self.logs_dir()
         try:
