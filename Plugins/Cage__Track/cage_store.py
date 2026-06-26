@@ -538,6 +538,11 @@ class CageStore:
         data["project_colors"][project_name] = color
         self.save_data()
 
+    def clear_project_colors(self) -> None:
+        data = self.load_data()
+        data["project_colors"] = {}
+        self.save_data()
+
     def get_all_project_colors(self) -> Dict[str, str]:
         data = self.load_data()
         return dict(data.get("project_colors", {}))

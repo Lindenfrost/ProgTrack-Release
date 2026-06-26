@@ -4324,7 +4324,9 @@
     "expanded_buildings": [
       "bld_e50578894709"
     ],
-    "expanded_rooms": [],
+    "expanded_rooms": [
+      "room_318d36867c9d"
+    ],
     "view_position": {
       "x": 0,
       "y": 0
@@ -4335,6 +4337,6 @@
       368.4316186497065,
       456.5434884337349
     ],
-    "show_unassigned": true
+    "show_unassigned": false
   }
 }

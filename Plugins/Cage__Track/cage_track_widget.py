@@ -334,9 +334,12 @@ class ProjectColorDialog(QDialog):
         btn_row = QHBoxLayout()
         apply_btn = QPushButton(messages.get("cage_track.colors.apply", "Apply"))
         apply_btn.clicked.connect(self._apply)
-        cancel_btn = QPushButton(messages.get("cage_track.colors.reset", "Cancel"))
+        reset_btn = QPushButton(messages.get("cage_track.colors.reset", "Reset to Default"))
+        reset_btn.clicked.connect(self._reset_to_default)
+        cancel_btn = QPushButton(messages.get("button.cancel", "Cancel"))
         cancel_btn.clicked.connect(self.reject)
         btn_row.addStretch()
+        btn_row.addWidget(reset_btn)
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(apply_btn)
         layout.addLayout(btn_row)
@@ -357,6 +360,10 @@ class ProjectColorDialog(QDialog):
     def _apply(self) -> None:
         for pname, color in self._colors.items():
             self.store.set_project_color(pname, color)
+        self.accept()
+
+    def _reset_to_default(self) -> None:
+        self.store.clear_project_colors()
         self.accept()
 
 
@@ -509,7 +516,11 @@ class CageSettingsDialog(QDialog):
             if p:
                 projects.add(p)
         dlg = ProjectColorDialog(self, self.messages, self.store, list(projects))
-        dlg.exec()
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            pw._project_color_cache.clear()
+            pw._animal_project_color_cache.clear()
+            pw._project_rgba_cache.clear()
+            pw.refresh_view(sync_animals=False)
 
     def _on_export_pdf(self) -> None:
         pw = self._parent_widget
@@ -815,6 +826,7 @@ class CageTrackWidget(QWidget):
         self._legend_drag_offset: Optional[Tuple[float, float]] = None
 
         self._build_ui()
+        QTimer.singleShot(0, lambda: self.refresh_view(sync_animals=True))
 
     # ------------------------------------------------------------------
     # Permission helpers (delegate to Master_Track via main app)
@@ -1094,6 +1106,25 @@ class CageTrackWidget(QWidget):
             self._project_rgba_cache[project_color] = rgba
         return self._project_rgba_cache[project_color]
 
+    def _draw_animal_name(self, x: float, y: float, name: str,
+                          project_color: str, zorder: int) -> None:
+        kwargs: Dict[str, Any] = {
+            "fontsize": 7.5,
+            "color": "#000000",
+            "zorder": zorder,
+            "clip_on": True,
+            "verticalalignment": "center",
+        }
+        if project_color and project_color != "#000000":
+            rgba = list(self._cached_project_rgba(project_color))
+            rgba[3] = 0.45
+            kwargs["bbox"] = {
+                "boxstyle": "round,pad=0.14",
+                "facecolor": tuple(rgba),
+                "edgecolor": "none",
+            }
+        self.ax.text(x, y, name, **kwargs)
+
     def _cached_animal_role_color(self, animal_name: str, animals_dict: Dict[str, Any]) -> str:
         if animal_name not in self._role_color_cache:
             self._role_color_cache[animal_name] = self._get_animal_role_color(animal_name, animals_dict)
@@ -1295,7 +1326,7 @@ class CageTrackWidget(QWidget):
         scatter_y: List[float] = []
         face_colors: List[str] = []
         edge_colors: List[str] = []
-        text_rows: List[Tuple[float, float, str]] = []
+        text_rows: List[Tuple[float, float, str, str]] = []
         for i, occ in enumerate(occupants):
             col_idx = i % 4
             row_idx = i // 4
@@ -1312,17 +1343,16 @@ class CageTrackWidget(QWidget):
             scatter_x.append(tx + 5)
             scatter_y.append(ty)
             face_colors.append(color)
-            edge_colors.append(project_color if project_color != "#000000" else "#424242")
-            text_rows.append((tx + 13, ty, occ_id))
+            edge_colors.append("#000000")
+            text_rows.append((tx + 13, ty, occ_id, project_color))
             self._hit_map.append(((tx - 2, ty - 6, tx + 100, ty + 8), occ_id, "occupant"))
 
         if scatter_x:
             self.ax.scatter(scatter_x, scatter_y, s=42, marker="o",
                             facecolors=face_colors, edgecolors=edge_colors,
                             linewidths=0.8, zorder=4, clip_on=True)
-        for tx, ty, occ_id in text_rows:
-            self.ax.text(tx, ty, occ_id, fontsize=7.5, color="#212121",
-                         zorder=3, clip_on=True, verticalalignment="center")
+        for tx, ty, occ_id, project_color in text_rows:
+            self._draw_animal_name(tx, ty, occ_id, project_color, zorder=3)
 
         self._hit_map.append(((x, y, x + w, y + h), UNASSIGNED_CAGE_ID, "cage"))
         self._hit_map.append(((x, y, x + w, y + TITLE_H), UNASSIGNED_CAGE_ID, "unassigned_title"))
@@ -1428,7 +1458,7 @@ class CageTrackWidget(QWidget):
         scatter_y: List[float] = []
         face_colors: List[str] = []
         edge_colors: List[str] = []
-        text_rows: List[Tuple[float, float, str]] = []
+        text_rows: List[Tuple[float, float, str, str]] = []
         for occ in occupants:
             occ_id = occ["occupant_id"]
             circle_color = self._cached_animal_role_color(occ_id, animals_dict)
@@ -1436,8 +1466,8 @@ class CageTrackWidget(QWidget):
             scatter_x.append(x + CAGE_PAD + 5)
             scatter_y.append(oy)
             face_colors.append(circle_color)
-            edge_colors.append(project_color if project_color != "#000000" else "#424242")
-            text_rows.append((x + CAGE_PAD + 13, oy, occ_id))
+            edge_colors.append("#000000")
+            text_rows.append((x + CAGE_PAD + 13, oy, occ_id, project_color))
             self._hit_map.append(((x + CAGE_PAD - 2, oy - 6, x + w - CAGE_PAD, oy + 8),
                                   occ_id, "occupant"))
             oy += OCCUPANT_LINE_H
@@ -1445,9 +1475,8 @@ class CageTrackWidget(QWidget):
             self.ax.scatter(scatter_x, scatter_y, s=42, marker="o",
                             facecolors=face_colors, edgecolors=edge_colors,
                             linewidths=0.8, zorder=6, clip_on=True)
-        for tx, ty, occ_id in text_rows:
-            self.ax.text(tx, ty, occ_id, fontsize=7.5, color="#212121",
-                         zorder=5, clip_on=True, verticalalignment="center")
+        for tx, ty, occ_id, project_color in text_rows:
+            self._draw_animal_name(tx, ty, occ_id, project_color, zorder=5)
 
     def _draw_legend(self, project_colors: Dict[str, str], total_w: float,
                      total_h: float, stored_pos: Optional[List[float]] = None) -> None:
