@@ -52,6 +52,7 @@ from PyQt6.QtWidgets import (
     QWidget,
     QApplication,
 )
+from Plugins.core.platform_helpers import open_local_path
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ def _icon_for_ext(ext: str) -> QIcon:
     elif ext in _TABLE_EXTS:
         icon_name = 'file_csv.png'
     elif ext in _PDF_EXTS:
-        icon_name = 'file_pdg.png'
+        icon_name = 'file_pdf.png'
     else:
         icon_name = 'file_text.png'
     path = ICONS_DIR / icon_name
@@ -1268,10 +1269,8 @@ class MediTrackWidget(QWidget):
     def _on_doc_item_clicked(self, item: QListWidgetItem) -> None:
         path = item.data(Qt.ItemDataRole.UserRole)
         if path and Path(path).exists():
-            try:
-                os.startfile(path)  # type: ignore[attr-defined]  # Windows only
-            except Exception as exc:
-                logger.error("os.startfile failed: %s", exc)
+            if not open_local_path(path):
+                logger.error("Could not open document path: %s", path)
 
     # ── filter logic ──
 

@@ -50,6 +50,7 @@ import matplotlib.colors as mcolors
 
 from .cage_store import CageStore, UNASSIGNED_CAGE_ID
 from .cage_engine import CageEngine
+from Plugins.core.platform_helpers import default_save_path
 
 logger = logging.getLogger(__name__)
 
@@ -726,8 +727,7 @@ class InspectionPDFExportDialog(QDialog):
             key=lambda r: (r.get("unit_name", ""), r.get("date_sort", "")))
 
         now_str = datetime.now().strftime("%Y-%m-%d")
-        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-        default_path = os.path.join(desktop, f"Inspection_Report_{now_str}.pdf")
+        default_path = default_save_path(f"Inspection_Report_{now_str}.pdf")
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.messages.get(

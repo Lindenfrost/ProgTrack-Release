@@ -48,7 +48,8 @@ def setup_environment() -> Path:
         os.environ["PATH"] = os.pathsep.join(
             str(path) for path in path_parts if path.exists()
         ) + os.pathsep + os.environ.get("PATH", "")
-        os.environ.setdefault("QT_QPA_PLATFORM", "windows")
+        if sys.platform.startswith("win"):
+            os.environ.setdefault("QT_QPA_PLATFORM", "windows")
         if qt_plugins.exists():
             os.environ["QT_PLUGIN_PATH"] = str(qt_plugins)
     else:

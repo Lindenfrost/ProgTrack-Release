@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QTextEdit, QVBoxLayout, QWidget,
 )
 from Plugins.core.project_visibility import diff_project_associated_users
+from Plugins.core.platform_helpers import open_local_path
 logger = logging.getLogger(__name__)
 _DOCS_SUBDIR   = "documents"
 _SOP_SUBDIR    = "sop"
@@ -1039,16 +1040,8 @@ class ProjectTrackTab(QWidget):
         fname = display_text.split('  ', 1)[-1] if '  ' in display_text else display_text
         path = os.path.join(self._doc_dir(name), fname)
         if os.path.isfile(path):
-            import subprocess, sys as _sys
-            try:
-                if _sys.platform == 'win32':
-                    os.startfile(path)
-                elif _sys.platform == 'darwin':
-                    subprocess.call(['open', path])
-                else:
-                    subprocess.call(['xdg-open', path])
-            except Exception as exc:
-                logger.error('doc open: %s', exc)
+            if not open_local_path(path):
+                logger.error('doc open failed: %s', path)
 
     def _on_doc_upload(self, name):
         if not self._can('project.upload_document'):
@@ -1092,16 +1085,8 @@ class ProjectTrackTab(QWidget):
         fname = display_text.split('  ', 1)[-1] if '  ' in display_text else display_text
         path = os.path.join(self._sop_dir(name), fname)
         if os.path.isfile(path):
-            import subprocess, sys as _sys
-            try:
-                if _sys.platform == 'win32':
-                    os.startfile(path)
-                elif _sys.platform == 'darwin':
-                    subprocess.call(['open', path])
-                else:
-                    subprocess.call(['xdg-open', path])
-            except Exception as exc:
-                logger.error('sop open: %s', exc)
+            if not open_local_path(path):
+                logger.error('sop open failed: %s', path)
 
     def _on_sop_upload(self, name):
         if not self._can('project.upload_sop'):

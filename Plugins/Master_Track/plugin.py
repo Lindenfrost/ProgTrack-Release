@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
-import sys
 from datetime import date, datetime
 from typing import Any, Dict, Optional
 
@@ -30,6 +28,7 @@ from .permissions import (
     get_permission_label,
 )
 from .session import SessionManager
+from Plugins.core.platform_helpers import open_local_path
 
 logger = logging.getLogger(__name__)
 
@@ -505,12 +504,8 @@ class MasterTrackPlugin:
         try:
             os.makedirs(logs_dir, exist_ok=True)
             self._write_log_locations_file(logs_dir)
-            if sys.platform.startswith("win"):
-                os.startfile(logs_dir)  # type: ignore[attr-defined]
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", logs_dir])
-            else:
-                subprocess.Popen(["xdg-open", logs_dir])
+            if not open_local_path(logs_dir):
+                raise OSError("No desktop opener is available for the logs folder.")
         except Exception as exc:
             from PyQt6.QtWidgets import QMessageBox
             template = messages.get(

@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QPushButton, QScrollArea, QScrollBar, QSizePolicy, QSpinBox,
     QTabWidget, QTextEdit, QVBoxLayout, QWidget, QCompleter,
 )
+from Plugins.core.platform_helpers import default_export_directory
 
 logger = logging.getLogger(__name__)
 
@@ -2999,12 +3000,10 @@ class OtherSamplesTab(QWidget):
 def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
                     row_widgets, store) -> None:
     m = messages
-    # Default save location: Desktop
-    desktop_path = str(Path.home() / "Desktop")
     path, _ = QFileDialog.getSaveFileName(
         parent_widget,
         _msg(m, "sample_track.pdf.export_title", "Save PDF"),
-        desktop_path,
+        str(default_export_directory()),
         _msg(m, "sample_track.pdf.export_filter", "PDF Files (*.pdf)"),
     )
     if not path:

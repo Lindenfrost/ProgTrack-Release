@@ -62,6 +62,7 @@ from Plugins.core.project_visibility import (
     is_unrestricted_project_role,
     visible_projects_for_user,
 )
+from Plugins.core.platform_helpers import default_export_directory, default_save_path
 from typing import List, Dict, Any, Optional, Tuple, Callable, TYPE_CHECKING
 
 APP_BASE_DIR = Path(__file__).resolve().parent
@@ -5729,11 +5730,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             c for c in animal_name if c.isalnum() or c in ('_', '-', ' ')
         ).strip().replace(' ', '_')
         default_filename = f"{safe_name}_{year}_{month:02d}.pdf"
-        _desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.messages.get("dialog.save_pdf.title", "Save PDF Report"),
-            os.path.join(_desktop, default_filename),
+            default_save_path(default_filename),
             "PDF files (*.pdf)",
         )
         if not path:
@@ -10641,11 +10641,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if von == bis:
                 self._show_message("warning.print.same_date")
 
-            _desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
             path, _ = QFileDialog.getSaveFileName(
                 self,
                 self.messages["dialog.save_excel.title"],
-                _desktop,
+                str(default_export_directory()),
                 self.messages["dialog.save_excel.filter"]
             )
             if not path:
@@ -11023,11 +11022,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     break
 
             # Select output directory
-            _desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
             output_dir = QFileDialog.getExistingDirectory(
                 self,
                 self.messages.get("dialog.select_output_directory", "Select Output Directory"),
-                _desktop,
+                str(default_export_directory()),
                 QFileDialog.Option.ShowDirsOnly
             )
             if not output_dir:
@@ -11178,11 +11176,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if not selected_animals:
                 self._show_message("error.print.no_selection")
                 return
-            _desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
             output_dir = QFileDialog.getExistingDirectory(
                 self,
                 self.messages.get("dialog.select_output_directory", "Select Output Directory"),
-                _desktop,
+                str(default_export_directory()),
                 QFileDialog.Option.ShowDirsOnly,
             )
             if not output_dir:
