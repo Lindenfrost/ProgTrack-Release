@@ -20,6 +20,150 @@ ROLE_VALUE_ZUCHTTIER = "Zuchttier"
 ROLE_VALUE_EXPERIMENTAL = "Versuchstier"
 ROLE_VALUE_UNKNOWN = "Unbekannt"
 
+REQUIRED_DIALOG_BLOCKS = ("identity", "cage_address", "weight", "parenting")
+OPTIONAL_DIALOG_BLOCKS = (
+    "id_chip_origin",
+    "lifecycle",
+    "project_severity",
+    "reference_weight",
+    "health_flags",
+    "limits_reproductive",
+    "limits_measurements",
+    "recovery_time",
+    "blood_progesterone",
+    "urine_pdg",
+    "computed_values",
+    "sperm_measurements",
+    "reproductive_events",
+    "procedure_events",
+    "partner_fields",
+    "mating_partner",
+    "experimental_fields",
+)
+ALL_DIALOG_BLOCKS = REQUIRED_DIALOG_BLOCKS + OPTIONAL_DIALOG_BLOCKS
+
+GLOBAL_EVENT_CATALOG: Dict[str, Dict[str, Any]] = {
+    "surgery": {"label_key": "event.surgery", "aliases": ["op"], "planned": True, "limit_block": "max_op"},
+    "embryo_transfer": {"label_key": "event.embryo_transfer", "aliases": ["embryo"], "planned": True, "limit_block": "max_embryo"},
+    "pregnancy": {"label_key": "event.pregnancy", "aliases": ["traechtigkeit", "trächtigkeit"], "planned": False, "limit_block": "max_pregnancies"},
+    "abortion": {"label_key": "event.abortion", "aliases": ["abort"], "planned": False, "limit_block": ""},
+    "birth": {"label_key": "event.birth", "aliases": ["geburt"], "planned": False, "limit_block": "max_births"},
+    "pgf": {"label_key": "event.pgf", "aliases": ["pgf"], "planned": True, "limit_block": "max_pgf"},
+    "fsh": {"label_key": "event.fsh", "aliases": ["fsh"], "planned": True, "limit_block": "max_fsh"},
+    "progesterone": {"label_key": "event.progesterone", "aliases": ["progesterone"], "planned": False, "limit_block": ""},
+    "special_measurement": {"label_key": "event.special_measurement", "aliases": ["sondermessung"], "planned": True, "limit_block": "max_special"},
+    "measurement": {"label_key": "event.measurement", "aliases": ["measurement"], "planned": True, "limit_block": "max_measurements"},
+}
+
+DEFAULT_DIALOG_RECIPES: Dict[str, Dict[str, Any]] = {
+    "female_donor": {
+        "new": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "limits_reproductive",
+            "limits_measurements", "recovery_time", "health_flags", "weight",
+            "blood_progesterone", "urine_pdg", "computed_values", "reproductive_events",
+        ],
+        "edit": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "limits_reproductive",
+            "limits_measurements", "recovery_time", "health_flags", "weight",
+            "blood_progesterone", "urine_pdg", "computed_values", "reproductive_events",
+        ],
+        "events": ["surgery", "pgf", "fsh", "progesterone"],
+    },
+    "surrogate": {
+        "new": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "limits_reproductive",
+            "limits_measurements", "recovery_time", "health_flags", "weight",
+            "blood_progesterone", "urine_pdg", "computed_values", "reproductive_events",
+        ],
+        "edit": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "limits_reproductive",
+            "limits_measurements", "recovery_time", "health_flags", "weight",
+            "blood_progesterone", "urine_pdg", "computed_values", "reproductive_events",
+        ],
+        "events": ["embryo_transfer", "pregnancy", "abortion", "birth", "pgf", "progesterone"],
+    },
+    "sperm_donor": {
+        "new": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "limits_measurements",
+            "recovery_time", "health_flags", "weight", "sperm_measurements",
+        ],
+        "edit": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "limits_measurements",
+            "recovery_time", "health_flags", "weight", "sperm_measurements",
+        ],
+        "events": [],
+    },
+    "offspring": {
+        "new": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "limits_measurements", "health_flags",
+            "weight", "procedure_events",
+        ],
+        "edit": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "limits_measurements", "health_flags",
+            "weight", "procedure_events",
+        ],
+        "events": ["special_measurement", "surgery"],
+    },
+    "partner": {
+        "new": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "partner_fields",
+            "health_flags", "weight", "urine_pdg", "computed_values",
+        ],
+        "edit": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "partner_fields",
+            "health_flags", "weight", "urine_pdg", "computed_values",
+        ],
+        "events": [],
+    },
+    "breeding": {
+        "new": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "mating_partner",
+            "limits_reproductive", "health_flags", "weight", "reproductive_events",
+        ],
+        "edit": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "mating_partner",
+            "limits_reproductive", "health_flags", "weight", "reproductive_events",
+        ],
+        "events": ["pregnancy", "abortion", "birth"],
+    },
+    "experimental": {
+        "new": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "limits_measurements",
+            "health_flags", "weight", "procedure_events", "experimental_fields",
+        ],
+        "edit": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "limits_measurements",
+            "health_flags", "weight", "procedure_events", "experimental_fields",
+        ],
+        "events": ["surgery", "measurement"],
+    },
+    "basic": {
+        "new": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "health_flags", "weight",
+        ],
+        "edit": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "health_flags", "weight",
+        ],
+        "events": [],
+    },
+}
+
 
 DEFAULT_ROLE_DEFINITIONS: List[Dict[str, Any]] = [
     {
@@ -122,6 +266,7 @@ DEFAULT_ROLE_DEFINITIONS: List[Dict[str, Any]] = [
 
 
 _DEFAULTS_BY_VALUE = {role["value"]: role for role in DEFAULT_ROLE_DEFINITIONS}
+_BUILTIN_VALUES = {role["value"] for role in DEFAULT_ROLE_DEFINITIONS}
 
 
 def _slugify(text: str) -> str:
@@ -146,11 +291,68 @@ def _coerce_int(value: Any, default: int) -> int:
         return default
 
 
+def normalize_block_list(values: Any) -> List[str]:
+    if isinstance(values, str):
+        raw_values = [part.strip() for part in values.split(",")]
+    elif isinstance(values, Iterable) and not isinstance(values, (bytes, bytearray, dict)):
+        raw_values = [str(value or "").strip() for value in values]
+    else:
+        raw_values = []
+
+    normalized: List[str] = []
+    for block in [*REQUIRED_DIALOG_BLOCKS, *raw_values]:
+        if block in ALL_DIALOG_BLOCKS and block not in normalized:
+            normalized.append(block)
+    return normalized
+
+
+def default_dialog_blocks(field_preset: str) -> Dict[str, Any]:
+    recipe = DEFAULT_DIALOG_RECIPES.get(str(field_preset or ""), DEFAULT_DIALOG_RECIPES["basic"])
+    return {
+        "new": normalize_block_list(recipe.get("new", [])),
+        "edit": normalize_block_list(recipe.get("edit", [])),
+    }
+
+
+def default_event_recipe(field_preset: str) -> Dict[str, Any]:
+    recipe = DEFAULT_DIALOG_RECIPES.get(str(field_preset or ""), DEFAULT_DIALOG_RECIPES["basic"])
+    events = [event for event in recipe.get("events", []) if event in GLOBAL_EVENT_CATALOG]
+    return {
+        "available_events": events,
+        "default_event": events[0] if events else "",
+    }
+
+
 def normalize_role_definition(raw: Dict[str, Any], *, default_order: int = 1000) -> Dict[str, Any]:
     value = str(raw.get("value") or raw.get("role_id") or "").strip()
-    label = str(raw.get("label") or value or "New role").strip()
+    label = str(raw.get("label") or "").strip()
     role_id = str(raw.get("role_id") or _slugify(label)).strip()
     built_in = _coerce_bool(raw.get("built_in"), False)
+    field_preset = str(raw.get("field_preset") or "basic").strip() or "basic"
+    dialog_blocks = raw.get("dialog_blocks")
+    if isinstance(dialog_blocks, dict):
+        normalized_blocks = {
+            "new": normalize_block_list(dialog_blocks.get("new", [])),
+            "edit": normalize_block_list(dialog_blocks.get("edit", [])),
+        }
+    else:
+        normalized_blocks = default_dialog_blocks(field_preset)
+
+    event_recipe = raw.get("event_recipe")
+    if isinstance(event_recipe, dict):
+        available_events = [
+            str(event or "").strip()
+            for event in event_recipe.get("available_events", [])
+            if str(event or "").strip() in GLOBAL_EVENT_CATALOG
+        ]
+        normalized_event_recipe = {
+            "available_events": available_events,
+            "default_event": str(event_recipe.get("default_event") or "").strip(),
+        }
+        if normalized_event_recipe["default_event"] not in available_events:
+            normalized_event_recipe["default_event"] = available_events[0] if available_events else ""
+    else:
+        normalized_event_recipe = default_event_recipe(field_preset)
 
     return {
         "role_id": role_id,
@@ -162,10 +364,15 @@ def normalize_role_definition(raw: Dict[str, Any], *, default_order: int = 1000)
         "active": _coerce_bool(raw.get("active"), True),
         "built_in": built_in,
         "base_editor": str(raw.get("base_editor") or "basic").strip() or "basic",
-        "field_preset": str(raw.get("field_preset") or "basic").strip() or "basic",
+        "field_preset": field_preset,
+        "dialog_blocks": normalized_blocks,
+        "event_recipe": normalized_event_recipe,
+        "eligibility": raw.get("eligibility") if isinstance(raw.get("eligibility"), dict) else {},
+        "status_display": raw.get("status_display") if isinstance(raw.get("status_display"), dict) else {},
         "imported": _coerce_bool(raw.get("imported"), False),
         "review_state": str(raw.get("review_state") or "").strip(),
         "original_label": str(raw.get("original_label") or "").strip(),
+        "mapped_to": str(raw.get("mapped_to") or "").strip(),
     }
 
 
@@ -192,6 +399,17 @@ class AnimalRoleRegistry:
                 return deepcopy(role)
         return None
 
+    def find_by_label_exact(self, label: str) -> Optional[Dict[str, Any]]:
+        """Return a role whose label exactly matches *label*.
+
+        Role import matching is intentionally case- and whitespace-sensitive.
+        """
+        label = str(label or "")
+        for role in self._roles:
+            if str(role.get("label") or "") == label:
+                return deepcopy(role)
+        return None
+
     def label_for_value(self, value: str, messages: Optional[Dict[str, str]] = None) -> str:
         role = self.get_by_value(value)
         if not role:
@@ -209,6 +427,20 @@ class AnimalRoleRegistry:
         label = self.label_for_value(value, messages)
         icon = self.icon_for_value(value)
         return f"{icon} {label}".strip()
+
+    def dialog_blocks_for_value(self, value: str, mode: str = "edit") -> List[str]:
+        role = self.get_by_value(value) or {}
+        blocks = role.get("dialog_blocks", {}) if isinstance(role, dict) else {}
+        if not isinstance(blocks, dict):
+            return default_dialog_blocks("basic").get(mode, list(REQUIRED_DIALOG_BLOCKS))
+        return normalize_block_list(blocks.get(mode, blocks.get("edit", [])))
+
+    def event_recipe_for_value(self, value: str) -> Dict[str, Any]:
+        role = self.get_by_value(value) or {}
+        recipe = role.get("event_recipe", {}) if isinstance(role, dict) else {}
+        if not isinstance(recipe, dict):
+            return default_event_recipe("basic")
+        return deepcopy(recipe)
 
     def make_custom_role(
         self,
@@ -240,14 +472,70 @@ class AnimalRoleRegistry:
                 "built_in": False,
                 "base_editor": "basic",
                 "field_preset": "basic",
+                "dialog_blocks": default_dialog_blocks("basic"),
+                "event_recipe": default_event_recipe("basic"),
+            }
+        )
+
+    def make_imported_role(
+        self,
+        original_label: str,
+        *,
+        source: str = "",
+        existing_values: Optional[Iterable[str]] = None,
+    ) -> Dict[str, Any]:
+        original_label = str(original_label or "Imported role").strip() or "Imported role"
+        existing_match = self.find_by_label_exact(original_label)
+        if existing_match:
+            existing_match["original_label"] = original_label
+            existing_match["import_source"] = str(source or "").strip()
+            return normalize_role_definition(existing_match)
+
+        existing = {role.get("value") for role in self._roles}
+        existing.update(str(value) for value in (existing_values or []))
+        slug = _slugify(original_label)
+        value = f"imported.{slug}"
+        suffix = 2
+        while value in existing:
+            value = f"imported.{slug}_{suffix}"
+            suffix += 1
+
+        return normalize_role_definition(
+            {
+                "role_id": value.removeprefix("imported."),
+                "value": value,
+                "label": original_label,
+                "icon": "!",
+                "order": self._next_order(),
+                "active": True,
+                "built_in": False,
+                "base_editor": "basic",
+                "field_preset": "basic",
+                "dialog_blocks": default_dialog_blocks("basic"),
+                "event_recipe": default_event_recipe("basic"),
+                "imported": True,
+                "review_state": "confirmed",
+                "original_label": original_label,
+                "import_source": str(source or "").strip(),
             }
         )
 
     def save_roles(self, roles: Iterable[Dict[str, Any]]) -> None:
-        normalized = self._merge_with_defaults(list(roles))
+        role_list = list(roles)
+        provided_values = {
+            str(role.get("value") or "")
+            for role in role_list
+            if isinstance(role, dict) and str(role.get("value") or "")
+        }
+        deleted_builtin_values = sorted(_BUILTIN_VALUES - provided_values)
+        normalized = self._merge_with_defaults(
+            role_list,
+            deleted_builtin_values=deleted_builtin_values,
+        )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "schema_version": SCHEMA_VERSION,
+            "deleted_builtin_values": deleted_builtin_values,
             "roles": normalized,
         }
         with self.path.open("w", encoding="utf-8") as handle:
@@ -266,11 +554,20 @@ class AnimalRoleRegistry:
         raw_roles = payload.get("roles", []) if isinstance(payload, dict) else []
         if not isinstance(raw_roles, list):
             raw_roles = []
-        return self._merge_with_defaults(raw_roles)
+        deleted_builtin_values = payload.get("deleted_builtin_values", []) if isinstance(payload, dict) else []
+        return self._merge_with_defaults(raw_roles, deleted_builtin_values=deleted_builtin_values)
 
-    def _merge_with_defaults(self, raw_roles: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _merge_with_defaults(
+        self,
+        raw_roles: Iterable[Dict[str, Any]],
+        *,
+        deleted_builtin_values: Iterable[str] = (),
+    ) -> List[Dict[str, Any]]:
         merged_by_value: Dict[str, Dict[str, Any]] = {}
+        deleted_builtins = {str(value or "") for value in deleted_builtin_values}
         for index, default in enumerate(DEFAULT_ROLE_DEFINITIONS):
+            if default["value"] in deleted_builtins:
+                continue
             merged_by_value[default["value"]] = normalize_role_definition(
                 default, default_order=(index + 1) * 10
             )
@@ -284,10 +581,14 @@ class AnimalRoleRegistry:
                 default_normalized = normalize_role_definition(default)
                 default_normalized.update(
                     {
-                        "label": normalized.get("label") or default_normalized["label"],
+                        "label": normalized.get("label"),
                         "icon": normalized.get("icon") or default_normalized["icon"],
                         "order": normalized.get("order", default_normalized["order"]),
                         "active": normalized.get("active", default_normalized["active"]),
+                        "dialog_blocks": normalized.get("dialog_blocks", default_normalized["dialog_blocks"]),
+                        "event_recipe": normalized.get("event_recipe", default_normalized["event_recipe"]),
+                        "eligibility": normalized.get("eligibility", default_normalized.get("eligibility", {})),
+                        "status_display": normalized.get("status_display", default_normalized.get("status_display", {})),
                     }
                 )
                 normalized = default_normalized
@@ -302,3 +603,19 @@ class AnimalRoleRegistry:
         if not self._roles:
             return 100
         return max(_coerce_int(role.get("order"), 0) for role in self._roles) + 10
+
+
+def clear_deleted_role_assignments(
+    animal_records: Dict[str, Dict[str, Any]],
+    deleted_role_values: Iterable[str],
+) -> List[str]:
+    """Clear role assignments for animals that still reference deleted roles."""
+    deleted = {str(value or "") for value in deleted_role_values if str(value or "")}
+    changed: List[str] = []
+    if not deleted or not isinstance(animal_records, dict):
+        return changed
+    for animal_name, record in animal_records.items():
+        if isinstance(record, dict) and record.get("rolle") in deleted:
+            record["rolle"] = ""
+            changed.append(str(animal_name))
+    return changed

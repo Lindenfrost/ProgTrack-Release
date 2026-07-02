@@ -78,7 +78,13 @@ from Plugins.core.animal_reference_rewrite import (
     replace_exact_animal_reference,
     rewrite_animal_reference_file,
 )
-from Plugins.core.animal_roles import AnimalRoleRegistry
+from Plugins.core.animal_roles import (
+    ALL_DIALOG_BLOCKS,
+    AnimalRoleRegistry,
+    REQUIRED_DIALOG_BLOCKS,
+    clear_deleted_role_assignments,
+    normalize_block_list,
+)
 from Plugins.core.animal_status import (
     DECEASED_STATUS_SYMBOL,
     compact_status_with_death_priority,
@@ -1020,7 +1026,7 @@ class StyleSettingsDialog(QDialog):
             locked.setStyleSheet("color: #666;")
             layout.addWidget(locked)
 
-        self.role_table = QTableWidget(0, 6, tab)
+        self.role_table = QTableWidget(0, 8, tab)
         self.role_table.setHorizontalHeaderLabels([
             self.messages.get("settings.role_setup.col.active", "Active"),
             self.messages.get("settings.role_setup.col.order", "Order"),
@@ -1028,6 +1034,8 @@ class StyleSettingsDialog(QDialog):
             self.messages.get("settings.role_setup.col.label", "Label"),
             self.messages.get("settings.role_setup.col.value", "Internal ID"),
             self.messages.get("settings.role_setup.col.preset", "Preset"),
+            self.messages.get("settings.role_setup.col.new_blocks", "New blocks"),
+            self.messages.get("settings.role_setup.col.edit_blocks", "Edit blocks"),
         ])
         self.role_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.role_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
@@ -1042,12 +1050,14 @@ class StyleSettingsDialog(QDialog):
 
         button_row = QHBoxLayout()
         add_btn = QPushButton(self.messages.get("settings.role_setup.add_role", "Add role"))
+        delete_btn = QPushButton(self.messages.get("settings.role_setup.delete_role", "Delete role"))
         up_btn = QPushButton(self.messages.get("settings.role_setup.move_up", "Move up"))
         down_btn = QPushButton(self.messages.get("settings.role_setup.move_down", "Move down"))
         add_btn.clicked.connect(self._add_custom_role_row)
+        delete_btn.clicked.connect(self._delete_selected_role_row)
         up_btn.clicked.connect(lambda: self._move_selected_role_row(-1))
         down_btn.clicked.connect(lambda: self._move_selected_role_row(1))
-        for btn in (add_btn, up_btn, down_btn):
+        for btn in (add_btn, delete_btn, up_btn, down_btn):
             btn.setEnabled(self._role_setup_editable)
             button_row.addWidget(btn)
         button_row.addStretch()
@@ -1074,17 +1084,20 @@ class StyleSettingsDialog(QDialog):
             active_item.setFlags(active_item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
         self.role_table.setItem(row, 0, active_item)
 
+        dialog_blocks = role.get("dialog_blocks", {}) if isinstance(role.get("dialog_blocks"), dict) else {}
         values = [
             str(role.get("order", (row + 1) * 10)),
             str(role.get("icon", "")),
             str(role.get("label", "")),
             str(role.get("value", "")),
             str(role.get("field_preset", "basic")),
+            ", ".join(dialog_blocks.get("new", [])),
+            ", ".join(dialog_blocks.get("edit", [])),
         ]
         for col, value in enumerate(values, start=1):
             item = QTableWidgetItem(value)
             item.setData(Qt.ItemDataRole.UserRole, dict(role))
-            immutable = col in (4, 5) or (bool(role.get("built_in")) and col == 3)
+            immutable = col in (4, 5)
             if immutable or not self._role_setup_editable:
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.role_table.setItem(row, col, item)
@@ -1125,6 +1138,14 @@ class StyleSettingsDialog(QDialog):
         self._rebuild_role_table(roles)
         self.role_table.selectRow(target)
 
+    def _delete_selected_role_row(self):
+        if self.role_table is None or not self._role_setup_editable:
+            return
+        selected = self.role_table.selectionModel().selectedRows()
+        if not selected:
+            return
+        self.role_table.removeRow(selected[0].row())
+
     def _role_rows_from_table(self, *, validate: bool):
         roles = []
         seen_values = set()
@@ -1140,8 +1161,11 @@ class StyleSettingsDialog(QDialog):
             order_text = (self.role_table.item(row, 1).text() if self.role_table.item(row, 1) else "").strip()
             active_item = self.role_table.item(row, 0)
 
-            if validate and not label:
-                raise ValueError(self.messages.get("settings.role_setup.error.label_required", "Role label is required."))
+            if validate and not label and not icon:
+                raise ValueError(self.messages.get(
+                    "settings.role_setup.error.label_or_icon_required",
+                    "A role needs either a label or an icon.",
+                ))
             if validate and not value:
                 raise ValueError(self.messages.get("settings.role_setup.error.value_required", "Internal role ID is required."))
             if validate and value in seen_values:
@@ -1160,6 +1184,14 @@ class StyleSettingsDialog(QDialog):
                 "icon": icon or "\u25cf",
                 "order": order,
                 "active": active_item.checkState() == Qt.CheckState.Checked if active_item else True,
+                "dialog_blocks": {
+                    "new": self.parent_app._normalize_role_dialog_blocks(
+                        self.role_table.item(row, 6).text() if self.role_table.item(row, 6) else "",
+                    ),
+                    "edit": self.parent_app._normalize_role_dialog_blocks(
+                        self.role_table.item(row, 7).text() if self.role_table.item(row, 7) else "",
+                    ),
+                },
             })
             if not role.get("built_in"):
                 role["label_key"] = ""
@@ -3041,7 +3073,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.op_planner_action = QAction(self.messages.get("menu.tools.op_planner", "OP Scheduler"), self)
         self.op_planner_action.triggered.connect(self._launch_op_planner)
         self.op_planner_action.setEnabled(
-            self._op_planner_available() and self._master_can('op_scheduler.use'))
+            self._op_planner_available() and self._master_can('op_scheduler.view'))
         tools_menu.addAction(self.op_planner_action)
 
         if getattr(self, 'has_sample_track_plugin', False):
@@ -5998,6 +6030,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------
     def _get_animal_name_from_item(self, item: QListWidgetItem) -> Optional[str]:
         """Extract animal name from a list widget item (handles custom widgets)."""
+        user_data = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        if isinstance(user_data, str) and user_data in self.animals:
+            return user_data
+
         # Try to get from custom widget
         widget = self.lst.itemWidget(item)
         if widget:
@@ -6119,8 +6155,29 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         registry = getattr(self, "animal_role_registry", None)
         if registry is None:
             return False
+        previous_values = {
+            str(role.get("value") or "")
+            for role in registry.roles()
+            if str(role.get("value") or "")
+        }
+        next_values = {
+            str(role.get("value") or "")
+            for role in roles
+            if isinstance(role, dict) and str(role.get("value") or "")
+        }
+        deleted_values = previous_values - next_values
         try:
             registry.save_roles(roles)
+            changed_active = clear_deleted_role_assignments(self.animals, deleted_values)
+            changed_archived = clear_deleted_role_assignments(self.archived, deleted_values)
+            if changed_active or changed_archived:
+                logging.info(
+                    "Cleared deleted role assignments: active=%s archived=%s",
+                    changed_active,
+                    changed_archived,
+                )
+                self._save_persistence(defer_post_save_work=True)
+                self._refresh_list()
             return True
         except Exception as exc:
             logging.error(f"Failed to save animal role setup: {exc}")
@@ -6151,9 +6208,58 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             }
         return registry.make_custom_role(label, icon, existing_values=existing_values)
 
+    def _make_imported_animal_role_definition(self, original_label: str, source: str = "", existing_values=None) -> Dict[str, Any]:
+        registry = getattr(self, "animal_role_registry", None)
+        if registry is None:
+            return {
+                "role_id": str(original_label or "imported_role").strip().replace(" ", "_"),
+                "value": f"imported.{str(original_label or 'role').strip().replace(' ', '_')}",
+                "label": str(original_label or "Imported role").strip(),
+                "label_key": "",
+                "icon": "!",
+                "order": 1000,
+                "active": True,
+                "built_in": False,
+                "base_editor": "basic",
+                "field_preset": "basic",
+                "dialog_blocks": {
+                    "new": list(REQUIRED_DIALOG_BLOCKS),
+                    "edit": list(REQUIRED_DIALOG_BLOCKS),
+                },
+                "imported": True,
+                "review_state": "confirmed",
+                "original_label": str(original_label or "").strip(),
+                "import_source": str(source or "").strip(),
+            }
+        return registry.make_imported_role(
+            original_label,
+            source=source,
+            existing_values=existing_values,
+        )
+
     def _active_animal_role_definitions(self) -> List[Dict[str, Any]]:
         roles = self._load_animal_role_definitions()
         return [role for role in roles if role.get("active")]
+
+    def _normalize_role_dialog_blocks(self, blocks) -> List[str]:
+        return normalize_block_list(blocks)
+
+    def _role_definition_for_value(self, role_value: str) -> Dict[str, Any]:
+        registry = getattr(self, "animal_role_registry", None)
+        if registry is None:
+            return {}
+        return registry.get_by_value(role_value) or {}
+
+    def _role_dialog_blocks(self, role_value: str, mode: str = "edit") -> List[str]:
+        registry = getattr(self, "animal_role_registry", None)
+        if registry is None:
+            return list(REQUIRED_DIALOG_BLOCKS)
+        return registry.dialog_blocks_for_value(role_value, mode)
+
+    def _role_block_enabled(self, role_value: str, block_id: str, mode: str = "edit") -> bool:
+        if block_id in REQUIRED_DIALOG_BLOCKS:
+            return True
+        return block_id in self._role_dialog_blocks(role_value, mode)
 
     def _role_label_with_icon(self, rolle: str) -> str:
         registry = getattr(self, "animal_role_registry", None)
@@ -6376,17 +6482,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Block signals to prevent infinite loop during table population
         self.report_table.blockSignals(True)
         
-        # Get selected animal
-        selected = self.lst.selectedItems()
-        if not selected:
-            logging.debug("No animal selected for report")
-            self.report_table.setRowCount(0)
-            self.report_table.blockSignals(False)
-            return
-        
-        animal_name = self._get_animal_name_from_item(selected[0])
+        # Use the report's tracked animal as source of truth. The sidebar
+        # selection can be rebuilt by filters/tab changes while Reports stays open.
+        animal_name = getattr(self, 'report_current_animal', None)
         if not animal_name:
-            logging.warning("Could not extract animal name from selected item")
+            selected = self.lst.selectedItems()
+            if selected:
+                animal_name = self._get_animal_name_from_item(selected[0])
+        if not animal_name:
+            logging.debug("No animal selected for report")
             self.report_table.setRowCount(0)
             self.report_table.blockSignals(False)
             return
@@ -8482,6 +8586,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         active_species = getattr(self.projects_plugin, 'active_species', None) if has_projects_plugin else None
         name_filter = self._current_animal_name_filter_text()
         unrestricted_projects, visible_projects = self._project_visibility_scope()
+        show_all_animals_tab = cat == self.messages["sidebar.filter.all"]
+
+        def _visible_in_animal_sidebar(data: Dict[str, Any]) -> bool:
+            if show_all_animals_tab:
+                return True
+            return animal_visible_by_project_scope(data, unrestricted_projects, visible_projects)
+
         has_medi_track = getattr(self, 'has_medi_track_plugin', False)
         medi_tab_open = False
         medi_plugin = None
@@ -8504,7 +8615,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         active_medi_filter = medi_widget.active_filter()
         
         for name, data in sorted(self.animals.items()):
-            if not animal_visible_by_project_scope(data, unrestricted_projects, visible_projects):
+            if not _visible_in_animal_sidebar(data):
                 continue
             # Filter by rolle
             if not cat_pred(data):
@@ -8722,7 +8833,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # --- Show archived animals below separator when checkbox is checked ---
         if getattr(self, 'chk_show_archived', None) and self.chk_show_archived.isChecked() and self.archived:
             def _arch_filter(name: str, data: dict) -> bool:
-                if not animal_visible_by_project_scope(data, unrestricted_projects, visible_projects):
+                if not _visible_in_animal_sidebar(data):
                     return False
                 if not cat_pred(data):
                     return False
@@ -12610,7 +12721,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             action.triggered.connect(self._launch_op_planner)
             self.op_planner_action = action
         action.setEnabled(
-            self._op_planner_available() and self._master_can('op_scheduler.use'))
+            self._op_planner_available() and self._master_can('op_scheduler.view'))
         tools_menu.addAction(action)
 
         if getattr(self, 'has_sample_track_plugin', False):
@@ -13170,7 +13281,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         return {
             'network_track_action': 'network.view',
             'embryo_tracker_action': 'embryo_track.view',
-            'op_planner_action': 'op_scheduler.use',
+            'op_planner_action': 'op_scheduler.view',
             'sample_track_action': 'sample_track.use',
             'animal_reports_action': 'reports.view',
             'flow_track_action': 'flow_track.open',
@@ -13353,7 +13464,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         foreground rather than re‑created.  Any errors are logged and
         displayed to the user.
         """
-        if not self._master_can('op_scheduler.use'):
+        if not self._master_can('op_scheduler.view'):
             self._show_permission_denied()
             return
         try:
@@ -13450,7 +13561,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # create or reuse the planner dialog *inside* the plugin’s tiny-label context
             if not hasattr(self, '_op_planner_dialog') or self._op_planner_dialog is None or not self._op_planner_dialog.isVisible():
                 with rc_context(_plugin_sizes):
-                    self._op_planner_dialog = GanttWidget(animals=animals_for_planner, messages=self.messages)
+                    self._op_planner_dialog = GanttWidget(animals=animals_for_planner, messages=self.messages, parent=self)
             else:
                 try:
                     with rc_context(_plugin_sizes):
@@ -16908,6 +17019,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         rec.setdefault("sick", False)
         rec.setdefault("abnormal_current", False)
         rec.setdefault("in_experiment", False)
+        dialog_mode = "new" if creating else "edit"
+        enabled_blocks = set(self._role_dialog_blocks(role_value, dialog_mode))
 
         role_label = self._role_label_with_icon(role_value)
         title = (
@@ -16924,26 +17037,33 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             editing=not creating,
             name_label_key="dialog.field.name",
         )
-        id_le, chip_le, origin_le = self._build_id_chip_origin_row(form, rec)
+        if "id_chip_origin" in enabled_blocks:
+            id_le, chip_le, origin_le = self._build_id_chip_origin_row(form, rec)
+        else:
+            id_le = QLineEdit(str(rec.get("id", "")))
+            chip_le = QLineEdit(str(rec.get("chip_nr", "")))
+            origin_le = QLineEdit(str(rec.get("origin", "")))
 
-        project_cb = QComboBox()
-        project_cb.setEditable(True)
-        project_cb.setInsertPolicy(QComboBox.InsertPolicy.InsertAtTop)
-        for project_name in self._load_project_names():
-            project_cb.addItem(project_name)
+        project_cb = None
         current_project = rec.get("project", "")
-        project_idx = project_cb.findText(current_project)
-        if project_idx >= 0:
-            project_cb.setCurrentIndex(project_idx)
-        elif current_project:
-            project_cb.insertItem(0, current_project)
-            project_cb.setCurrentIndex(0)
-        elif project_cb.lineEdit():
-            project_cb.lineEdit().clear()
-        self._std_widen(project_cb)
-        if not self._master_can('project.project_assign'):
-            project_cb.setEnabled(False)
-        form.addRow(self.messages.get("dialog.field.project", "Project:"), project_cb)
+        if "project_severity" in enabled_blocks:
+            project_cb = QComboBox()
+            project_cb.setEditable(True)
+            project_cb.setInsertPolicy(QComboBox.InsertPolicy.InsertAtTop)
+            for project_name in self._load_project_names():
+                project_cb.addItem(project_name)
+            project_idx = project_cb.findText(current_project)
+            if project_idx >= 0:
+                project_cb.setCurrentIndex(project_idx)
+            elif current_project:
+                project_cb.insertItem(0, current_project)
+                project_cb.setCurrentIndex(0)
+            elif project_cb.lineEdit():
+                project_cb.lineEdit().clear()
+            self._std_widen(project_cb)
+            if not self._master_can('project.project_assign'):
+                project_cb.setEnabled(False)
+            form.addRow(self.messages.get("dialog.field.project", "Project:"), project_cb)
 
         dates_layout = QHBoxLayout()
         birth_date_le = QLineEdit(rec.get("birth_date", ""))
@@ -16964,10 +17084,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         death_date_le.textChanged.connect(update_age)
         dates_layout.addWidget(birth_date_le)
         dates_layout.addWidget(QLabel("/"))
-        dates_layout.addWidget(death_date_le)
-        dates_layout.addWidget(age_label)
-        dates_layout.addWidget(QLabel(self.messages.get("dialog.field.special_status", "Special Status:")))
-        dates_layout.addWidget(special_status_le)
+        if "lifecycle" in enabled_blocks:
+            dates_layout.addWidget(death_date_le)
+            dates_layout.addWidget(age_label)
+            dates_layout.addWidget(QLabel(self.messages.get("dialog.field.special_status", "Special Status:")))
+            dates_layout.addWidget(special_status_le)
+        else:
+            dates_layout.addWidget(age_label)
         form.addRow(self.messages.get("dialog.field.birth_death_date", "Birth / Death Date:"), dates_layout)
 
         sex_cb = QComboBox()
@@ -16980,24 +17103,72 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._std_widen(sex_cb)
         form.addRow(self.messages.get("dialog.offspring.sex", "Sex:"), sex_cb)
 
-        ref_w_le = QLineEdit(str(rec.get("ref_weight", "")))
-        ref_w_le.setValidator(QDoubleValidator(0.0, 100000.0, 3, ref_w_le))
-        form.addRow(self.messages.get("dialog.field.reference_weight", "Reference weight (g):"), ref_w_le)
+        genotype_le = QLineEdit(str(rec.get("genotype", "")))
+        form.addRow(self.messages.get("dialog.offspring.genotype", "Genotype:"), genotype_le)
 
-        health_w = QWidget()
-        health_l = QHBoxLayout(health_w)
-        health_l.setContentsMargins(0, 0, 0, 0)
-        sick_chk = QCheckBox(self.messages.get("dialog.offspring.checkbox.sick", "Sick"))
-        abnormal_chk = QCheckBox(self.messages.get("dialog.offspring.checkbox.abnormal", "Abnormal"))
-        in_exp_chk = QCheckBox(self.messages.get("checkbox.in_experiment", "In Experiment"))
-        sick_chk.setChecked(bool(rec.get("sick", False)))
-        abnormal_chk.setChecked(bool(rec.get("abnormal_current", False)))
-        in_exp_chk.setChecked(bool(rec.get("in_experiment", False)))
-        in_exp_chk.setVisible(self._is_projects_track_active())
-        for widget in (sick_chk, abnormal_chk, in_exp_chk):
-            health_l.addWidget(widget)
-        health_l.addStretch()
-        form.addRow(self.messages.get("dialog.offspring.health_status", "Health Status:"), health_w)
+        cage_address_fields = None
+        extract_address_values = None
+        _cage_addr_group = None
+        if "cage_address" in enabled_blocks and getattr(self, 'has_cage_track_plugin', False):
+            try:
+                from Plugins.Cage__Track.ui_address_fields import build_address_group, extract_address_values as _extract_address_values
+                extract_address_values = _extract_address_values
+                _cage_addr_group, cage_address_fields = build_address_group(
+                    self, self.cage_track_plugin, name if not creating else None
+                )
+                form.addRow(_cage_addr_group)
+            except Exception as exc:
+                logging.warning(f"Could not build basic-role cage address block: {exc}")
+
+        parent_fields: Dict[str, QLineEdit] = {}
+        parents_group = QGroupBox(self.messages.get("dialog.offspring.parents", "Parents"))
+        parents_layout = QFormLayout(parents_group)
+        parent_specs = [
+            ("eizellspenderin", "dialog.offspring.field.egg_donor", "Egg Donor:"),
+            ("samenspender", "dialog.offspring.field.sperm_donor", "Sperm Donor:"),
+            ("ziehmutter", "dialog.offspring.field.surrogate_mother", "Surrogate Mother:"),
+            ("ziehvater", "dialog.offspring.field.surrogate_father", "Surrogate Father:"),
+        ]
+        for field_name, label_key, default_label in parent_specs:
+            parent_fields[field_name] = QLineEdit(str(rec.get(field_name, "")))
+            parents_layout.addRow(self.messages.get(label_key, default_label), parent_fields[field_name])
+        self._add_parent_mode_selector(form, parents_group, parent_fields, default_mode="hide")
+
+        ref_w_le = None
+        if "reference_weight" in enabled_blocks:
+            ref_w_le = QLineEdit(str(rec.get("ref_weight", "")))
+            ref_w_le.setValidator(QDoubleValidator(0.0, 100000.0, 3, ref_w_le))
+            form.addRow(self.messages.get("dialog.field.reference_weight", "Reference weight (g):"), ref_w_le)
+
+        new_weight_le = None
+        if "weight" in enabled_blocks:
+            new_weight_le = QLineEdit("")
+            new_weight_le.setValidator(QDoubleValidator(0.0, 100000.0, 3, new_weight_le))
+            weight_label = (
+                self.messages.get("dialog.field.initial_weight", "Initial weight (g):")
+                if creating else
+                self.messages.get("dialog.field.new_weight", "New weight (g):")
+            )
+            form.addRow(weight_label, new_weight_le)
+
+        sick_chk = None
+        abnormal_chk = None
+        in_exp_chk = None
+        if "health_flags" in enabled_blocks:
+            health_w = QWidget()
+            health_l = QHBoxLayout(health_w)
+            health_l.setContentsMargins(0, 0, 0, 0)
+            sick_chk = QCheckBox(self.messages.get("dialog.offspring.checkbox.sick", "Sick"))
+            abnormal_chk = QCheckBox(self.messages.get("dialog.offspring.checkbox.abnormal", "Abnormal"))
+            in_exp_chk = QCheckBox(self.messages.get("checkbox.in_experiment", "In Experiment"))
+            sick_chk.setChecked(bool(rec.get("sick", False)))
+            abnormal_chk.setChecked(bool(rec.get("abnormal_current", False)))
+            in_exp_chk.setChecked(bool(rec.get("in_experiment", False)))
+            in_exp_chk.setVisible(self._is_projects_track_active())
+            for widget in (sick_chk, abnormal_chk, in_exp_chk):
+                health_l.addWidget(widget)
+            health_l.addStretch()
+            form.addRow(self.messages.get("dialog.offspring.health_status", "Health Status:"), health_w)
 
         v.addLayout(form)
         save_btn = QPushButton(self.messages.get("button.save", "Save"))
@@ -17055,10 +17226,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self._show_message_raw(self.messages.get("error.title", "Error"), str(exc), "error")
                 return
 
-            try:
-                ref_weight = float(ref_w_le.text()) if ref_w_le.text().strip() else DEFAULT_REF_WEIGHT
-            except ValueError:
-                ref_weight = DEFAULT_REF_WEIGHT
+            if ref_w_le is not None:
+                try:
+                    ref_weight = float(ref_w_le.text()) if ref_w_le.text().strip() else DEFAULT_REF_WEIGHT
+                except ValueError:
+                    ref_weight = DEFAULT_REF_WEIGHT
+            else:
+                ref_weight = rec.get("ref_weight", DEFAULT_REF_WEIGHT)
 
             rec_obj = dict(rec)
             rec_obj.update({
@@ -17066,32 +17240,75 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 "id": id_le.text().strip(),
                 "chip_nr": chip_le.text().strip(),
                 "origin": origin_le.text().strip(),
-                "project": project_cb.currentText().strip(),
+                "project": project_cb.currentText().strip() if project_cb is not None else current_project,
                 "birth_date": birth_date,
-                "death_date": death_date,
-                "special_status": special_status_le.text().strip(),
+                "death_date": death_date if "lifecycle" in enabled_blocks else rec.get("death_date", ""),
+                "special_status": special_status_le.text().strip() if "lifecycle" in enabled_blocks else rec.get("special_status", ""),
                 "sex": sex_cb.currentData() or "Unknown",
+                "genotype": genotype_le.text().strip(),
                 "ref_weight": ref_weight,
-                "sick": sick_chk.isChecked(),
-                "abnormal_current": abnormal_chk.isChecked(),
-                "in_experiment": in_exp_chk.isChecked() if in_exp_chk.isVisible() else False,
+                "sick": sick_chk.isChecked() if sick_chk is not None else bool(rec.get("sick", False)),
+                "abnormal_current": abnormal_chk.isChecked() if abnormal_chk is not None else bool(rec.get("abnormal_current", False)),
+                "in_experiment": (
+                    in_exp_chk.isChecked()
+                    if in_exp_chk is not None and in_exp_chk.isVisible()
+                    else bool(rec.get("in_experiment", False))
+                ),
                 "species": selected_species,
                 "ipid": new_key,
                 "name": base_name,
                 "_base_name": base_name,
                 "display_name": base_name,
             })
+            for field_name, widget in parent_fields.items():
+                rec_obj[field_name] = widget.text().strip()
+
+            if new_weight_le is not None and new_weight_le.text().strip():
+                try:
+                    weight_value = float(new_weight_le.text().strip())
+                except ValueError:
+                    weight_value = None
+                if weight_value is not None:
+                    weights = list(rec_obj.get("gewicht", []))
+                    weights.append({"datum": datetime.now(), "wert": weight_value})
+                    rec_obj["gewicht"] = weights
 
             if not creating and new_key != name:
                 self.animals.pop(name, None)
             self.animals[new_key] = rec_obj
             self._write_json({"animals": self.animals, "archived": self.archived})
+            if cage_address_fields and extract_address_values and getattr(self, 'cage_track_plugin', None) is not None:
+                try:
+                    self.cage_track_plugin.save_address_from_dialog(
+                        new_key,
+                        extract_address_values(cage_address_fields),
+                    )
+                except Exception as exc:
+                    logging.warning(f"Could not save basic-role cage address block: {exc}")
+            if getattr(self, 'heritage_plugin', None) is not None:
+                try:
+                    self.heritage_plugin.save_parentage(
+                        new_key,
+                        {field: widget.text().strip() for field, widget in parent_fields.items()},
+                        source="plugin",
+                    )
+                except Exception as exc:
+                    logging.warning(f"Could not save basic-role parentage block: {exc}")
             self.selected_animals = [new_key]
             self._refresh_list(update_tab_visibility=True)
             self._on_select()
             dlg.accept()
 
         save_btn.clicked.connect(on_save_basic_role)
+        self._apply_dialog_field_permissions({
+            'core.edit_animal_identity': [
+                name_le, species_cb, id_le, chip_le, origin_le,
+                birth_date_le, death_date_le, special_status_le, sex_cb, genotype_le,
+            ],
+            'core.edit_animal_housing': [_cage_addr_group, parents_group],
+            'core.edit_animal_measurements': [new_weight_le],
+            'core.edit_animal_research_data': [ref_w_le],
+        })
         dlg.exec()
 
     def _dlg_female_animal(

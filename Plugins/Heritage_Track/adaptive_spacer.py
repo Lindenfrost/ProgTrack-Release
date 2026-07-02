@@ -7,7 +7,8 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Set, Tuple
+from collections import defaultdict
+from typing import Dict, Optional, Set, Tuple
 
 
 class AdaptiveSpacer:
@@ -153,6 +154,3 @@ class AdaptiveSpacer:
             Estimated width in graph units
         """
         return len(label) * self.char_width + self.padding * 2
-
-
-from collections import defaultdict

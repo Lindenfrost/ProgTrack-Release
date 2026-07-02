@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .pedigree_engine import PedigreeEngine
@@ -18,6 +19,84 @@ DEFAULT_GROUP_GAP = 0.90
 DEFAULT_CLUSTER_GAP = 1.40
 DEFAULT_COMPONENT_GAP = 3.80
 DEFAULT_LEVEL_SPACING = 2.0
+DEFAULT_BIRTHDATE_ROW_OFFSET_FACTOR = 0.28
+DEFAULT_PARTNER_LINE_NUDGE = 0.35
+
+
+def parse_complete_birth_date_ordinal(raw_value: Any) -> Optional[int]:
+    """Parse complete supported birth-date values to a date ordinal."""
+    if raw_value is None:
+        return None
+
+    if isinstance(raw_value, datetime):
+        return raw_value.date().toordinal()
+    if isinstance(raw_value, date):
+        return raw_value.toordinal()
+
+    if isinstance(raw_value, (int, float)):
+        return None
+
+    text = str(raw_value).strip()
+    if not text:
+        return None
+
+    normalized = text.split("T", 1)[0].strip()
+    for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(normalized, fmt).date().toordinal()
+        except ValueError:
+            continue
+    return None
+
+
+def nudge_nodes_off_child_line_segments(
+    animal_positions: Dict[str, Tuple[float, float]],
+    families: Dict[str, Dict[str, Any]],
+    family_positions: Dict[str, Tuple[float, float]],
+    protected_nodes: Optional[Set[str]] = None,
+    *,
+    nudge: float = DEFAULT_PARTNER_LINE_NUDGE,
+    vertical_threshold: float = 0.18,
+    horizontal_margin: float = 0.25,
+) -> Dict[str, Tuple[float, float]]:
+    """Move automatic non-family nodes away from horizontal child connector lines."""
+    protected = set(protected_nodes or set())
+    segments: List[Tuple[float, float, float, Set[str]]] = []
+
+    for family_id, family in families.items():
+        family_pos = family_positions.get(family_id)
+        if family_pos is None:
+            continue
+        fx, _fy = family_pos
+        mother = str(family.get("mother", "")).strip()
+        father = str(family.get("father", "")).strip()
+        excluded = {name for name in (mother, father) if name}
+        for child in family.get("children", []):
+            if child not in animal_positions:
+                continue
+            cx, cy = animal_positions[child]
+            x_min = min(fx, cx) - horizontal_margin
+            x_max = max(fx, cx) + horizontal_margin
+            segments.append((cy, x_min, x_max, excluded | {child}))
+
+    if not segments:
+        return animal_positions
+
+    adjusted = dict(animal_positions)
+    for node in sorted(adjusted, key=str.lower):
+        if node in protected:
+            continue
+        x, y = adjusted[node]
+        shift = 0.0
+        for seg_y, x_min, x_max, excluded in segments:
+            if node in excluded:
+                continue
+            if x_min <= x <= x_max and abs((y + shift) - seg_y) <= vertical_threshold:
+                shift -= nudge
+        if shift:
+            adjusted[node] = (x, y + shift)
+
+    return adjusted
 
 
 class GroupGrouper:
@@ -618,7 +697,6 @@ class XPlacer:
                 return self.locked_x[node]
 
             vals: List[float] = []
-            group_id = self.groups.get(gid, {}).get("id", "")
 
             for family_id in self.groups[gid].get("child_families", set()):
                 family = self.usable_families.get(family_id)
@@ -779,6 +857,8 @@ class LayoutPipeline:
         families: Optional[Dict[str, Dict[str, Any]]] = None,
         locked_positions: Optional[Dict[str, Tuple[float, float]]] = None,
         birth_year_by_node: Optional[Dict[str, Optional[int]]] = None,
+        birth_ordinal_by_node: Optional[Dict[str, Optional[int]]] = None,
+        birthdate_height_layout: bool = False,
     ) -> Dict[str, Tuple[float, float]]:
         """Compute positions through the full pipeline."""
         if not nodes:
@@ -796,6 +876,9 @@ class LayoutPipeline:
 
         # Get tie key function
         def get_tie_key(node: str) -> Tuple[int, int, str]:
+            ordinal = birth_ordinal_by_node.get(node) if birth_ordinal_by_node else None
+            if ordinal is not None:
+                return 0, int(ordinal), node.lower()
             year = birth_year_by_node.get(node) if birth_year_by_node else None
             if year is None:
                 return 1, 9999, node.lower()
@@ -891,12 +974,18 @@ class LayoutPipeline:
                 component_shift[comp_id] = shift
                 current_left = right + shift
 
+        birthdate_y_offset = self._compute_birthdate_y_offsets(
+            groups,
+            birth_ordinal_by_node or {},
+        ) if birthdate_height_layout else {}
+
         # Phase 7: Combine into final positions
         positions: Dict[str, Tuple[float, float]] = {}
         for node in nodes:
             gid = group_by_node.get(node)
             row = group_row.get(gid, 0) if gid else 0
             y = float(max_row - row) * self.level_spacing
+            y += birthdate_y_offset.get(node, 0.0)
             comp_id = component_by_node.get(node, 0)
             x = component_xmaps.get(comp_id, {}).get(node, 0.0) + component_shift.get(comp_id, 0.0)
 
@@ -906,3 +995,37 @@ class LayoutPipeline:
             positions[node] = (x, y)
 
         return positions
+
+    def _compute_birthdate_y_offsets(
+        self,
+        groups: Dict[str, Dict[str, Any]],
+        birth_ordinal_by_node: Dict[str, Optional[int]],
+    ) -> Dict[str, float]:
+        offsets: Dict[str, float] = {}
+        max_offset = min(self.level_spacing * DEFAULT_BIRTHDATE_ROW_OFFSET_FACTOR, self.level_spacing * 0.40)
+
+        for group in groups.values():
+            members = list(group.get("members", []))
+            dated = [
+                (node, birth_ordinal_by_node.get(node))
+                for node in members
+                if birth_ordinal_by_node.get(node) is not None
+            ]
+            unique_dates = sorted({int(ordinal) for _node, ordinal in dated if ordinal is not None})
+            if len(unique_dates) < 2:
+                continue
+
+            oldest = unique_dates[0]
+            youngest = unique_dates[-1]
+            span = youngest - oldest
+            if span <= 0:
+                continue
+            midpoint = oldest + (span / 2.0)
+
+            for node, ordinal in dated:
+                if ordinal is None:
+                    continue
+                normalized = (float(ordinal) - midpoint) / (span / 2.0)
+                offsets[node] = normalized * max_offset
+
+        return offsets

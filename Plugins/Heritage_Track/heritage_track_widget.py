@@ -51,7 +51,7 @@ from Plugins.core.animal_identity import (
 )
 
 from .display_context import DisplayContext, DisplayContextBuilder
-from .display_strategies import AllAnimalsStrategy, CompositeDisplayStrategy, SelectedAnimalsStrategy
+from .display_strategies import AllAnimalsStrategy, SelectedAnimalsStrategy
 from .ghost_strategies import (
     ArchivedGhostStrategy,
     CompositeGhostStrategy,
@@ -61,9 +61,13 @@ from .ghost_strategies import (
 from .engine_cache import PedigreeEngineCache
 from .heritage_store import HeritageStore
 from .inbreeding import InbreedingCalculator
-from .layout_pipeline import LayoutPipeline
+from .layout_pipeline import (
+    LayoutPipeline,
+    nudge_nodes_off_child_line_segments,
+    parse_complete_birth_date_ordinal,
+)
 from .pedigree_engine import PedigreeEngine
-from .scope_provider import ProjectsTrackScopeProvider, ScopeFilter
+from .scope_provider import ProjectsTrackScopeProvider
 from .ui_parent_fields import build_parent_group, extract_parent_values
 
 
@@ -737,6 +741,21 @@ class HeritageTrackWidget(QWidget):
         exclude_archived_check.setChecked(self.settings.get("exclude_archived", False))
         layout.addWidget(exclude_archived_check)
 
+        birthdate_height_check = QCheckBox(
+            self.messages.get(
+                "heritage_track.settings.birthdate_height_layout",
+                "Use birth date for vertical placement",
+            )
+        )
+        birthdate_height_check.setToolTip(
+            self.messages.get(
+                "heritage_track.settings.birthdate_height_layout.tooltip",
+                "Use complete birth dates as a secondary vertical factor in automatic pedigree layout.",
+            )
+        )
+        birthdate_height_check.setChecked(self.settings.get("birthdate_height_layout", True))
+        layout.addWidget(birthdate_height_check)
+
         self.canvas.setToolTip(self.messages.get("heritage_track.tooltip.double_click_edit", "Double-click a node to edit"))
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -753,6 +772,7 @@ class HeritageTrackWidget(QWidget):
         self.settings["show_legend"] = show_legend_check.isChecked()
         self.settings["show_inbreeding_f"] = show_inbreeding_f_check.isChecked()
         self.settings["exclude_archived"] = exclude_archived_check.isChecked()
+        self.settings["birthdate_height_layout"] = birthdate_height_check.isChecked()
         self.plugin.set_settings(self.settings)
         self.refresh_graph(keep_view=True)
 
@@ -1426,18 +1446,54 @@ class HeritageTrackWidget(QWidget):
 
         return None
 
-    def _get_node_birth_year(self, node: str) -> Optional[int]:
-        animals = getattr(self.app, "animals", {})
-        record: Dict[str, Any] = {}
-        if isinstance(animals, dict):
-            candidate = animals.get(node, {})
-            if isinstance(candidate, dict):
-                record = candidate
+    def _iter_node_records(self, node: str) -> List[Dict[str, Any]]:
+        records: List[Dict[str, Any]] = []
+        for collection in (
+            getattr(self.app, "animals", {}) or {},
+            getattr(self.app, "archived", {}) or {},
+        ):
+            if not isinstance(collection, dict):
+                continue
+            record = collection.get(node)
+            if isinstance(record, dict):
+                records.append(record)
 
-        for key in ("birth_date", "geburtsdatum", "birth_year", "year_of_birth"):
-            year = self._parse_birth_year(record.get(key))
-            if year is not None:
-                return year
+        store_animals = self.plugin.store.load().get("animals", {})
+        if isinstance(store_animals, dict):
+            store_record = store_animals.get(node)
+            if isinstance(store_record, dict):
+                records.append(store_record)
+
+        return records
+
+    def _get_node_record(self, node: str) -> Dict[str, Any]:
+        merged: Dict[str, Any] = {}
+        for record in reversed(self._iter_node_records(node)):
+            merged.update(record)
+        return merged
+
+    def _get_node_display_label(self, node: str, record: Optional[Dict[str, Any]] = None) -> str:
+        source_record = record if isinstance(record, dict) else self._get_node_record(node)
+        return animal_base_name(node, source_record) or str(node)
+
+    def _get_node_birth_ordinal(self, node: str) -> Optional[int]:
+        for record in self._iter_node_records(node):
+            for key in ("birth_date", "geburtsdatum"):
+                ordinal = parse_complete_birth_date_ordinal(record.get(key))
+                if ordinal is not None:
+                    return ordinal
+        return None
+
+    def _get_node_birth_year(self, node: str) -> Optional[int]:
+        ordinal = self._get_node_birth_ordinal(node)
+        if ordinal is not None:
+            return int(datetime.fromordinal(ordinal).year)
+
+        for record in self._iter_node_records(node):
+            for key in ("birth_year", "year_of_birth"):
+                year = self._parse_birth_year(record.get(key))
+                if year is not None:
+                    return year
         return None
 
     def _family_node_id(self, mother: str, father: str) -> str:
@@ -1775,6 +1831,9 @@ class HeritageTrackWidget(QWidget):
         birth_year_by_node: Dict[str, Optional[int]] = {
             node: self._get_node_birth_year(node) for node in node_set
         }
+        birth_ordinal_by_node: Dict[str, Optional[int]] = {
+            node: self._get_node_birth_ordinal(node) for node in node_set
+        }
 
         # Use the LayoutPipeline for position computation
         pipeline = LayoutPipeline()
@@ -1785,6 +1844,8 @@ class HeritageTrackWidget(QWidget):
             families=families,
             locked_positions=locked_positions or {},
             birth_year_by_node=birth_year_by_node,
+            birth_ordinal_by_node=birth_ordinal_by_node,
+            birthdate_height_layout=self.settings.get("birthdate_height_layout", True),
         )
 
     def _bfs_relationship_path(
@@ -2155,11 +2216,14 @@ class HeritageTrackWidget(QWidget):
 
         if self.all_animals_mode:
             animal_positions: Dict[str, Tuple[float, float]] = {}
+            protected_nodes: Set[str] = set()
             for node, pos in auto_positions.items():
                 if node in self.temp_positions:
                     animal_positions[node] = self.temp_positions[node]
+                    protected_nodes.add(node)
                 elif node in saved_positions and not self._force_relayout:
                     animal_positions[node] = saved_positions[node]
+                    protected_nodes.add(node)
                 else:
                     animal_positions[node] = pos
 
@@ -2175,19 +2239,23 @@ class HeritageTrackWidget(QWidget):
         else:
             # Selected animals mode - handle position computation with relayout support
             animal_positions = {}
+            protected_nodes = set()
             for node, pos in auto_positions.items():
                 if node in self.temp_positions:
                     # User-dragged position takes priority
                     animal_positions[node] = self.temp_positions[node]
+                    protected_nodes.add(node)
                 elif self._force_relayout:
                     # Force relayout: use computed positions for all nodes (ignore cached positions)
                     animal_positions[node] = pos
                 elif node in previous_positions:
                     # Use existing position from previous frame
                     animal_positions[node] = previous_positions[node]
+                    protected_nodes.add(node)
                 elif node in saved_positions:
                     # Use saved position from store
                     animal_positions[node] = saved_positions[node]
+                    protected_nodes.add(node)
                 else:
                     # New node: use computed position
                     animal_positions[node] = pos
@@ -2199,6 +2267,21 @@ class HeritageTrackWidget(QWidget):
         )
         family_positions.update(collapsed_positions)
         family_members.update(collapsed_members)
+        nudged_positions = nudge_nodes_off_child_line_segments(
+            animal_positions,
+            families,
+            family_positions,
+            protected_nodes=protected_nodes,
+        )
+        if nudged_positions != animal_positions:
+            animal_positions = nudged_positions
+            family_positions, family_members = self._compute_family_positions(families, animal_positions)
+            collapsed_positions, collapsed_members = self._compute_collapsed_family_positions(
+                collapsed_family_nodes,
+                animal_positions,
+            )
+            family_positions.update(collapsed_positions)
+            family_members.update(collapsed_members)
 
         positions: Dict[str, Tuple[float, float]] = dict(animal_positions)
         positions.update(family_positions)
@@ -2328,17 +2411,13 @@ class HeritageTrackWidget(QWidget):
             if _f_to_save:
                 self.plugin.store.set_inbreeding_f_batch(_f_to_save)
 
-        # Also get archived animals for record lookup
-        _archived_animals = getattr(self.app, "archived", {}) or {}
-        if not isinstance(_archived_animals, dict):
-            _archived_animals = {}
-
         for node in sorted(display_nodes, key=str.lower):
             x, y = animal_positions.get(node, (0.0, 0.0))
             is_ghost = node in ghost_nodes
             is_heritage_only = self.plugin.is_heritage_only(node)
             # Get record from main app data (active or archived) for proper sex/shape
-            record = _app_animals.get(node) or _archived_animals.get(node, {})
+            record = self._get_node_record(node)
+            display_label = self._get_node_display_label(node, record)
             role = str(record.get("rolle", "")).strip().lower()
             # Determine sex: role takes priority, then sex field, then heritage manual sex, default female
             if role in ("spenderin", "amme"):
@@ -2389,7 +2468,7 @@ class HeritageTrackWidget(QWidget):
             self.ax.text(
                 x,
                 y - 0.38,
-                node,
+                display_label,
                 ha="center",
                 va="top",
                 fontsize=9,
@@ -2444,6 +2523,9 @@ class HeritageTrackWidget(QWidget):
                 "role": role,
                 "sex": sex,
                 "heritage_only": is_heritage_only,
+                "display_label": display_label,
+                "ipid": node,
+                "birth_date": str(record.get("birth_date", "") or record.get("geburtsdatum", "")).strip(),
             }
 
         self.ax.axis("off")
@@ -2561,7 +2643,6 @@ class HeritageTrackWidget(QWidget):
 
         node = self._node_at_mouse(event)
         node_kind = str(self.node_meta.get(node, {}).get("kind", "animal")) if node else ""
-        is_ghost = node and node in getattr(self, '_ghost_nodes', set())
 
         # Right mouse button -> toggle kinship selection
         if event.button == 3 and node and node_kind == "animal":
@@ -2730,10 +2811,11 @@ class HeritageTrackWidget(QWidget):
 
         if is_ghost:
             # Show ghost node tooltip with click hints
+            display_label = self.node_meta.get(node, {}).get("display_label") or self._get_node_display_label(node)
             tooltip_text = self.messages.get(
                 "heritage_track.node.tooltip.ghost",
                 "{name} (click to add to selection)"
-            ).format(name=node)
+            ).format(name=display_label)
         else:
             tooltip_text = self.messages.get(
                 "heritage_track.node.tooltip.genotype",
@@ -2760,8 +2842,6 @@ class HeritageTrackWidget(QWidget):
         if self.drag_group_nodes:
             nodes_to_draw.update(self.drag_group_nodes)
 
-        _app_animals = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
-
         # Redraw each dragged node directly
         for node in nodes_to_draw:
             if node not in self.temp_positions:
@@ -2769,7 +2849,8 @@ class HeritageTrackWidget(QWidget):
             x, y = self.temp_positions[node]
 
             is_ghost = node in getattr(self, '_ghost_nodes', set())
-            record = _app_animals.get(node, {}) if not is_ghost else {}
+            record = self._get_node_record(node)
+            display_label = self._get_node_display_label(node, record)
             role = str(record.get("rolle", ""))
             sex = self.plugin.get_effective_sex(node, record)
 
@@ -2819,7 +2900,7 @@ class HeritageTrackWidget(QWidget):
             t = self.ax.text(
                 x,
                 y - 0.38,
-                node,
+                display_label,
                 ha="center",
                 va="top",
                 fontsize=9,
@@ -3267,44 +3348,6 @@ class HeritageTrackPlugin:
 
     def save_parentage(self, animal_name: str, parent_values: Dict[str, Any], source: str = "plugin") -> None:
         self.store.set_parentage(animal_name, parent_values, source=source)
-
-    def _ensure_parent_placeholders(
-        self,
-        mother: str,
-        father: str,
-        offspring_species: str = "",
-    ) -> None:
-        """Create heritage-only placeholders for parents that don't exist in the system.
-
-        New mothers are created with female sex, fathers with male sex.
-        Both inherit the species from the offspring.
-        """
-        mother_name = (mother or "").strip()
-        father_name = (father or "").strip()
-
-        # Check and create mother placeholder if needed
-        if mother_name and not self._parent_exists_in_system(mother_name):
-            self.create_heritage_only_animal(
-                name=mother_name,
-                mother="",
-                father="",
-                genotype="",
-                fill_color="",
-                sex="female",
-                species=offspring_species,
-            )
-
-        # Check and create father placeholder if needed
-        if father_name and not self._parent_exists_in_system(father_name):
-            self.create_heritage_only_animal(
-                name=father_name,
-                mother="",
-                father="",
-                genotype="",
-                fill_color="",
-                sex="male",
-                species=offspring_species,
-            )
 
     def get_settings(self) -> Dict[str, bool]:
         return self.store.get_settings()

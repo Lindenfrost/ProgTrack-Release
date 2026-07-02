@@ -1,5 +1,5 @@
 {
-  "username": "manager",
+  "username": "Manager",
   "disabled_plugins": [],
   "last_active_tab": "tab.reports",
   "last_animal_group": "",
@@ -24,5 +24,9 @@
   "display_chk_events_offspring": true,
   "display_chk_events_breeding": true,
   "display_chk_events_experimental": true,
-  "sidebar_visible": true
+  "sidebar_visible": false,
+  "project_visibility_cache": {
+    "dirty": false,
+    "projects": []
+  }
 }

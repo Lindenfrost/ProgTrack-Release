@@ -78,6 +78,14 @@ def _safe_name(name: str) -> str:
     return safe or 'unknown'
 
 
+def _display_animal_name(animal_key: str, record: Optional[Dict[str, Any]] = None) -> str:
+    display_name = animal_base_name(animal_key, record)
+    fallback_name = animal_base_name(animal_key)
+    if display_name == str(animal_key or '').strip() or " | " in display_name:
+        return fallback_name
+    return display_name or fallback_name
+
+
 def _icon_for_ext(ext: str) -> QIcon:
     """Return a QIcon for the given file extension using icons/*.png files."""
     ext = ext.lower()
@@ -1090,7 +1098,7 @@ class MediTrackWidget(QWidget):
         _h_cond_col = _msg(_messages, 'medi_track.table.condition', 'Condition')
         _h_det_col  = _msg(_messages, 'medi_track.table.details', 'Details')
         _h_sig_col  = _msg(_messages, 'medi_track.table.signature', 'Signature')
-        _v_name     = _esc(animal_base_name(animal_name, rec))
+        _v_name     = _esc(_display_animal_name(animal_name, rec))
         _v_ipid     = _esc(animal_name)
         _v_genotype = _esc(rec.get('genotype') or _dash)
         _proj_sev_fn = getattr(self.app, '_format_project_severity', None)
@@ -1319,7 +1327,7 @@ class MediTrackWidget(QWidget):
             getattr(self.app, "animals", None), dict) else {}
         rec = app_animals.get(name, {})
 
-        self._lbl_name.setText(str(name))
+        self._lbl_name.setText(_display_animal_name(name, rec))
         fmt_fn = getattr(self.app, '_format_id_with_species', None)
         if callable(fmt_fn):
             self._lbl_id.setText(fmt_fn(rec, rich_text=True) or "\u2013")

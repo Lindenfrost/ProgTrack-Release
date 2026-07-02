@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from typing import Any, Callable, Dict, Optional
 
 from .pedigree_engine import PedigreeEngine

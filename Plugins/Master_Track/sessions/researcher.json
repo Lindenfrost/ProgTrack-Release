@@ -1,5 +1,5 @@
 {
-  "username": "researcher",
+  "username": "Researcher",
   "disabled_plugins": [],
   "last_active_tab": "tab.reports",
   "last_animal_group": "",
@@ -23,5 +23,11 @@
   "display_chk_events": false,
   "display_chk_events_offspring": true,
   "display_chk_events_breeding": true,
-  "display_chk_events_experimental": true
+  "display_chk_events_experimental": true,
+  "project_visibility_cache": {
+    "dirty": false,
+    "projects": [
+      "Backcrossing"
+    ]
+  }
 }

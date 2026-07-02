@@ -29,6 +29,17 @@ from PyQt6.QtCore import Qt, QSize, pyqtSignal, QObject, QTimer, QEvent
 from PyQt6.QtGui import QIcon, QAction, QKeySequence, QPixmap, QColor, QFont, QDoubleValidator
 from PyQt6.QtGui import QIcon, QAction, QKeySequence, QPixmap, QColor, QFont, QDoubleValidator
 
+try:
+    from Plugins.core.animal_identity import animal_base_name
+except Exception:  # pragma: no cover - standalone plugin fallback
+    def animal_base_name(key: Any, record: Dict[str, Any] | None = None) -> str:
+        if isinstance(record, dict):
+            for field in ("_base_name", "display_name", "name"):
+                value = str(record.get(field, "") or "").strip()
+                if value:
+                    return value
+        return str(key or "").split(" - ")[0].strip()
+
 @dataclass
 class LockedEntry:
     """Class to represent a locked timeline entry."""
@@ -141,9 +152,9 @@ class AnimalReportsWidget(QMainWindow):
                 
             animals_dict = self.data.get('animals', {}) or self.data.get('tiere', {})
             if animal_name in animals_dict:
-                items = self.animal_list.findItems(animal_name, Qt.MatchFlag.MatchExactly)
-                if items:
-                    self.animal_list.setCurrentItem(items[0])
+                item = self._find_animal_list_item_by_key(animal_name)
+                if item:
+                    self.animal_list.setCurrentItem(item)
                     logger.debug(f"Selected animal after init: {animal_name}")
                 else:
                     logger.warning(f"Animal {animal_name} not found in animal list")
@@ -290,6 +301,30 @@ class AnimalReportsWidget(QMainWindow):
         except RuntimeError:
             return False
 
+    def _display_animal_name(self, animal_key: str, animal_data: Any = None) -> str:
+        record = animal_data if isinstance(animal_data, dict) else None
+        display_name = animal_base_name(animal_key, record)
+        fallback_name = animal_base_name(animal_key)
+        if display_name == str(animal_key or '').strip() or " | " in display_name:
+            return fallback_name
+        return display_name or fallback_name
+
+    def _animal_key_from_item(self, item) -> str:
+        item_data = item.data(Qt.ItemDataRole.UserRole) if item else None
+        if isinstance(item_data, dict):
+            return str(item_data.get('key') or item_data.get('ipid') or item_data.get('name') or item.text()).strip()
+        return item.text().strip() if item else ''
+
+    def _find_animal_list_item_by_key(self, animal_key: str):
+        if not self.animal_list:
+            return None
+        wanted = str(animal_key or '').strip()
+        for index in range(self.animal_list.count()):
+            item = self.animal_list.item(index)
+            if self._animal_key_from_item(item) == wanted or item.text().strip() == wanted:
+                return item
+        return None
+
     def _load_animal_list(self):
         """
         Load the list of animals from the data, handling both 'animals' and 'tiere' keys.
@@ -330,19 +365,29 @@ class AnimalReportsWidget(QMainWindow):
                     logger.warning("No animal data found to load")
                     return False
                     
-                # Get sorted list of animal names
-                animal_names = sorted(str(k) for k in animals_dict.keys())
-                logger.info("Loading %d animals into the list", len(animal_names))
+                # Get sorted list of animal items
+                animal_items = sorted(
+                    animals_dict.items(),
+                    key=lambda item: self._display_animal_name(str(item[0]), item[1]).lower(),
+                )
+                logger.info("Loading %d animals into the list", len(animal_items))
                 
                 # Add animals to the list
                 added_count = 0
-                for animal_name in animal_names:
+                for animal_name, animal_data in animal_items:
                     try:
                         if not self._is_widget_valid(self.animal_list):
                             logger.warning("Widget was deleted during list population")
                             return False
-                            
-                        item = QListWidgetItem(animal_name)
+                        animal_name = str(animal_name)
+                        display_name = self._display_animal_name(animal_name, animal_data)
+                        item = QListWidgetItem(display_name)
+                        item.setData(Qt.ItemDataRole.UserRole, {
+                            'key': animal_name,
+                            'ipid': animal_name,
+                            'name': display_name,
+                            'data': animal_data,
+                        })
                         self.animal_list.addItem(item)
                         added_count += 1
                     except Exception as e:
@@ -351,14 +396,14 @@ class AnimalReportsWidget(QMainWindow):
                 
                 # Only try to restore selection if we still have a valid widget
                 if self._is_widget_valid(self.animal_list):
-                    if current_selection and self.animal_list.findItems(current_selection, Qt.MatchFlag.MatchExactly):
-                        items = self.animal_list.findItems(current_selection, Qt.MatchFlag.MatchExactly)
-                        if items:
-                            self.animal_list.setCurrentItem(items[0])
+                    if current_selection:
+                        item = self._find_animal_list_item_by_key(current_selection)
+                        if item:
+                            self.animal_list.setCurrentItem(item)
                     elif self.animal_list.count() > 0:
                         self.animal_list.setCurrentRow(0)
                 
-                logger.info("Successfully loaded %d/%d animals into the list", added_count, len(animal_names))
+                logger.info("Successfully loaded %d/%d animals into the list", added_count, len(animal_items))
                 return added_count > 0
                 
             finally:
@@ -376,28 +421,7 @@ class AnimalReportsWidget(QMainWindow):
         except Exception as e:
             logger.error(f"Unexpected error in _load_animal_list: {str(e)}", exc_info=True)
             return False
-    
-        
-        # Add animals to the list
-        added_count = 0
-        for animal_name in animal_names:
-            try:
-                if not isinstance(animal_name, str):
-                    animal_name = str(animal_name)
-                item = QListWidgetItem(animal_name)
-                self.animal_list.addItem(item)
-                added_count += 1
-                logger.debug("Added animal to list: %s", animal_name)
-            except Exception as e:
-                logger.error("Error adding animal %s to list: %s", animal_name, str(e))
-        
-        # Restore selection if possible
-        if current_selection:
-            items = self.animal_list.findItems(current_selection, Qt.MatchFlag.MatchExactly)
-            if items:
-                self.animal_list.setCurrentItem(items[0])
-        elif self.animal_list.count() > 0:
-            self.animal_list.setCurrentRow(0)
+
     def _is_valid_date(self, date_str):
         """Check if a date string is in a valid format."""
         if not date_str:
@@ -1135,7 +1159,10 @@ class AnimalReportsWidget(QMainWindow):
         logger.debug(f"Aggregating data for animal: {animal_name}")
         
         # Initialize the result structure
+        display_name = self._display_animal_name(animal_name, animal_data)
         result = {
+            'ipid': animal_name,
+            'name': display_name,
             'id': animal_data.get('id', animal_name),
             'reference_weight': animal_data.get('referenz_gewicht', 
                                              animal_data.get('referenzgewicht', 0)),
@@ -1415,7 +1442,7 @@ class AnimalReportsWidget(QMainWindow):
             if self.animal_list and not self.animal_name and self.animal_list.count() > 0:
                 first_item = self.animal_list.item(0)
                 if first_item:
-                    self.animal_name = first_item.text()
+                    self.animal_name = self._animal_key_from_item(first_item)
                     self._select_animal(self.animal_name)
             
         except Exception as e:
@@ -1474,7 +1501,10 @@ class AnimalReportsWidget(QMainWindow):
                     return False
                     
                 # Get sorted list of animal items
-                animal_items = sorted(animals_dict.items(), key=lambda x: str(x[0]).lower())
+                animal_items = sorted(
+                    animals_dict.items(),
+                    key=lambda item: self._display_animal_name(str(item[0]), item[1]).lower(),
+                )
                 logger.info("Loading %d animals into the list", len(animal_items))
                 
                 # Add animals to the list
@@ -1497,11 +1527,14 @@ class AnimalReportsWidget(QMainWindow):
                             logger.warning("Skipping animal with empty name")
                             continue
                             
-                        item = QListWidgetItem(animal_name)
+                        display_name = self._display_animal_name(animal_name, animal_data)
+                        item = QListWidgetItem(display_name)
                         
                         # Store both the display name and the original data for reference
                         item_data = {
-                            'name': animal_name,
+                            'key': animal_name,
+                            'ipid': animal_name,
+                            'name': display_name,
                             'data': animal_data
                         }
                         item.setData(Qt.ItemDataRole.UserRole, item_data)
@@ -1542,9 +1575,9 @@ class AnimalReportsWidget(QMainWindow):
                 # Only try to restore selection if we still have a valid widget
                 if self._is_widget_valid(self.animal_list):
                     if current_selection:
-                        items = self.animal_list.findItems(current_selection, Qt.MatchFlag.MatchExactly)
-                        if items:
-                            self.animal_list.setCurrentItem(items[0])
+                        item = self._find_animal_list_item_by_key(current_selection)
+                        if item:
+                            self.animal_list.setCurrentItem(item)
                             logger.debug(f"Restored selection to: {current_selection}")
                     elif self.animal_list.count() > 0:
                         self.animal_list.setCurrentRow(0)
@@ -1569,79 +1602,6 @@ class AnimalReportsWidget(QMainWindow):
         except Exception as e:
             logger.error(f"Unexpected error in _load_animal_list: {str(e)}", exc_info=True)
             return False
-                
-            # Get sorted list of animal items
-            animal_items = sorted(animals_dict.items(), key=lambda x: str(x[0]).lower())
-            logger.info("Loading %d animals into the list", len(animal_items))
-            
-            # Add animals to the list
-            added_count = 0
-            for animal_name, animal_data in animal_items:
-                try:
-                    if not self._is_widget_valid(self.animal_list):
-                        logger.warning("Widget was deleted during list population")
-                        return False
-                        
-                    animal_name = str(animal_name).strip()
-                    if not animal_name:
-                        logger.warning("Skipping animal with empty name")
-                        continue
-                        
-                    item = QListWidgetItem(animal_name)
-                    
-                    # Store both the display name and the original data for reference
-                    item_data = {
-                        'name': animal_name,
-                        'data': animal_data
-                    }
-                    item.setData(Qt.ItemDataRole.UserRole, item_data)
-                    
-                    # Build tooltip with available information
-                    tooltip_parts = []
-                    
-                    # Add ID if available and different from name
-                    animal_id = animal_data.get('id')
-                    if animal_id and str(animal_id) != animal_name:
-                        tooltip_parts.append(f"ID: {animal_id}")
-                    
-                    # Add status if available
-                    status = animal_data.get('status')
-                    if status:
-                        tooltip_parts.append(f"Status: {status}")
-                        
-                    # Add species if available
-                    species = animal_data.get('species')
-                    if species:
-                        tooltip_parts.append(f"Species: {species}")
-                        
-                    # Add reference weight if available
-                    weight = animal_data.get('reference_weight')
-                    if weight:
-                        tooltip_parts.append(f"Ref. Weight: {weight}")
-                    
-                    if tooltip_parts:
-                        item.setToolTip("\n".join(tooltip_parts))
-                    
-                    self.animal_list.addItem(item)
-                    
-                except Exception as e:
-                    logger.error(f"Error processing animal {animal_name}: {str(e)}", exc_info=True)
-                    continue
-                    
-            logger.info(f"Loaded {self.animal_list.count()} animals into the list")
-            
-            # Auto-select the first item if none is selected
-            if self.animal_list.count() > 0 and not self.animal_list.currentItem():
-                self.animal_list.setCurrentRow(0)
-                
-        except Exception as e:
-            logger.error(f"Error in _load_animal_list: {str(e)}", exc_info=True)
-            QMessageBox.warning(
-                self,
-                self._get_message('error.title', 'Error'),
-                self._get_message('error.load_animals', 'Failed to load animal list: {error}').format(
-                    error=str(e))
-            )
     
     def _export_report(self):
         """Export the current report to a file."""
@@ -1665,10 +1625,11 @@ class AnimalReportsWidget(QMainWindow):
         try:
             # TODO: Implement actual PDF export
             # For now, just save a simple text file
+            display_name = self._display_animal_name(self.animal_name, self.current_animal_data)
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(f"Animal Report: {self.animal_name}\n")
+                f.write(f"Animal Report: {display_name}\n")
                 f.write("=" * 50 + "\n\n")
-                f.write(f"Name: {self.current_animal_data.get('name', '')}\n")
+                f.write(f"Name: {display_name}\n")
                 f.write(f"Reference Weight: {self.current_animal_data.get('referenz_gewicht', '')} kg\n")
                 # Add more fields as needed
             
@@ -1691,7 +1652,7 @@ class AnimalReportsWidget(QMainWindow):
         if not selected_items:
             return
         
-        animal_name = selected_items[0].text()
+        animal_name = self._animal_key_from_item(selected_items[0])
         self.animal_name = animal_name
         self._update_animal_details(animal_name)
     
@@ -1745,9 +1706,9 @@ class AnimalReportsWidget(QMainWindow):
             self.current_animal_data = animal_data
             self.animal_name = animal_name
             
-            # Ensure the name is set in the animal data
+            # Ensure the display name is set in the animal data
             if 'name' not in self.current_animal_data:
-                self.current_animal_data['name'] = animal_name
+                self.current_animal_data['name'] = self._display_animal_name(animal_name, animal_data)
             
             # Update the UI with the animal's data
             self._update_ui()
@@ -1796,9 +1757,9 @@ class AnimalReportsWidget(QMainWindow):
             self.current_animal_data = animal_data
             self.animal_name = animal_name
             
-            # Ensure the name is set in the animal data
+            # Ensure the display name is set in the animal data
             if 'name' not in self.current_animal_data:
-                self.current_animal_data['name'] = animal_name
+                self.current_animal_data['name'] = self._display_animal_name(animal_name, animal_data)
             
             # Update the timeline with the selected animal's data
             if hasattr(self, '_update_timeline') and callable(self._update_timeline):
@@ -1850,7 +1811,8 @@ class AnimalReportsWidget(QMainWindow):
         
         try:
             # Update window title
-            self.setWindowTitle(f"{self._get_message('plugin.animal_reports.title', 'Animal Report')} - {self.animal_name}")
+            display_name = self._display_animal_name(self.animal_name, self.current_animal_data)
+            self.setWindowTitle(f"{self._get_message('plugin.animal_reports.title', 'Animal Report')} - {display_name}")
             
             # Update details table
             if hasattr(self, 'details_table') and self._is_widget_valid(self.details_table):
@@ -1858,7 +1820,7 @@ class AnimalReportsWidget(QMainWindow):
                 current_age = self._calculate_age(birth_date)
                 
                 details = [
-                    (self._get_message('label.name', 'Name'), self.current_animal_data.get('name', '')),
+                    (self._get_message('label.name', 'Name'), display_name),
                     (self._get_message('label.id', 'ID'), self.current_animal_data.get('id', '')),
                     (self._get_message('label.species', 'Species'), self.current_animal_data.get('species', '')),
                     (self._get_message('label.status', 'Status'), self._get_animal_status(self.current_animal_data)),
@@ -1881,7 +1843,7 @@ class AnimalReportsWidget(QMainWindow):
             # Update status bar
             if hasattr(self, 'statusBar'):
                 self.statusBar().showMessage(
-                    self._get_message('status.animal_loaded', 'Loaded data for {name}').format(name=self.animal_name), 
+                    self._get_message('status.animal_loaded', 'Loaded data for {name}').format(name=display_name),
                     5000
                 )
                 

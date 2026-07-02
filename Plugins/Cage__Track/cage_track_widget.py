@@ -356,6 +356,13 @@ class ProjectColorDialog(QDialog):
         btn_row.addWidget(apply_btn)
         layout.addLayout(btn_row)
 
+    @staticmethod
+    def default_preview_colors(project_names: List[str]) -> Dict[str, str]:
+        colors: Dict[str, str] = {}
+        for idx, pname in enumerate(sorted(set(project_names))):
+            colors[pname] = DEFAULT_PROJECT_PALETTE[idx % len(DEFAULT_PROJECT_PALETTE)]
+        return colors
+
     def _pick_color(self, row: int, col: int) -> None:
         if col != 1:
             return
@@ -376,7 +383,18 @@ class ProjectColorDialog(QDialog):
 
     def _reset_to_default(self) -> None:
         self.store.clear_project_colors()
-        self.accept()
+        self._colors.clear()
+        preview_colors = self.default_preview_colors(self._project_names)
+        for row, pname in enumerate(self._project_names):
+            color = preview_colors.get(pname, "#CCCCCC")
+            item = self.table.item(row, 1)
+            if item is not None:
+                item.setText(color)
+                item.setBackground(QColor(color))
+        parent = self.parent()
+        refresh_parent = getattr(parent, "_refresh_parent_view", None)
+        if callable(refresh_parent):
+            refresh_parent()
 
 
 # ======================================================================
@@ -529,10 +547,14 @@ class CageSettingsDialog(QDialog):
                 projects.add(p)
         dlg = ProjectColorDialog(self, self.messages, self.store, list(projects))
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            pw._project_color_cache.clear()
-            pw._animal_project_color_cache.clear()
-            pw._project_rgba_cache.clear()
-            pw.refresh_view(sync_animals=False)
+            self._refresh_parent_view()
+
+    def _refresh_parent_view(self) -> None:
+        pw = self._parent_widget
+        pw._project_color_cache.clear()
+        pw._animal_project_color_cache.clear()
+        pw._project_rgba_cache.clear()
+        pw.refresh_view(sync_animals=False)
 
     def _on_export_pdf(self) -> None:
         pw = self._parent_widget

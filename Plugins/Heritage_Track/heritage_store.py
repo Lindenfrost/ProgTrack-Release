@@ -45,6 +45,7 @@ class HeritageStore:
             "show_legend": True,
             "show_inbreeding_f": True,
             "exclude_archived": False,
+            "birthdate_height_layout": True,
         }
 
     def _default_data(self) -> Dict[str, Any]:
@@ -231,6 +232,8 @@ class HeritageStore:
             "show_heritage_only": bool(raw_settings.get("show_heritage_only", default_settings["show_heritage_only"])),
             "show_legend": bool(raw_settings.get("show_legend", default_settings["show_legend"])),
             "show_inbreeding_f": bool(raw_settings.get("show_inbreeding_f", default_settings["show_inbreeding_f"])),
+            "exclude_archived": bool(raw_settings.get("exclude_archived", default_settings["exclude_archived"])),
+            "birthdate_height_layout": bool(raw_settings.get("birthdate_height_layout", default_settings["birthdate_height_layout"])),
         }
 
         normalized_positions: Dict[str, Dict[str, float]] = {}
@@ -421,6 +424,7 @@ class HeritageStore:
             "show_legend": bool(settings.get("show_legend", default_settings["show_legend"])),
             "show_inbreeding_f": bool(settings.get("show_inbreeding_f", default_settings["show_inbreeding_f"])),
             "exclude_archived": bool(settings.get("exclude_archived", default_settings["exclude_archived"])),
+            "birthdate_height_layout": bool(settings.get("birthdate_height_layout", default_settings["birthdate_height_layout"])),
         }
 
     def set_settings(self, settings: Dict[str, Any]) -> None:

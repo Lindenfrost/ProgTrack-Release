@@ -474,6 +474,48 @@ class GanttWidget(QDialog):
             return True
         return bool(getattr(mt, 'can', lambda _: False)(perm))
 
+    def _can_edit_schedule(self) -> bool:
+        return self._can('op_scheduler.use')
+
+    def _apply_permission_state(self) -> None:
+        """Keep view-only users inside the planner while disabling write controls."""
+        editable = self._can_edit_schedule()
+        for attr in (
+            'block_name',
+            'add_block_btn',
+            'horizon_start',
+            'horizon_end',
+            'donors_per_surgery',
+            'surrogates_per_transfer',
+            'transfer_offset',
+            'surgery_days',
+            'transfer_days',
+            'recovery_op',
+            'recovery_transfer',
+            'cycle_active_days',
+            'cycle_break_days',
+            'generate_btn',
+            'optimize_btn',
+            'save_btn',
+            'invert_fixed_btn',
+            'fix_all_btn',
+        ):
+            widget = getattr(self, attr, None)
+            if widget is not None:
+                try:
+                    widget.setEnabled(editable)
+                except Exception:
+                    pass
+        # Export does not modify ProgTrack data; keep it available to view-only users.
+        export_btn = getattr(self, 'export_menu_btn', None)
+        if export_btn is not None:
+            export_btn.setEnabled(self._can('op_scheduler.view'))
+        for checkbox in getattr(self, 'animal_checkboxes', {}).values():
+            try:
+                checkbox.setEnabled(editable)
+            except Exception:
+                pass
+
     def _initialize_schedule_and_calendar(self):
         """Initialize schedule and calendar after UI is fully set up."""
         # Load schedule using the new method (main file only)
@@ -1004,6 +1046,7 @@ class GanttWidget(QDialog):
 
         # finally add the splitter into the dialog
         main_layout.addWidget(splitter)
+        self._apply_permission_state()
 
     def _on_scroll(self, event):
         """Zoom in/out on wheel scroll, centered under the cursor (x-axis only)."""
@@ -1459,6 +1502,7 @@ class GanttWidget(QDialog):
                 
                 # Connect checkbox to update checked_animals
                 checkbox.stateChanged.connect(lambda state, n=name: self._on_animal_checkbox_changed(n, state))
+                checkbox.setEnabled(self._can_edit_schedule())
                 
                 self.animal_checkboxes[name] = checkbox
                 

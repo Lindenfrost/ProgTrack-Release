@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 import statistics
 from typing import Any, Dict, Optional, Tuple
 
@@ -185,6 +186,3 @@ class FamilyPositionOptimizer:
                         family_list[j] = (fid, old_x + shift)
         
         return adjusted_positions
-
-
-from collections import defaultdict
