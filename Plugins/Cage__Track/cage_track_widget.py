@@ -50,6 +50,7 @@ import matplotlib.colors as mcolors
 
 from .cage_store import CageStore, UNASSIGNED_CAGE_ID
 from .cage_engine import CageEngine
+from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.platform_helpers import default_save_path
 
 logger = logging.getLogger(__name__)
@@ -117,7 +118,9 @@ class MovementHistoryDialog(QDialog):
         layout = QVBoxLayout(self)
 
         occ = store.get_occupant(occupant_id)
-        layout.addWidget(QLabel(f"<b>{occupant_id}</b>"))
+        occupant_label = (occ or {}).get("name") or animal_base_name(occupant_id)
+        layout.addWidget(QLabel(f"<b>{occupant_label}</b>"))
+        layout.addWidget(QLabel(f"IPID: {occupant_id}"))
 
         current_cage_id = occ.get("cage_id", UNASSIGNED_CAGE_ID) if occ else UNASSIGNED_CAGE_ID
         ua_label = messages.get("cage_track.unassigned", "Unassigned")
@@ -166,7 +169,10 @@ class MovementHistoryDialog(QDialog):
                 item3.setFlags(no_edit)
                 table.setItem(row, 3, item3)
 
-                mates = ", ".join(entry.get("cage_mates_snapshot", []))
+                mates = ", ".join(
+                    f"{animal_base_name(mate)} ({mate})"
+                    for mate in entry.get("cage_mates_snapshot", [])
+                )
                 item4 = QTableWidgetItem(mates)
                 item4.setFlags(no_edit)
                 table.setItem(row, 4, item4)
@@ -190,7 +196,11 @@ class MovementHistoryDialog(QDialog):
         if self._table is None:
             return
         now_str = datetime.now().strftime("%Y-%m-%d")
-        default_name = f"Movement_History_{self.occupant_id}_{now_str}.pdf"
+        safe_occupant = ''.join(
+            c if c.isalnum() or c in ('_', '-', ' ') else '_'
+            for c in self.occupant_id
+        ).strip().replace(' ', '_')
+        default_name = f"Movement_History_{safe_occupant}_{now_str}.pdf"
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.messages.get("cage_track.history.export_pdf", "Export PDF"),
@@ -206,7 +216,8 @@ class MovementHistoryDialog(QDialog):
             ax = fig.add_subplot(111)
             ax.axis("off")
             ax.set_title(
-                self.messages.get("cage_track.history.title", "Movement History: {occupant}").replace("{occupant}", self.occupant_id),
+                self.messages.get("cage_track.history.title", "Movement History: {occupant}").replace(
+                    "{occupant}", f"{animal_base_name(self.occupant_id)} ({self.occupant_id})"),
                 fontsize=12, fontweight="bold", loc="left",
             )
             cols = self._table.columnCount()
@@ -1344,7 +1355,7 @@ class CageTrackWidget(QWidget):
             scatter_y.append(ty)
             face_colors.append(color)
             edge_colors.append("#000000")
-            text_rows.append((tx + 13, ty, occ_id, project_color))
+            text_rows.append((tx + 13, ty, animal_base_name(occ_id, animals_dict.get(occ_id, {})), project_color))
             self._hit_map.append(((tx - 2, ty - 6, tx + 100, ty + 8), occ_id, "occupant"))
 
         if scatter_x:
@@ -1467,7 +1478,12 @@ class CageTrackWidget(QWidget):
             scatter_y.append(oy)
             face_colors.append(circle_color)
             edge_colors.append("#000000")
-            text_rows.append((x + CAGE_PAD + 13, oy, occ_id, project_color))
+            text_rows.append((
+                x + CAGE_PAD + 13,
+                oy,
+                animal_base_name(occ_id, animals_dict.get(occ_id, {})),
+                project_color,
+            ))
             self._hit_map.append(((x + CAGE_PAD - 2, oy - 6, x + w - CAGE_PAD, oy + 8),
                                   occ_id, "occupant"))
             oy += OCCUPANT_LINE_H

@@ -1,0 +1,40 @@
+{
+  "schedule": [
+    {
+      "animal": "Ekaterina",
+      "event_type": "op",
+      "date": "01.07.2026",
+      "override_weekday": false,
+      "fixed": false,
+      "created_by": "surgery_planner_plugin_v1.0.0",
+      "timestamp": "2026-06-26T10:29:46.840263"
+    },
+    {
+      "animal": "Olga",
+      "event_type": "embryoübertragung",
+      "date": "07.07.2026",
+      "override_weekday": false,
+      "fixed": false,
+      "created_by": "surgery_planner_plugin_v1.0.0",
+      "timestamp": "2026-06-26T10:29:46.842900"
+    },
+    {
+      "animal": "Ekaterina",
+      "event_type": "op",
+      "date": "30.09.2026",
+      "override_weekday": false,
+      "fixed": false,
+      "created_by": "surgery_planner_plugin_v1.0.0",
+      "timestamp": "2026-06-26T10:29:46.859549"
+    },
+    {
+      "animal": "Olga",
+      "event_type": "embryoübertragung",
+      "date": "06.10.2026",
+      "override_weekday": false,
+      "fixed": false,
+      "created_by": "surgery_planner_plugin_v1.0.0",
+      "timestamp": "2026-06-26T10:29:46.862468"
+    }
+  ]
+}

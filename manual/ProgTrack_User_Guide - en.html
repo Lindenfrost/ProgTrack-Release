@@ -280,6 +280,9 @@
   <h3>4.1 Creating records</h3>
   <p>Use the sidebar action to create a record. In the All category ProgTrack asks for the role first, then opens the matching editor. Required fields depend on the role; optional ID, project, origin, genotype, parent, housing, and limit fields are shown where relevant.</p>
   <p><strong>➕ New Animal</strong> · <strong>Select Role</strong> · <strong>Save</strong></p>
+  <div class="hint">
+    <strong>Animal identity:</strong> ProgTrack identifies each animal by its IPID, built from <code>Name | Species | DD.MM.YYYY</code>. The sidebar still shows the short name for readability, but tooltips, stored JSON data, imports, and exports keep the full IPID. Later changes to name, species, or birth date require manager permission.
+  </div>
 
   <h3>4.2 Animal roles and category-specific editors</h3>
   <p>The role determines which editor and data tabs are shown. Steroid-specific roles and controls are available only while Steroid Track is enabled.</p>
@@ -322,6 +325,7 @@
   <h3>5.3 Importing from Excel</h3>
   <p>Excel imports are based on exact column names. Use the import button that matches the data type and clean invalid dates, empty names, or non-numeric values before importing.</p>
   <table class="basic"><tr><th>Button</th><th>Required columns</th></tr><tr><td><strong>📈 Load Blood Values</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Load Urine Values</strong></td><td><code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Load Weights</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Load Sperm Values</strong></td><td><code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
+  <p>For new animals created during blood, urine, weight, or sperm imports, ProgTrack asks for species and birth date when the import file does not provide them. Import files may include identity columns such as <code>Species</code>/<code>Art</code> and <code>Birth Date</code>/<code>Geburtsdatum</code>. Existing repeated short names should be resolved by IPID or by complete name/species/birth-date information.</p>
   <p>Optional sample identifiers are recognized from common columns such as Probennummer, Sample ID, Sample, Probe, ID, sample_id, or probe.</p>
 
   
@@ -462,6 +466,7 @@
     <li>Confirm to export all relevant measurements and events into an Excel
       workbook.</li>
   </ul>
+  <p>Animal exports include the readable animal name and the <code>IPID</code> (Internal ProgTrack ID). Use the IPID for exact joins or re-imports, and the short name for human review.</p>
 
   <h3>8.3 PDF export (with Animal Reports plugin)</h3>
   <p>

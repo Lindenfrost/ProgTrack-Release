@@ -22,6 +22,12 @@ from PyQt6.QtWidgets import (
     QMessageBox, QPushButton, QScrollArea, QScrollBar, QSizePolicy, QSpinBox,
     QTabWidget, QTextEdit, QVBoxLayout, QWidget, QCompleter,
 )
+from Plugins.core.animal_identity import (
+    animal_base_name,
+    animal_identity_label,
+    resolve_animal_reference_text,
+    split_animal_identity_key,
+)
 from Plugins.core.platform_helpers import default_export_directory
 
 logger = logging.getLogger(__name__)
@@ -221,6 +227,43 @@ def _type_display(key: str) -> Tuple[str, str]:
 
 def _msg(messages: Dict, key: str, fallback: str) -> str:
     return messages.get(key, fallback) if isinstance(messages, dict) else fallback
+
+
+def _animal_records(app) -> Dict[str, Dict[str, Any]]:
+    animals = getattr(app, 'animals', {})
+    archived = getattr(app, 'archived', {})
+    merged: Dict[str, Dict[str, Any]] = {}
+    if isinstance(animals, dict):
+        merged.update(animals)
+    if isinstance(archived, dict):
+        merged.update(archived)
+    return merged
+
+
+def _resolve_animal_input(app, value: str) -> tuple[str, Dict[str, Any], str]:
+    """Resolve user-entered animal text to an IPID key.
+
+    Returns (key, record, error_code). error_code is "" on success,
+    "missing" when the text cannot be resolved, and "ambiguous" when a short
+    display name matches more than one animal.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return "", {}, "missing"
+
+    key, record, status = resolve_animal_reference_text(text, _animal_records(app))
+    if status == "resolved":
+        return key, dict(record), ""
+    if status == "ambiguous":
+        return "", {}, "ambiguous"
+
+    if split_animal_identity_key(text) is not None:
+        return text, {}, ""
+    return "", {}, "missing"
+
+
+def _display_animal_name(key: str, record: Optional[Dict[str, Any]] = None) -> str:
+    return animal_base_name(key, record or {})
 
 
 def _parse_date(s: str) -> Optional[date]:
@@ -878,11 +921,12 @@ class SampleRowWidget(QFrame):
         self._setup_autocomplete()
 
     def _setup_autocomplete(self):
-        animals = getattr(self._app, 'animals', {})
-        archived = getattr(self._app, 'archived', {})
         names = []
-        for key, rec in {**animals, **archived}.items():
-            names.append(rec.get('_base_name', key))
+        self._animal_display_to_key = {}
+        for key, rec in _animal_records(self._app).items():
+            display = animal_identity_label(key, rec)
+            names.append(display)
+            self._animal_display_to_key[display] = key
         model = QStringListModel(sorted(set(names)))
         comp = QCompleter(model, self._name_le)
         comp.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
@@ -890,19 +934,18 @@ class SampleRowWidget(QFrame):
         self._name_le.setCompleter(comp)
 
     def _on_autocomplete(self, display_name: str):
-        animals = getattr(self._app, 'animals', {})
-        archived = getattr(self._app, 'archived', {})
+        records = _animal_records(self._app)
         rec = None
-        key_used = None
-        for key, r in {**animals, **archived}.items():
-            if r.get('_base_name', key) == display_name or key == display_name:
+        key_used = getattr(self, '_animal_display_to_key', {}).get(display_name, display_name)
+        for key, r in records.items():
+            if key == key_used:
                 rec = r
-                key_used = key
                 break
         if rec is None:
             return
         # Just populate fields - duplicate check will happen on Save
-        self._name_le.setText(display_name)
+        self._name_le.setText(key_used)
+        self._name_le.setToolTip(animal_identity_label(key_used, rec))
         self._species_le.setText(rec.get('species', ''))
         self._id_le.setText(rec.get('id', ''))
         _sv = rec.get('rolle', '')
@@ -911,7 +954,16 @@ class SampleRowWidget(QFrame):
         self._death_le.setText(rec.get('death_date', ''))
 
     def _on_save(self):
-        name = self._name_le.text().strip()
+        raw_name = self._name_le.text().strip()
+        name, rec, error_code = _resolve_animal_input(self._app, raw_name)
+        if error_code:
+            message = (
+                "This animal name is ambiguous. Please select the full IPID from autocomplete."
+                if error_code == "ambiguous"
+                else "Please select an existing animal or enter a valid full IPID."
+            )
+            QMessageBox.warning(self, "Animal identity", message)
+            return
         existing = [r.get("animal_name", "") for r in self._all_rows if r is not self._data]
         if name in existing:
             QMessageBox.warning(
@@ -920,11 +972,12 @@ class SampleRowWidget(QFrame):
                      "An entry for this animal already exists."))
             return  # Keep row open for editing
         self._data["animal_name"] = name
-        self._data["species"] = self._species_le.text().strip()
-        self._data["id"] = self._id_le.text().strip()
-        self._data["sex"] = self._sex_cb.currentText()
-        self._data["birth_date"] = self._birth_le.text().strip()
-        self._data["death_date"] = self._death_le.text().strip()
+        self._data["species"] = (rec.get("species") if rec else "") or self._species_le.text().strip()
+        self._data["id"] = (rec.get("id") if rec else "") or self._id_le.text().strip()
+        sex_value = (rec.get("rolle") if rec else "") or self._sex_cb.currentText()
+        self._data["sex"] = sex_value if sex_value in ("Male", "Female", "Undefined") else self._sex_cb.currentText()
+        self._data["birth_date"] = (rec.get("birth_date") if rec else "") or self._birth_le.text().strip()
+        self._data["death_date"] = (rec.get("death_date") if rec else "") or self._death_le.text().strip()
         self._saved = True
         self._apply_saved_state()
         self._save_to_store()
@@ -999,7 +1052,9 @@ class SampleRowWidget(QFrame):
         self._birth_lbl.setVisible(self._saved)
         self._death_lbl.setVisible(self._saved)
         if self._saved:
-            self._name_lbl.setText(self._data.get("animal_name", ""))
+            animal_key = self._data.get("animal_name", "")
+            self._name_lbl.setText(_display_animal_name(animal_key, _animal_records(self._app).get(animal_key)))
+            self._name_lbl.setToolTip(animal_identity_label(animal_key, _animal_records(self._app).get(animal_key)))
             self._species_lbl.setText(self._data.get("species", ""))
             self._id_lbl.setText(self._data.get("id", ""))
             self._sex_lbl.setText(self._data.get("sex", ""))
@@ -1457,11 +1512,12 @@ class OtherSampleRowWidget(QFrame):
         self._setup_autocomplete()
 
     def _setup_autocomplete(self):
-        animals = getattr(self._app, 'animals', {})
-        archived = getattr(self._app, 'archived', {})
         names = []
-        for key, rec in {**animals, **archived}.items():
-            names.append(rec.get('_base_name', key))
+        self._animal_display_to_key = {}
+        for key, rec in _animal_records(self._app).items():
+            display = animal_identity_label(key, rec)
+            names.append(display)
+            self._animal_display_to_key[display] = key
         model = QStringListModel(sorted(set(names)))
         comp = QCompleter(model, self._name_le)
         comp.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
@@ -1469,23 +1525,33 @@ class OtherSampleRowWidget(QFrame):
         self._name_le.setCompleter(comp)
 
     def _on_autocomplete(self, display_name: str):
-        animals = getattr(self._app, 'animals', {})
-        archived = getattr(self._app, 'archived', {})
+        records = _animal_records(self._app)
         rec = None
-        for key, r in {**animals, **archived}.items():
-            if r.get('_base_name', key) == display_name or key == display_name:
+        key_used = getattr(self, '_animal_display_to_key', {}).get(display_name, display_name)
+        for key, r in records.items():
+            if key == key_used:
                 rec = r
                 break
         if rec is None:
             return
-        self._name_le.setText(display_name)
+        self._name_le.setText(key_used)
+        self._name_le.setToolTip(animal_identity_label(key_used, rec))
         self._species_le.setText(rec.get('species', ''))
         self._id_le.setText(rec.get('id', ''))
         _sv2 = rec.get('rolle', '')
         self._sex_cb.setCurrentText(_sv2 if _sv2 in ('Male', 'Female', 'Undefined') else 'Undefined')
 
     def _on_save(self):
-        name = self._name_le.text().strip()
+        raw_name = self._name_le.text().strip()
+        name, rec, error_code = _resolve_animal_input(self._app, raw_name)
+        if error_code:
+            message = (
+                "This animal name is ambiguous. Please select the full IPID from autocomplete."
+                if error_code == "ambiguous"
+                else "Please select an existing animal or enter a valid full IPID."
+            )
+            QMessageBox.warning(self, "Animal identity", message)
+            return
         sn = self._sample_num_le.text().strip()
         if sn:
             for r in self._all_rows:
@@ -1497,9 +1563,10 @@ class OtherSampleRowWidget(QFrame):
                         return  # Keep row open for editing
         self._data["sample_number"] = sn
         self._data["animal_name"] = name
-        self._data["species"] = self._species_le.text().strip()
-        self._data["id"] = self._id_le.text().strip()
-        self._data["sex"] = self._sex_cb.currentText()
+        self._data["species"] = (rec.get("species") if rec else "") or self._species_le.text().strip()
+        self._data["id"] = (rec.get("id") if rec else "") or self._id_le.text().strip()
+        sex_value = (rec.get("rolle") if rec else "") or self._sex_cb.currentText()
+        self._data["sex"] = sex_value if sex_value in ("Male", "Female", "Undefined") else self._sex_cb.currentText()
         self._data["collection_date"] = self._date_le.text().strip()
         self._saved = True
         self._apply_saved_state()
@@ -1560,7 +1627,9 @@ class OtherSampleRowWidget(QFrame):
         self._date_lbl.setVisible(self._saved and bool(self._data.get("collection_date", "").strip()))
         if self._saved:
             self._sample_num_lbl.setText(self._data.get("sample_number", ""))
-            self._name_lbl.setText(self._data.get("animal_name", ""))
+            animal_key = self._data.get("animal_name", "")
+            self._name_lbl.setText(_display_animal_name(animal_key, _animal_records(self._app).get(animal_key)))
+            self._name_lbl.setToolTip(animal_identity_label(animal_key, _animal_records(self._app).get(animal_key)))
             self._species_lbl.setText(self._data.get("species", ""))
             self._id_lbl.setText(self._data.get("id", ""))
             self._sex_lbl.setText(self._data.get("sex", ""))
@@ -1869,6 +1938,9 @@ def _get_lord_all_units(app) -> Optional[List[str]]:
     """If logged-in user is a Lord, return empty list (Lord sees all). Else None."""
     mt = getattr(app, 'master_track', None)
     if mt is None:
+        return None
+    disabled = getattr(app, '_disabled_plugins', set())
+    if "master_track" in disabled:
         return None
     if not getattr(mt, 'is_logged_in', False):
         return None
@@ -3067,8 +3139,8 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
         else:
             # Build full data with all columns first
             if tab_key == "organ_samples":
-                # Static headers for first 7 columns (added Unit column)
-                static_headers = ["Name", "Species", "ID", "Sex", "Birth", "Death", "Unit"]
+                # Static headers for animal identity and sample metadata.
+                static_headers = ["IPID", "Name", "Species", "ID", "Sex", "Birth", "Death", "Unit"]
                 # Use plain abbreviations for organ headers
                 organ_labels = [_organ_display(o["key"])[1] for o in ORGANS]
                 all_headers = static_headers + organ_labels
@@ -3092,7 +3164,9 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
                                 pass
                     unit_str = ", ".join(sorted(all_units)) if all_units else ""
                     row_cells = [
-                        d.get("animal_name", ""), d.get("species", ""),
+                        d.get("animal_name", ""),
+                        animal_base_name(d.get("animal_name", "")),
+                        d.get("species", ""),
                         d.get("id", ""), d.get("sex", ""),
                         d.get("birth_date", ""), d.get("death_date", ""),
                         unit_str,
@@ -3112,8 +3186,8 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
                             row_cells.append("")
                     full_data_rows.append(row_cells)
             else:
-                # Static headers for first 7 columns (added Unit column)
-                static_headers = ["No.", "Name", "Species", "ID", "Sex", "Date", "Unit"]
+                # Static headers for animal identity and sample metadata.
+                static_headers = ["No.", "IPID", "Name", "Species", "ID", "Sex", "Date", "Unit"]
                 # Use plain abbreviations for sample type headers
                 type_labels = [_type_display(t["key"])[0] for t in OTHER_TYPES]
                 all_headers = static_headers + type_labels
@@ -3137,7 +3211,9 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
                                 pass
                     unit_str = ", ".join(sorted(all_units)) if all_units else ""
                     row_cells = [
-                        d.get("sample_number", ""), d.get("animal_name", ""),
+                        d.get("sample_number", ""),
+                        d.get("animal_name", ""),
+                        animal_base_name(d.get("animal_name", "")),
                         d.get("species", ""), d.get("id", ""),
                         d.get("sex", ""), d.get("collection_date", ""),
                         unit_str,
@@ -3231,11 +3307,11 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
             # Calculate column widths to fit within page
             # Fixed widths for first 7 columns (animal info + Unit) - ID column uses calculated width
             if tab_key == "organ_samples":
-                # Name, Species, ID (auto), Sex, Birth, Death, Unit
-                fixed_widths = [25*mm, 20*mm, id_col_width, 12*mm, 20*mm, 20*mm, 25*mm]
+                # IPID, Name, Species, ID (auto), Sex, Birth, Death, Unit
+                fixed_widths = [38*mm, 22*mm, 18*mm, id_col_width, 12*mm, 18*mm, 18*mm, 22*mm]
             else:
-                # No., Name, Species, ID (auto), Sex, Date, Unit
-                fixed_widths = [12*mm, 25*mm, 20*mm, id_col_width, 12*mm, 20*mm, 25*mm]
+                # No., IPID, Name, Species, ID (auto), Sex, Date, Unit
+                fixed_widths = [10*mm, 38*mm, 22*mm, 18*mm, id_col_width, 12*mm, 18*mm, 22*mm]
 
             # Calculate column widths based on actual number of columns with data
             num_cols = len(data_rows[0]) if data_rows else 0

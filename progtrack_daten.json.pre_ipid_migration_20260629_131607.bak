@@ -1,7 +1,7 @@
 {
   "version": "4.0",
   "animals": {
-    "Eluréd | Callitrix jacchus | 20.01.2007": {
+    "Eluréd": {
       "rolle": "Zuchttier",
       "id": "cj_14853236",
       "birth_date": "20.01.2007",
@@ -10,8 +10,8 @@
       "genotype": "WT/H-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Nimloth | Callitrix jacchus | 06.09.2004",
-      "samenspender": "Dior | Callitrix jacchus | 09.05.2004",
+      "eizellspenderin": "Nimloth",
+      "samenspender": "Dior",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -96,13 +96,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Eluréd | Callitrix jacchus | 20.01.2007",
-      "name": "Eluréd",
-      "_base_name": "Eluréd",
-      "display_name": "Eluréd"
+      "special_status": ""
     },
-    "Elurín | Callitrix jacchus | 17.07.2007": {
+    "Elurín": {
       "rolle": "Zuchttier",
       "id": "cj_71437348",
       "birth_date": "17.07.2007",
@@ -111,8 +107,8 @@
       "genotype": "WT/H-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Nimloth | Callitrix jacchus | 06.09.2004",
-      "samenspender": "Dior | Callitrix jacchus | 09.05.2004",
+      "eizellspenderin": "Nimloth",
+      "samenspender": "Dior",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -197,13 +193,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Elurín | Callitrix jacchus | 17.07.2007",
-      "name": "Elurín",
-      "_base_name": "Elurín",
-      "display_name": "Elurín"
+      "special_status": ""
     },
-    "Arwen | Callitrix jacchus | 23.02.2015": {
+    "Arwen": {
       "rolle": "Zuchttier",
       "id": "cj_82259270",
       "birth_date": "23.02.2015",
@@ -212,8 +204,8 @@
       "genotype": "WT/H-",
       "max_pregnancies": 8,
       "max_geburten": 6,
-      "eizellspenderin": "Celebrían | Callitrix jacchus | 06.05.2007",
-      "samenspender": "Elrond | Callitrix jacchus | 04.02.2012",
+      "eizellspenderin": "Celebrían",
+      "samenspender": "Elrond",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -311,13 +303,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Arwen | Callitrix jacchus | 23.02.2015",
-      "name": "Arwen",
-      "_base_name": "Arwen",
-      "display_name": "Arwen"
+      "project_entry_date": "20.04.2026"
     },
-    "Isildur | Callitrix jacchus | 23.02.2015": {
+    "Isildur": {
       "rolle": "Zuchttier",
       "id": "cj_38322688",
       "birth_date": "23.02.2015",
@@ -326,8 +314,8 @@
       "genotype": "H-/H-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Madison | Callitrix jacchus | 31.12.2012",
-      "samenspender": "Elros | Callitrix jacchus | 24.07.2012",
+      "eizellspenderin": "Madison",
+      "samenspender": "Elros",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -425,13 +413,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Isildur | Callitrix jacchus | 23.02.2015",
-      "name": "Isildur",
-      "_base_name": "Isildur",
-      "display_name": "Isildur"
+      "project_entry_date": "20.04.2026"
     },
-    "Aragorn II | Callitrix jacchus | 11.02.2021": {
+    "Aragorn II": {
       "rolle": "Zuchttier",
       "id": "cj_69002521",
       "birth_date": "11.02.2021",
@@ -440,8 +424,8 @@
       "genotype": "WT/H-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Taylor | Callitrix jacchus | 14.06.2018",
-      "samenspender": "Aragorn I | Callitrix jacchus | 07.02.2018",
+      "eizellspenderin": "Taylor",
+      "samenspender": "Aragorn I",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -535,20 +519,16 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Aragorn II | Callitrix jacchus | 11.02.2021",
-      "name": "Aragorn II",
-      "_base_name": "Aragorn II",
-      "display_name": "Aragorn II"
+      "project_entry_date": "20.04.2026"
     },
-    "Eldarion | Callitrix jacchus | 01.03.2026": {
+    "Eldarion": {
       "rolle": "Nachkomme",
       "sex": "Male",
       "genotype": "WT/H-",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Arwen | Callitrix jacchus | 23.02.2015",
-      "samenspender": "Aragorn II | Callitrix jacchus | 11.02.2021",
+      "eizellspenderin": "Arwen",
+      "samenspender": "Aragorn II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -604,13 +584,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Eldarion | Callitrix jacchus | 01.03.2026",
-      "name": "Eldarion",
-      "_base_name": "Eldarion",
-      "display_name": "Eldarion"
+      "project_entry_date": "20.04.2026"
     },
-    "Oropher | Callitrix jacchus | 25.05.2015": {
+    "Oropher": {
       "rolle": "Partnertier",
       "id": "cj_09133717",
       "project": "OTOF-",
@@ -692,13 +668,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Oropher | Callitrix jacchus | 25.05.2015",
-      "name": "Oropher",
-      "_base_name": "Oropher",
-      "display_name": "Oropher"
+      "project_entry_date": "20.04.2026"
     },
-    "Ekaterina | Callitrix jacchus | 02.04.2016": {
+    "Ekaterina": {
       "rolle": "Spenderin",
       "id": "cj_13817596",
       "birth_date": "02.04.2016",
@@ -936,13 +908,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Ekaterina | Callitrix jacchus | 02.04.2016",
-      "name": "Ekaterina",
-      "_base_name": "Ekaterina",
-      "display_name": "Ekaterina"
+      "project_entry_date": "20.04.2026"
     },
-    "Thranduil | Callitrix jacchus | 11.02.2021": {
+    "Thranduil": {
       "rolle": "Samenspender",
       "id": "cj_18049553",
       "birth_date": "11.02.2021",
@@ -951,10 +919,10 @@
       "genotype": "OTOF-/OTOF-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Ekaterina | Callitrix jacchus | 02.04.2016",
-      "samenspender": "Oropher | Callitrix jacchus | 25.05.2015",
-      "ziehmutter": "Olga | Callitrix jacchus | 20.06.2015",
-      "ziehvater": "Anton | Callitrix jacchus | 25.05.2015",
+      "eizellspenderin": "Ekaterina",
+      "samenspender": "Oropher",
+      "ziehmutter": "Olga",
+      "ziehvater": "Anton",
       "gewicht": [
         {
           "datum": "2021-02-11T00:00:00",
@@ -1049,13 +1017,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Thranduil | Callitrix jacchus | 11.02.2021",
-      "name": "Thranduil",
-      "_base_name": "Thranduil",
-      "display_name": "Thranduil"
+      "project_entry_date": "20.04.2026"
     },
-    "Olga | Callitrix jacchus | 20.06.2015": {
+    "Olga": {
       "rolle": "Amme",
       "ref_weight": 468.0,
       "max_messungen": 100,
@@ -1552,13 +1516,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Olga | Callitrix jacchus | 20.06.2015",
-      "name": "Olga",
-      "_base_name": "Olga",
-      "display_name": "Olga"
+      "project_entry_date": "20.04.2026"
     },
-    "Anton | Callitrix jacchus | 25.05.2015": {
+    "Anton": {
       "rolle": "Partnertier",
       "id": "cj_09717949",
       "project": "OTOF-",
@@ -1640,13 +1600,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Anton | Callitrix jacchus | 25.05.2015",
-      "name": "Anton",
-      "_base_name": "Anton",
-      "display_name": "Anton"
+      "project_entry_date": "20.04.2026"
     },
-    "Svetlana | Callitrix jacchus | 03.05.2021": {
+    "Svetlana": {
       "rolle": "Zuchttier",
       "id": "cj_06103935",
       "birth_date": "03.05.2021",
@@ -1734,13 +1690,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Svetlana | Callitrix jacchus | 03.05.2021",
-      "name": "Svetlana",
-      "_base_name": "Svetlana",
-      "display_name": "Svetlana"
+      "project_entry_date": "20.04.2026"
     },
-    "Konstantin | Callitrix jacchus | 18.08.2020": {
+    "Konstantin": {
       "rolle": "Partnertier",
       "id": "cj_13762689",
       "project": "OTOF-",
@@ -1822,22 +1774,18 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Konstantin | Callitrix jacchus | 18.08.2020",
-      "name": "Konstantin",
-      "_base_name": "Konstantin",
-      "display_name": "Konstantin"
+      "project_entry_date": "20.04.2026"
     },
-    "Legolas | Callitrix jacchus | 04.03.2026": {
+    "Legolas": {
       "rolle": "Nachkomme",
       "sex": "Male",
       "genotype": "OTOF-/WT",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Svetlana | Callitrix jacchus | 03.05.2021",
-      "samenspender": "Thranduil | Callitrix jacchus | 11.02.2021",
-      "ziehmutter": "Olga | Callitrix jacchus | 20.06.2015",
-      "ziehvater": "Anton | Callitrix jacchus | 25.05.2015",
+      "eizellspenderin": "Svetlana",
+      "samenspender": "Thranduil",
+      "ziehmutter": "Olga",
+      "ziehvater": "Anton",
       "sick": false,
       "gewicht": [
         {
@@ -1891,13 +1839,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Legolas | Callitrix jacchus | 04.03.2026",
-      "name": "Legolas",
-      "_base_name": "Legolas",
-      "display_name": "Legolas"
+      "project_entry_date": "20.04.2026"
     },
-    "Elladan | Callitrix jacchus | 23.07.2015": {
+    "Elladan": {
       "rolle": "Zuchttier",
       "id": "cj_39696766",
       "birth_date": "23.07.2015",
@@ -1906,8 +1850,8 @@
       "genotype": "WT/H-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Celebrían | Callitrix jacchus | 06.05.2007",
-      "samenspender": "Elrond | Callitrix jacchus | 04.02.2012",
+      "eizellspenderin": "Celebrían",
+      "samenspender": "Elrond",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -2005,13 +1949,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Elladan | Callitrix jacchus | 23.07.2015",
-      "name": "Elladan",
-      "_base_name": "Elladan",
-      "display_name": "Elladan"
+      "project_entry_date": "20.04.2026"
     },
-    "Elrohir | Callitrix jacchus | 21.01.2016": {
+    "Elrohir": {
       "rolle": "Zuchttier",
       "id": "cj_20928368",
       "birth_date": "21.01.2016",
@@ -2020,8 +1960,8 @@
       "genotype": "WT/H-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Celebrían | Callitrix jacchus | 06.05.2007",
-      "samenspender": "Elrond | Callitrix jacchus | 04.02.2012",
+      "eizellspenderin": "Celebrían",
+      "samenspender": "Elrond",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -2119,13 +2059,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Elrohir | Callitrix jacchus | 21.01.2016",
-      "name": "Elrohir",
-      "_base_name": "Elrohir",
-      "display_name": "Elrohir"
+      "project_entry_date": "20.04.2026"
     },
-    "Jessica | Callitrix jacchus | 06.07.2015": {
+    "Jessica": {
       "rolle": "Zuchttier",
       "id": "cj_24485404",
       "birth_date": "06.07.2015",
@@ -2233,13 +2169,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Jessica | Callitrix jacchus | 06.07.2015",
-      "name": "Jessica",
-      "_base_name": "Jessica",
-      "display_name": "Jessica"
+      "project_entry_date": "20.04.2026"
     },
-    "Aragorn I | Callitrix jacchus | 07.02.2018": {
+    "Aragorn I": {
       "rolle": "Zuchttier",
       "id": "cj_51342521",
       "birth_date": "07.02.2018",
@@ -2248,8 +2180,8 @@
       "genotype": "H-/H-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Jessica | Callitrix jacchus | 06.07.2015",
-      "samenspender": "Isildur | Callitrix jacchus | 23.02.2015",
+      "eizellspenderin": "Jessica",
+      "samenspender": "Isildur",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -2347,13 +2279,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Aragorn I | Callitrix jacchus | 07.02.2018",
-      "name": "Aragorn I",
-      "_base_name": "Aragorn I",
-      "display_name": "Aragorn I"
+      "project_entry_date": "20.04.2026"
     },
-    "Taylor | Callitrix jacchus | 14.06.2018": {
+    "Taylor": {
       "rolle": "Zuchttier",
       "id": "cj_58571033",
       "birth_date": "14.06.2018",
@@ -2461,13 +2389,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Taylor | Callitrix jacchus | 14.06.2018",
-      "name": "Taylor",
-      "_base_name": "Taylor",
-      "display_name": "Taylor"
+      "project_entry_date": "20.04.2026"
     },
-    "Gimli | Macaca mulatta | 04.03.2026": {
+    "Gimli": {
       "rolle": "Nachkomme",
       "id": "mm_90515197",
       "chip_nr": "GI3EHS0X",
@@ -2481,8 +2405,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Simone | Macaca mulatta | 04.03.2023",
-      "samenspender": "Glóin II | Macaca mulatta | 04.03.2023",
+      "eizellspenderin": "Simone",
+      "samenspender": "Glóin II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -2502,13 +2426,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Gimli | Macaca mulatta | 04.03.2026",
-      "name": "Gimli",
-      "_base_name": "Gimli",
-      "display_name": "Gimli"
+      "edits": {}
     },
-    "Thrór | Macaca mulatta | 04.03.2017": {
+    "Thrór": {
       "rolle": "Nachkomme",
       "id": "mm_56156012",
       "chip_nr": "TMLFRK16",
@@ -2522,8 +2442,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Irmgard II | Macaca mulatta | 04.03.2014",
-      "samenspender": "Dáin I | Macaca mulatta | 04.03.2014",
+      "eizellspenderin": "Irmgard II",
+      "samenspender": "Dáin I",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -2543,13 +2463,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Thrór | Macaca mulatta | 04.03.2017",
-      "name": "Thrór",
-      "_base_name": "Thrór",
-      "display_name": "Thrór"
+      "edits": {}
     },
-    "Frór | Macaca mulatta | 04.03.2017": {
+    "Frór": {
       "rolle": "Nachkomme",
       "id": "mm_81666433",
       "chip_nr": "SS99NKTD",
@@ -2563,8 +2479,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Irmgard II | Macaca mulatta | 04.03.2014",
-      "samenspender": "Dáin I | Macaca mulatta | 04.03.2014",
+      "eizellspenderin": "Irmgard II",
+      "samenspender": "Dáin I",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -2584,13 +2500,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Frór | Macaca mulatta | 04.03.2017",
-      "name": "Frór",
-      "_base_name": "Frór",
-      "display_name": "Frór"
+      "edits": {}
     },
-    "Grór | Macaca mulatta | 04.03.2017": {
+    "Grór": {
       "rolle": "Nachkomme",
       "id": "mm_02626111",
       "chip_nr": "NQLZ1TBB",
@@ -2604,8 +2516,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Irmgard II | Macaca mulatta | 04.03.2014",
-      "samenspender": "Dáin I | Macaca mulatta | 04.03.2014",
+      "eizellspenderin": "Irmgard II",
+      "samenspender": "Dáin I",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -2625,13 +2537,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Grór | Macaca mulatta | 04.03.2017",
-      "name": "Grór",
-      "_base_name": "Grór",
-      "display_name": "Grór"
+      "edits": {}
     },
-    "Gerda | Macaca mulatta | 04.03.2017": {
+    "Gerda": {
       "rolle": "Nachkomme",
       "id": "mm_30474999",
       "chip_nr": "VQGY89W3",
@@ -2666,13 +2574,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Gerda | Macaca mulatta | 04.03.2017",
-      "name": "Gerda",
-      "_base_name": "Gerda",
-      "display_name": "Gerda"
+      "edits": {}
     },
-    "Gudrun II | Macaca mulatta | 04.03.2017": {
+    "Gudrun II": {
       "rolle": "Nachkomme",
       "id": "mm_91464649",
       "chip_nr": "9JHG9XFK",
@@ -2707,13 +2611,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Gudrun II | Macaca mulatta | 04.03.2017",
-      "name": "Gudrun II",
-      "_base_name": "Gudrun II",
-      "display_name": "Gudrun II"
+      "edits": {}
     },
-    "Thráin II | Macaca mulatta | 04.03.2020": {
+    "Thráin II": {
       "rolle": "Nachkomme",
       "id": "mm_34464679",
       "chip_nr": "4U1APSGL",
@@ -2727,8 +2627,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Gerda | Macaca mulatta | 04.03.2017",
-      "samenspender": "Thrór | Macaca mulatta | 04.03.2017",
+      "eizellspenderin": "Gerda",
+      "samenspender": "Thrór",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -2748,13 +2648,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Thráin II | Macaca mulatta | 04.03.2020",
-      "name": "Thráin II",
-      "_base_name": "Thráin II",
-      "display_name": "Thráin II"
+      "edits": {}
     },
-    "Hilda | Macaca mulatta | 04.03.2020": {
+    "Hilda": {
       "rolle": "Nachkomme",
       "id": "mm_88446857",
       "chip_nr": "76XDJXMJ",
@@ -2789,13 +2685,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Hilda | Macaca mulatta | 04.03.2020",
-      "name": "Hilda",
-      "_base_name": "Hilda",
-      "display_name": "Hilda"
+      "edits": {}
     },
-    "Thorin II | Macaca mulatta | 04.03.2023": {
+    "Thorin II": {
       "rolle": "Nachkomme",
       "id": "mm_63531546",
       "chip_nr": "TGXKF9B6",
@@ -2809,8 +2701,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Hilda | Macaca mulatta | 04.03.2020",
-      "samenspender": "Thráin II | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Hilda",
+      "samenspender": "Thráin II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -2830,13 +2722,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Thorin II | Macaca mulatta | 04.03.2023",
-      "name": "Thorin II",
-      "_base_name": "Thorin II",
-      "display_name": "Thorin II"
+      "edits": {}
     },
-    "Frerin | Macaca mulatta | 04.03.2023": {
+    "Frerin": {
       "rolle": "Nachkomme",
       "id": "mm_83217464",
       "chip_nr": "POQ08KCK",
@@ -2850,8 +2738,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Hilda | Macaca mulatta | 04.03.2020",
-      "samenspender": "Thráin II | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Hilda",
+      "samenspender": "Thráin II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -2871,13 +2759,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Frerin | Macaca mulatta | 04.03.2023",
-      "name": "Frerin",
-      "_base_name": "Frerin",
-      "display_name": "Frerin"
+      "edits": {}
     },
-    "Dís | Macaca mulatta | 04.03.2023": {
+    "Dís": {
       "rolle": "Nachkomme",
       "id": "mm_76572956",
       "chip_nr": "OI7CTQL9",
@@ -2891,8 +2775,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Hilda | Macaca mulatta | 04.03.2020",
-      "samenspender": "Thráin II | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Hilda",
+      "samenspender": "Thráin II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -2912,13 +2796,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Dís | Macaca mulatta | 04.03.2023",
-      "name": "Dís",
-      "_base_name": "Dís",
-      "display_name": "Dís"
+      "edits": {}
     },
-    "Manfred | Macaca mulatta | 04.03.2023": {
+    "Manfred": {
       "rolle": "Nachkomme",
       "id": "mm_17083609",
       "chip_nr": "IIBF15WX",
@@ -2953,13 +2833,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Manfred | Macaca mulatta | 04.03.2023",
-      "name": "Manfred",
-      "_base_name": "Manfred",
-      "display_name": "Manfred"
+      "edits": {}
     },
-    "Fíli | Macaca mulatta | 04.03.2026": {
+    "Fíli": {
       "rolle": "Nachkomme",
       "id": "mm_51246641",
       "chip_nr": "AU12Y4AZ",
@@ -2973,8 +2849,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Dís | Macaca mulatta | 04.03.2023",
-      "samenspender": "Manfred | Macaca mulatta | 04.03.2023",
+      "eizellspenderin": "Dís",
+      "samenspender": "Manfred",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -2994,13 +2870,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Fíli | Macaca mulatta | 04.03.2026",
-      "name": "Fíli",
-      "_base_name": "Fíli",
-      "display_name": "Fíli"
+      "edits": {}
     },
-    "Kíli | Macaca mulatta | 04.03.2026": {
+    "Kíli": {
       "rolle": "Nachkomme",
       "id": "mm_47612594",
       "chip_nr": "MCBH8D7P",
@@ -3014,8 +2886,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Dís | Macaca mulatta | 04.03.2023",
-      "samenspender": "Manfred | Macaca mulatta | 04.03.2023",
+      "eizellspenderin": "Dís",
+      "samenspender": "Manfred",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3035,13 +2907,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Kíli | Macaca mulatta | 04.03.2026",
-      "name": "Kíli",
-      "_base_name": "Kíli",
-      "display_name": "Kíli"
+      "edits": {}
     },
-    "Náin III | Macaca mulatta | 04.03.2020": {
+    "Náin III": {
       "rolle": "Nachkomme",
       "id": "mm_22042722",
       "chip_nr": "CV13CXMD",
@@ -3055,8 +2923,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Gudrun II | Macaca mulatta | 04.03.2017",
-      "samenspender": "Grór | Macaca mulatta | 04.03.2017",
+      "eizellspenderin": "Gudrun II",
+      "samenspender": "Grór",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3076,13 +2944,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Náin III | Macaca mulatta | 04.03.2020",
-      "name": "Náin III",
-      "_base_name": "Náin III",
-      "display_name": "Náin III"
+      "edits": {}
     },
-    "Dáin II | Macaca mulatta | 04.03.2023": {
+    "Dáin II": {
       "rolle": "Nachkomme",
       "id": "mm_57047022",
       "chip_nr": "G788XDL9",
@@ -3096,8 +2960,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Beate I | Macaca mulatta | 04.03.2020",
-      "samenspender": "Náin III | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Beate I",
+      "samenspender": "Náin III",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3117,13 +2981,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Dáin II | Macaca mulatta | 04.03.2023",
-      "name": "Dáin II",
-      "_base_name": "Dáin II",
-      "display_name": "Dáin II"
+      "edits": {}
     },
-    "Dorothea | Macaca mulatta | 04.03.2023": {
+    "Dorothea": {
       "rolle": "Nachkomme",
       "id": "mm_38279897",
       "chip_nr": "HRED1USK",
@@ -3158,13 +3018,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Dorothea | Macaca mulatta | 04.03.2023",
-      "name": "Dorothea",
-      "_base_name": "Dorothea",
-      "display_name": "Dorothea"
+      "edits": {}
     },
-    "Thorin III | Macaca mulatta | 04.03.2026": {
+    "Thorin III": {
       "rolle": "Nachkomme",
       "id": "mm_85156353",
       "chip_nr": "P29UIK40",
@@ -3178,8 +3034,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Dorothea | Macaca mulatta | 04.03.2023",
-      "samenspender": "Dáin II | Macaca mulatta | 04.03.2023",
+      "eizellspenderin": "Dorothea",
+      "samenspender": "Dáin II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3199,13 +3055,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Thorin III | Macaca mulatta | 04.03.2026",
-      "name": "Thorin III",
-      "_base_name": "Thorin III",
-      "display_name": "Thorin III"
+      "edits": {}
     },
-    "Claudia | Macaca mulatta | 04.03.2026": {
+    "Claudia": {
       "rolle": "Nachkomme",
       "id": "mm_52782534",
       "chip_nr": "70NK3I9P",
@@ -3240,13 +3092,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Claudia | Macaca mulatta | 04.03.2026",
-      "name": "Claudia",
-      "_base_name": "Claudia",
-      "display_name": "Claudia"
+      "edits": {}
     },
-    "Durin VII | Macaca mulatta | 04.03.2029": {
+    "Durin VII": {
       "rolle": "Nachkomme",
       "id": "mm_40966835",
       "chip_nr": "HX5PKW5Q",
@@ -3260,8 +3108,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Claudia | Macaca mulatta | 04.03.2026",
-      "samenspender": "Thorin III | Macaca mulatta | 04.03.2026",
+      "eizellspenderin": "Claudia",
+      "samenspender": "Thorin III",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3281,13 +3129,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Durin VII | Macaca mulatta | 04.03.2029",
-      "name": "Durin VII",
-      "_base_name": "Durin VII",
-      "display_name": "Durin VII"
+      "edits": {}
     },
-    "Farin | Macaca mulatta | 04.03.2017": {
+    "Farin": {
       "rolle": "Nachkomme",
       "id": "mm_85230822",
       "chip_nr": "RXODRKD2",
@@ -3301,8 +3145,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Elke | Macaca mulatta | 04.03.2014",
-      "samenspender": "Borin | Macaca mulatta | 04.03.2014",
+      "eizellspenderin": "Elke",
+      "samenspender": "Borin",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3322,13 +3166,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Farin | Macaca mulatta | 04.03.2017",
-      "name": "Farin",
-      "_base_name": "Farin",
-      "display_name": "Farin"
+      "edits": {}
     },
-    "Martina | Macaca mulatta | 04.03.2017": {
+    "Martina": {
       "rolle": "Nachkomme",
       "id": "mm_74661919",
       "chip_nr": "7B6KX3LZ",
@@ -3363,13 +3203,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Martina | Macaca mulatta | 04.03.2017",
-      "name": "Martina",
-      "_base_name": "Martina",
-      "display_name": "Martina"
+      "edits": {}
     },
-    "Fundin | Macaca mulatta | 04.03.2020": {
+    "Fundin": {
       "rolle": "Nachkomme",
       "id": "mm_45043586",
       "chip_nr": "QCL88HJ1",
@@ -3383,8 +3219,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Martina | Macaca mulatta | 04.03.2017",
-      "samenspender": "Farin | Macaca mulatta | 04.03.2017",
+      "eizellspenderin": "Martina",
+      "samenspender": "Farin",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3404,13 +3240,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Fundin | Macaca mulatta | 04.03.2020",
-      "name": "Fundin",
-      "_base_name": "Fundin",
-      "display_name": "Fundin"
+      "edits": {}
     },
-    "Gróin | Macaca mulatta | 04.03.2020": {
+    "Gróin": {
       "rolle": "Nachkomme",
       "id": "mm_43429343",
       "chip_nr": "D0M9HGWP",
@@ -3424,8 +3256,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Martina | Macaca mulatta | 04.03.2017",
-      "samenspender": "Farin | Macaca mulatta | 04.03.2017",
+      "eizellspenderin": "Martina",
+      "samenspender": "Farin",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3445,13 +3277,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Gróin | Macaca mulatta | 04.03.2020",
-      "name": "Gróin",
-      "_base_name": "Gróin",
-      "display_name": "Gróin"
+      "edits": {}
     },
-    "Marianne | Macaca mulatta | 04.03.2020": {
+    "Marianne": {
       "rolle": "Nachkomme",
       "id": "mm_02335583",
       "chip_nr": "IUSNKJDB",
@@ -3486,13 +3314,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Marianne | Macaca mulatta | 04.03.2020",
-      "name": "Marianne",
-      "_base_name": "Marianne",
-      "display_name": "Marianne"
+      "edits": {}
     },
-    "Petra | Macaca mulatta | 04.03.2020": {
+    "Petra": {
       "rolle": "Nachkomme",
       "id": "mm_13152116",
       "chip_nr": "3QEKFMOH",
@@ -3527,13 +3351,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Petra | Macaca mulatta | 04.03.2020",
-      "name": "Petra",
-      "_base_name": "Petra",
-      "display_name": "Petra"
+      "edits": {}
     },
-    "Balin | Macaca mulatta | 04.03.2023": {
+    "Balin": {
       "rolle": "Nachkomme",
       "id": "mm_87674979",
       "chip_nr": "T7AB27OM",
@@ -3547,8 +3367,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Marianne | Macaca mulatta | 04.03.2020",
-      "samenspender": "Fundin | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Marianne",
+      "samenspender": "Fundin",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3568,13 +3388,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Balin | Macaca mulatta | 04.03.2023",
-      "name": "Balin",
-      "_base_name": "Balin",
-      "display_name": "Balin"
+      "edits": {}
     },
-    "Dwalin | Macaca mulatta | 04.03.2023": {
+    "Dwalin": {
       "rolle": "Nachkomme",
       "id": "mm_73551776",
       "chip_nr": "OM2DMZ7H",
@@ -3588,8 +3404,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Marianne | Macaca mulatta | 04.03.2020",
-      "samenspender": "Fundin | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Marianne",
+      "samenspender": "Fundin",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3609,13 +3425,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Dwalin | Macaca mulatta | 04.03.2023",
-      "name": "Dwalin",
-      "_base_name": "Dwalin",
-      "display_name": "Dwalin"
+      "edits": {}
     },
-    "Óin II | Macaca mulatta | 04.03.2023": {
+    "Óin II": {
       "rolle": "Nachkomme",
       "id": "mm_27347127",
       "chip_nr": "XQQLMBUP",
@@ -3629,8 +3441,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Petra | Macaca mulatta | 04.03.2020",
-      "samenspender": "Gróin | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Petra",
+      "samenspender": "Gróin",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3650,13 +3462,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Óin II | Macaca mulatta | 04.03.2023",
-      "name": "Óin II",
-      "_base_name": "Óin II",
-      "display_name": "Óin II"
+      "edits": {}
     },
-    "Glóin II | Macaca mulatta | 04.03.2023": {
+    "Glóin II": {
       "rolle": "Nachkomme",
       "id": "mm_26410525",
       "chip_nr": "96MT5Y3F",
@@ -3670,8 +3478,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Petra | Macaca mulatta | 04.03.2020",
-      "samenspender": "Gróin | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Petra",
+      "samenspender": "Gróin",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3691,13 +3499,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Glóin II | Macaca mulatta | 04.03.2023",
-      "name": "Glóin II",
-      "_base_name": "Glóin II",
-      "display_name": "Glóin II"
+      "edits": {}
     },
-    "Simone | Macaca mulatta | 04.03.2023": {
+    "Simone": {
       "rolle": "Nachkomme",
       "id": "mm_36237787",
       "chip_nr": "YQBDVSEI",
@@ -3732,13 +3536,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Simone | Macaca mulatta | 04.03.2023",
-      "name": "Simone",
-      "_base_name": "Simone",
-      "display_name": "Simone"
+      "edits": {}
     },
-    "Konrad II | Macaca mulatta | 04.03.2017": {
+    "Konrad II": {
       "rolle": "Nachkomme",
       "id": "mm_32026904",
       "chip_nr": "T7CK40QD",
@@ -3752,8 +3552,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Jutta | Macaca mulatta | 04.03.2014",
-      "samenspender": "Dieter | Macaca mulatta | 04.03.2014",
+      "eizellspenderin": "Jutta",
+      "samenspender": "Dieter",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3773,13 +3573,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Konrad II | Macaca mulatta | 04.03.2017",
-      "name": "Konrad II",
-      "_base_name": "Konrad II",
-      "display_name": "Konrad II"
+      "edits": {}
     },
-    "Heike | Macaca mulatta | 04.03.2017": {
+    "Heike": {
       "rolle": "Nachkomme",
       "id": "mm_21182393",
       "chip_nr": "G9XVXWBW",
@@ -3814,13 +3610,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Heike | Macaca mulatta | 04.03.2017",
-      "name": "Heike",
-      "_base_name": "Heike",
-      "display_name": "Heike"
+      "edits": {}
     },
-    "Karl | Macaca mulatta | 04.03.2020": {
+    "Karl": {
       "rolle": "Nachkomme",
       "id": "mm_27422437",
       "chip_nr": "YHK9EQEM",
@@ -3834,8 +3626,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Heike | Macaca mulatta | 04.03.2017",
-      "samenspender": "Konrad II | Macaca mulatta | 04.03.2017",
+      "eizellspenderin": "Heike",
+      "samenspender": "Konrad II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3855,13 +3647,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Karl | Macaca mulatta | 04.03.2020",
-      "name": "Karl",
-      "_base_name": "Karl",
-      "display_name": "Karl"
+      "edits": {}
     },
-    "Wilhelm | Macaca mulatta | 04.03.2020": {
+    "Wilhelm": {
       "rolle": "Nachkomme",
       "id": "mm_63395566",
       "chip_nr": "YYLVV0Z1",
@@ -3875,8 +3663,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Heike | Macaca mulatta | 04.03.2017",
-      "samenspender": "Konrad II | Macaca mulatta | 04.03.2017",
+      "eizellspenderin": "Heike",
+      "samenspender": "Konrad II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -3896,13 +3684,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Wilhelm | Macaca mulatta | 04.03.2020",
-      "name": "Wilhelm",
-      "_base_name": "Wilhelm",
-      "display_name": "Wilhelm"
+      "edits": {}
     },
-    "Rita | Macaca mulatta | 04.03.2020": {
+    "Rita": {
       "rolle": "Nachkomme",
       "id": "mm_45472630",
       "chip_nr": "MN6QUDTT",
@@ -3937,13 +3721,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Rita | Macaca mulatta | 04.03.2020",
-      "name": "Rita",
-      "_base_name": "Rita",
-      "display_name": "Rita"
+      "edits": {}
     },
-    "Erika II | Macaca mulatta | 04.03.2020": {
+    "Erika II": {
       "rolle": "Nachkomme",
       "id": "mm_28356937",
       "chip_nr": "BUDDWSNL",
@@ -3978,13 +3758,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Erika II | Macaca mulatta | 04.03.2020",
-      "name": "Erika II",
-      "_base_name": "Erika II",
-      "display_name": "Erika II"
+      "edits": {}
     },
-    "Dori | Macaca mulatta | 04.03.2023": {
+    "Dori": {
       "rolle": "Nachkomme",
       "id": "mm_06003439",
       "chip_nr": "0LTH2GV2",
@@ -3998,8 +3774,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Rita | Macaca mulatta | 04.03.2020",
-      "samenspender": "Karl | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Rita",
+      "samenspender": "Karl",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4019,13 +3795,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Dori | Macaca mulatta | 04.03.2023",
-      "name": "Dori",
-      "_base_name": "Dori",
-      "display_name": "Dori"
+      "edits": {}
     },
-    "Nori | Macaca mulatta | 04.03.2023": {
+    "Nori": {
       "rolle": "Nachkomme",
       "id": "mm_22758519",
       "chip_nr": "YRKW1U3Y",
@@ -4039,8 +3811,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Rita | Macaca mulatta | 04.03.2020",
-      "samenspender": "Karl | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Rita",
+      "samenspender": "Karl",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4060,13 +3832,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Nori | Macaca mulatta | 04.03.2023",
-      "name": "Nori",
-      "_base_name": "Nori",
-      "display_name": "Nori"
+      "edits": {}
     },
-    "Ori | Macaca mulatta | 04.03.2023": {
+    "Ori": {
       "rolle": "Nachkomme",
       "id": "mm_12605735",
       "chip_nr": "RKJTOYS4",
@@ -4080,8 +3848,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Erika II | Macaca mulatta | 04.03.2020",
-      "samenspender": "Wilhelm | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Erika II",
+      "samenspender": "Wilhelm",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4101,13 +3869,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Ori | Macaca mulatta | 04.03.2023",
-      "name": "Ori",
-      "_base_name": "Ori",
-      "display_name": "Ori"
+      "edits": {}
     },
-    "Albrecht | Macaca mulatta | 04.03.2020": {
+    "Albrecht": {
       "rolle": "Nachkomme",
       "id": "mm_71321469",
       "chip_nr": "14ZD8OG2",
@@ -4142,13 +3906,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Albrecht | Macaca mulatta | 04.03.2020",
-      "name": "Albrecht",
-      "_base_name": "Albrecht",
-      "display_name": "Albrecht"
+      "edits": {}
     },
-    "Kunigunde | Macaca mulatta | 04.03.2020": {
+    "Kunigunde": {
       "rolle": "Nachkomme",
       "id": "mm_36917511",
       "chip_nr": "UD8GEW83",
@@ -4183,13 +3943,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Kunigunde | Macaca mulatta | 04.03.2020",
-      "name": "Kunigunde",
-      "_base_name": "Kunigunde",
-      "display_name": "Kunigunde"
+      "edits": {}
     },
-    "Joachim | Macaca mulatta | 04.03.2023": {
+    "Joachim": {
       "rolle": "Nachkomme",
       "id": "mm_26734248",
       "chip_nr": "Y85SNSIL",
@@ -4203,8 +3959,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Kunigunde | Macaca mulatta | 04.03.2020",
-      "samenspender": "Albrecht | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Kunigunde",
+      "samenspender": "Albrecht",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4224,13 +3980,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Joachim | Macaca mulatta | 04.03.2023",
-      "name": "Joachim",
-      "_base_name": "Joachim",
-      "display_name": "Joachim"
+      "edits": {}
     },
-    "Rudolf | Macaca mulatta | 04.03.2023": {
+    "Rudolf": {
       "rolle": "Nachkomme",
       "id": "mm_45631187",
       "chip_nr": "9QZ55NM2",
@@ -4244,8 +3996,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Kunigunde | Macaca mulatta | 04.03.2020",
-      "samenspender": "Albrecht | Macaca mulatta | 04.03.2020",
+      "eizellspenderin": "Kunigunde",
+      "samenspender": "Albrecht",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4265,13 +4017,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Rudolf | Macaca mulatta | 04.03.2023",
-      "name": "Rudolf",
-      "_base_name": "Rudolf",
-      "display_name": "Rudolf"
+      "edits": {}
     },
-    "Beate II | Macaca mulatta | 04.03.2023": {
+    "Beate II": {
       "rolle": "Nachkomme",
       "id": "mm_84847468",
       "chip_nr": "45HGXODM",
@@ -4306,13 +4054,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Beate II | Macaca mulatta | 04.03.2023",
-      "name": "Beate II",
-      "_base_name": "Beate II",
-      "display_name": "Beate II"
+      "edits": {}
     },
-    "Margarete | Macaca mulatta | 04.03.2023": {
+    "Margarete": {
       "rolle": "Nachkomme",
       "id": "mm_43998759",
       "chip_nr": "RJW85QWM",
@@ -4347,13 +4091,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Margarete | Macaca mulatta | 04.03.2023",
-      "name": "Margarete",
-      "_base_name": "Margarete",
-      "display_name": "Margarete"
+      "edits": {}
     },
-    "Bifur | Macaca mulatta | 04.03.2026": {
+    "Bifur": {
       "rolle": "Nachkomme",
       "id": "mm_03147565",
       "chip_nr": "33Y95MTQ",
@@ -4367,8 +4107,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Beate II | Macaca mulatta | 04.03.2023",
-      "samenspender": "Joachim | Macaca mulatta | 04.03.2023",
+      "eizellspenderin": "Beate II",
+      "samenspender": "Joachim",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4388,13 +4128,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Bifur | Macaca mulatta | 04.03.2026",
-      "name": "Bifur",
-      "_base_name": "Bifur",
-      "display_name": "Bifur"
+      "edits": {}
     },
-    "Bofur | Macaca mulatta | 04.03.2026": {
+    "Bofur": {
       "rolle": "Nachkomme",
       "id": "mm_93703178",
       "chip_nr": "5EG9NPHH",
@@ -4408,8 +4144,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Margarete | Macaca mulatta | 04.03.2023",
-      "samenspender": "Rudolf | Macaca mulatta | 04.03.2023",
+      "eizellspenderin": "Margarete",
+      "samenspender": "Rudolf",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4429,13 +4165,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Bofur | Macaca mulatta | 04.03.2026",
-      "name": "Bofur",
-      "_base_name": "Bofur",
-      "display_name": "Bofur"
+      "edits": {}
     },
-    "Bombur | Macaca mulatta | 04.03.2026": {
+    "Bombur": {
       "rolle": "Nachkomme",
       "id": "mm_96765292",
       "chip_nr": "36FQBY7K",
@@ -4449,8 +4181,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Margarete | Macaca mulatta | 04.03.2023",
-      "samenspender": "Rudolf | Macaca mulatta | 04.03.2023",
+      "eizellspenderin": "Margarete",
+      "samenspender": "Rudolf",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4470,13 +4202,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Bombur | Macaca mulatta | 04.03.2026",
-      "name": "Bombur",
-      "_base_name": "Bombur",
-      "display_name": "Bombur"
+      "edits": {}
     },
-    "Beate I | Macaca mulatta | 04.03.2020": {
+    "Beate I": {
       "rolle": "Nachkomme",
       "id": "mm_11482560",
       "chip_nr": "ED09V4AS",
@@ -4511,13 +4239,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Beate I | Macaca mulatta | 04.03.2020",
-      "name": "Beate I",
-      "_base_name": "Beate I",
-      "display_name": "Beate I"
+      "edits": {}
     },
-    "Boldog | Papio hamadryas anubis | 04.03.2020": {
+    "Boldog": {
       "rolle": "Zuchttier",
       "id": "pha_35111257",
       "chip_nr": "HXZQBBPD",
@@ -4552,13 +4276,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Boldog | Papio hamadryas anubis | 04.03.2020",
-      "name": "Boldog",
-      "_base_name": "Boldog",
-      "display_name": "Boldog"
+      "in_experiment": false
     },
-    "Adèle | Papio hamadryas anubis | 04.03.2020": {
+    "Adèle": {
       "rolle": "Zuchttier",
       "id": "pha_68831762",
       "chip_nr": "QE0H5TTE",
@@ -4593,13 +4313,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Adèle | Papio hamadryas anubis | 04.03.2020",
-      "name": "Adèle",
-      "_base_name": "Adèle",
-      "display_name": "Adèle"
+      "in_experiment": false
     },
-    "Gorgol | Papio hamadryas anubis | 04.03.2021": {
+    "Gorgol": {
       "rolle": "Zuchttier",
       "id": "pha_11057581",
       "chip_nr": "W3NVEQJJ",
@@ -4613,8 +4329,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Adèle | Papio hamadryas anubis | 04.03.2020",
-      "samenspender": "Boldog | Papio hamadryas anubis | 04.03.2020",
+      "eizellspenderin": "Adèle",
+      "samenspender": "Boldog",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4634,13 +4350,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Gorgol | Papio hamadryas anubis | 04.03.2021",
-      "name": "Gorgol",
-      "_base_name": "Gorgol",
-      "display_name": "Gorgol"
+      "in_experiment": false
     },
-    "Balcmeg | Papio hamadryas anubis | 04.06.2021": {
+    "Balcmeg": {
       "rolle": "Nachkomme",
       "id": "pha_48358311",
       "chip_nr": "LOFY7YOZ",
@@ -4654,8 +4366,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Adèle | Papio hamadryas anubis | 04.03.2020",
-      "samenspender": "Boldog | Papio hamadryas anubis | 04.03.2020",
+      "eizellspenderin": "Adèle",
+      "samenspender": "Boldog",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4675,13 +4387,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Balcmeg | Papio hamadryas anubis | 04.06.2021",
-      "name": "Balcmeg",
-      "_base_name": "Balcmeg",
-      "display_name": "Balcmeg"
+      "in_experiment": false
     },
-    "Othrod | Papio hamadryas anubis | 04.09.2021": {
+    "Othrod": {
       "rolle": "Nachkomme",
       "id": "pha_27899674",
       "chip_nr": "0J8TSASK",
@@ -4695,8 +4403,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Adèle | Papio hamadryas anubis | 04.03.2020",
-      "samenspender": "Boldog | Papio hamadryas anubis | 04.03.2020",
+      "eizellspenderin": "Adèle",
+      "samenspender": "Boldog",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4716,13 +4424,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Othrod | Papio hamadryas anubis | 04.09.2021",
-      "name": "Othrod",
-      "_base_name": "Othrod",
-      "display_name": "Othrod"
+      "in_experiment": false
     },
-    "Béatrice | Papio hamadryas anubis | 04.03.2021": {
+    "Béatrice": {
       "rolle": "Zuchttier",
       "id": "pha_15619892",
       "chip_nr": "EZKLBADW",
@@ -4757,13 +4461,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Béatrice | Papio hamadryas anubis | 04.03.2021",
-      "name": "Béatrice",
-      "_base_name": "Béatrice",
-      "display_name": "Béatrice"
+      "in_experiment": false
     },
-    "Grishnákh | Papio hamadryas anubis | 04.03.2022": {
+    "Grishnákh": {
       "rolle": "Zuchttier",
       "id": "pha_78646258",
       "chip_nr": "NBXX3R5L",
@@ -4777,8 +4477,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Béatrice | Papio hamadryas anubis | 04.03.2021",
-      "samenspender": "Gorgol | Papio hamadryas anubis | 04.03.2021",
+      "eizellspenderin": "Béatrice",
+      "samenspender": "Gorgol",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4798,13 +4498,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Grishnákh | Papio hamadryas anubis | 04.03.2022",
-      "name": "Grishnákh",
-      "_base_name": "Grishnákh",
-      "display_name": "Grishnákh"
+      "in_experiment": false
     },
-    "Orcobal | Papio hamadryas anubis | 04.06.2022": {
+    "Orcobal": {
       "rolle": "Nachkomme",
       "id": "pha_99351077",
       "chip_nr": "TX6YJ8O8",
@@ -4818,8 +4514,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Béatrice | Papio hamadryas anubis | 04.03.2021",
-      "samenspender": "Gorgol | Papio hamadryas anubis | 04.03.2021",
+      "eizellspenderin": "Béatrice",
+      "samenspender": "Gorgol",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4839,13 +4535,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Orcobal | Papio hamadryas anubis | 04.06.2022",
-      "name": "Orcobal",
-      "_base_name": "Orcobal",
-      "display_name": "Orcobal"
+      "in_experiment": false
     },
-    "Camille | Papio hamadryas anubis | 04.03.2022": {
+    "Camille": {
       "rolle": "Zuchttier",
       "id": "pha_84574058",
       "chip_nr": "H70NFHL3",
@@ -4880,13 +4572,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Camille | Papio hamadryas anubis | 04.03.2022",
-      "name": "Camille",
-      "_base_name": "Camille",
-      "display_name": "Camille"
+      "in_experiment": false
     },
-    "Shagrat | Papio hamadryas anubis | 04.03.2023": {
+    "Shagrat": {
       "rolle": "Zuchttier",
       "id": "pha_78404029",
       "chip_nr": "LDT9JHNY",
@@ -4900,8 +4588,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Camille | Papio hamadryas anubis | 04.03.2022",
-      "samenspender": "Grishnákh | Papio hamadryas anubis | 04.03.2022",
+      "eizellspenderin": "Camille",
+      "samenspender": "Grishnákh",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4921,13 +4609,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Shagrat | Papio hamadryas anubis | 04.03.2023",
-      "name": "Shagrat",
-      "_base_name": "Shagrat",
-      "display_name": "Shagrat"
+      "in_experiment": false
     },
-    "Lugdush | Papio hamadryas anubis | 04.06.2023": {
+    "Lugdush": {
       "rolle": "Zuchttier",
       "id": "pha_90142018",
       "chip_nr": "FYU8097J",
@@ -4941,8 +4625,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Camille | Papio hamadryas anubis | 04.03.2022",
-      "samenspender": "Grishnákh | Papio hamadryas anubis | 04.03.2022",
+      "eizellspenderin": "Camille",
+      "samenspender": "Grishnákh",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -4962,13 +4646,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Lugdush | Papio hamadryas anubis | 04.06.2023",
-      "name": "Lugdush",
-      "_base_name": "Lugdush",
-      "display_name": "Lugdush"
+      "in_experiment": false
     },
-    "Gorbag | Papio hamadryas anubis | 04.09.2023": {
+    "Gorbag": {
       "rolle": "Nachkomme",
       "id": "pha_88010849",
       "chip_nr": "YRGF1CI4",
@@ -4982,8 +4662,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Camille | Papio hamadryas anubis | 04.03.2022",
-      "samenspender": "Grishnákh | Papio hamadryas anubis | 04.03.2022",
+      "eizellspenderin": "Camille",
+      "samenspender": "Grishnákh",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5003,13 +4683,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Gorbag | Papio hamadryas anubis | 04.09.2023",
-      "name": "Gorbag",
-      "_base_name": "Gorbag",
-      "display_name": "Gorbag"
+      "in_experiment": false
     },
-    "Orc-chieftain | Papio hamadryas anubis | 04.11.2023": {
+    "Orc-chieftain": {
       "rolle": "Nachkomme",
       "id": "pha_32546759",
       "chip_nr": "2O4GWB9W",
@@ -5023,8 +4699,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Camille | Papio hamadryas anubis | 04.03.2022",
-      "samenspender": "Grishnákh | Papio hamadryas anubis | 04.03.2022",
+      "eizellspenderin": "Camille",
+      "samenspender": "Grishnákh",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5044,13 +4720,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Orc-chieftain | Papio hamadryas anubis | 04.11.2023",
-      "name": "Orc-chieftain",
-      "_base_name": "Orc-chieftain",
-      "display_name": "Orc-chieftain"
+      "in_experiment": false
     },
-    "Delphine | Papio hamadryas anubis | 04.03.2023": {
+    "Delphine": {
       "rolle": "Zuchttier",
       "id": "pha_49530904",
       "chip_nr": "9Q3CNS49",
@@ -5085,13 +4757,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Delphine | Papio hamadryas anubis | 04.03.2023",
-      "name": "Delphine",
-      "_base_name": "Delphine",
-      "display_name": "Delphine"
+      "in_experiment": false
     },
-    "Hélène | Papio hamadryas anubis | 04.06.2023": {
+    "Hélène": {
       "rolle": "Zuchttier",
       "id": "pha_89498421",
       "chip_nr": "X9KAMY6L",
@@ -5126,13 +4794,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Hélène | Papio hamadryas anubis | 04.06.2023",
-      "name": "Hélène",
-      "_base_name": "Hélène",
-      "display_name": "Hélène"
+      "in_experiment": false
     },
-    "Aurore | Papio hamadryas anubis | 04.09.2023": {
+    "Aurore": {
       "rolle": "Nachkomme",
       "id": "pha_68646069",
       "chip_nr": "ESA62136",
@@ -5167,13 +4831,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Aurore | Papio hamadryas anubis | 04.09.2023",
-      "name": "Aurore",
-      "_base_name": "Aurore",
-      "display_name": "Aurore"
+      "in_experiment": false
     },
-    "Lagduf | Papio hamadryas anubis | 04.03.2024": {
+    "Lagduf": {
       "rolle": "Zuchttier",
       "id": "pha_67623358",
       "chip_nr": "W35H2VPW",
@@ -5187,8 +4847,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Delphine | Papio hamadryas anubis | 04.03.2023",
-      "samenspender": "Shagrat | Papio hamadryas anubis | 04.03.2023",
+      "eizellspenderin": "Delphine",
+      "samenspender": "Shagrat",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5208,13 +4868,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Lagduf | Papio hamadryas anubis | 04.03.2024",
-      "name": "Lagduf",
-      "_base_name": "Lagduf",
-      "display_name": "Lagduf"
+      "in_experiment": false
     },
-    "Snaga I | Papio hamadryas anubis | 04.06.2024": {
+    "Snaga I": {
       "rolle": "Nachkomme",
       "id": "pha_54063939",
       "chip_nr": "DI2EOQDL",
@@ -5228,8 +4884,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Delphine | Papio hamadryas anubis | 04.03.2023",
-      "samenspender": "Shagrat | Papio hamadryas anubis | 04.03.2023",
+      "eizellspenderin": "Delphine",
+      "samenspender": "Shagrat",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5249,13 +4905,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Snaga I | Papio hamadryas anubis | 04.06.2024",
-      "name": "Snaga I",
-      "_base_name": "Snaga I",
-      "display_name": "Snaga I"
+      "in_experiment": false
     },
-    "Muzgash | Papio hamadryas anubis | 04.09.2024": {
+    "Muzgash": {
       "rolle": "Nachkomme",
       "id": "pha_69622256",
       "chip_nr": "5Q23EN6G",
@@ -5269,8 +4921,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Delphine | Papio hamadryas anubis | 04.03.2023",
-      "samenspender": "Shagrat | Papio hamadryas anubis | 04.03.2023",
+      "eizellspenderin": "Delphine",
+      "samenspender": "Shagrat",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5290,13 +4942,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Muzgash | Papio hamadryas anubis | 04.09.2024",
-      "name": "Muzgash",
-      "_base_name": "Muzgash",
-      "display_name": "Muzgash"
+      "in_experiment": false
     },
-    "Uglúk | Papio hamadryas anubis | 04.06.2024": {
+    "Uglúk": {
       "rolle": "Zuchttier",
       "id": "pha_82149014",
       "chip_nr": "2RCE2K7T",
@@ -5310,8 +4958,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Hélène | Papio hamadryas anubis | 04.06.2023",
-      "samenspender": "Lugdush | Papio hamadryas anubis | 04.06.2023",
+      "eizellspenderin": "Hélène",
+      "samenspender": "Lugdush",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5331,13 +4979,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Uglúk | Papio hamadryas anubis | 04.06.2024",
-      "name": "Uglúk",
-      "_base_name": "Uglúk",
-      "display_name": "Uglúk"
+      "in_experiment": false
     },
-    "Élodie | Papio hamadryas anubis | 04.03.2024": {
+    "Élodie": {
       "rolle": "Zuchttier",
       "id": "pha_40397215",
       "chip_nr": "ZS292EX8",
@@ -5372,13 +5016,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Élodie | Papio hamadryas anubis | 04.03.2024",
-      "name": "Élodie",
-      "_base_name": "Élodie",
-      "display_name": "Élodie"
+      "in_experiment": false
     },
-    "Josiane | Papio hamadryas anubis | 04.09.2024": {
+    "Josiane": {
       "rolle": "Nachkomme",
       "id": "pha_34962057",
       "chip_nr": "X2C3MGVO",
@@ -5413,13 +5053,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Josiane | Papio hamadryas anubis | 04.09.2024",
-      "name": "Josiane",
-      "_base_name": "Josiane",
-      "display_name": "Josiane"
+      "in_experiment": false
     },
-    "Isabelle | Papio hamadryas anubis | 04.06.2024": {
+    "Isabelle": {
       "rolle": "Zuchttier",
       "id": "pha_32691314",
       "chip_nr": "KZ9PS80T",
@@ -5454,13 +5090,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Isabelle | Papio hamadryas anubis | 04.06.2024",
-      "name": "Isabelle",
-      "_base_name": "Isabelle",
-      "display_name": "Isabelle"
+      "in_experiment": false
     },
-    "Ufthak | Papio hamadryas anubis | 04.03.2025": {
+    "Ufthak": {
       "rolle": "Zuchttier",
       "id": "pha_04622136",
       "chip_nr": "GGVXXFRH",
@@ -5474,8 +5106,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Élodie | Papio hamadryas anubis | 04.03.2024",
-      "samenspender": "Lagduf | Papio hamadryas anubis | 04.03.2024",
+      "eizellspenderin": "Élodie",
+      "samenspender": "Lagduf",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5495,13 +5127,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Ufthak | Papio hamadryas anubis | 04.03.2025",
-      "name": "Ufthak",
-      "_base_name": "Ufthak",
-      "display_name": "Ufthak"
+      "in_experiment": false
     },
-    "Lug | Papio hamadryas anubis | 04.06.2025": {
+    "Lug": {
       "rolle": "Nachkomme",
       "id": "pha_62215591",
       "chip_nr": "015S6MQE",
@@ -5515,8 +5143,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Élodie | Papio hamadryas anubis | 04.03.2024",
-      "samenspender": "Lagduf | Papio hamadryas anubis | 04.03.2024",
+      "eizellspenderin": "Élodie",
+      "samenspender": "Lagduf",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5536,13 +5164,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Lug | Papio hamadryas anubis | 04.06.2025",
-      "name": "Lug",
-      "_base_name": "Lug",
-      "display_name": "Lug"
+      "in_experiment": false
     },
-    "Naglur-Danlo | Papio hamadryas anubis | 04.09.2025": {
+    "Naglur-Danlo": {
       "rolle": "Zuchttier",
       "id": "pha_41774622",
       "chip_nr": "D5Z7RF37",
@@ -5556,8 +5180,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Florence | Papio hamadryas anubis | 04.03.2025",
-      "samenspender": "Ufthak | Papio hamadryas anubis | 04.03.2025",
+      "eizellspenderin": "Florence",
+      "samenspender": "Ufthak",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5577,13 +5201,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Naglur-Danlo | Papio hamadryas anubis | 04.09.2025",
-      "name": "Naglur-Danlo",
-      "_base_name": "Naglur-Danlo",
-      "display_name": "Naglur-Danlo"
+      "in_experiment": false
     },
-    "Mauhúr | Papio hamadryas anubis | 04.06.2025": {
+    "Mauhúr": {
       "rolle": "Zuchttier",
       "id": "pha_63222904",
       "chip_nr": "8MUGTIIX",
@@ -5597,8 +5217,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Isabelle | Papio hamadryas anubis | 04.06.2024",
-      "samenspender": "Uglúk | Papio hamadryas anubis | 04.06.2024",
+      "eizellspenderin": "Isabelle",
+      "samenspender": "Uglúk",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5618,13 +5238,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Mauhúr | Papio hamadryas anubis | 04.06.2025",
-      "name": "Mauhúr",
-      "_base_name": "Mauhúr",
-      "display_name": "Mauhúr"
+      "in_experiment": false
     },
-    "Snaga II | Papio hamadryas anubis | 04.09.2025": {
+    "Snaga II": {
       "rolle": "Nachkomme",
       "id": "pha_55706001",
       "chip_nr": "CESB81SG",
@@ -5638,8 +5254,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Isabelle | Papio hamadryas anubis | 04.06.2024",
-      "samenspender": "Uglúk | Papio hamadryas anubis | 04.06.2024",
+      "eizellspenderin": "Isabelle",
+      "samenspender": "Uglúk",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5659,13 +5275,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Snaga II | Papio hamadryas anubis | 04.09.2025",
-      "name": "Snaga II",
-      "_base_name": "Snaga II",
-      "display_name": "Snaga II"
+      "in_experiment": false
     },
-    "Florence | Papio hamadryas anubis | 04.03.2025": {
+    "Florence": {
       "rolle": "Zuchttier",
       "id": "pha_68203422",
       "chip_nr": "0YKN6PZ3",
@@ -5700,13 +5312,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Florence | Papio hamadryas anubis | 04.03.2025",
-      "name": "Florence",
-      "_base_name": "Florence",
-      "display_name": "Florence"
+      "in_experiment": false
     },
-    "Gisèle | Papio hamadryas anubis | 04.09.2025": {
+    "Gisèle": {
       "rolle": "Zuchttier",
       "id": "pha_72688547",
       "chip_nr": "L11B4YA6",
@@ -5741,13 +5349,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Gisèle | Papio hamadryas anubis | 04.09.2025",
-      "name": "Gisèle",
-      "_base_name": "Gisèle",
-      "display_name": "Gisèle"
+      "in_experiment": false
     },
-    "Josette | Papio hamadryas anubis | 04.06.2025": {
+    "Josette": {
       "rolle": "Zuchttier",
       "id": "pha_50566446",
       "chip_nr": "S48F7W7E",
@@ -5782,13 +5386,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Josette | Papio hamadryas anubis | 04.06.2025",
-      "name": "Josette",
-      "_base_name": "Josette",
-      "display_name": "Josette"
+      "in_experiment": false
     },
-    "Gothmog | Papio hamadryas anubis | 04.03.2026": {
+    "Gothmog": {
       "rolle": "Nachkomme",
       "id": "pha_17669206",
       "chip_nr": "6OCA14G3",
@@ -5802,8 +5402,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Gisèle | Papio hamadryas anubis | 04.09.2025",
-      "samenspender": "Naglur-Danlo | Papio hamadryas anubis | 04.09.2025",
+      "eizellspenderin": "Gisèle",
+      "samenspender": "Naglur-Danlo",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5823,13 +5423,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Gothmog | Papio hamadryas anubis | 04.03.2026",
-      "name": "Gothmog",
-      "_base_name": "Gothmog",
-      "display_name": "Gothmog"
+      "in_experiment": false
     },
-    "Lurz | Papio hamadryas anubis | 04.03.2026": {
+    "Lurz": {
       "rolle": "Nachkomme",
       "id": "pha_13841563",
       "chip_nr": "33XWTQJS",
@@ -5843,8 +5439,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Josette | Papio hamadryas anubis | 04.06.2025",
-      "samenspender": "Mauhúr | Papio hamadryas anubis | 04.06.2025",
+      "eizellspenderin": "Josette",
+      "samenspender": "Mauhúr",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5864,13 +5460,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Lurz | Papio hamadryas anubis | 04.03.2026",
-      "name": "Lurz",
-      "_base_name": "Lurz",
-      "display_name": "Lurz"
+      "in_experiment": false
     },
-    "Golfimbul | Papio hamadryas anubis | 04.04.2020": {
+    "Golfimbul": {
       "rolle": "Zuchttier",
       "id": "pha_89439677",
       "chip_nr": "97I1BXO4",
@@ -5905,13 +5497,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Golfimbul | Papio hamadryas anubis | 04.04.2020",
-      "name": "Golfimbul",
-      "_base_name": "Golfimbul",
-      "display_name": "Golfimbul"
+      "in_experiment": false
     },
-    "Blanche | Papio hamadryas anubis | 04.04.2020": {
+    "Blanche": {
       "rolle": "Zuchttier",
       "id": "pha_67469671",
       "chip_nr": "3A95O761",
@@ -5946,13 +5534,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Blanche | Papio hamadryas anubis | 04.04.2020",
-      "name": "Blanche",
-      "_base_name": "Blanche",
-      "display_name": "Blanche"
+      "in_experiment": false
     },
-    "Greatgoblin | Papio hamadryas anubis | 04.04.2021": {
+    "Greatgoblin": {
       "rolle": "Zuchttier",
       "id": "pha_96697751",
       "chip_nr": "U50HFCCF",
@@ -5966,8 +5550,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Blanche | Papio hamadryas anubis | 04.04.2020",
-      "samenspender": "Golfimbul | Papio hamadryas anubis | 04.04.2020",
+      "eizellspenderin": "Blanche",
+      "samenspender": "Golfimbul",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -5987,13 +5571,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Greatgoblin | Papio hamadryas anubis | 04.04.2021",
-      "name": "Greatgoblin",
-      "_base_name": "Greatgoblin",
-      "display_name": "Greatgoblin"
+      "in_experiment": false
     },
-    "Cécile | Papio hamadryas anubis | 04.04.2021": {
+    "Cécile": {
       "rolle": "Zuchttier",
       "id": "pha_30380653",
       "chip_nr": "0IWQ2A3S",
@@ -6028,13 +5608,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Cécile | Papio hamadryas anubis | 04.04.2021",
-      "name": "Cécile",
-      "_base_name": "Cécile",
-      "display_name": "Cécile"
+      "in_experiment": false
     },
-    "Azog | Papio hamadryas anubis | 04.04.2022": {
+    "Azog": {
       "rolle": "Versuchstier",
       "id": "pha_46229302",
       "chip_nr": "9LWX3R1A",
@@ -6048,8 +5624,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Cécile | Papio hamadryas anubis | 04.04.2021",
-      "samenspender": "Greatgoblin | Papio hamadryas anubis | 04.04.2021",
+      "eizellspenderin": "Cécile",
+      "samenspender": "Greatgoblin",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -6069,13 +5645,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Azog | Papio hamadryas anubis | 04.04.2022",
-      "name": "Azog",
-      "_base_name": "Azog",
-      "display_name": "Azog"
+      "in_experiment": false
     },
-    "Diane | Papio hamadryas anubis | 04.04.2022": {
+    "Diane": {
       "rolle": "Zuchttier",
       "id": "pha_29281555",
       "chip_nr": "6TEYN9SM",
@@ -6110,13 +5682,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Diane | Papio hamadryas anubis | 04.04.2022",
-      "name": "Diane",
-      "_base_name": "Diane",
-      "display_name": "Diane"
+      "in_experiment": false
     },
-    "Bolg | Papio hamadryas anubis | 04.04.2023": {
+    "Bolg": {
       "rolle": "Zuchttier",
       "id": "pha_61202180",
       "chip_nr": "ZRPBRNMM",
@@ -6130,8 +5698,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Diane | Papio hamadryas anubis | 04.04.2022",
-      "samenspender": "Azog | Papio hamadryas anubis | 04.04.2022",
+      "eizellspenderin": "Diane",
+      "samenspender": "Azog",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -6151,13 +5719,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Bolg | Papio hamadryas anubis | 04.04.2023",
-      "name": "Bolg",
-      "_base_name": "Bolg",
-      "display_name": "Bolg"
+      "in_experiment": false
     },
-    "Estelle | Papio hamadryas anubis | 04.04.2023": {
+    "Estelle": {
       "rolle": "Zuchttier",
       "id": "pha_62174474",
       "chip_nr": "T6YIFKAV",
@@ -6192,13 +5756,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Estelle | Papio hamadryas anubis | 04.04.2023",
-      "name": "Estelle",
-      "_base_name": "Estelle",
-      "display_name": "Estelle"
+      "in_experiment": false
     },
-    "Bodyguard | Papio hamadryas anubis | 04.04.2024": {
+    "Bodyguard": {
       "rolle": "Zuchttier",
       "id": "pha_06467948",
       "chip_nr": "J8D2BFK4",
@@ -6212,8 +5772,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Estelle | Papio hamadryas anubis | 04.04.2023",
-      "samenspender": "Bolg | Papio hamadryas anubis | 04.04.2023",
+      "eizellspenderin": "Estelle",
+      "samenspender": "Bolg",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -6233,13 +5793,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Bodyguard | Papio hamadryas anubis | 04.04.2024",
-      "name": "Bodyguard",
-      "_base_name": "Bodyguard",
-      "display_name": "Bodyguard"
+      "in_experiment": false
     },
-    "Fabienne | Papio hamadryas anubis | 04.04.2024": {
+    "Fabienne": {
       "rolle": "Zuchttier",
       "id": "pha_49661724",
       "chip_nr": "PQRUDT8R",
@@ -6274,13 +5830,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Fabienne | Papio hamadryas anubis | 04.04.2024",
-      "name": "Fabienne",
-      "_base_name": "Fabienne",
-      "display_name": "Fabienne"
+      "in_experiment": false
     },
-    "Yellowfang | Papio hamadryas anubis | 04.04.2025": {
+    "Yellowfang": {
       "rolle": "Zuchttier",
       "id": "pha_31103986",
       "chip_nr": "YSV9MJEH",
@@ -6294,8 +5846,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Fabienne | Papio hamadryas anubis | 04.04.2024",
-      "samenspender": "Bodyguard | Papio hamadryas anubis | 04.04.2024",
+      "eizellspenderin": "Fabienne",
+      "samenspender": "Bodyguard",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -6315,13 +5867,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Yellowfang | Papio hamadryas anubis | 04.04.2025",
-      "name": "Yellowfang",
-      "_base_name": "Yellowfang",
-      "display_name": "Yellowfang"
+      "in_experiment": false
     },
-    "Gaëlle | Papio hamadryas anubis | 04.04.2025": {
+    "Gaëlle": {
       "rolle": "Zuchttier",
       "id": "pha_37740347",
       "chip_nr": "VEWR5NF5",
@@ -6356,13 +5904,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Gaëlle | Papio hamadryas anubis | 04.04.2025",
-      "name": "Gaëlle",
-      "_base_name": "Gaëlle",
-      "display_name": "Gaëlle"
+      "in_experiment": false
     },
-    "Snot | Papio hamadryas anubis | 04.03.2026": {
+    "Snot": {
       "rolle": "Nachkomme",
       "id": "pha_81439507",
       "chip_nr": "HK9S2Z8Q",
@@ -6376,8 +5920,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Gaëlle | Papio hamadryas anubis | 04.04.2025",
-      "samenspender": "Yellowfang | Papio hamadryas anubis | 04.04.2025",
+      "eizellspenderin": "Gaëlle",
+      "samenspender": "Yellowfang",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -6397,13 +5941,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Snot | Papio hamadryas anubis | 04.03.2026",
-      "name": "Snot",
-      "_base_name": "Snot",
-      "display_name": "Snot"
+      "in_experiment": false
     },
-    "Gaston | Papio hamadryas anubis | 04.07.2021": {
+    "Gaston": {
       "rolle": "Nachkomme",
       "id": "pha_81609158",
       "chip_nr": "IK631ZVF",
@@ -6417,8 +5957,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Blanche | Papio hamadryas anubis | 04.04.2020",
-      "samenspender": "Golfimbul | Papio hamadryas anubis | 04.04.2020",
+      "eizellspenderin": "Blanche",
+      "samenspender": "Golfimbul",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -6438,13 +5978,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Gaston | Papio hamadryas anubis | 04.07.2021",
-      "name": "Gaston",
-      "_base_name": "Gaston",
-      "display_name": "Gaston"
+      "in_experiment": false
     },
-    "Honoré | Papio hamadryas anubis | 04.07.2022": {
+    "Honoré": {
       "rolle": "Nachkomme",
       "id": "pha_79597848",
       "chip_nr": "7DCG3V45",
@@ -6458,8 +5994,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Cécile | Papio hamadryas anubis | 04.04.2021",
-      "samenspender": "Greatgoblin | Papio hamadryas anubis | 04.04.2021",
+      "eizellspenderin": "Cécile",
+      "samenspender": "Greatgoblin",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -6479,13 +6015,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Honoré | Papio hamadryas anubis | 04.07.2022",
-      "name": "Honoré",
-      "_base_name": "Honoré",
-      "display_name": "Honoré"
+      "in_experiment": false
     },
-    "Marcel | Papio hamadryas anubis | 04.07.2023": {
+    "Marcel": {
       "rolle": "Nachkomme",
       "id": "pha_28553263",
       "chip_nr": "SS1YLEM6",
@@ -6499,8 +6031,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Diane | Papio hamadryas anubis | 04.04.2022",
-      "samenspender": "Azog | Papio hamadryas anubis | 04.04.2022",
+      "eizellspenderin": "Diane",
+      "samenspender": "Azog",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -6520,13 +6052,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Marcel | Papio hamadryas anubis | 04.07.2023",
-      "name": "Marcel",
-      "_base_name": "Marcel",
-      "display_name": "Marcel"
+      "in_experiment": false
     },
-    "Noémie | Papio hamadryas anubis | 04.07.2025": {
+    "Noémie": {
       "rolle": "Nachkomme",
       "id": "pha_52340970",
       "chip_nr": "T87ICZWA",
@@ -6540,8 +6068,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Fabienne | Papio hamadryas anubis | 04.04.2024",
-      "samenspender": "Bodyguard | Papio hamadryas anubis | 04.04.2024",
+      "eizellspenderin": "Fabienne",
+      "samenspender": "Bodyguard",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -6561,13 +6089,9 @@
       "recovery_time": 0,
       "sick_start_date": null,
       "sick_end_date": null,
-      "in_experiment": false,
-      "ipid": "Noémie | Papio hamadryas anubis | 04.07.2025",
-      "name": "Noémie",
-      "_base_name": "Noémie",
-      "display_name": "Noémie"
+      "in_experiment": false
     },
-    "Elrond | Callitrix jacchus | 04.02.2012": {
+    "Elrond": {
       "rolle": "Zuchttier",
       "id": "cj_99652953",
       "birth_date": "04.02.2012",
@@ -6576,8 +6100,8 @@
       "genotype": "WT/H-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Elwing | Callitrix jacchus | 08.01.2008",
-      "samenspender": "Eärendil | Callitrix jacchus | 14.02.2010",
+      "eizellspenderin": "Elwing",
+      "samenspender": "Eärendil",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -6675,13 +6199,9 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Elrond | Callitrix jacchus | 04.02.2012",
-      "name": "Elrond",
-      "_base_name": "Elrond",
-      "display_name": "Elrond"
+      "project_entry_date": "20.04.2026"
     },
-    "Celebrían | Callitrix jacchus | 06.05.2007": {
+    "Celebrían": {
       "rolle": "Zuchttier",
       "id": "cj_81047252",
       "birth_date": "06.05.2007",
@@ -6690,8 +6210,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 8,
       "max_geburten": 6,
-      "eizellspenderin": "Galadriel | Callitrix jacchus | 17.06.2005",
-      "samenspender": "Celeborn | Callitrix jacchus | 29.08.2004",
+      "eizellspenderin": "Galadriel",
+      "samenspender": "Celeborn",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -6789,23 +6309,19 @@
           "severity": ""
         }
       ],
-      "project_entry_date": "20.04.2026",
-      "ipid": "Celebrían | Callitrix jacchus | 06.05.2007",
-      "name": "Celebrían",
-      "_base_name": "Celebrían",
-      "display_name": "Celebrían"
+      "project_entry_date": "20.04.2026"
     },
-    "Andy | Unknown species | 01.01.1900": {
+    "Andy": {
       "rolle": "Samenspender",
       "id": "",
       "chip_nr": "",
       "origin": "",
       "project": "Zucht",
       "severity": "",
-      "birth_date": "01.01.1900",
+      "birth_date": "",
       "death_date": "",
       "special_status": "",
-      "species": "Unknown species",
+      "species": "",
       "ref_weight": 450.0,
       "max_spermaproben": 100,
       "recovery_time": 60,
@@ -6854,25 +6370,19 @@
       "pgf": [],
       "embryo": [],
       "sick_start_date": null,
-      "sick_end_date": null,
-      "ipid": "Andy | Unknown species | 01.01.1900",
-      "name": "Andy",
-      "_base_name": "Andy",
-      "display_name": "Andy",
-      "identity_review_required": true,
-      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
+      "sick_end_date": null
     },
-    "Bobby | Unknown species | 01.01.1900": {
+    "Bobby": {
       "rolle": "Samenspender",
       "id": "",
       "chip_nr": "",
       "origin": "",
       "project": "",
       "severity": "",
-      "birth_date": "01.01.1900",
+      "birth_date": "",
       "death_date": "",
       "special_status": "",
-      "species": "Unknown species",
+      "species": "",
       "ref_weight": 450.0,
       "max_spermaproben": 100,
       "recovery_time": 60,
@@ -6907,25 +6417,19 @@
           "leave_date": "17.06.2026",
           "severity": ""
         }
-      ],
-      "ipid": "Bobby | Unknown species | 01.01.1900",
-      "name": "Bobby",
-      "_base_name": "Bobby",
-      "display_name": "Bobby",
-      "identity_review_required": true,
-      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
+      ]
     },
-    "Cindy | Unknown species | 01.01.1900": {
+    "Cindy": {
       "rolle": "Samenspender",
       "id": "",
       "chip_nr": "",
       "origin": "",
       "project": "",
       "severity": "",
-      "birth_date": "01.01.1900",
+      "birth_date": "",
       "death_date": "",
       "special_status": "",
-      "species": "Unknown species",
+      "species": "",
       "ref_weight": 450.0,
       "max_spermaproben": 100,
       "recovery_time": 60,
@@ -6967,25 +6471,19 @@
       "pgf": [],
       "embryo": [],
       "sick_start_date": null,
-      "sick_end_date": null,
-      "ipid": "Cindy | Unknown species | 01.01.1900",
-      "name": "Cindy",
-      "_base_name": "Cindy",
-      "display_name": "Cindy",
-      "identity_review_required": true,
-      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
+      "sick_end_date": null
     },
-    "Dana | Unknown species | 01.01.1900": {
+    "Dana": {
       "rolle": "Samenspender",
       "id": "",
       "chip_nr": "",
       "origin": "",
       "project": "",
       "severity": "",
-      "birth_date": "01.01.1900",
+      "birth_date": "",
       "death_date": "",
       "special_status": "",
-      "species": "Unknown species",
+      "species": "",
       "ref_weight": 450.0,
       "max_spermaproben": 100,
       "recovery_time": 60,
@@ -7027,25 +6525,19 @@
       "pgf": [],
       "embryo": [],
       "sick_start_date": null,
-      "sick_end_date": null,
-      "ipid": "Dana | Unknown species | 01.01.1900",
-      "name": "Dana",
-      "_base_name": "Dana",
-      "display_name": "Dana",
-      "identity_review_required": true,
-      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
+      "sick_end_date": null
     },
-    "Echo | Unknown species | 01.01.1900": {
+    "Echo": {
       "rolle": "Samenspender",
       "id": "",
       "chip_nr": "",
       "origin": "",
       "project": "",
       "severity": "",
-      "birth_date": "01.01.1900",
+      "birth_date": "",
       "death_date": "",
       "special_status": "",
-      "species": "Unknown species",
+      "species": "",
       "ref_weight": 450.0,
       "max_spermaproben": 100,
       "recovery_time": 60,
@@ -7062,25 +6554,19 @@
       "pgf": [],
       "embryo": [],
       "sick_start_date": null,
-      "sick_end_date": null,
-      "ipid": "Echo | Unknown species | 01.01.1900",
-      "name": "Echo",
-      "_base_name": "Echo",
-      "display_name": "Echo",
-      "identity_review_required": true,
-      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
+      "sick_end_date": null
     },
-    "Fredi | Unknown species | 01.01.1900": {
+    "Fredi": {
       "rolle": "Samenspender",
       "id": "",
       "chip_nr": "",
       "origin": "",
       "project": "",
       "severity": "",
-      "birth_date": "01.01.1900",
+      "birth_date": "",
       "death_date": "",
       "special_status": "",
-      "species": "Unknown species",
+      "species": "",
       "ref_weight": 450.0,
       "max_spermaproben": 100,
       "recovery_time": 60,
@@ -7097,17 +6583,11 @@
       "pgf": [],
       "embryo": [],
       "sick_start_date": null,
-      "sick_end_date": null,
-      "ipid": "Fredi | Unknown species | 01.01.1900",
-      "name": "Fredi",
-      "_base_name": "Fredi",
-      "display_name": "Fredi",
-      "identity_review_required": true,
-      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
+      "sick_end_date": null
     }
   },
   "archived_animals": {
-    "Míriel | Callitrix jacchus | 08.01.2000": {
+    "Míriel": {
       "rolle": "Zuchttier",
       "id": "cj_57356675",
       "birth_date": "08.01.2000",
@@ -7201,13 +6681,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Míriel | Callitrix jacchus | 08.01.2000",
-      "name": "Míriel",
-      "_base_name": "Míriel",
-      "display_name": "Míriel"
+      "special_status": ""
     },
-    "Finwë | Callitrix jacchus | 15.05.2000": {
+    "Finwë": {
       "rolle": "Zuchttier",
       "id": "cj_13098748",
       "birth_date": "15.05.2000",
@@ -7301,13 +6777,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Finwë | Callitrix jacchus | 15.05.2000",
-      "name": "Finwë",
-      "_base_name": "Finwë",
-      "display_name": "Finwë"
+      "special_status": ""
     },
-    "Indis | Callitrix jacchus | 05.03.2000": {
+    "Indis": {
       "rolle": "Zuchttier",
       "id": "cj_14697832",
       "birth_date": "05.03.2000",
@@ -7401,13 +6873,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Indis | Callitrix jacchus | 05.03.2000",
-      "name": "Indis",
-      "_base_name": "Indis",
-      "display_name": "Indis"
+      "special_status": ""
     },
-    "Fëanor | Callitrix jacchus | 13.03.2002": {
+    "Fëanor": {
       "rolle": "Zuchttier",
       "id": "cj_74858635",
       "birth_date": "13.03.2002",
@@ -7416,8 +6884,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Míriel | Callitrix jacchus | 08.01.2000",
-      "samenspender": "Finwë | Callitrix jacchus | 15.05.2000",
+      "eizellspenderin": "Míriel",
+      "samenspender": "Finwë",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -7501,13 +6969,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Fëanor | Callitrix jacchus | 13.03.2002",
-      "name": "Fëanor",
-      "_base_name": "Fëanor",
-      "display_name": "Fëanor"
+      "special_status": ""
     },
-    "Findis | Callitrix jacchus | 02.05.2002": {
+    "Findis": {
       "rolle": "Zuchttier",
       "id": "cj_72397724",
       "birth_date": "02.05.2002",
@@ -7516,8 +6980,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 8,
       "max_geburten": 6,
-      "eizellspenderin": "Indis | Callitrix jacchus | 05.03.2000",
-      "samenspender": "Finwë | Callitrix jacchus | 15.05.2000",
+      "eizellspenderin": "Indis",
+      "samenspender": "Finwë",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -7601,13 +7065,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Findis | Callitrix jacchus | 02.05.2002",
-      "name": "Findis",
-      "_base_name": "Findis",
-      "display_name": "Findis"
+      "special_status": ""
     },
-    "Fingolfin | Callitrix jacchus | 01.08.2002": {
+    "Fingolfin": {
       "rolle": "Zuchttier",
       "id": "cj_55140406",
       "birth_date": "01.08.2002",
@@ -7616,8 +7076,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Indis | Callitrix jacchus | 05.03.2000",
-      "samenspender": "Finwë | Callitrix jacchus | 15.05.2000",
+      "eizellspenderin": "Indis",
+      "samenspender": "Finwë",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -7701,13 +7161,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Fingolfin | Callitrix jacchus | 01.08.2002",
-      "name": "Fingolfin",
-      "_base_name": "Fingolfin",
-      "display_name": "Fingolfin"
+      "special_status": ""
     },
-    "Írimë | Callitrix jacchus | 18.01.2003": {
+    "Írimë": {
       "rolle": "Zuchttier",
       "id": "cj_47266899",
       "birth_date": "18.01.2003",
@@ -7716,8 +7172,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 8,
       "max_geburten": 6,
-      "eizellspenderin": "Indis | Callitrix jacchus | 05.03.2000",
-      "samenspender": "Finwë | Callitrix jacchus | 15.05.2000",
+      "eizellspenderin": "Indis",
+      "samenspender": "Finwë",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -7801,13 +7257,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Írimë | Callitrix jacchus | 18.01.2003",
-      "name": "Írimë",
-      "_base_name": "Írimë",
-      "display_name": "Írimë"
+      "special_status": ""
     },
-    "Nerdanel | Callitrix jacchus | 08.09.2001": {
+    "Nerdanel": {
       "rolle": "Zuchttier",
       "id": "cj_94000918",
       "birth_date": "08.09.2001",
@@ -7901,13 +7353,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Nerdanel | Callitrix jacchus | 08.09.2001",
-      "name": "Nerdanel",
-      "_base_name": "Nerdanel",
-      "display_name": "Nerdanel"
+      "special_status": ""
     },
-    "Eärwen | Callitrix jacchus | 03.08.2001": {
+    "Eärwen": {
       "rolle": "Zuchttier",
       "id": "cj_56864289",
       "birth_date": "03.08.2001",
@@ -8001,13 +7449,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Eärwen | Callitrix jacchus | 03.08.2001",
-      "name": "Eärwen",
-      "_base_name": "Eärwen",
-      "display_name": "Eärwen"
+      "special_status": ""
     },
-    "Maedhros | Callitrix jacchus | 25.02.2004": {
+    "Maedhros": {
       "rolle": "Zuchttier",
       "id": "cj_67054765",
       "birth_date": "25.02.2004",
@@ -8016,8 +7460,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001",
-      "samenspender": "Fëanor | Callitrix jacchus | 13.03.2002",
+      "eizellspenderin": "Nerdanel",
+      "samenspender": "Fëanor",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -8101,13 +7545,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Maedhros | Callitrix jacchus | 25.02.2004",
-      "name": "Maedhros",
-      "_base_name": "Maedhros",
-      "display_name": "Maedhros"
+      "special_status": ""
     },
-    "Maglor | Callitrix jacchus | 12.07.2004": {
+    "Maglor": {
       "rolle": "Zuchttier",
       "id": "cj_72651194",
       "birth_date": "12.07.2004",
@@ -8116,8 +7556,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001",
-      "samenspender": "Fëanor | Callitrix jacchus | 13.03.2002",
+      "eizellspenderin": "Nerdanel",
+      "samenspender": "Fëanor",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -8201,13 +7641,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Maglor | Callitrix jacchus | 12.07.2004",
-      "name": "Maglor",
-      "_base_name": "Maglor",
-      "display_name": "Maglor"
+      "special_status": ""
     },
-    "Celegorm | Callitrix jacchus | 08.01.2005": {
+    "Celegorm": {
       "rolle": "Zuchttier",
       "id": "cj_48149965",
       "birth_date": "08.01.2005",
@@ -8216,8 +7652,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001",
-      "samenspender": "Fëanor | Callitrix jacchus | 13.03.2002",
+      "eizellspenderin": "Nerdanel",
+      "samenspender": "Fëanor",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -8301,13 +7737,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Celegorm | Callitrix jacchus | 08.01.2005",
-      "name": "Celegorm",
-      "_base_name": "Celegorm",
-      "display_name": "Celegorm"
+      "special_status": ""
     },
-    "Caranthir | Callitrix jacchus | 23.06.2005": {
+    "Caranthir": {
       "rolle": "Zuchttier",
       "id": "cj_77655664",
       "birth_date": "23.06.2005",
@@ -8316,8 +7748,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001",
-      "samenspender": "Fëanor | Callitrix jacchus | 13.03.2002",
+      "eizellspenderin": "Nerdanel",
+      "samenspender": "Fëanor",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -8401,13 +7833,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Caranthir | Callitrix jacchus | 23.06.2005",
-      "name": "Caranthir",
-      "_base_name": "Caranthir",
-      "display_name": "Caranthir"
+      "special_status": ""
     },
-    "Curufin | Callitrix jacchus | 10.12.2005": {
+    "Curufin": {
       "rolle": "Zuchttier",
       "id": "cj_79148075",
       "birth_date": "10.12.2005",
@@ -8416,8 +7844,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001",
-      "samenspender": "Fëanor | Callitrix jacchus | 13.03.2002",
+      "eizellspenderin": "Nerdanel",
+      "samenspender": "Fëanor",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -8501,13 +7929,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Curufin | Callitrix jacchus | 10.12.2005",
-      "name": "Curufin",
-      "_base_name": "Curufin",
-      "display_name": "Curufin"
+      "special_status": ""
     },
-    "Ashley | Callitrix jacchus | 16.05.2004": {
+    "Ashley": {
       "rolle": "Zuchttier",
       "id": "cj_27029921",
       "birth_date": "16.05.2004",
@@ -8601,13 +8025,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Ashley | Callitrix jacchus | 16.05.2004",
-      "name": "Ashley",
-      "_base_name": "Ashley",
-      "display_name": "Ashley"
+      "special_status": ""
     },
-    "Celebrimbor | Callitrix jacchus | 26.09.2007": {
+    "Celebrimbor": {
       "rolle": "Zuchttier",
       "id": "cj_10861288",
       "birth_date": "26.09.2007",
@@ -8616,8 +8036,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Ashley | Callitrix jacchus | 16.05.2004",
-      "samenspender": "Curufin | Callitrix jacchus | 10.12.2005",
+      "eizellspenderin": "Ashley",
+      "samenspender": "Curufin",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -8701,13 +8121,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Celebrimbor | Callitrix jacchus | 26.09.2007",
-      "name": "Celebrimbor",
-      "_base_name": "Celebrimbor",
-      "display_name": "Celebrimbor"
+      "special_status": ""
     },
-    "Fingon | Callitrix jacchus | 25.05.2004": {
+    "Fingon": {
       "rolle": "Zuchttier",
       "id": "cj_06498369",
       "birth_date": "25.05.2004",
@@ -8716,8 +8132,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Anairë | Callitrix jacchus | 20.08.2001",
-      "samenspender": "Fingolfin | Callitrix jacchus | 01.08.2002",
+      "eizellspenderin": "Anairë",
+      "samenspender": "Fingolfin",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -8801,13 +8217,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Fingon | Callitrix jacchus | 25.05.2004",
-      "name": "Fingon",
-      "_base_name": "Fingon",
-      "display_name": "Fingon"
+      "special_status": ""
     },
-    "Turgon | Callitrix jacchus | 03.08.2004": {
+    "Turgon": {
       "rolle": "Zuchttier",
       "id": "cj_07737435",
       "birth_date": "03.08.2004",
@@ -8816,8 +8228,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Anairë | Callitrix jacchus | 20.08.2001",
-      "samenspender": "Fingolfin | Callitrix jacchus | 01.08.2002",
+      "eizellspenderin": "Anairë",
+      "samenspender": "Fingolfin",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -8901,13 +8313,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Turgon | Callitrix jacchus | 03.08.2004",
-      "name": "Turgon",
-      "_base_name": "Turgon",
-      "display_name": "Turgon"
+      "special_status": ""
     },
-    "Aredhel | Callitrix jacchus | 22.01.2005": {
+    "Aredhel": {
       "rolle": "Zuchttier",
       "id": "cj_35634778",
       "birth_date": "22.01.2005",
@@ -8916,8 +8324,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 8,
       "max_geburten": 6,
-      "eizellspenderin": "Anairë | Callitrix jacchus | 20.08.2001",
-      "samenspender": "Fingolfin | Callitrix jacchus | 01.08.2002",
+      "eizellspenderin": "Anairë",
+      "samenspender": "Fingolfin",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -9001,13 +8409,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Aredhel | Callitrix jacchus | 22.01.2005",
-      "name": "Aredhel",
-      "_base_name": "Aredhel",
-      "display_name": "Aredhel"
+      "special_status": ""
     },
-    "Argon | Callitrix jacchus | 16.07.2005": {
+    "Argon": {
       "rolle": "Zuchttier",
       "id": "cj_14947554",
       "birth_date": "16.07.2005",
@@ -9016,8 +8420,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Anairë | Callitrix jacchus | 20.08.2001",
-      "samenspender": "Fingolfin | Callitrix jacchus | 01.08.2002",
+      "eizellspenderin": "Anairë",
+      "samenspender": "Fingolfin",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -9101,13 +8505,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Argon | Callitrix jacchus | 16.07.2005",
-      "name": "Argon",
-      "_base_name": "Argon",
-      "display_name": "Argon"
+      "special_status": ""
     },
-    "Elenwë | Callitrix jacchus | 19.12.2004": {
+    "Elenwë": {
       "rolle": "Zuchttier",
       "id": "cj_87375189",
       "birth_date": "19.12.2004",
@@ -9201,13 +8601,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Elenwë | Callitrix jacchus | 19.12.2004",
-      "name": "Elenwë",
-      "_base_name": "Elenwë",
-      "display_name": "Elenwë"
+      "special_status": ""
     },
-    "Idril | Callitrix jacchus | 14.02.2007": {
+    "Idril": {
       "rolle": "Zuchttier",
       "id": "cj_77192709",
       "birth_date": "14.02.2007",
@@ -9216,8 +8612,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 8,
       "max_geburten": 6,
-      "eizellspenderin": "Elenwë | Callitrix jacchus | 19.12.2004",
-      "samenspender": "Turgon | Callitrix jacchus | 03.08.2004",
+      "eizellspenderin": "Elenwë",
+      "samenspender": "Turgon",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -9301,13 +8697,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Idril | Callitrix jacchus | 14.02.2007",
-      "name": "Idril",
-      "_base_name": "Idril",
-      "display_name": "Idril"
+      "special_status": ""
     },
-    "Eöl | Callitrix jacchus | 30.04.2004": {
+    "Eöl": {
       "rolle": "Zuchttier",
       "id": "cj_31450011",
       "birth_date": "30.04.2004",
@@ -9401,13 +8793,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Eöl | Callitrix jacchus | 30.04.2004",
-      "name": "Eöl",
-      "_base_name": "Eöl",
-      "display_name": "Eöl"
+      "special_status": ""
     },
-    "Maeglin | Callitrix jacchus | 22.01.2007": {
+    "Maeglin": {
       "rolle": "Zuchttier",
       "id": "cj_21511823",
       "birth_date": "22.01.2007",
@@ -9416,8 +8804,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Aredhel | Callitrix jacchus | 22.01.2005",
-      "samenspender": "Eöl | Callitrix jacchus | 30.04.2004",
+      "eizellspenderin": "Aredhel",
+      "samenspender": "Eöl",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -9501,13 +8889,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Maeglin | Callitrix jacchus | 22.01.2007",
-      "name": "Maeglin",
-      "_base_name": "Maeglin",
-      "display_name": "Maeglin"
+      "special_status": ""
     },
-    "Finrod | Callitrix jacchus | 12.08.2005": {
+    "Finrod": {
       "rolle": "Zuchttier",
       "id": "cj_31313408",
       "birth_date": "12.08.2005",
@@ -9516,8 +8900,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Eärwen | Callitrix jacchus | 03.08.2001",
-      "samenspender": "Finarfin | Callitrix jacchus | 06.07.2003",
+      "eizellspenderin": "Eärwen",
+      "samenspender": "Finarfin",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -9601,13 +8985,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Finrod | Callitrix jacchus | 12.08.2005",
-      "name": "Finrod",
-      "_base_name": "Finrod",
-      "display_name": "Finrod"
+      "special_status": ""
     },
-    "Angrod | Callitrix jacchus | 26.07.2005": {
+    "Angrod": {
       "rolle": "Zuchttier",
       "id": "cj_80616887",
       "birth_date": "26.07.2005",
@@ -9616,8 +8996,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Eärwen | Callitrix jacchus | 03.08.2001",
-      "samenspender": "Finarfin | Callitrix jacchus | 06.07.2003",
+      "eizellspenderin": "Eärwen",
+      "samenspender": "Finarfin",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -9701,13 +9081,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Angrod | Callitrix jacchus | 26.07.2005",
-      "name": "Angrod",
-      "_base_name": "Angrod",
-      "display_name": "Angrod"
+      "special_status": ""
     },
-    "Galadriel | Callitrix jacchus | 17.06.2005": {
+    "Galadriel": {
       "rolle": "Zuchttier",
       "id": "cj_63474293",
       "birth_date": "17.06.2005",
@@ -9716,8 +9092,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 8,
       "max_geburten": 6,
-      "eizellspenderin": "Eärwen | Callitrix jacchus | 03.08.2001",
-      "samenspender": "Finarfin | Callitrix jacchus | 06.07.2003",
+      "eizellspenderin": "Eärwen",
+      "samenspender": "Finarfin",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -9801,13 +9177,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Galadriel | Callitrix jacchus | 17.06.2005",
-      "name": "Galadriel",
-      "_base_name": "Galadriel",
-      "display_name": "Galadriel"
+      "special_status": ""
     },
-    "Brittany | Callitrix jacchus | 14.08.2004": {
+    "Brittany": {
       "rolle": "Zuchttier",
       "id": "cj_23032942",
       "birth_date": "14.08.2004",
@@ -9901,13 +9273,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Brittany | Callitrix jacchus | 14.08.2004",
-      "name": "Brittany",
-      "_base_name": "Brittany",
-      "display_name": "Brittany"
+      "special_status": ""
     },
-    "Orodreth | Callitrix jacchus | 07.08.2007": {
+    "Orodreth": {
       "rolle": "Zuchttier",
       "id": "cj_94970537",
       "birth_date": "07.08.2007",
@@ -9916,8 +9284,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Brittany | Callitrix jacchus | 14.08.2004",
-      "samenspender": "Angrod | Callitrix jacchus | 26.07.2005",
+      "eizellspenderin": "Brittany",
+      "samenspender": "Angrod",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -10001,13 +9369,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Orodreth | Callitrix jacchus | 07.08.2007",
-      "name": "Orodreth",
-      "_base_name": "Orodreth",
-      "display_name": "Orodreth"
+      "special_status": ""
     },
-    "Jennifer | Callitrix jacchus | 08.07.2007": {
+    "Jennifer": {
       "rolle": "Zuchttier",
       "id": "cj_60448624",
       "birth_date": "08.07.2007",
@@ -10101,13 +9465,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Jennifer | Callitrix jacchus | 08.07.2007",
-      "name": "Jennifer",
-      "_base_name": "Jennifer",
-      "display_name": "Jennifer"
+      "special_status": ""
     },
-    "Finduilas | Callitrix jacchus | 23.01.2010": {
+    "Finduilas": {
       "rolle": "Zuchttier",
       "id": "cj_31858294",
       "birth_date": "23.01.2010",
@@ -10116,8 +9476,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 8,
       "max_geburten": 6,
-      "eizellspenderin": "Jennifer | Callitrix jacchus | 08.07.2007",
-      "samenspender": "Orodreth | Callitrix jacchus | 07.08.2007",
+      "eizellspenderin": "Jennifer",
+      "samenspender": "Orodreth",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -10201,13 +9561,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Finduilas | Callitrix jacchus | 23.01.2010",
-      "name": "Finduilas",
-      "_base_name": "Finduilas",
-      "display_name": "Finduilas"
+      "special_status": ""
     },
-    "Gil-galad | Callitrix jacchus | 06.07.2010": {
+    "Gil-galad": {
       "rolle": "Zuchttier",
       "id": "cj_17987978",
       "birth_date": "06.07.2010",
@@ -10216,8 +9572,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Jennifer | Callitrix jacchus | 08.07.2007",
-      "samenspender": "Orodreth | Callitrix jacchus | 07.08.2007",
+      "eizellspenderin": "Jennifer",
+      "samenspender": "Orodreth",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -10301,13 +9657,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Gil-galad | Callitrix jacchus | 06.07.2010",
-      "name": "Gil-galad",
-      "_base_name": "Gil-galad",
-      "display_name": "Gil-galad"
+      "special_status": ""
     },
-    "Celeborn | Callitrix jacchus | 29.08.2004": {
+    "Celeborn": {
       "rolle": "Zuchttier",
       "id": "cj_06589678",
       "birth_date": "29.08.2004",
@@ -10401,13 +9753,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Celeborn | Callitrix jacchus | 29.08.2004",
-      "name": "Celeborn",
-      "_base_name": "Celeborn",
-      "display_name": "Celeborn"
+      "special_status": ""
     },
-    "Tuor | Callitrix jacchus | 17.10.2007": {
+    "Tuor": {
       "rolle": "Zuchttier",
       "id": "cj_97513424",
       "birth_date": "17.10.2007",
@@ -10501,13 +9849,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Tuor | Callitrix jacchus | 17.10.2007",
-      "name": "Tuor",
-      "_base_name": "Tuor",
-      "display_name": "Tuor"
+      "special_status": ""
     },
-    "Eärendil | Callitrix jacchus | 14.02.2010": {
+    "Eärendil": {
       "rolle": "Zuchttier",
       "id": "cj_48493904",
       "birth_date": "14.02.2010",
@@ -10516,8 +9860,8 @@
       "genotype": "WT/H-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Idril | Callitrix jacchus | 14.02.2007",
-      "samenspender": "Tuor | Callitrix jacchus | 17.10.2007",
+      "eizellspenderin": "Idril",
+      "samenspender": "Tuor",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -10601,13 +9945,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Eärendil | Callitrix jacchus | 14.02.2010",
-      "name": "Eärendil",
-      "_base_name": "Eärendil",
-      "display_name": "Eärendil"
+      "special_status": ""
     },
-    "Thingol | Callitrix jacchus | 17.08.2000": {
+    "Thingol": {
       "rolle": "Zuchttier",
       "id": "cj_53570118",
       "birth_date": "17.08.2000",
@@ -10701,13 +10041,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Thingol | Callitrix jacchus | 17.08.2000",
-      "name": "Thingol",
-      "_base_name": "Thingol",
-      "display_name": "Thingol"
+      "special_status": ""
     },
-    "Melian | Callitrix jacchus | 29.06.2000": {
+    "Melian": {
       "rolle": "Zuchttier",
       "id": "cj_99477439",
       "birth_date": "29.06.2000",
@@ -10801,13 +10137,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Melian | Callitrix jacchus | 29.06.2000",
-      "name": "Melian",
-      "_base_name": "Melian",
-      "display_name": "Melian"
+      "special_status": ""
     },
-    "Lúthien | Callitrix jacchus | 29.07.2002": {
+    "Lúthien": {
       "rolle": "Zuchttier",
       "id": "cj_11196732",
       "birth_date": "29.07.2002",
@@ -10816,8 +10148,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 8,
       "max_geburten": 6,
-      "eizellspenderin": "Melian | Callitrix jacchus | 29.06.2000",
-      "samenspender": "Thingol | Callitrix jacchus | 17.08.2000",
+      "eizellspenderin": "Melian",
+      "samenspender": "Thingol",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -10901,13 +10233,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Lúthien | Callitrix jacchus | 29.07.2002",
-      "name": "Lúthien",
-      "_base_name": "Lúthien",
-      "display_name": "Lúthien"
+      "special_status": ""
     },
-    "Beren | Callitrix jacchus | 25.08.2001": {
+    "Beren": {
       "rolle": "Zuchttier",
       "id": "cj_70049507",
       "birth_date": "25.08.2001",
@@ -11001,13 +10329,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Beren | Callitrix jacchus | 25.08.2001",
-      "name": "Beren",
-      "_base_name": "Beren",
-      "display_name": "Beren"
+      "special_status": ""
     },
-    "Dior | Callitrix jacchus | 09.05.2004": {
+    "Dior": {
       "rolle": "Zuchttier",
       "id": "cj_71258546",
       "birth_date": "09.05.2004",
@@ -11016,8 +10340,8 @@
       "genotype": "WT/H-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Lúthien | Callitrix jacchus | 29.07.2002",
-      "samenspender": "Beren | Callitrix jacchus | 25.08.2001",
+      "eizellspenderin": "Lúthien",
+      "samenspender": "Beren",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -11101,13 +10425,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Dior | Callitrix jacchus | 09.05.2004",
-      "name": "Dior",
-      "_base_name": "Dior",
-      "display_name": "Dior"
+      "special_status": ""
     },
-    "Nimloth | Callitrix jacchus | 06.09.2004": {
+    "Nimloth": {
       "rolle": "Zuchttier",
       "id": "cj_44953634",
       "birth_date": "06.09.2004",
@@ -11201,13 +10521,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Nimloth | Callitrix jacchus | 06.09.2004",
-      "name": "Nimloth",
-      "_base_name": "Nimloth",
-      "display_name": "Nimloth"
+      "special_status": ""
     },
-    "Elwing | Callitrix jacchus | 08.01.2008": {
+    "Elwing": {
       "rolle": "Zuchttier",
       "id": "cj_75409991",
       "birth_date": "08.01.2008",
@@ -11216,8 +10532,8 @@
       "genotype": "WT/H-",
       "max_pregnancies": 8,
       "max_geburten": 6,
-      "eizellspenderin": "Nimloth | Callitrix jacchus | 06.09.2004",
-      "samenspender": "Dior | Callitrix jacchus | 09.05.2004",
+      "eizellspenderin": "Nimloth",
+      "samenspender": "Dior",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -11301,13 +10617,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Elwing | Callitrix jacchus | 08.01.2008",
-      "name": "Elwing",
-      "_base_name": "Elwing",
-      "display_name": "Elwing"
+      "special_status": ""
     },
-    "Elros | Callitrix jacchus | 24.07.2012": {
+    "Elros": {
       "rolle": "Zuchttier",
       "id": "cj_28334319",
       "birth_date": "24.07.2012",
@@ -11316,8 +10628,8 @@
       "genotype": "WT/H-",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Elwing | Callitrix jacchus | 08.01.2008",
-      "samenspender": "Eärendil | Callitrix jacchus | 14.02.2010",
+      "eizellspenderin": "Elwing",
+      "samenspender": "Eärendil",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -11401,13 +10713,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Elros | Callitrix jacchus | 24.07.2012",
-      "name": "Elros",
-      "_base_name": "Elros",
-      "display_name": "Elros"
+      "special_status": ""
     },
-    "Madison | Callitrix jacchus | 31.12.2012": {
+    "Madison": {
       "rolle": "Zuchttier",
       "id": "cj_20238025",
       "birth_date": "31.12.2012",
@@ -11501,13 +10809,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Madison | Callitrix jacchus | 31.12.2012",
-      "name": "Madison",
-      "_base_name": "Madison",
-      "display_name": "Madison"
+      "special_status": ""
     },
-    "Durin I | Macaca mulatta | 04.03.1963": {
+    "Durin I": {
       "rolle": "Nachkomme",
       "id": "mm_84905540",
       "chip_nr": "B8FYSLQ7",
@@ -11542,13 +10846,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Durin I | Macaca mulatta | 04.03.1963",
-      "name": "Durin I",
-      "_base_name": "Durin I",
-      "display_name": "Durin I"
+      "edits": {}
     },
-    "Gertrud | Macaca mulatta | 04.03.1963": {
+    "Gertrud": {
       "rolle": "Nachkomme",
       "id": "mm_64283796",
       "chip_nr": "FA5Y48WM",
@@ -11583,13 +10883,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Gertrud | Macaca mulatta | 04.03.1963",
-      "name": "Gertrud",
-      "_base_name": "Gertrud",
-      "display_name": "Gertrud"
+      "edits": {}
     },
-    "Hartmut | Macaca mulatta | 04.03.1966": {
+    "Hartmut": {
       "rolle": "Nachkomme",
       "id": "mm_60596739",
       "chip_nr": "VSUOG813",
@@ -11603,8 +10899,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Gertrud | Macaca mulatta | 04.03.1963",
-      "samenspender": "Durin I | Macaca mulatta | 04.03.1963",
+      "eizellspenderin": "Gertrud",
+      "samenspender": "Durin I",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -11624,13 +10920,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Hartmut | Macaca mulatta | 04.03.1966",
-      "name": "Hartmut",
-      "_base_name": "Hartmut",
-      "display_name": "Hartmut"
+      "edits": {}
     },
-    "Ingrid | Macaca mulatta | 04.03.1966": {
+    "Ingrid": {
       "rolle": "Nachkomme",
       "id": "mm_76680985",
       "chip_nr": "X3JKVJBK",
@@ -11665,13 +10957,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Ingrid | Macaca mulatta | 04.03.1966",
-      "name": "Ingrid",
-      "_base_name": "Ingrid",
-      "display_name": "Ingrid"
+      "edits": {}
     },
-    "Durin II | Macaca mulatta | 04.03.1969": {
+    "Durin II": {
       "rolle": "Nachkomme",
       "id": "mm_58123963",
       "chip_nr": "MQ8QMRXU",
@@ -11685,8 +10973,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Ingrid | Macaca mulatta | 04.03.1966",
-      "samenspender": "Hartmut | Macaca mulatta | 04.03.1966",
+      "eizellspenderin": "Ingrid",
+      "samenspender": "Hartmut",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -11706,13 +10994,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Durin II | Macaca mulatta | 04.03.1969",
-      "name": "Durin II",
-      "_base_name": "Durin II",
-      "display_name": "Durin II"
+      "edits": {}
     },
-    "Irmgard I | Macaca mulatta | 04.03.1969": {
+    "Irmgard I": {
       "rolle": "Nachkomme",
       "id": "mm_50747031",
       "chip_nr": "4BX39YI5",
@@ -11747,13 +11031,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Irmgard I | Macaca mulatta | 04.03.1969",
-      "name": "Irmgard I",
-      "_base_name": "Irmgard I",
-      "display_name": "Irmgard I"
+      "edits": {}
     },
-    "Bernhard | Macaca mulatta | 04.03.1972": {
+    "Bernhard": {
       "rolle": "Nachkomme",
       "id": "mm_31964648",
       "chip_nr": "LOUCBXAX",
@@ -11767,8 +11047,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Irmgard I | Macaca mulatta | 04.03.1969",
-      "samenspender": "Durin II | Macaca mulatta | 04.03.1969",
+      "eizellspenderin": "Irmgard I",
+      "samenspender": "Durin II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -11788,13 +11068,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Bernhard | Macaca mulatta | 04.03.1972",
-      "name": "Bernhard",
-      "_base_name": "Bernhard",
-      "display_name": "Bernhard"
+      "edits": {}
     },
-    "Adelheid | Macaca mulatta | 04.03.1972": {
+    "Adelheid": {
       "rolle": "Nachkomme",
       "id": "mm_90763995",
       "chip_nr": "XH2DHSXR",
@@ -11829,13 +11105,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Adelheid | Macaca mulatta | 04.03.1972",
-      "name": "Adelheid",
-      "_base_name": "Adelheid",
-      "display_name": "Adelheid"
+      "edits": {}
     },
-    "Durin III | Macaca mulatta | 04.03.1975": {
+    "Durin III": {
       "rolle": "Nachkomme",
       "id": "mm_13315935",
       "chip_nr": "EV8UR0BI",
@@ -11849,8 +11121,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Adelheid | Macaca mulatta | 04.03.1972",
-      "samenspender": "Bernhard | Macaca mulatta | 04.03.1972",
+      "eizellspenderin": "Adelheid",
+      "samenspender": "Bernhard",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -11870,13 +11142,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Durin III | Macaca mulatta | 04.03.1975",
-      "name": "Durin III",
-      "_base_name": "Durin III",
-      "display_name": "Durin III"
+      "edits": {}
     },
-    "Hildegard | Macaca mulatta | 04.03.1975": {
+    "Hildegard": {
       "rolle": "Nachkomme",
       "id": "mm_69885691",
       "chip_nr": "R0S63CPG",
@@ -11911,13 +11179,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Hildegard | Macaca mulatta | 04.03.1975",
-      "name": "Hildegard",
-      "_base_name": "Hildegard",
-      "display_name": "Hildegard"
+      "edits": {}
     },
-    "Konrad I | Macaca mulatta | 04.03.1978": {
+    "Konrad I": {
       "rolle": "Nachkomme",
       "id": "mm_89156244",
       "chip_nr": "JH1D8G37",
@@ -11931,8 +11195,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Hildegard | Macaca mulatta | 04.03.1975",
-      "samenspender": "Durin III | Macaca mulatta | 04.03.1975",
+      "eizellspenderin": "Hildegard",
+      "samenspender": "Durin III",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -11952,13 +11216,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Konrad I | Macaca mulatta | 04.03.1978",
-      "name": "Konrad I",
-      "_base_name": "Konrad I",
-      "display_name": "Konrad I"
+      "edits": {}
     },
-    "Mathilde | Macaca mulatta | 04.03.1978": {
+    "Mathilde": {
       "rolle": "Nachkomme",
       "id": "mm_41655989",
       "chip_nr": "NPZHJP0O",
@@ -11993,13 +11253,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Mathilde | Macaca mulatta | 04.03.1978",
-      "name": "Mathilde",
-      "_base_name": "Mathilde",
-      "display_name": "Mathilde"
+      "edits": {}
     },
-    "Durin IV | Macaca mulatta | 04.03.1981": {
+    "Durin IV": {
       "rolle": "Nachkomme",
       "id": "mm_76247267",
       "chip_nr": "FMP65H2C",
@@ -12013,8 +11269,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Mathilde | Macaca mulatta | 04.03.1978",
-      "samenspender": "Konrad I | Macaca mulatta | 04.03.1978",
+      "eizellspenderin": "Mathilde",
+      "samenspender": "Konrad I",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12034,13 +11290,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Durin IV | Macaca mulatta | 04.03.1981",
-      "name": "Durin IV",
-      "_base_name": "Durin IV",
-      "display_name": "Durin IV"
+      "edits": {}
     },
-    "Gudrun I | Macaca mulatta | 04.03.1981": {
+    "Gudrun I": {
       "rolle": "Nachkomme",
       "id": "mm_74171059",
       "chip_nr": "0VX5IW4B",
@@ -12075,13 +11327,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Gudrun I | Macaca mulatta | 04.03.1981",
-      "name": "Gudrun I",
-      "_base_name": "Gudrun I",
-      "display_name": "Gudrun I"
+      "edits": {}
     },
-    "Eckhard | Macaca mulatta | 04.03.1984": {
+    "Eckhard": {
       "rolle": "Nachkomme",
       "id": "mm_74863250",
       "chip_nr": "86XXSGCB",
@@ -12095,8 +11343,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Gudrun I | Macaca mulatta | 04.03.1981",
-      "samenspender": "Durin IV | Macaca mulatta | 04.03.1981",
+      "eizellspenderin": "Gudrun I",
+      "samenspender": "Durin IV",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12116,13 +11364,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Eckhard | Macaca mulatta | 04.03.1984",
-      "name": "Eckhard",
-      "_base_name": "Eckhard",
-      "display_name": "Eckhard"
+      "edits": {}
     },
-    "Gerlinde | Macaca mulatta | 04.03.1984": {
+    "Gerlinde": {
       "rolle": "Nachkomme",
       "id": "mm_17607762",
       "chip_nr": "IAITPWMI",
@@ -12157,13 +11401,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Gerlinde | Macaca mulatta | 04.03.1984",
-      "name": "Gerlinde",
-      "_base_name": "Gerlinde",
-      "display_name": "Gerlinde"
+      "edits": {}
     },
-    "Durin V | Macaca mulatta | 04.03.1987": {
+    "Durin V": {
       "rolle": "Nachkomme",
       "id": "mm_01390483",
       "chip_nr": "XOP4UISG",
@@ -12177,8 +11417,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Gerlinde | Macaca mulatta | 04.03.1984",
-      "samenspender": "Eckhard | Macaca mulatta | 04.03.1984",
+      "eizellspenderin": "Gerlinde",
+      "samenspender": "Eckhard",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12198,13 +11438,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Durin V | Macaca mulatta | 04.03.1987",
-      "name": "Durin V",
-      "_base_name": "Durin V",
-      "display_name": "Durin V"
+      "edits": {}
     },
-    "Walburga | Macaca mulatta | 04.03.1987": {
+    "Walburga": {
       "rolle": "Nachkomme",
       "id": "mm_64029655",
       "chip_nr": "JWOT19O5",
@@ -12239,13 +11475,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Walburga | Macaca mulatta | 04.03.1987",
-      "name": "Walburga",
-      "_base_name": "Walburga",
-      "display_name": "Walburga"
+      "edits": {}
     },
-    "Rüdiger | Macaca mulatta | 04.03.1990": {
+    "Rüdiger": {
       "rolle": "Nachkomme",
       "id": "mm_13939229",
       "chip_nr": "S1PGRYPW",
@@ -12259,8 +11491,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Walburga | Macaca mulatta | 04.03.1987",
-      "samenspender": "Durin V | Macaca mulatta | 04.03.1987",
+      "eizellspenderin": "Walburga",
+      "samenspender": "Durin V",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12280,13 +11512,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Rüdiger | Macaca mulatta | 04.03.1990",
-      "name": "Rüdiger",
-      "_base_name": "Rüdiger",
-      "display_name": "Rüdiger"
+      "edits": {}
     },
-    "Brigitte | Macaca mulatta | 04.03.1990": {
+    "Brigitte": {
       "rolle": "Nachkomme",
       "id": "mm_12691284",
       "chip_nr": "1MFNUEOO",
@@ -12321,13 +11549,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Brigitte | Macaca mulatta | 04.03.1990",
-      "name": "Brigitte",
-      "_base_name": "Brigitte",
-      "display_name": "Brigitte"
+      "edits": {}
     },
-    "Durin VI | Macaca mulatta | 04.03.1993": {
+    "Durin VI": {
       "rolle": "Nachkomme",
       "id": "mm_35053974",
       "chip_nr": "SKJSKYS5",
@@ -12341,8 +11565,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Brigitte | Macaca mulatta | 04.03.1990",
-      "samenspender": "Rüdiger | Macaca mulatta | 04.03.1990",
+      "eizellspenderin": "Brigitte",
+      "samenspender": "Rüdiger",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12362,13 +11586,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Durin VI | Macaca mulatta | 04.03.1993",
-      "name": "Durin VI",
-      "_base_name": "Durin VI",
-      "display_name": "Durin VI"
+      "edits": {}
     },
-    "Hannelore | Macaca mulatta | 04.03.1993": {
+    "Hannelore": {
       "rolle": "Nachkomme",
       "id": "mm_21225870",
       "chip_nr": "OUOROG60",
@@ -12403,13 +11623,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Hannelore | Macaca mulatta | 04.03.1993",
-      "name": "Hannelore",
-      "_base_name": "Hannelore",
-      "display_name": "Hannelore"
+      "edits": {}
     },
-    "Náin I | Macaca mulatta | 04.03.1996": {
+    "Náin I": {
       "rolle": "Nachkomme",
       "id": "mm_81715617",
       "chip_nr": "086DZQS3",
@@ -12423,8 +11639,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Hannelore | Macaca mulatta | 04.03.1993",
-      "samenspender": "Durin VI | Macaca mulatta | 04.03.1993",
+      "eizellspenderin": "Hannelore",
+      "samenspender": "Durin VI",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12444,13 +11660,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Náin I | Macaca mulatta | 04.03.1996",
-      "name": "Náin I",
-      "_base_name": "Náin I",
-      "display_name": "Náin I"
+      "edits": {}
     },
-    "Ursula | Macaca mulatta | 04.03.1996": {
+    "Ursula": {
       "rolle": "Nachkomme",
       "id": "mm_62582401",
       "chip_nr": "SRY1N3NY",
@@ -12485,13 +11697,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Ursula | Macaca mulatta | 04.03.1996",
-      "name": "Ursula",
-      "_base_name": "Ursula",
-      "display_name": "Ursula"
+      "edits": {}
     },
-    "Thráin I | Macaca mulatta | 04.03.1999": {
+    "Thráin I": {
       "rolle": "Nachkomme",
       "id": "mm_60217355",
       "chip_nr": "3V06GI43",
@@ -12505,8 +11713,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Ursula | Macaca mulatta | 04.03.1996",
-      "samenspender": "Náin I | Macaca mulatta | 04.03.1996",
+      "eizellspenderin": "Ursula",
+      "samenspender": "Náin I",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12526,13 +11734,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Thráin I | Macaca mulatta | 04.03.1999",
-      "name": "Thráin I",
-      "_base_name": "Thráin I",
-      "display_name": "Thráin I"
+      "edits": {}
     },
-    "Renate | Macaca mulatta | 04.03.1999": {
+    "Renate": {
       "rolle": "Nachkomme",
       "id": "mm_44978248",
       "chip_nr": "J13FTXIY",
@@ -12567,13 +11771,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Renate | Macaca mulatta | 04.03.1999",
-      "name": "Renate",
-      "_base_name": "Renate",
-      "display_name": "Renate"
+      "edits": {}
     },
-    "Thorin I | Macaca mulatta | 04.03.2002": {
+    "Thorin I": {
       "rolle": "Nachkomme",
       "id": "mm_87732552",
       "chip_nr": "G9DUTP9J",
@@ -12587,8 +11787,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Renate | Macaca mulatta | 04.03.1999",
-      "samenspender": "Thráin I | Macaca mulatta | 04.03.1999",
+      "eizellspenderin": "Renate",
+      "samenspender": "Thráin I",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12608,13 +11808,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Thorin I | Macaca mulatta | 04.03.2002",
-      "name": "Thorin I",
-      "_base_name": "Thorin I",
-      "display_name": "Thorin I"
+      "edits": {}
     },
-    "Erika I | Macaca mulatta | 04.03.2002": {
+    "Erika I": {
       "rolle": "Nachkomme",
       "id": "mm_25852047",
       "chip_nr": "K2JU8KQE",
@@ -12649,13 +11845,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Erika I | Macaca mulatta | 04.03.2002",
-      "name": "Erika I",
-      "_base_name": "Erika I",
-      "display_name": "Erika I"
+      "edits": {}
     },
-    "Glóin I | Macaca mulatta | 04.03.2005": {
+    "Glóin I": {
       "rolle": "Nachkomme",
       "id": "mm_87128359",
       "chip_nr": "0T5NBRYO",
@@ -12669,8 +11861,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Erika I | Macaca mulatta | 04.03.2002",
-      "samenspender": "Thorin I | Macaca mulatta | 04.03.2002",
+      "eizellspenderin": "Erika I",
+      "samenspender": "Thorin I",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12690,13 +11882,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Glóin I | Macaca mulatta | 04.03.2005",
-      "name": "Glóin I",
-      "_base_name": "Glóin I",
-      "display_name": "Glóin I"
+      "edits": {}
     },
-    "Monika | Macaca mulatta | 04.03.2005": {
+    "Monika": {
       "rolle": "Nachkomme",
       "id": "mm_40753983",
       "chip_nr": "Q3XE5AQN",
@@ -12731,13 +11919,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Monika | Macaca mulatta | 04.03.2005",
-      "name": "Monika",
-      "_base_name": "Monika",
-      "display_name": "Monika"
+      "edits": {}
     },
-    "Óin I | Macaca mulatta | 04.03.2008": {
+    "Óin I": {
       "rolle": "Nachkomme",
       "id": "mm_35092581",
       "chip_nr": "CWSE3NLP",
@@ -12751,8 +11935,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Monika | Macaca mulatta | 04.03.2005",
-      "samenspender": "Glóin I | Macaca mulatta | 04.03.2005",
+      "eizellspenderin": "Monika",
+      "samenspender": "Glóin I",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12772,13 +11956,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Óin I | Macaca mulatta | 04.03.2008",
-      "name": "Óin I",
-      "_base_name": "Óin I",
-      "display_name": "Óin I"
+      "edits": {}
     },
-    "Sabine | Macaca mulatta | 04.03.2008": {
+    "Sabine": {
       "rolle": "Nachkomme",
       "id": "mm_77967517",
       "chip_nr": "W2AORG3X",
@@ -12813,13 +11993,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Sabine | Macaca mulatta | 04.03.2008",
-      "name": "Sabine",
-      "_base_name": "Sabine",
-      "display_name": "Sabine"
+      "edits": {}
     },
-    "Náin II | Macaca mulatta | 04.03.2011": {
+    "Náin II": {
       "rolle": "Nachkomme",
       "id": "mm_02417079",
       "chip_nr": "89MHV6L1",
@@ -12833,8 +12009,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Sabine | Macaca mulatta | 04.03.2008",
-      "samenspender": "Óin I | Macaca mulatta | 04.03.2008",
+      "eizellspenderin": "Sabine",
+      "samenspender": "Óin I",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12854,13 +12030,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Náin II | Macaca mulatta | 04.03.2011",
-      "name": "Náin II",
-      "_base_name": "Náin II",
-      "display_name": "Náin II"
+      "edits": {}
     },
-    "Helga | Macaca mulatta | 04.03.2011": {
+    "Helga": {
       "rolle": "Nachkomme",
       "id": "mm_35812766",
       "chip_nr": "C6NV1YEF",
@@ -12895,13 +12067,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Helga | Macaca mulatta | 04.03.2011",
-      "name": "Helga",
-      "_base_name": "Helga",
-      "display_name": "Helga"
+      "edits": {}
     },
-    "Dáin I | Macaca mulatta | 04.03.2014": {
+    "Dáin I": {
       "rolle": "Nachkomme",
       "id": "mm_55959480",
       "chip_nr": "9ECOE9PZ",
@@ -12915,8 +12083,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Helga | Macaca mulatta | 04.03.2011",
-      "samenspender": "Náin II | Macaca mulatta | 04.03.2011",
+      "eizellspenderin": "Helga",
+      "samenspender": "Náin II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12936,13 +12104,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Dáin I | Macaca mulatta | 04.03.2014",
-      "name": "Dáin I",
-      "_base_name": "Dáin I",
-      "display_name": "Dáin I"
+      "edits": {}
     },
-    "Borin | Macaca mulatta | 04.03.2014": {
+    "Borin": {
       "rolle": "Nachkomme",
       "id": "mm_43350107",
       "chip_nr": "CF90ERJX",
@@ -12956,8 +12120,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Helga | Macaca mulatta | 04.03.2011",
-      "samenspender": "Náin II | Macaca mulatta | 04.03.2011",
+      "eizellspenderin": "Helga",
+      "samenspender": "Náin II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -12977,13 +12141,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Borin | Macaca mulatta | 04.03.2014",
-      "name": "Borin",
-      "_base_name": "Borin",
-      "display_name": "Borin"
+      "edits": {}
     },
-    "Dieter | Macaca mulatta | 04.03.2014": {
+    "Dieter": {
       "rolle": "Nachkomme",
       "id": "mm_12199697",
       "chip_nr": "MF0L344Q",
@@ -12997,8 +12157,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Helga | Macaca mulatta | 04.03.2011",
-      "samenspender": "Náin II | Macaca mulatta | 04.03.2011",
+      "eizellspenderin": "Helga",
+      "samenspender": "Náin II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -13018,13 +12178,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Dieter | Macaca mulatta | 04.03.2014",
-      "name": "Dieter",
-      "_base_name": "Dieter",
-      "display_name": "Dieter"
+      "edits": {}
     },
-    "Irmgard II | Macaca mulatta | 04.03.2014": {
+    "Irmgard II": {
       "rolle": "Nachkomme",
       "id": "mm_93728518",
       "chip_nr": "7RCNYLN7",
@@ -13059,13 +12215,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Irmgard II | Macaca mulatta | 04.03.2014",
-      "name": "Irmgard II",
-      "_base_name": "Irmgard II",
-      "display_name": "Irmgard II"
+      "edits": {}
     },
-    "Elke | Macaca mulatta | 04.03.2014": {
+    "Elke": {
       "rolle": "Nachkomme",
       "id": "mm_11421653",
       "chip_nr": "8HQY47MQ",
@@ -13100,13 +12252,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Elke | Macaca mulatta | 04.03.2014",
-      "name": "Elke",
-      "_base_name": "Elke",
-      "display_name": "Elke"
+      "edits": {}
     },
-    "Jutta | Macaca mulatta | 04.03.2014": {
+    "Jutta": {
       "rolle": "Nachkomme",
       "id": "mm_86330635",
       "chip_nr": "GOXE5P9Z",
@@ -13141,13 +12289,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Jutta | Macaca mulatta | 04.03.2014",
-      "name": "Jutta",
-      "_base_name": "Jutta",
-      "display_name": "Jutta"
+      "edits": {}
     },
-    "Dietmar | Macaca mulatta | 04.03.2014": {
+    "Dietmar": {
       "rolle": "Nachkomme",
       "id": "mm_41551882",
       "chip_nr": "Z558B5VW",
@@ -13161,8 +12305,8 @@
       "genotype": "",
       "max_special": 6,
       "max_op": 2,
-      "eizellspenderin": "Helga | Macaca mulatta | 04.03.2011",
-      "samenspender": "Náin II | Macaca mulatta | 04.03.2011",
+      "eizellspenderin": "Helga",
+      "samenspender": "Náin II",
       "ziehmutter": "",
       "ziehvater": "",
       "sick": false,
@@ -13182,13 +12326,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Dietmar | Macaca mulatta | 04.03.2014",
-      "name": "Dietmar",
-      "_base_name": "Dietmar",
-      "display_name": "Dietmar"
+      "edits": {}
     },
-    "Anneliese | Macaca mulatta | 04.03.2014": {
+    "Anneliese": {
       "rolle": "Nachkomme",
       "id": "mm_53877671",
       "chip_nr": "S7OVLZ0U",
@@ -13223,13 +12363,9 @@
       "sick_start_date": null,
       "sick_end_date": null,
       "in_experiment": false,
-      "edits": {},
-      "ipid": "Anneliese | Macaca mulatta | 04.03.2014",
-      "name": "Anneliese",
-      "_base_name": "Anneliese",
-      "display_name": "Anneliese"
+      "edits": {}
     },
-    "Finarfin | Callitrix jacchus | 06.07.2003": {
+    "Finarfin": {
       "rolle": "Zuchttier",
       "id": "cj_07563349",
       "birth_date": "06.07.2003",
@@ -13238,8 +12374,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Indis | Callitrix jacchus | 05.03.2000",
-      "samenspender": "Finwë | Callitrix jacchus | 15.05.2000",
+      "eizellspenderin": "Indis",
+      "samenspender": "Finwë",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -13323,13 +12459,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Finarfin | Callitrix jacchus | 06.07.2003",
-      "name": "Finarfin",
-      "_base_name": "Finarfin",
-      "display_name": "Finarfin"
+      "special_status": ""
     },
-    "Aegnor | Callitrix jacchus | 17.04.2005": {
+    "Aegnor": {
       "rolle": "Zuchttier",
       "id": "cj_89406212",
       "birth_date": "17.04.2005",
@@ -13338,8 +12470,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Eärwen | Callitrix jacchus | 03.08.2001",
-      "samenspender": "Finarfin | Callitrix jacchus | 06.07.2003",
+      "eizellspenderin": "Eärwen",
+      "samenspender": "Finarfin",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -13424,13 +12556,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Aegnor | Callitrix jacchus | 17.04.2005",
-      "name": "Aegnor",
-      "_base_name": "Aegnor",
-      "display_name": "Aegnor"
+      "special_status": ""
     },
-    "Amras | Callitrix jacchus | 02.11.2006": {
+    "Amras": {
       "rolle": "Zuchttier",
       "id": "cj_81450790",
       "birth_date": "02.11.2006",
@@ -13439,8 +12567,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001",
-      "samenspender": "Fëanor | Callitrix jacchus | 13.03.2002",
+      "eizellspenderin": "Nerdanel",
+      "samenspender": "Fëanor",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -13524,13 +12652,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Amras | Callitrix jacchus | 02.11.2006",
-      "name": "Amras",
-      "_base_name": "Amras",
-      "display_name": "Amras"
+      "special_status": ""
     },
-    "Amrod | Callitrix jacchus | 22.05.2006": {
+    "Amrod": {
       "rolle": "Zuchttier",
       "id": "cj_19050119",
       "birth_date": "22.05.2006",
@@ -13539,8 +12663,8 @@
       "genotype": "WT/WT",
       "max_pregnancies": 0,
       "max_geburten": 0,
-      "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001",
-      "samenspender": "Fëanor | Callitrix jacchus | 13.03.2002",
+      "eizellspenderin": "Nerdanel",
+      "samenspender": "Fëanor",
       "ziehmutter": "",
       "ziehvater": "",
       "gewicht": [
@@ -13624,13 +12748,9 @@
       "origin": "DPZ",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Amrod | Callitrix jacchus | 22.05.2006",
-      "name": "Amrod",
-      "_base_name": "Amrod",
-      "display_name": "Amrod"
+      "special_status": ""
     },
-    "Anairë | Callitrix jacchus | 20.08.2001": {
+    "Anairë": {
       "rolle": "Zuchttier",
       "id": "cj_61553927",
       "birth_date": "20.08.2001",
@@ -13724,13 +12844,9 @@
       "origin": "Iluvatara",
       "project_severity": "",
       "severity": "",
-      "special_status": "",
-      "ipid": "Anairë | Callitrix jacchus | 20.08.2001",
-      "name": "Anairë",
-      "_base_name": "Anairë",
-      "display_name": "Anairë"
+      "special_status": ""
     },
-    "Betta | Unknown species | 01.01.1900": {
+    "Betta": {
       "rolle": "Spenderin",
       "ref_weight": 450.0,
       "max_messungen": 100,
@@ -13745,13 +12861,13 @@
       "pdg": [],
       "gewicht": [],
       "events": [],
-      "species": "Unknown species",
+      "species": "",
       "id": "",
       "chip_nr": "",
       "origin": "",
       "project": "Zeta-1",
       "severity": "SV1",
-      "birth_date": "01.01.1900",
+      "birth_date": "",
       "death_date": "",
       "special_status": "",
       "sick": false,
@@ -13786,13 +12902,7 @@
       "sperm": [],
       "embryo": [],
       "sick_start_date": null,
-      "sick_end_date": null,
-      "ipid": "Betta | Unknown species | 01.01.1900",
-      "name": "Betta",
-      "_base_name": "Betta",
-      "display_name": "Betta",
-      "identity_review_required": true,
-      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack archived_animals data."
+      "sick_end_date": null
     }
   },
   "settings": {}

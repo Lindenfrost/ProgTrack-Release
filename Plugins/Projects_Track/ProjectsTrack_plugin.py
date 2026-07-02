@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QSizePolicy, QApplication)
 from PyQt6.QtCore import Qt, QRect, QSize, QTimer
 from PyQt6.QtGui import QColor, QPainter, QFont
+from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.project_visibility import animal_visible_by_project_scope
 
 
@@ -171,17 +172,25 @@ class HistoryStore:
             return bool(record.get("previous_in_experiment"))
         return bool(record.get("last_severity"))
 
+    def _animal_key(self, record: dict) -> str:
+        return str(record.get("ipid") or record.get("name") or "").strip()
+
     def record_added(self, project: str, animal: str):
+        animal = (animal or "").strip()
+        if not animal:
+            return
         proj = self._proj(project)
         for r in proj["animals"]:
-            if r.get("name") == animal and r.get("status") == "active":
+            if self._animal_key(r) == animal and r.get("status") == "active":
                 return
         previous_snapshot = [
             dict(record)
             for record in self.previous_project_records(animal, exclude=project)
         ]
         proj["animals"].append({
-            "name": animal, "status": "active",
+            "ipid": animal,
+            "name": animal_base_name(animal),
+            "status": "active",
             "date_entered": self._today(),
             "date_left": None, "last_severity": None,
             "previous_project_snapshot": previous_snapshot,
@@ -194,8 +203,9 @@ class HistoryStore:
 
     def record_removed(self, project: str, animal: str, severity: str = None,
                        previous_in_experiment: bool = None):
+        animal = (animal or "").strip()
         for r in self._proj(project)["animals"]:
-            if r.get("name") == animal and r.get("status") == "active":
+            if self._animal_key(r) == animal and r.get("status") == "active":
                 had_in_experiment = bool(
                     r.get("previous_in_experiment") or r.get("had_in_experiment"))
                 r["status"] = "former"
@@ -217,7 +227,7 @@ class HistoryStore:
             return
         changed = False
         for r in self._proj(project)["animals"]:
-            if r.get("name") == animal and r.get("status") == "active":
+            if self._animal_key(r) == animal and r.get("status") == "active":
                 if not r.get("previous_in_experiment"):
                     r["previous_in_experiment"] = True
                     changed = True
@@ -258,7 +268,7 @@ class HistoryStore:
             if pname == exclude:
                 continue
             if any(
-                r.get("name") == animal and r.get("status") == "former"
+                self._animal_key(r) == animal and r.get("status") == "former"
                 for r in pdata.get("animals", [])
             ):
                 result.append(pname)
@@ -270,7 +280,7 @@ class HistoryStore:
             if pname == exclude:
                 continue
             for record in pdata.get("animals", []):
-                if record.get("name") != animal:
+                if self._animal_key(record) != animal:
                     continue
                 if record.get("status") != "former":
                     continue

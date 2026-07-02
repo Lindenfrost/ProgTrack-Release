@@ -9,64 +9,56 @@
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Anton | Callitrix jacchus | 25.05.2015"
+          "last_severity": null
         },
         {
           "name": "Ekaterina",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Ekaterina | Callitrix jacchus | 02.04.2016"
+          "last_severity": null
         },
         {
           "name": "Konstantin",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Konstantin | Callitrix jacchus | 18.08.2020"
+          "last_severity": null
         },
         {
           "name": "Legolas",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Legolas | Callitrix jacchus | 04.03.2026"
+          "last_severity": null
         },
         {
           "name": "Olga",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Olga | Callitrix jacchus | 20.06.2015"
+          "last_severity": null
         },
         {
           "name": "Oropher",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Oropher | Callitrix jacchus | 25.05.2015"
+          "last_severity": null
         },
         {
           "name": "Svetlana",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Svetlana | Callitrix jacchus | 03.05.2021"
+          "last_severity": null
         },
         {
           "name": "Thranduil",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Thranduil | Callitrix jacchus | 11.02.2021"
+          "last_severity": null
         }
       ]
     },
@@ -78,88 +70,77 @@
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Aragorn I | Callitrix jacchus | 07.02.2018"
+          "last_severity": null
         },
         {
           "name": "Aragorn II",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Aragorn II | Callitrix jacchus | 11.02.2021"
+          "last_severity": null
         },
         {
           "name": "Arwen",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Arwen | Callitrix jacchus | 23.02.2015"
+          "last_severity": null
         },
         {
           "name": "Celebrían",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Celebrían | Callitrix jacchus | 06.05.2007"
+          "last_severity": null
         },
         {
           "name": "Eldarion",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Eldarion | Callitrix jacchus | 01.03.2026"
+          "last_severity": null
         },
         {
           "name": "Elladan",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Elladan | Callitrix jacchus | 23.07.2015"
+          "last_severity": null
         },
         {
           "name": "Elrohir",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Elrohir | Callitrix jacchus | 21.01.2016"
+          "last_severity": null
         },
         {
           "name": "Elrond",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Elrond | Callitrix jacchus | 04.02.2012"
+          "last_severity": null
         },
         {
           "name": "Isildur",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Isildur | Callitrix jacchus | 23.02.2015"
+          "last_severity": null
         },
         {
           "name": "Jessica",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Jessica | Callitrix jacchus | 06.07.2015"
+          "last_severity": null
         },
         {
           "name": "Taylor",
           "status": "active",
           "date_entered": "20.04.2026",
           "date_left": null,
-          "last_severity": null,
-          "ipid": "Taylor | Callitrix jacchus | 14.06.2018"
+          "last_severity": null
         }
       ]
     },
@@ -175,8 +156,7 @@
           "previous_project_snapshot": [],
           "previous_experimental_snapshot": [],
           "previous_in_experiment": true,
-          "had_in_experiment": true,
-          "ipid": "Andy | Unknown species | 01.01.1900"
+          "had_in_experiment": true
         },
         {
           "name": "Cindy",
@@ -186,8 +166,7 @@
           "last_severity": "SV2",
           "previous_project_snapshot": [],
           "previous_experimental_snapshot": [],
-          "previous_in_experiment": false,
-          "ipid": "Cindy | Unknown species | 01.01.1900"
+          "previous_in_experiment": false
         },
         {
           "name": "Dana",
@@ -198,8 +177,7 @@
           "previous_project_snapshot": [],
           "previous_experimental_snapshot": [],
           "previous_in_experiment": true,
-          "had_in_experiment": true,
-          "ipid": "Dana | Unknown species | 01.01.1900"
+          "had_in_experiment": true
         }
       ]
     },
@@ -239,8 +217,7 @@
               "had_in_experiment": true,
               "project": "Anode"
             }
-          ],
-          "ipid": "Andy | Unknown species | 01.01.1900"
+          ]
         }
       ]
     }

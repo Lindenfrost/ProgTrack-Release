@@ -1,5 +1,5 @@
 {
-  "Olga | Callitrix jacchus | 20.06.2015": {
+  "Olga": {
     "model_type": "linear",
     "a0": -12.348822881083263,
     "b1": 0.5350871223301921,
@@ -10,8 +10,6 @@
     "pdg_scale": 5.1,
     "pdg_unit": "ug/mg_Cr",
     "prog_unit": "ng/mL",
-    "n_pdg_total": 22,
-    "ipid": "Olga | Callitrix jacchus | 20.06.2015",
-    "name": "Olga"
+    "n_pdg_total": 22
   }
 }

@@ -2609,14 +2609,17 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
                  Paragraph(safe_str(header_info.get('Name', '-')), normal_style), 
                  Paragraph('<b>' + messages.get('report.header.role', 'Role') + ':</b>', normal_style), 
                  Paragraph(safe_str(header_info.get('Role', '-')), normal_style)],
-                [Paragraph('<b>' + messages.get('report.header.id', 'ID') + ':</b>', normal_style), 
-                 Paragraph(safe_str(header_info.get('ID', '-')), normal_style), 
-                 Paragraph('<b>' + messages.get('report.header.status', 'Status') + ':</b>', normal_style), 
+                [Paragraph('<b>' + messages.get('report.header.ipid', 'IPID') + ':</b>', normal_style),
+                 Paragraph(safe_str(header_info.get('IPID', '-')), normal_style),
+                 Paragraph('<b>' + messages.get('report.header.id', 'ID') + ':</b>', normal_style),
+                 Paragraph(safe_str(header_info.get('ID', '-')), normal_style)],
+                [Paragraph('<b>' + messages.get('report.header.birth_date', 'Birth Date') + ':</b>', normal_style),
+                 Paragraph(safe_str(header_info.get('Birth Date', '-')), normal_style),
+                 Paragraph('<b>' + messages.get('report.header.status', 'Status') + ':</b>', normal_style),
                  Paragraph(safe_str(header_info.get('Status', '-')), normal_style)],
-                [Paragraph('<b>' + messages.get('report.header.birth_date', 'Birth Date') + ':</b>', normal_style), 
-                 Paragraph(safe_str(header_info.get('Birth Date', '-')), normal_style), 
-                 Paragraph('<b>' + messages.get('report.header.genotype', 'Genotype') + ':</b>', normal_style), 
-                 Paragraph(safe_str(header_info.get('Genotype', '-')), normal_style)],
+                [Paragraph('<b>' + messages.get('report.header.genotype', 'Genotype') + ':</b>', normal_style),
+                 Paragraph(safe_str(header_info.get('Genotype', '-')), normal_style),
+                 '', ''],
                 [Paragraph('<b>' + messages.get('report.header.statistics', 'Statistics') + ':</b>', normal_style), 
                  Paragraph(safe_str(header_info.get('Statistics', '-')), normal_style), '', '']
             ]
@@ -2632,8 +2635,8 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
                 ('RIGHTPADDING', (0, 0), (-1, -1), 3),
                 ('TOPPADDING', (0, 0), (-1, -1), 2),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-                ('SPAN', (0, 3), (0, 3)),
-                ('SPAN', (1, 3), (3, 3)),
+                ('SPAN', (0, 4), (0, 4)),
+                ('SPAN', (1, 4), (3, 4)),
             ]))
             
             w3, h3 = header_table.wrap(doc.width, doc.topMargin)
@@ -2646,7 +2649,7 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
         # Create PDF document with custom page template - minimal margins for wider table
         doc = BaseDocTemplate(output_path, pagesize=landscape(A4),
                              leftMargin=0.5*cm, rightMargin=0.5*cm,
-                             topMargin=5*cm, bottomMargin=1*cm)
+                             topMargin=5.4*cm, bottomMargin=1*cm)
         
         # Define frame for content (below header)
         frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='normal')

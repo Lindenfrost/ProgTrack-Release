@@ -63,6 +63,28 @@ from Plugins.core.project_visibility import (
     visible_projects_for_user,
 )
 from Plugins.core.platform_helpers import default_export_directory, default_save_path
+from Plugins.core.animal_identity import (
+    animal_base_name,
+    animal_identity_key,
+    animal_identity_label,
+    identity_conflict,
+    normalize_birth_date,
+    record_identity_tuple,
+    split_animal_identity_key,
+)
+from Plugins.core.animal_reference_rewrite import (
+    backfill_reference_display_names,
+    move_medi_document_folder,
+    replace_exact_animal_reference,
+    rewrite_animal_reference_file,
+)
+from Plugins.core.animal_roles import AnimalRoleRegistry
+from Plugins.core.animal_status import (
+    DECEASED_STATUS_SYMBOL,
+    compact_status_with_death_priority,
+    has_death_date,
+    status_summary_with_death_priority,
+)
 from typing import List, Dict, Any, Optional, Tuple, Callable, TYPE_CHECKING
 
 APP_BASE_DIR = Path(__file__).resolve().parent
@@ -257,7 +279,7 @@ from PyQt6.QtWidgets import (
     QCheckBox, QWidget, QRadioButton, QButtonGroup, QSizePolicy, QSpacerItem,
     QTextEdit, QTextBrowser, QSplitter, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
     QDialogButtonBox, QTabBar, QColorDialog, QMenuBar, QStyledItemDelegate, QStyleOptionViewItem,
-    QSpinBox, QProgressBar
+    QSpinBox, QProgressBar, QProgressDialog
 )
 import math
 from math import isnan
@@ -663,6 +685,10 @@ class StyleSettingsDialog(QDialog):
         # Store color buttons for easy access
         self.color_buttons = {}
         self.marker_combos = {}
+        self.role_table = None
+        self._role_definitions = self.parent_app._load_animal_role_definitions()
+        self._role_setup_editable = self.parent_app._can_configure_animal_roles()
+        self._accepted_role_definitions = None
         
         self._init_ui()
         self._load_current_settings()
@@ -681,6 +707,9 @@ class StyleSettingsDialog(QDialog):
         """Initialize the dialog UI."""
         layout = QVBoxLayout(self)
         steroid_active = self._steroid_track_active()
+        tabs = QTabWidget(self)
+        visual_tab = QWidget()
+        visual_layout = QVBoxLayout(visual_tab)
         
         # Create scroll area for settings
         scroll = QtWidgets.QScrollArea()
@@ -947,7 +976,10 @@ class StyleSettingsDialog(QDialog):
         
         scroll_layout.addStretch()
         scroll.setWidget(scroll_widget)
-        layout.addWidget(scroll)
+        visual_layout.addWidget(scroll)
+        tabs.addTab(visual_tab, self.messages.get("settings.tab.visual_style", "Visual style"))
+        tabs.addTab(self._create_role_setup_tab(), self.messages.get("settings.tab.role_setup", "Role setup"))
+        layout.addWidget(tabs)
         
         # ===== Buttons =====
         button_layout = QHBoxLayout()
@@ -967,6 +999,187 @@ class StyleSettingsDialog(QDialog):
         button_layout.addWidget(button_box)
         
         layout.addLayout(button_layout)
+
+    def _create_role_setup_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        notice = QLabel(self.messages.get(
+            "settings.role_setup.notice",
+            "Animal roles are global. New custom roles use an emoji label for now; later UI graphics will replace this.",
+        ))
+        notice.setWordWrap(True)
+        layout.addWidget(notice)
+
+        if not self._role_setup_editable:
+            locked = QLabel(self.messages.get(
+                "settings.role_setup.locked",
+                "Only Lord or Master users can change animal role setup.",
+            ))
+            locked.setWordWrap(True)
+            locked.setStyleSheet("color: #666;")
+            layout.addWidget(locked)
+
+        self.role_table = QTableWidget(0, 6, tab)
+        self.role_table.setHorizontalHeaderLabels([
+            self.messages.get("settings.role_setup.col.active", "Active"),
+            self.messages.get("settings.role_setup.col.order", "Order"),
+            self.messages.get("settings.role_setup.col.icon", "Emoji"),
+            self.messages.get("settings.role_setup.col.label", "Label"),
+            self.messages.get("settings.role_setup.col.value", "Internal ID"),
+            self.messages.get("settings.role_setup.col.preset", "Preset"),
+        ])
+        self.role_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.role_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.role_table.verticalHeader().setVisible(False)
+        self.role_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+        self.role_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        if not self._role_setup_editable:
+            self.role_table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+
+        self._rebuild_role_table(self._role_definitions)
+        layout.addWidget(self.role_table, 1)
+
+        button_row = QHBoxLayout()
+        add_btn = QPushButton(self.messages.get("settings.role_setup.add_role", "Add role"))
+        up_btn = QPushButton(self.messages.get("settings.role_setup.move_up", "Move up"))
+        down_btn = QPushButton(self.messages.get("settings.role_setup.move_down", "Move down"))
+        add_btn.clicked.connect(self._add_custom_role_row)
+        up_btn.clicked.connect(lambda: self._move_selected_role_row(-1))
+        down_btn.clicked.connect(lambda: self._move_selected_role_row(1))
+        for btn in (add_btn, up_btn, down_btn):
+            btn.setEnabled(self._role_setup_editable)
+            button_row.addWidget(btn)
+        button_row.addStretch()
+        layout.addLayout(button_row)
+        return tab
+
+    def _rebuild_role_table(self, roles):
+        if self.role_table is None:
+            return
+        self.role_table.setRowCount(0)
+        for role in sorted(roles, key=lambda r: (int(r.get("order", 1000)), str(r.get("label", "")).casefold())):
+            self._add_role_table_row(role)
+
+    def _add_role_table_row(self, role):
+        row = self.role_table.rowCount()
+        self.role_table.insertRow(row)
+
+        active_item = QTableWidgetItem("")
+        active_item.setCheckState(
+            Qt.CheckState.Checked if role.get("active", True) else Qt.CheckState.Unchecked
+        )
+        active_item.setFlags((active_item.flags() | Qt.ItemFlag.ItemIsUserCheckable) & ~Qt.ItemFlag.ItemIsEditable)
+        if not self._role_setup_editable:
+            active_item.setFlags(active_item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+        self.role_table.setItem(row, 0, active_item)
+
+        values = [
+            str(role.get("order", (row + 1) * 10)),
+            str(role.get("icon", "")),
+            str(role.get("label", "")),
+            str(role.get("value", "")),
+            str(role.get("field_preset", "basic")),
+        ]
+        for col, value in enumerate(values, start=1):
+            item = QTableWidgetItem(value)
+            item.setData(Qt.ItemDataRole.UserRole, dict(role))
+            immutable = col in (4, 5) or (bool(role.get("built_in")) and col == 3)
+            if immutable or not self._role_setup_editable:
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.role_table.setItem(row, col, item)
+
+    def _current_role_values_in_table(self):
+        values = set()
+        if self.role_table is None:
+            return values
+        for row in range(self.role_table.rowCount()):
+            item = self.role_table.item(row, 4)
+            if item:
+                values.add(item.text().strip())
+        return values
+
+    def _add_custom_role_row(self):
+        role = self.parent_app._make_custom_animal_role_definition(
+            self.messages.get("settings.role_setup.new_role_label", "New role"),
+            "\u25cf",
+            existing_values=self._current_role_values_in_table(),
+        )
+        self._add_role_table_row(role)
+        self.role_table.selectRow(self.role_table.rowCount() - 1)
+
+    def _move_selected_role_row(self, direction: int):
+        if self.role_table is None:
+            return
+        selected = self.role_table.selectionModel().selectedRows()
+        if not selected:
+            return
+        row = selected[0].row()
+        target = row + direction
+        if target < 0 or target >= self.role_table.rowCount():
+            return
+        roles = self._role_rows_from_table(validate=False)
+        roles[row], roles[target] = roles[target], roles[row]
+        for index, role in enumerate(roles):
+            role["order"] = (index + 1) * 10
+        self._rebuild_role_table(roles)
+        self.role_table.selectRow(target)
+
+    def _role_rows_from_table(self, *, validate: bool):
+        roles = []
+        seen_values = set()
+        if self.role_table is None:
+            return roles
+        for row in range(self.role_table.rowCount()):
+            source_item = self.role_table.item(row, 4)
+            original = source_item.data(Qt.ItemDataRole.UserRole) if source_item else {}
+            original = dict(original) if isinstance(original, dict) else {}
+            label = (self.role_table.item(row, 3).text() if self.role_table.item(row, 3) else "").strip()
+            value = (self.role_table.item(row, 4).text() if self.role_table.item(row, 4) else "").strip()
+            icon = (self.role_table.item(row, 2).text() if self.role_table.item(row, 2) else "").strip()
+            order_text = (self.role_table.item(row, 1).text() if self.role_table.item(row, 1) else "").strip()
+            active_item = self.role_table.item(row, 0)
+
+            if validate and not label:
+                raise ValueError(self.messages.get("settings.role_setup.error.label_required", "Role label is required."))
+            if validate and not value:
+                raise ValueError(self.messages.get("settings.role_setup.error.value_required", "Internal role ID is required."))
+            if validate and value in seen_values:
+                raise ValueError(self.messages.get("settings.role_setup.error.duplicate", "Internal role IDs must be unique."))
+            seen_values.add(value)
+
+            try:
+                order = int(order_text)
+            except ValueError:
+                order = (row + 1) * 10
+
+            role = dict(original)
+            role.update({
+                "value": value,
+                "label": label,
+                "icon": icon or "\u25cf",
+                "order": order,
+                "active": active_item.checkState() == Qt.CheckState.Checked if active_item else True,
+            })
+            if not role.get("built_in"):
+                role["label_key"] = ""
+                role.setdefault("base_editor", "basic")
+                role.setdefault("field_preset", "basic")
+            roles.append(role)
+        return roles
+
+    def accept(self):
+        if self._role_setup_editable:
+            try:
+                self._accepted_role_definitions = self._role_rows_from_table(validate=True)
+            except ValueError as exc:
+                QMessageBox.warning(
+                    self,
+                    self.messages.get("title.warning", "Warning"),
+                    str(exc),
+                )
+                return
+        super().accept()
     
     def _create_color_button(self, default_color):
         """Create a color picker button."""
@@ -1138,6 +1351,10 @@ class StyleSettingsDialog(QDialog):
             'sperm_progressive_marker': _marker_or_parent('sperm_progressive', 'sperm_progressive_marker', '^')
         }
 
+    def get_role_definitions(self):
+        """Return accepted role definitions, or None when Role setup was read-only."""
+        return self._accepted_role_definitions
+
 # # ================================================================ #
 # Helper classes for Master_Track integration
 # # ================================================================ #
@@ -1260,6 +1477,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # Expose Role enum for plugin access
         self.Role = Role
+        self.animal_role_registry = AnimalRoleRegistry(
+            APP_BASE_DIR / "Plugins" / "core" / "animal_roles.json"
+        )
         
         # Import Qt components that are needed immediately
         global QIcon, QMainWindow
@@ -3039,20 +3259,34 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------
     # 7.8.x Helper: ensure defaults for newly seen names (used by all imports)
     # ------------------------
-    def _ensure_defaults_for_new(self, name: str):
+    def _ensure_defaults_for_new(
+        self,
+        name: str,
+        *,
+        base_name: str = "",
+        species: str = "",
+        birth_date: str = "",
+    ):
         """
         Create a minimal default record if 'name' is not yet present.
         New animals start with rolle=Unbekannt and empty lists.
         """
         # If the animal doesn't exist in self.animals dict, create it
         if name not in self.animals:
+            normalized_birth = normalize_birth_date(birth_date, required=False)
+            visible_name = base_name or animal_base_name(name)
             self.animals[name] = {
+                "ipid": name,
+                "name": visible_name,
+                "_base_name": visible_name,
+                "display_name": visible_name,
                 "rolle": Role.UNKNOWN.value,
                 "events": [],
                 "daten": [],
                 "pdg": [],
                 "gewicht": [],
-                "species": "",
+                "species": self._normalize_species_value(species),
+                "birth_date": normalized_birth,
                 "chip_nr": "",
                 "origin": "",
                 "special_status": "",
@@ -3063,62 +3297,322 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             
         return self.animals[name]
 
-    def _name_species_conflict(self, new_name: str, new_species: str) -> bool:
-        """Return True if (new_name, new_species) is already taken.
+    @staticmethod
+    def _apply_identity_fields_to_record(
+        record: Dict[str, Any],
+        animal_key: str,
+        base_name: str,
+        species: str,
+        birth_date: str,
+    ) -> None:
+        visible_name = animal_base_name(base_name) or animal_base_name(animal_key)
+        record['ipid'] = animal_key
+        record['name'] = visible_name
+        record['_base_name'] = visible_name
+        record['display_name'] = visible_name
+        record['species'] = species
+        record['birth_date'] = birth_date
 
-        Same name is allowed when species differ (both defined).
-        An undefined-species name is only allowed once.
-        """
-        ns = (new_species or "").strip()
-        for d in (self.animals, getattr(self, 'archived', {})):
-            for key, rec in d.items():
-                base = (rec.get('_base_name') or key).strip()
-                if base.lower() != new_name.lower():
-                    continue
-                rs = (rec.get('species') or '').strip()
-                if not ns and not rs:
-                    return True  # both undefined → conflict
-                if ns and ns == rs:
-                    return True  # same defined species → conflict
+    @staticmethod
+    def _replace_exact_animal_reference(value: Any, old_key: str, new_key: str) -> Any:
+        return replace_exact_animal_reference(value, old_key, new_key)
+
+    @staticmethod
+    def _backfill_reference_display_names(value: Any, animal_key: str, base_name: str) -> None:
+        backfill_reference_display_names(value, animal_key, base_name)
+
+    def _rewrite_animal_reference_file(self, path: Path, old_key: str, new_key: str, base_name: str) -> None:
+        rewrite_animal_reference_file(path, old_key, new_key, base_name)
+
+    def _rewrite_animal_references_after_identity_change(
+        self,
+        old_key: str,
+        new_key: str,
+        base_name: str,
+    ) -> None:
+        if not old_key or old_key == new_key:
+            return
+        self.animals = self._replace_exact_animal_reference(self.animals, old_key, new_key)
+        self.archived = self._replace_exact_animal_reference(self.archived, old_key, new_key)
+        self._backfill_reference_display_names(self.animals, new_key, base_name)
+        self._backfill_reference_display_names(self.archived, new_key, base_name)
+
+        base = Path(__file__).resolve().parent
+        for rel_path in (
+            "Plugins/Medi_Track/medi_history.json",
+            "Plugins/Cage__Track/cage.json",
+            "Plugins/Heritage_Track/heritage_animals.json",
+            "Plugins/Animal_Reports/animal_report_data.json",
+            "Plugins/Flow_Track/flowtrack_daten.json",
+            "Plugins/Flow_Track/flowtrack_config.json",
+            "Plugins/Projects_Track/projects_history.json",
+            "Plugins/Projects_Track/project_data.json",
+            "Plugins/Sample_Track/organs.json",
+            "Plugins/Sample_Track/other.json",
+            "Plugins/Surgery_Planner/Surgery_Planner.schedule.json",
+            "Plugins/Surgery_Planner/Surgery_Pre_Planner.schedule.json",
+            "Plugins/PdG_converter/data/models.json",
+        ):
+            self._rewrite_animal_reference_file(base / rel_path, old_key, new_key, base_name)
+        move_medi_document_folder(base, old_key, new_key)
+
+    def _name_species_conflict(
+        self,
+        new_name: str,
+        new_species: str,
+        birth_date: str = "",
+        *,
+        exclude_key: Optional[str] = None,
+    ) -> bool:
+        """Return True if the complete animal identity is already taken."""
+        return identity_conflict(
+            new_name,
+            new_species,
+            birth_date,
+            self.animals,
+            getattr(self, 'archived', {}),
+            exclude_key=exclude_key,
+        )
+
+    def _resolve_animal_key(self, base_name: str, species: str, birth_date: str) -> str:
+        """Return the dict key to use for a new animal."""
+        return animal_identity_key(base_name, species, birth_date)
+
+    def _normalize_identity_birth_for_save(self, value: str, *, required: bool) -> Optional[str]:
+        try:
+            return normalize_birth_date(value, required=required)
+        except ValueError as exc:
+            self._show_message_raw(
+                self.messages.get("error.title", "Error"),
+                str(exc),
+                "error",
+            )
+            return None
+
+    def _validate_identity_species_for_save(self, species: str) -> bool:
+        if species:
+            return True
+        self._show_message_raw(
+            self.messages.get("error.title", "Error"),
+            self.messages.get(
+                "error.new_animal.species_required",
+                "Species is required for animal identity.",
+            ),
+            "error",
+        )
         return False
 
-    def _resolve_animal_key(self, base_name: str, species: str) -> str:
-        """Return the dict key to use for a new animal.
+    def _validate_existing_identity_for_save(
+        self,
+        animal_key: str,
+        base_name: str,
+        species: str,
+        birth_date: str,
+    ) -> bool:
+        try:
+            target_key = self._resolve_animal_key(base_name, species, birth_date)
+        except ValueError as exc:
+            self._show_message_raw(
+                self.messages.get("error.title", "Error"),
+                str(exc),
+                "error",
+            )
+            return False
+        if target_key == animal_key:
+            return True
+        if not self._master_can('core.edit_animal_identity'):
+            self._show_permission_denied()
+            return False
+        return True
 
-        If 'base_name' is free, returns it as-is.
-        If already taken by an animal with a different defined species,
-        returns 'base_name (species)' to avoid overwriting.
-        """
-        sp = (species or '').strip()
-        if base_name not in self.animals and base_name not in getattr(self, 'archived', {}):
-            return base_name
-        for d in (self.animals, getattr(self, 'archived', {})):
-            if base_name in d:
-                existing_sp = (d[base_name].get('species') or '').strip()
-                if sp and sp != existing_sp:
-                    return f"{base_name} ({sp})"
-        return base_name
+    @staticmethod
+    def _import_row_text(row: Any, candidates: Tuple[str, ...]) -> str:
+        for column in candidates:
+            try:
+                if column not in row:
+                    continue
+                value = row[column]
+            except Exception:
+                continue
+            text = "" if value is None else str(value).strip()
+            if text and text.casefold() not in {"none", "null", "nan", "nat"}:
+                return text
+        return ""
+
+    def _resolve_import_animal_key(self, row: Any, *, create_missing: bool = True) -> Optional[str]:
+        raw_name = self._import_row_text(row, ("Name",))
+        if not raw_name:
+            return None
+
+        if raw_name in self.animals:
+            return raw_name
+
+        species = self._normalize_species_value(
+            self._import_row_text(row, ("Species", "species", "Spezies", "Art"))
+        )
+        birth_raw = self._import_row_text(
+            row,
+            (
+                "Birth Date",
+                "Birth date",
+                "Birthdate",
+                "birth_date",
+                "Geburtsdatum",
+                "Geburtsdatum (DD.MM.YYYY)",
+            ),
+        )
+
+        parts = split_animal_identity_key(raw_name)
+        base_name = raw_name
+        if parts is not None:
+            base_name = parts[0]
+            species = species or parts[1]
+            birth_raw = birth_raw or parts[2]
+
+        birth = ""
+        if birth_raw:
+            try:
+                birth = normalize_birth_date(birth_raw, required=True)
+            except ValueError as exc:
+                logging.warning(f"Import row skipped for {raw_name}: {exc}")
+                return None
+
+        if species and birth:
+            try:
+                normalized_key = animal_identity_key(base_name, species, birth)
+            except ValueError as exc:
+                logging.warning(f"Import row skipped for {raw_name}: {exc}")
+                return None
+            if normalized_key in self.animals:
+                return normalized_key
+
+        candidates = []
+        wanted_name = animal_base_name(base_name).casefold()
+        wanted_species = self._normalize_species_value(species).casefold()
+        for key, rec in self.animals.items():
+            rec_name, rec_species, rec_birth = record_identity_tuple(key, rec)
+            if rec_name != wanted_name:
+                continue
+            if wanted_species and rec_species != wanted_species:
+                continue
+            if birth and rec_birth != birth:
+                continue
+            candidates.append(key)
+
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            logging.warning(
+                "Ambiguous import row for animal %s; add Species and Birth Date.",
+                raw_name,
+            )
+            return None
+
+        if create_missing and species and birth:
+            new_key = animal_identity_key(base_name, species, birth)
+            self._ensure_defaults_for_new(
+                new_key,
+                base_name=base_name,
+                species=species,
+                birth_date=birth,
+            )
+            return new_key
+
+        if create_missing:
+            prompted = self._prompt_identity_for_import(base_name)
+            if prompted is not None:
+                species, birth = prompted
+                new_key = animal_identity_key(base_name, species, birth)
+                self._ensure_defaults_for_new(
+                    new_key,
+                    base_name=base_name,
+                    species=species,
+                    birth_date=birth,
+                )
+                return new_key
+
+        logging.warning(
+            "Import row skipped for %s: animal not found and identity columns missing.",
+            raw_name,
+        )
+        return None
+
+    def _reset_import_identity_prompt_cache(self) -> None:
+        self._import_identity_prompt_cache = {}
+
+    def _prompt_identity_for_import(self, base_name: str) -> Optional[Tuple[str, str]]:
+        cache = getattr(self, '_import_identity_prompt_cache', None)
+        if not isinstance(cache, dict):
+            cache = {}
+            self._import_identity_prompt_cache = cache
+        cache_key = animal_base_name(base_name).casefold()
+        if cache_key in cache:
+            return cache[cache_key]
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(self.messages.get(
+            "dialog.import_identity.title",
+            "Animal identity required",
+        ))
+        layout = QVBoxLayout(dlg)
+        form = QFormLayout()
+
+        name_le = QLineEdit(animal_base_name(base_name))
+        name_le.setReadOnly(True)
+        form.addRow(self.messages.get("dialog.field.name", "Name:"), name_le)
+
+        species_cb = QComboBox()
+        placeholder = self.messages.get("dialog.species.placeholder", "(Please select)")
+        species_cb.addItem(placeholder, "")
+        for species in self._load_species_options():
+            species_cb.addItem(species, species)
+        form.addRow(self.messages.get("dialog.field.species", "Species:"), species_cb)
+
+        birth_le = QLineEdit()
+        birth_le.setPlaceholderText(self.messages.get("form.placeholder.date_short", "(DD.MM.YYYY)"))
+        form.addRow(self.messages.get("dialog.field.birth_date", "Birth date:"), birth_le)
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            parent=dlg,
+        )
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+
+        while True:
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                cache[cache_key] = None
+                return None
+            species = self._species_from_combo(species_cb)
+            try:
+                birth = normalize_birth_date(birth_le.text(), required=True)
+                animal_identity_key(base_name, species, birth)
+            except ValueError as exc:
+                self._show_message_raw(
+                    self.messages.get("error.title", "Error"),
+                    str(exc),
+                    "error",
+                )
+                continue
+            cache[cache_key] = (species, birth)
+            return cache[cache_key]
 
 
     def _display_name(self, key: str) -> str:
         """Return the user-visible name for an animal key.
 
-        When a key was disambiguated by appending a species suffix
-        (e.g. ``"Luna (Cat)"``), the original ``_base_name`` field
-        (``"Luna"``) is used as the display name.  Falls back to the
-        key itself if the animal is unknown or has no ``_base_name``.
+        Full identity keys are stored internally, while the sidebar can
+        keep showing the short animal name.
         """
         rec = self.animals.get(key)
         if isinstance(rec, dict):
-            base = rec.get('_base_name')
-            if base:
-                return base
+            return animal_base_name(key, rec)
         rec = getattr(self, 'archived', {}).get(key)
         if isinstance(rec, dict):
-            base = rec.get('_base_name')
-            if base:
-                return base
-        return key
+            return animal_base_name(key, rec)
+        return animal_base_name(key)
 
     # ------------------------
     # 7.9 Read JSON Data
@@ -3234,6 +3728,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             
             for name, rec in source_data.items():
                 rec_copy = rec.copy()
+                visible_name = animal_base_name(name, rec_copy)
+                rec_copy['ipid'] = name
+                rec_copy['name'] = visible_name
+                rec_copy['_base_name'] = visible_name
+                rec_copy['display_name'] = visible_name
+                parts = split_animal_identity_key(name)
+                if parts is not None:
+                    rec_copy['species'] = self._normalize_species_value(rec_copy.get('species')) or parts[1]
+                    rec_copy['birth_date'] = (
+                        normalize_birth_date(rec_copy.get('birth_date'), required=False)
+                        or normalize_birth_date(parts[2], required=False)
+                    )
 
                 # --- progesterone (blood) ---
                 rec_copy['daten'] = []
@@ -3627,10 +4133,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
 
-        name_le = QLineEdit(name_value or "")
+        can_edit_identity = self._master_can('core.edit_animal_identity')
+        display_name_value = animal_base_name(name_value) if editing else (name_value or "")
+        name_le = QLineEdit(display_name_value)
         self._std_widen(name_le)
         name_le.setMaximumWidth(UI_STD_FIELD_MIN_WIDTH + 80)
-        if editing:
+        if editing and not can_edit_identity:
             name_le.setReadOnly(True)
         else:
             name_le.setPlaceholderText(self.messages.get("form.placeholder.name", "Name"))
@@ -3667,7 +4175,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         species_cb.currentIndexChanged.connect(_sync_species_font)
         _sync_species_font(species_cb.currentIndex())
 
-        if editing and normalized_species:
+        if editing and normalized_species and not can_edit_identity:
             species_cb.setEnabled(False)
 
         row.addWidget(name_le, 0)
@@ -3842,7 +4350,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     ) -> str:
         name_text = str(animal_name or "").strip()
         data = animal_data if isinstance(animal_data, dict) else self.animals.get(name_text, {})
-        name_text = data.get('_base_name') or name_text
+        name_text = animal_base_name(name_text, data)
         name_display = html.escape(name_text) if rich_text else name_text
         id_species = self._format_id_with_species(data, messages=messages, rich_text=rich_text)
         if not id_species or id_species == "-":
@@ -4101,9 +4609,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._animal_name_filter = ""
         self.animal_name_filter_edit = QLineEdit()
         self.animal_name_filter_edit.setPlaceholderText(
-            self.messages.get("sidebar.animal_name_filter.placeholder", "Filter animals by name"))
+            self.messages.get("sidebar.animal_name_filter.placeholder", "Filter animals by name or IPID"))
         self.animal_name_filter_edit.setToolTip(
-            self.messages.get("sidebar.animal_name_filter.tooltip", "Filter the visible animal list by name"))
+            self.messages.get("sidebar.animal_name_filter.tooltip", "Filter the visible animal list by short name or IPID"))
         self.animal_name_filter_edit.setClearButtonEnabled(True)
         self.animal_name_filter_edit.textChanged.connect(self._on_animal_name_filter_changed)
         sidebar.addWidget(self.animal_name_filter_edit)
@@ -4476,20 +4984,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return
         name = self.selected_animals[0]
         role = self.animals.get(name, {}).get('rolle', '')
-        if role in (Role.SPENDER.value, Role.AMME.value):
-            self._dlg_female_animal(name)
-        elif role == Role.SAMENSP.value:
-            self._dlg_samenspender(name)
-        elif role == Role.OFFSPRING.value:
-            self._dlg_offspring(name)
-        elif role == Role.PARTNER.value:
-            self._dlg_partner(name)
-        elif role == Role.ZUCHTTIER.value:
-            self._dlg_zuchttier(name)
-        elif role == Role.EXPERIMENTAL.value:
-            self._dlg_versuchstier(name)
-        else:
-            self._dlg_edit_animal()
+        self._dialog_for_role_value(role)(name)
 
     def _on_edit_in_all_tab(self):
         """When on the 'Alle' tab, Bearbeiten opens a sort-only dialog."""
@@ -4515,18 +5010,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # translated role label, store the internal role code.
         cmb = QComboBox(dlg)
         role_order = [
-            Role.SPENDER.value,
-            Role.AMME.value,
-            Role.SAMENSP.value,
-            Role.OFFSPRING.value,
-            Role.PARTNER.value,
-            Role.ZUCHTTIER.value,
-            Role.EXPERIMENTAL.value,
+            role.get("value", "")
+            for role in self._active_animal_role_definitions()
+            if role.get("value") and role.get("value") != Role.UNKNOWN.value
         ]
         if not self._is_steroid_track_active():
             role_order = [
                 role_code for role_code in role_order
-                if role_code not in (Role.SPENDER.value, Role.AMME.value, Role.SAMENSP.value)
+                if not self._is_steroid_role_value(role_code)
             ]
 
         current_role = a.get("rolle")
@@ -4567,18 +5058,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # Jump to the appropriate tab based on rolle
         rolle = a.get("rolle")
-        if rolle in (Role.SPENDER.value, Role.AMME.value):
-            tab_idx = 0  # ♀
-        elif rolle == Role.SAMENSP.value:
-            tab_idx = 1  # ♂
-        elif rolle == Role.OFFSPRING.value:
-            tab_idx = 2  # 👶
-        elif rolle == Role.PARTNER.value:
-            tab_idx = 3  # 🐾
-        elif rolle == Role.ZUCHTTIER.value:
-            tab_idx = 4  # ⚤
-        else:
-            tab_idx = 5  # Alle
+        tab_idx = self._category_tab_index_for_role(rolle)
         self.category_tab.setCurrentIndex(tab_idx)
         self._refresh_list()
         self._on_select()
@@ -5542,9 +6022,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             'Oo': self.messages.get('status.has_offspring', 'Has young offspring'),
             '+': self.messages.get('status.sick', 'Sick / In recovery'),
             '!': self.messages.get('status.abnormal', 'Abnormal'),
+            DECEASED_STATUS_SYMBOL: self.messages.get('status.deceased', 'Deceased'),
             '': self.messages.get('status.normal', 'Normal')
         }
         
+        if DECEASED_STATUS_SYMBOL in status and status != DECEASED_STATUS_SYMBOL:
+            genotype = status.replace(DECEASED_STATUS_SYMBOL, '').strip()
+            deceased_desc = status_map.get(DECEASED_STATUS_SYMBOL, 'Deceased')
+            return f"{genotype} {deceased_desc}".strip()
+
         # Handle combined statuses (e.g., "☉+")
         if '+' in status and status != '+':
             base_status = status.replace('+', '').strip()
@@ -5619,12 +6105,139 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._animal_name_filter = text
         self._refresh_list()
 
+    def _can_configure_animal_roles(self) -> bool:
+        mt = getattr(self, "master_track", None)
+        if mt is None or "master_track" in getattr(self, "_disabled_plugins", set()):
+            return True
+        return getattr(mt, "_current_role", "") in {"lord", "master"}
+
+    def _load_animal_role_definitions(self) -> List[Dict[str, Any]]:
+        registry = getattr(self, "animal_role_registry", None)
+        return registry.roles() if registry else []
+
+    def _save_animal_role_definitions(self, roles: List[Dict[str, Any]]) -> bool:
+        registry = getattr(self, "animal_role_registry", None)
+        if registry is None:
+            return False
+        try:
+            registry.save_roles(roles)
+            return True
+        except Exception as exc:
+            logging.error(f"Failed to save animal role setup: {exc}")
+            self._show_message_raw(
+                self.messages.get("error.title", "Error"),
+                self.messages.get(
+                    "settings.role_setup.save_failed",
+                    "Animal role setup could not be saved.",
+                ),
+                "error",
+            )
+            return False
+
+    def _make_custom_animal_role_definition(self, label: str, icon: str, existing_values=None) -> Dict[str, Any]:
+        registry = getattr(self, "animal_role_registry", None)
+        if registry is None:
+            return {
+                "role_id": label.casefold().replace(" ", "_"),
+                "value": f"custom.{label.casefold().replace(' ', '_')}",
+                "label": label,
+                "label_key": "",
+                "icon": icon or "●",
+                "order": 1000,
+                "active": True,
+                "built_in": False,
+                "base_editor": "basic",
+                "field_preset": "basic",
+            }
+        return registry.make_custom_role(label, icon, existing_values=existing_values)
+
+    def _active_animal_role_definitions(self) -> List[Dict[str, Any]]:
+        roles = self._load_animal_role_definitions()
+        return [role for role in roles if role.get("active")]
+
+    def _role_label_with_icon(self, rolle: str) -> str:
+        registry = getattr(self, "animal_role_registry", None)
+        if registry:
+            return registry.display_for_value(rolle, self.messages)
+        return self._get_localized_role(rolle)
+
+    def _build_export_role_groups(self, *, steroid_active: bool, visible_only: bool = False):
+        role_order = [
+            role.get("value", "")
+            for role in self._active_animal_role_definitions()
+            if role.get("value") and role.get("value") != Role.UNKNOWN.value
+        ]
+        if Role.UNKNOWN.value not in role_order:
+            role_order.append(Role.UNKNOWN.value)
+        role_groups = {role: [] for role in role_order}
+
+        for name, data in sorted(self.animals.items()):
+            if visible_only and not self._animal_visible_to_current_user(data):
+                continue
+            role = data.get("rolle") or Role.UNKNOWN.value
+            if role == Role.SAMENSP.value and not steroid_active:
+                continue
+            if role not in role_groups:
+                role_groups[role] = []
+                role_order.append(role)
+            role_groups[role].append(name)
+
+        role_labels = {role: self._role_label_with_icon(role) for role in role_order}
+        return role_groups, role_order, role_labels
+
+    def _is_steroid_role_value(self, role_value: str) -> bool:
+        return role_value in (Role.SPENDER.value, Role.AMME.value, Role.SAMENSP.value)
+
+    def _dialog_for_role_value(self, role_value: str):
+        if role_value in (Role.SPENDER.value, Role.AMME.value):
+            return lambda name, read_only=False: self._dlg_female_animal(
+                name,
+                read_only=read_only,
+                default_role=role_value,
+            )
+        if role_value == Role.SAMENSP.value:
+            return self._dlg_samenspender
+        if role_value == Role.OFFSPRING.value:
+            return self._dlg_offspring
+        if role_value == Role.PARTNER.value:
+            return self._dlg_partner
+        if role_value == Role.ZUCHTTIER.value:
+            return self._dlg_zuchttier
+        if role_value == Role.EXPERIMENTAL.value:
+            return self._dlg_versuchstier
+        return lambda name, read_only=False: self._dlg_basic_animal_role(
+            name,
+            role_value=role_value,
+            read_only=read_only,
+        )
+
+    def _category_tab_index_for_role(self, role_value: str) -> int:
+        if role_value in (Role.SPENDER.value, Role.AMME.value):
+            return 0
+        if role_value == Role.SAMENSP.value:
+            return 1
+        if role_value == Role.OFFSPRING.value:
+            return 2
+        if role_value == Role.PARTNER.value:
+            return 3
+        if role_value == Role.ZUCHTTIER.value:
+            return 4
+        if role_value == Role.EXPERIMENTAL.value:
+            return 5
+        return 6
+
     def _get_localized_role(self, rolle: str, messages: Optional[Dict[str, str]] = None) -> str:
         """Return a localized, human-readable role name for display."""
         m = messages or self.messages
 
         if not rolle:
             return m.get("role.unknown", "Unknown")
+
+        registry = getattr(self, "animal_role_registry", None)
+        if registry:
+            label = registry.label_for_value(rolle, m)
+            if label:
+                return label
 
         role_map = {
             Role.SPENDER.value:   m.get("role.spenderin", "Spenderin"),
@@ -5796,17 +6409,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         rolle = animal_data.get('rolle')
         self.report_role_label.setText(self._get_localized_role(rolle) if rolle is not None else '-')
         
-        # Get and display current status using sick/abnormal flags
-        _st_parts = []
-        if animal_data.get('sick', False):
-            _st_parts.append(self.messages.get('status.sick', 'Sick'))
-        if animal_data.get('abnormal_current', False):
-            _st_parts.append(self.messages.get('status.abnormal', 'Abnormal'))
-        if animal_data.get('in_experiment', False) and self._is_projects_track_active():
-            _st_parts.append(self.messages.get('status.in_experiment', 'In Experiment'))
-        _st_base = ', '.join(_st_parts) if _st_parts else self.messages.get('status.normal', 'Normal')
-        _st_special = animal_data.get('special_status', '').strip()
-        self.report_status_label.setText(_st_base + (' \u2014 ' + _st_special if _st_special else ''))
+        self.report_status_label.setText(
+            status_summary_with_death_priority(
+                animal_data,
+                self.messages,
+                projects_track_active=self._is_projects_track_active(),
+            )
+        )
         
         self.report_birth_label.setText(animal_data.get('birth_date', '-'))
         self.report_genotype_label.setText(animal_data.get('genotype', '-'))
@@ -7146,6 +7755,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             Localized status string
         """
         a = self.animals.get(animal_name, {})
+        if has_death_date(a):
+            return messages.get('status.deceased', 'Deceased')
         role = a.get('rolle')
         now = datetime.now()
         
@@ -7927,7 +8538,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             # build item + status
             status = self._get_status(name)
-            display_name = data.get('_base_name') or name
+            display_name = self._display_name(name)
+            identity_label = animal_identity_label(name, data)
 
             item = QListWidgetItem()
             item.setData(Qt.ItemDataRole.UserRole, name)
@@ -7936,6 +8548,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             
             # Add the animal name label
             name_label = QLabel(display_name)
+            name_label.setToolTip(identity_label)
             h.addWidget(name_label)
             
             # Add the status label
@@ -8038,6 +8651,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             
             # Set the widget as the item's widget
             item.setSizeHint(row_widget.sizeHint())
+            item.setToolTip(identity_label)
             self.lst.addItem(item)
             self.lst.setItemWidget(item, row_widget)
             
@@ -8150,10 +8764,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 sep_item.setData(Qt.ItemDataRole.UserRole, '__archived_sep__')
                 self.lst.addItem(sep_item)
                 for arch_name in sorted(arch_to_show.keys()):
+                    arch_identity_label = animal_identity_label(arch_name, arch_to_show[arch_name])
                     arch_item = QListWidgetItem()
                     arch_row = QWidget()
                     arch_h = QHBoxLayout(arch_row)
-                    arch_name_lbl = QLabel(arch_name)
+                    arch_name_lbl = QLabel(self._display_name(arch_name))
+                    arch_name_lbl.setToolTip(arch_identity_label)
                     arch_name_lbl.setStyleSheet('color: black;')
                     arch_h.addWidget(arch_name_lbl)
                     arch_h.addStretch()
@@ -8161,6 +8777,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     arch_row.setLayout(arch_h)
                     arch_item.setSizeHint(arch_row.sizeHint())
                     arch_item.setData(Qt.ItemDataRole.UserRole, '__archived__' + arch_name)
+                    arch_item.setToolTip(arch_identity_label)
                     self.lst.addItem(arch_item)
                     self.lst.setItemWidget(arch_item, arch_row)
 
@@ -8391,6 +9008,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         This is used for historical report generation.
         """
         a = self.animals.get(name, {})
+        if has_death_date(a):
+            return compact_status_with_death_priority(a)
         role = a.get('rolle')
         
         # Convert date to datetime for comparison
@@ -8681,7 +9300,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if a.get('in_experiment', False) and self._is_projects_track_active():
             status = (status + ' ■').strip()
 
-        return status
+        return compact_status_with_death_priority(a, status)
 
     # ------------------------
     # 7.17 Apply Phase Filter
@@ -10484,15 +11103,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         v.addWidget(QLabel(self.messages.get('dialog.new_animal.select_role_prompt',
                                              'Choose a role for the new animal:')))
         lw = QListWidget()
-        role_options = [
-            (self.messages.get('role.spenderin',   '♀ Spenderin'),  self._dlg_female_animal),
-            (self.messages.get('role.samenspender','♂ Samenspender'), self._dlg_samenspender),
-            (self.messages.get('role.offspring',   '👶 Nachkomme'),     self._dlg_offspring),
-            (self.messages.get('role.partnertier', '🐾 Partnertier'),   self._dlg_partner),
-            (self.messages.get('role.zuchttier',   '⚤ Zuchttier'),    self._dlg_zuchttier),
-            (self.messages.get('role.experimental','💡 Versuchstier'), self._dlg_versuchstier),
-        ]
-        for label, _ in role_options:
+        role_options = []
+        steroid_active = self._is_steroid_track_active()
+        for role in self._active_animal_role_definitions():
+            value = role.get("value", "")
+            if value == Role.UNKNOWN.value:
+                continue
+            if not steroid_active and self._is_steroid_role_value(value):
+                continue
+            role_options.append((self._role_label_with_icon(value), value))
+        if not role_options:
+            role_options.append((self._role_label_with_icon(Role.OFFSPRING.value), Role.OFFSPRING.value))
+
+        for label, _role_value in role_options:
             lw.addItem(label)
         lw.setCurrentRow(0)
         v.addWidget(lw)
@@ -10503,7 +11126,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if dlg.exec() != QDialog.DialogCode.Accepted: return
         chosen = lw.currentRow()
         if 0 <= chosen < len(role_options):
-            role_options[chosen][1](None)
+            role_value = role_options[chosen][1]
+            self._dialog_for_role_value(role_value)(None)
 
 
     # --- Moved from top-level into class ProgTrackApp ---
@@ -10527,48 +11151,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         role_header_widgets = {}
         steroid_active = self._is_steroid_track_active()
 
-        # Group animals by role
-        role_groups = {
-            Role.SPENDER.value: [],
-            Role.AMME.value: [],
-            Role.SAMENSP.value: [],
-            Role.OFFSPRING.value: [],
-            Role.PARTNER.value: [],
-            Role.ZUCHTTIER.value: []
-        }
-        
-        # Organize animals by role (exclude archived)
-        for name, data in sorted(self.animals.items()):
-            if not self._animal_visible_to_current_user(data):
-                continue
-            role = data.get('rolle')
-            if role == Role.SAMENSP.value and not steroid_active:
-                continue
-            if role in role_groups:
-                role_groups[role].append(name)
-        
-        # Role labels for display
-        role_labels = {
-            Role.SPENDER.value: "♀ " + self.messages.get("role.spenderin", "Spenderin"),
-            Role.AMME.value: "♀ " + self.messages.get("role.amme", "Amme"),
-            Role.SAMENSP.value: "♂ " + self.messages.get("role.samenspender", "Samenspender"),
-            Role.OFFSPRING.value: "👶 " + self.messages.get("role.offspring", "Nachkomme"),
-            Role.PARTNER.value: "🐾 " + self.messages.get("role.partnertier", "Partnertier"),
-            Role.ZUCHTTIER.value: "⚤ " + self.messages.get("role.zuchttier", "Zuchttier")
-        }
+        role_groups, role_order, role_labels = self._build_export_role_groups(
+            steroid_active=steroid_active,
+            visible_only=True,
+        )
         
         # Add animals grouped by role with separators
         first_group = True
-        role_order = [
-            Role.SPENDER.value,
-            Role.AMME.value,
-            Role.SAMENSP.value,
-            Role.OFFSPRING.value,
-            Role.PARTNER.value,
-            Role.ZUCHTTIER.value,
-        ]
-        if not steroid_active:
-            role_order = [role for role in role_order if role != Role.SAMENSP.value]
 
         for role in role_order:
             animals_in_role = role_groups[role]
@@ -10653,8 +11242,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             try:
                 import openpyxl
                 with pd.ExcelWriter(path, engine='openpyxl') as writer:
+                    used_sheet_names = set()
                     for name in selected_animals:
                         animal = self.animals[name]
+                        animal_display = self._display_name(name)
                         role = animal.get('rolle')
                         is_sperm_role = steroid_active and role == Role.SAMENSP.value
                         if role == Role.SAMENSP.value and not steroid_active:
@@ -10667,7 +11258,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                 dt = rec.get('datum')
                                 if isinstance(dt, datetime) and von <= dt.date() <= bis:
                                     data.append({
-                                        'Name': name,
+                                        'IPID': name,
+                                        'Name': animal_display,
                                         'Datum': dt.strftime(DATE_FORMAT),
                                         self.messages.get('export.header.progesterone', 'Progesteron (ng/ml)'): rec['wert'],
                                         'F': '',
@@ -10683,7 +11275,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                     prog = sperm.get('progressive', '')
                                     count = sperm.get('count', '')
                                     data.append({
-                                        'Name': name,
+                                        'IPID': name,
+                                        'Name': animal_display,
                                         'Datum': dt.strftime(DATE_FORMAT),
                                         self.messages.get('export.header.motility', 'Motility (%)'): mot,
                                         self.messages.get('export.header.progressive', 'Progressive (%)'): prog,
@@ -10706,7 +11299,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             for typ, dt in repro_events:
                                 if isinstance(dt, datetime) and von <= dt.date() <= bis:
                                     data.append({
-                                        'Name': name,
+                                        'IPID': name,
+                                        'Name': animal_display,
                                         'Datum': dt.strftime(DATE_FORMAT),
                                         self.messages.get('export.header.progesterone', 'Progesteron (ng/ml)'): '',
                                         'F': typ,
@@ -10718,7 +11312,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             for typ, dt in repro_events:
                                 if isinstance(dt, datetime) and von <= dt.date() <= bis:
                                     data.append({
-                                        'Name': name,
+                                        'IPID': name,
+                                        'Name': animal_display,
                                         'Datum': dt.strftime(DATE_FORMAT),
                                         'Motility (%)': '',
                                         'Progressive (%)': '',
@@ -10731,7 +11326,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             if isinstance(dt, datetime) and von <= dt.date() <= bis:
                                 dt_str = dt.strftime(DATE_FORMAT)
                                 match = next((entry for entry in data
-                                              if entry['Datum'] == dt_str and entry['Name'] == name),
+                                              if entry['Datum'] == dt_str and entry.get('IPID') == name),
                                              None)
                                 if match:
                                     match[self.messages.get('export.header.weight', 'Weight (g)')] = w.get('wert')
@@ -10739,7 +11334,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                     # Create appropriate structure based on role
                                     if is_sperm_role:
                                         data.append({
-                                            'Name': name,
+                                            'IPID': name,
+                                            'Name': animal_display,
                                             'Datum': dt_str,
                                             self.messages.get('export.header.motility', 'Motility (%)'): '',
                                             self.messages.get('export.header.progressive', 'Progressive (%)'): '',
@@ -10749,7 +11345,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                         })
                                     elif role in (Role.SPENDER.value, Role.AMME.value):
                                         data.append({
-                                            'Name': name,
+                                            'IPID': name,
+                                            'Name': animal_display,
                                             'Datum': dt_str,
                                             self.messages.get('export.header.progesterone', 'Progesteron (ng/ml)'): '',
                                             'F': '',
@@ -10759,7 +11356,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                     else:
                                         # For Offspring, Partners, Zuchttiere: minimal columns
                                         data.append({
-                                            'Name': name,
+                                            'IPID': name,
+                                            'Name': animal_display,
                                             'Datum': dt_str,
                                             'F': '',
                                             self.messages.get('export.header.weight', 'Weight (g)'): w.get('wert')
@@ -10783,7 +11381,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                 else:
                                     # no existing row → append new one
                                     data.append({
-                                        'Name': name,
+                                        'IPID': name,
+                                        'Name': animal_display,
                                         'Datum': date_str,
                                         self.messages.get('export.header.progesterone', 'Progesteron (ng/ml)'): '',
                                         'F': '',
@@ -10799,7 +11398,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             df['Datum'] = pd.to_datetime(df['Datum'], format=DATE_FORMAT, dayfirst=True)
                             df.sort_values('Datum', inplace=True)
                             df['Datum'] = df['Datum'].dt.strftime(DATE_FORMAT)
-                            sheet_name = re.sub(r'[\\/\\:*?"<>|]', '_', name)[:31]
+                            base_sheet = re.sub(r'[\\/\\:*?"<>|]', '_', animal_display)[:31] or "Animal"
+                            sheet_name = base_sheet
+                            counter = 2
+                            while sheet_name in used_sheet_names:
+                                suffix = f"_{counter}"
+                                sheet_name = f"{base_sheet[:31-len(suffix)]}{suffix}"
+                                counter += 1
+                            used_sheet_names.add(sheet_name)
                             df.to_excel(writer, sheet_name=sheet_name, index=False, startrow=1)
                             
                             # Add header row with Project and Date Range
@@ -10807,9 +11413,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             project = animal.get('project', '')
                             date_range_text = f"{von.strftime(DATE_FORMAT)} - {bis.strftime(DATE_FORMAT)}"
                             if project:
-                                header_text = f"Project: {project}  |  Date Range: {date_range_text}"
+                                header_text = f"Animal: {animal_display}  |  IPID: {name}  |  Project: {project}  |  Date Range: {date_range_text}"
                             else:
-                                header_text = f"Date Range: {date_range_text}"
+                                header_text = f"Animal: {animal_display}  |  IPID: {name}  |  Date Range: {date_range_text}"
                             worksheet.cell(row=1, column=1, value=header_text)
 
                 # ------------------------
@@ -10858,46 +11464,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         role_header_widgets = {}
         steroid_active = self._is_steroid_track_active()
 
-        # Group animals by role (same as xlsx export)
-        role_groups = {
-            Role.SPENDER.value: [],
-            Role.AMME.value: [],
-            Role.SAMENSP.value: [],
-            Role.OFFSPRING.value: [],
-            Role.PARTNER.value: [],
-            Role.ZUCHTTIER.value: []
-        }
-        
-        # Organize animals by role (exclude archived)
-        for name, data in sorted(self.animals.items()):
-            role = data.get('rolle')
-            if role == Role.SAMENSP.value and not steroid_active:
-                continue
-            if role in role_groups:
-                role_groups[role].append(name)
-        
-        # Role labels for display
-        role_labels = {
-            Role.SPENDER.value: "♀ " + self.messages.get("role.spenderin", "Spenderin"),
-            Role.AMME.value: "♀ " + self.messages.get("role.amme", "Amme"),
-            Role.SAMENSP.value: "♂ " + self.messages.get("role.samenspender", "Samenspender"),
-            Role.OFFSPRING.value: "👶 " + self.messages.get("role.offspring", "Nachkomme"),
-            Role.PARTNER.value: "🐾 " + self.messages.get("role.partner", "Partnertier"),
-            Role.ZUCHTTIER.value: "⚤ " + self.messages.get("role.zuchttier", "Zuchttier")
-        }
+        role_groups, role_order, role_labels = self._build_export_role_groups(
+            steroid_active=steroid_active,
+            visible_only=False,
+        )
         
         # Add animals grouped by role with separators
         first_group = True
-        role_order = [
-            Role.SPENDER.value,
-            Role.AMME.value,
-            Role.SAMENSP.value,
-            Role.OFFSPRING.value,
-            Role.PARTNER.value,
-            Role.ZUCHTTIER.value,
-        ]
-        if not steroid_active:
-            role_order = [role for role in role_order if role != Role.SAMENSP.value]
 
         for role in role_order:
             animals_in_role = role_groups[role]
@@ -11070,35 +11643,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         role_header_widgets = {}
         steroid_active = self._is_steroid_track_active()
 
-        role_groups = {
-            Role.SPENDER.value: [],
-            Role.AMME.value: [],
-            Role.SAMENSP.value: [],
-            Role.OFFSPRING.value: [],
-            Role.PARTNER.value: [],
-            Role.ZUCHTTIER.value: []
-        }
-        for name, data in sorted(self.animals.items()):
-            role = data.get('rolle')
-            if role == Role.SAMENSP.value and not steroid_active:
-                continue
-            if role in role_groups:
-                role_groups[role].append(name)
-
-        role_labels = {
-            Role.SPENDER.value: "♀ " + self.messages.get("role.spenderin", "Spenderin"),
-            Role.AMME.value: "♀ " + self.messages.get("role.amme", "Amme"),
-            Role.SAMENSP.value: "♂ " + self.messages.get("role.samenspender", "Samenspender"),
-            Role.OFFSPRING.value: "👶 " + self.messages.get("role.offspring", "Nachkomme"),
-            Role.PARTNER.value: "🐾 " + self.messages.get("role.partner", "Partnertier"),
-            Role.ZUCHTTIER.value: "⚤ " + self.messages.get("role.zuchttier", "Zuchttier"),
-        }
-        role_order = [
-            Role.SPENDER.value, Role.AMME.value, Role.SAMENSP.value,
-            Role.OFFSPRING.value, Role.PARTNER.value, Role.ZUCHTTIER.value,
-        ]
-        if not steroid_active:
-            role_order = [r for r in role_order if r != Role.SAMENSP.value]
+        role_groups, role_order, role_labels = self._build_export_role_groups(
+            steroid_active=steroid_active,
+            visible_only=False,
+        )
 
         first_group = True
         for role in role_order:
@@ -11306,7 +11854,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 
                 # Generate PDF for this animal/month
                 animal_data = self.animals[animal_name]
-                pdf_filename = f"{animal_name}_{year}_{month:02d}.pdf"
+                safe_subject = re.sub(
+                    r'[\\/\\:*?"<>|]',
+                    '_',
+                    animal_identity_label(animal_name, animal_data),
+                ).strip().replace(' ', '_')
+                pdf_filename = f"{safe_subject}_{year}_{month:02d}.pdf"
                 pdf_path = os.path.join(output_dir, pdf_filename)
                 
                 self._create_single_pdf_report(animal_name, animal_data, year, month, pdf_path, von_date, bis_date, report_lang)
@@ -11398,18 +11951,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             
             header_info = {
                 'Name': self._display_name(animal_name),
+                'IPID': animal_name,
                 'ID': formatted_id,
                 'Chip Nr.': animal_data.get('chip_nr', '') or '-',
                 'Origin': animal_data.get('origin', '') or '-',
                 'Title Subject': report_title_subject,
                 'Project': self._format_project_severity(animal_data) or '-',
                 'Role': self._get_localized_role(rolle, report_messages) if rolle is not None else '-',
-                'Status': (lambda _a=animal_data, _m=report_messages: (
-                    lambda _p: ', '.join(_p) if _p else _m.get('status.normal', 'Normal')
-                )([_m.get('status.sick', 'Sick')] * int(bool(_a.get('sick'))) +
-                  [_m.get('status.abnormal', 'Abnormal')] * int(bool(_a.get('abnormal_current'))) +
-                  [_m.get('status.in_experiment', 'In Experiment')] * int(bool(_a.get('in_experiment')) and self._is_projects_track_active()))
-                + (' \u2014 ' + _a.get('special_status', '').strip() if _a.get('special_status', '').strip() else ''))(),
+                'Status': status_summary_with_death_priority(
+                    animal_data,
+                    report_messages,
+                    projects_track_active=self._is_projects_track_active(),
+                ),
                 'Birth Date': birth_date_display,
                 'Genotype': animal_data.get('genotype', '-'),
                 'Statistics': localized_stats
@@ -11711,33 +12264,24 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _show_style_settings(self):
         """Show the Style Settings dialog."""
-        # Check if Master Track is active and user has permission
-        mt = getattr(self, 'master_track', None)
-        if mt and mt.is_logged_in:
-            if not mt.can('core.style_settings'):
-                QMessageBox.warning(
-                    self,
-                    self.messages.get("title.warning", "Warning"),
-                    self.messages.get("master_track.warn.no_permission", "You don't have permission to access this feature.")
-                )
-                return
-        elif mt and not mt.is_logged_in:
-            # Guest user - show permission warning
+        if not self._master_can('core.style_settings'):
             QMessageBox.warning(
                 self,
                 self.messages.get("title.warning", "Warning"),
                 self.messages.get("master_track.warn.no_permission", "You don't have permission to access this feature.")
             )
             return
-        # If Master Track is not active, allow access (backwards compatibility)
 
         dialog = StyleSettingsDialog(self, self.messages)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # Apply the new style settings
             new_settings = dialog.get_settings()
+            new_roles = dialog.get_role_definitions()
             self._apply_style_settings(new_settings)
             # Save per-user style settings
             self._save_user_style_settings(new_settings)
+            if new_roles is not None and self._save_animal_role_definitions(new_roles):
+                self._refresh_list(update_tab_visibility=True)
             # Refresh the plot to show new colors/styles
             if hasattr(self, 'selected_animals') and self.selected_animals:
                 self._plot_selected()
@@ -12272,9 +12816,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                                           "Archived Animals:"))
         if hasattr(self, 'animal_name_filter_edit'):
             self.animal_name_filter_edit.setPlaceholderText(
-                self.messages.get("sidebar.animal_name_filter.placeholder", "Filter animals by name"))
+                self.messages.get("sidebar.animal_name_filter.placeholder", "Filter animals by name or IPID"))
             self.animal_name_filter_edit.setToolTip(
-                self.messages.get("sidebar.animal_name_filter.tooltip", "Filter the visible animal list by name"))
+                self.messages.get("sidebar.animal_name_filter.tooltip", "Filter the visible animal list by short name or IPID"))
         self.btn_restore.setText(self.messages["button.sidebar.restore"])
         self.btn_delete.setText(self.messages["button.sidebar.delete"])
 
@@ -13512,10 +14056,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if self._is_projects_track_active():
             chk_in_exp = QCheckBox(self.messages.get("checkbox.in_experiment", "In Experiment"))
             chk_in_exp.setChecked(bool(rec.get('in_experiment', False)))
-            mt = getattr(self, 'master_track', None)
             currently_on = rec.get('in_experiment', False)
             perm = ('project.unset_in_experiment' if currently_on else 'project.set_in_experiment')
-            chk_in_exp.setEnabled(mt.can(perm) if mt else False)
+            chk_in_exp.setEnabled(self._master_can(perm))
             chk_in_exp.setToolTip(self.messages.get('tooltip.in_experiment', 'Mark this animal as currently in experiment'))
             _health_hl_p.addWidget(chk_in_exp)
         else:
@@ -13670,7 +14213,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self._show_message("error.empty_name", self.messages.get("dialog.partner.error.empty_name", "Name cannot be empty."))
                 return
             selected_species = self._species_from_combo(species_cb)
-            if not editing and self._name_species_conflict(new_name, selected_species):
+            birth_date = self._normalize_identity_birth_for_save(
+                birth_date_le.text(), required=not editing)
+            if birth_date is None:
+                return
+            if not editing and not self._validate_identity_species_for_save(selected_species):
+                return
+            if editing and not self._validate_existing_identity_for_save(
+                    name, new_name, selected_species, birth_date):
+                return
+            if self._name_species_conflict(
+                    new_name, selected_species, birth_date,
+                    exclude_key=name if editing else None):
                 self._show_message("error.name_exists", self.messages.get("dialog.partner.error.name_exists", "Name already exists."))
                 return
 
@@ -13678,8 +14232,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             _orig_name = new_name
-            if not editing:
-                new_name = self._resolve_animal_key(new_name, selected_species)
+            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
             self._save_trace(
                 "partner.save.identity_resolved",
                 new_name=new_name,
@@ -13715,20 +14268,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 new_weights.append({'datum': d, 'wert': val})
 
             # write record
-            rec_obj = self.animals.get(new_name, {}) if editing else {}
+            rec_obj = dict(self.animals.get(name, {})) if editing else {}
             rec_obj['rolle']             = Role.PARTNER.value
             rec_obj['id']                = id_le.text().strip()
             rec_obj['chip_nr']           = chip_le.text().strip()
             rec_obj['origin']            = origin_le.text().strip()
             rec_obj['project']           = project_le.currentText().strip()
             rec_obj['severity']          = severity_cb.currentData()
-            rec_obj['birth_date']        = birth_date_le.text().strip()
             rec_obj['death_date']        = death_date_le.text().strip()
             rec_obj['special_status']    = special_status_le.text().strip()
             rec_obj['ref_weight']        = ref_w
-            rec_obj['species']           = selected_species
-            if new_name != _orig_name:
-                rec_obj['_base_name'] = _orig_name
+            self._apply_identity_fields_to_record(
+                rec_obj, new_name, _orig_name, selected_species, birth_date)
             rec_obj['sex']               = sex_cb.currentData() or sex_cb.currentText()
             rec_obj['reproduktionsfeld'] = rep_le.text().strip()
             rec_obj['partner_von']       = partner_von_le.text().strip()
@@ -13742,10 +14293,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec_obj, is_sick != _was_sick_p or is_abnormal_p != _was_abnormal_p)
             old_in_exp_p = rec_obj.get('in_experiment', False)
             new_in_exp_p = chk_in_exp.isChecked() if chk_in_exp is not None else old_in_exp_p
-            _mt_p = getattr(self, 'master_track', None)
             if new_in_exp_p != old_in_exp_p:
                 _perm_p = ('project.unset_in_experiment' if old_in_exp_p else 'project.set_in_experiment')
-                if _mt_p is None or not _mt_p.can(_perm_p):
+                if not self._master_can(_perm_p):
                     new_in_exp_p = old_in_exp_p
             new_in_exp_p = self._coerce_in_experiment_for_project(
                 new_in_exp_p, rec_obj.get('project', ''))
@@ -13798,6 +14348,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             self._save_trace("partner.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
+            if editing and new_name != name:
+                self.animals.pop(name, None)
+                self._rewrite_animal_references_after_identity_change(name, new_name, _orig_name)
             self._save_trace("partner.save.commit.after", new_name=new_name, animal_count=len(self.animals))
             # Sync to Heritage Track (including sex from dialog)
             if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
@@ -14057,10 +14610,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if self._is_projects_track_active():
             chk_in_exp = QCheckBox(self.messages.get("checkbox.in_experiment", "In Experiment"))
             chk_in_exp.setChecked(bool(rec.get('in_experiment', False)))
-            mt = getattr(self, 'master_track', None)
             currently_on = rec.get('in_experiment', False)
             perm = ('project.unset_in_experiment' if currently_on else 'project.set_in_experiment')
-            chk_in_exp.setEnabled(mt.can(perm) if mt else False)
+            chk_in_exp.setEnabled(self._master_can(perm))
             chk_in_exp.setToolTip(self.messages.get('tooltip.in_experiment', 'Mark this animal as currently in experiment'))
             _health_hl_s.addWidget(chk_in_exp)
         else:
@@ -14262,7 +14814,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     return
 
             selected_species = self._species_from_combo(species_cb)
-            if not editing and self._name_species_conflict(new_name, selected_species):
+            birth_date = self._normalize_identity_birth_for_save(
+                birth_date_le.text(), required=not editing)
+            if birth_date is None:
+                return
+            if not editing and not self._validate_identity_species_for_save(selected_species):
+                return
+            if editing and not self._validate_existing_identity_for_save(
+                    name, new_name, selected_species, birth_date):
+                return
+            if self._name_species_conflict(
+                    new_name, selected_species, birth_date,
+                    exclude_key=name if editing else None):
                 self._show_message(
                     self.messages.get("error.title", "Error"),
                     self.messages.get("error.new_animal.name_exists", "Name already exists."),
@@ -14274,8 +14837,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             _orig_name = new_name
-            if not editing:
-                new_name = self._resolve_animal_key(new_name, selected_species)
+            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
             self._save_trace(
                 "sperm_donor.save.identity_resolved",
                 new_name=new_name,
@@ -14325,7 +14887,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 new_sperm = list(rec.get('sperm', []))
             # construct or update record
             if editing:
-                rec_obj = self.animals.get(new_name, {})
+                rec_obj = dict(self.animals.get(name, {}))
             else:
                 rec_obj = {}
             rec_obj['rolle'] = Role.SAMENSP.value
@@ -14334,12 +14896,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['origin'] = origin_le.text().strip()
             rec_obj['project'] = project_le.currentText().strip()
             rec_obj['severity'] = severity_cb.currentData()
-            rec_obj['birth_date'] = birth_date_le.text().strip()
             rec_obj['death_date'] = death_date_le.text().strip()
             rec_obj['special_status'] = special_status_le.text().strip()
-            rec_obj['species'] = selected_species
-            if new_name != _orig_name:
-                rec_obj['_base_name'] = _orig_name
+            self._apply_identity_fields_to_record(
+                rec_obj, new_name, _orig_name, selected_species, birth_date)
             rec_obj['ref_weight'] = ref_w
             rec_obj['max_spermaproben'] = max_sp
             rec_obj['recovery_time'] = recov
@@ -14353,10 +14913,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec_obj, is_sick != _was_sick_s or is_abnormal_s != _was_abnormal_s)
             old_in_exp_s = rec_obj.get('in_experiment', False)
             new_in_exp_s = chk_in_exp.isChecked() if chk_in_exp is not None else old_in_exp_s
-            _mt_s = getattr(self, 'master_track', None)
             if new_in_exp_s != old_in_exp_s:
                 _perm_s = ('project.unset_in_experiment' if old_in_exp_s else 'project.set_in_experiment')
-                if _mt_s is None or not _mt_s.can(_perm_s):
+                if not self._master_can(_perm_s):
                     new_in_exp_s = old_in_exp_s
             new_in_exp_s = self._coerce_in_experiment_for_project(
                 new_in_exp_s, rec_obj.get('project', ''))
@@ -14416,6 +14975,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # if the name was changed on edit, remove old entry
             if editing and new_name != name:
                 self.animals.pop(name, None)
+                self._rewrite_animal_references_after_identity_change(name, new_name, _orig_name)
             self._save_trace("sperm_donor.save.commit.after", new_name=new_name, animal_count=len(self.animals))
             self._save_trace("sperm_donor.save.project_updates.schedule.before", new_name=new_name)
             self._schedule_post_animal_save_project_updates(
@@ -14700,10 +15260,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if self._is_projects_track_active():
             chk_in_exp = QCheckBox(self.messages.get("checkbox.in_experiment", "In Experiment"))
             chk_in_exp.setChecked(bool(rec.get('in_experiment', False)))
-            mt = getattr(self, 'master_track', None)
             currently_on = rec.get('in_experiment', False)
             perm = ('project.unset_in_experiment' if currently_on else 'project.set_in_experiment')
-            chk_in_exp.setEnabled(mt.can(perm) if mt else False)
+            chk_in_exp.setEnabled(self._master_can(perm))
             chk_in_exp.setToolTip(self.messages.get('tooltip.in_experiment', 'Mark this animal as currently in experiment'))
             _health_hl_o.addWidget(chk_in_exp)
         else:
@@ -14891,7 +15450,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     return
 
             selected_species = self._species_from_combo(species_cb)
-            if not editing and self._name_species_conflict(new_name, selected_species):
+            birth_date = self._normalize_identity_birth_for_save(
+                birth_date_le.text(), required=not editing)
+            if birth_date is None:
+                return
+            if not editing and not self._validate_identity_species_for_save(selected_species):
+                return
+            if editing and not self._validate_existing_identity_for_save(
+                    name, new_name, selected_species, birth_date):
+                return
+            if self._name_species_conflict(
+                    new_name, selected_species, birth_date,
+                    exclude_key=name if editing else None):
                 QMessageBox.critical(
                     self,
                     self.messages.get("title.error", "Error"),
@@ -14903,24 +15473,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             _orig_name = new_name
-            if not editing:
-                new_name = self._resolve_animal_key(new_name, selected_species)
+            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
             self._save_trace("offspring.save.identity_resolved", new_name=new_name, selected_species=selected_species)
 
             # collect fields
-            rec_obj = self.animals.get(new_name, {}) if editing else {}
+            rec_obj = dict(self.animals.get(name, {})) if editing else {}
             rec_obj['rolle']       = Role.OFFSPRING.value
             rec_obj['id']          = id_le.text().strip()
             rec_obj['chip_nr']     = chip_le.text().strip()
             rec_obj['origin']      = origin_le.text().strip()
             rec_obj['project']     = project_le.currentText().strip()
             rec_obj['severity']    = severity_cb.currentData()
-            rec_obj['birth_date']       = birth_date_le.text().strip()
             rec_obj['death_date']       = death_date_le.text().strip()
             rec_obj['special_status']   = special_status_le.text().strip()
-            rec_obj['species']          = selected_species
-            if new_name != _orig_name:
-                rec_obj['_base_name'] = _orig_name
+            self._apply_identity_fields_to_record(
+                rec_obj, new_name, _orig_name, selected_species, birth_date)
             rec_obj['sex']              = sex_cb.currentData() or sex_cb.currentText()
             rec_obj['genotype']         = genotype_le.text().strip()
             rec_obj['max_special'] = max_special_sb.value()
@@ -14939,10 +15506,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec_obj, is_sick != _was_sick_o or is_abnormal_o != _was_abnormal_o)
             old_in_exp_o = rec_obj.get('in_experiment', False)
             new_in_exp_o = chk_in_exp.isChecked() if chk_in_exp is not None else old_in_exp_o
-            _mt_o = getattr(self, 'master_track', None)
             if new_in_exp_o != old_in_exp_o:
                 _perm_o = ('project.unset_in_experiment' if old_in_exp_o else 'project.set_in_experiment')
-                if _mt_o is None or not _mt_o.can(_perm_o):
+                if not self._master_can(_perm_o):
                     new_in_exp_o = old_in_exp_o
             new_in_exp_o = self._coerce_in_experiment_for_project(
                 new_in_exp_o, rec_obj.get('project', ''))
@@ -15028,6 +15594,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.animals[new_name] = rec_obj
             if editing and new_name != name:
                 self.animals.pop(name, None)
+                self._rewrite_animal_references_after_identity_change(name, new_name, _orig_name)
             self._save_trace("offspring.save.commit.after", new_name=new_name, animal_count=len(self.animals))
             self._save_trace("offspring.save.project_updates.schedule.before", new_name=new_name)
             self._schedule_post_animal_save_project_updates(
@@ -15292,10 +15859,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if self._is_projects_track_active():
             chk_in_exp = QCheckBox(self.messages.get("checkbox.in_experiment", "In Experiment"))
             chk_in_exp.setChecked(bool(rec.get('in_experiment', False)))
-            mt = getattr(self, 'master_track', None)
             currently_on = rec.get('in_experiment', False)
             perm = ('project.unset_in_experiment' if currently_on else 'project.set_in_experiment')
-            chk_in_exp.setEnabled(mt.can(perm) if mt else False)
+            chk_in_exp.setEnabled(self._master_can(perm))
             chk_in_exp.setToolTip(self.messages.get('tooltip.in_experiment', 'Mark this animal as currently in experiment'))
             _health_hl_z.addWidget(chk_in_exp)
         else:
@@ -15552,7 +16118,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     return
 
             selected_species = self._species_from_combo(species_cb)
-            if not editing and self._name_species_conflict(new_name, selected_species):
+            birth_date = self._normalize_identity_birth_for_save(
+                birth_date_le.text(), required=not editing)
+            if birth_date is None:
+                return
+            if not editing and not self._validate_identity_species_for_save(selected_species):
+                return
+            if editing and not self._validate_existing_identity_for_save(
+                    name, new_name, selected_species, birth_date):
+                return
+            if self._name_species_conflict(
+                    new_name, selected_species, birth_date,
+                    exclude_key=name if editing else None):
                 QMessageBox.critical(
                     self,
                     self.messages.get("title.error", "Error"),
@@ -15564,23 +16141,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             _orig_name = new_name
-            if not editing:
-                new_name = self._resolve_animal_key(new_name, selected_species)
+            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
             self._save_trace("zuchttier.save.identity_resolved", new_name=new_name, selected_species=selected_species)
             
             # Collect fields
-            rec_obj = self.animals.get(new_name, {}) if editing else {}
+            rec_obj = dict(self.animals.get(name, {})) if editing else {}
             rec_obj['rolle'] = Role.ZUCHTTIER.value
             rec_obj['id'] = id_le.text().strip()
             rec_obj['chip_nr'] = chip_le.text().strip()
             rec_obj['origin'] = origin_le.text().strip()
             rec_obj['project'] = project_le.currentText().strip()
             rec_obj['severity'] = severity_cb.currentData()
-            rec_obj['species'] = selected_species
-            if new_name != _orig_name:
-                rec_obj['_base_name'] = _orig_name
+            self._apply_identity_fields_to_record(
+                rec_obj, new_name, _orig_name, selected_species, birth_date)
             rec_obj['ref_weight'] = float(ref_w_le.text()) if ref_w_le.text() else DEFAULT_REF_WEIGHT
-            rec_obj['birth_date'] = birth_date_le.text().strip()
             rec_obj['death_date'] = death_date_le.text().strip()
             rec_obj['special_status'] = special_status_le.text().strip()
             rec_obj['sex'] = sex_cb.currentData() or sex_cb.currentText()
@@ -15596,10 +16170,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec_obj, is_sick != _was_sick_z or is_abnormal_z != _was_abnormal_z)
             old_in_exp_z = rec_obj.get('in_experiment', False)
             new_in_exp_z = chk_in_exp.isChecked() if chk_in_exp is not None else old_in_exp_z
-            _mt_z = getattr(self, 'master_track', None)
             if new_in_exp_z != old_in_exp_z:
                 _perm_z = ('project.unset_in_experiment' if old_in_exp_z else 'project.set_in_experiment')
-                if _mt_z is None or not _mt_z.can(_perm_z):
+                if not self._master_can(_perm_z):
                     new_in_exp_z = old_in_exp_z
             new_in_exp_z = self._coerce_in_experiment_for_project(
                 new_in_exp_z, rec_obj.get('project', ''))
@@ -15691,6 +16264,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.animals[new_name] = rec_obj
             if editing and new_name != name:
                 self.animals.pop(name, None)
+                self._rewrite_animal_references_after_identity_change(name, new_name, _orig_name)
             self._save_trace("zuchttier.save.commit.after", new_name=new_name, animal_count=len(self.animals))
             self._save_trace("zuchttier.save.project_updates.schedule.before", new_name=new_name)
             self._schedule_post_animal_save_project_updates(
@@ -15967,10 +16541,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if self._is_projects_track_active():
             chk_in_exp_vt = QCheckBox(self.messages.get('checkbox.in_experiment', 'In Experiment'))
             chk_in_exp_vt.setChecked(bool(rec.get('in_experiment', False)))
-            _mt_vt = getattr(self, 'master_track', None)
             _curr_on_vt = rec.get('in_experiment', False)
             _perm_vt = ('project.unset_in_experiment' if _curr_on_vt else 'project.set_in_experiment')
-            chk_in_exp_vt.setEnabled(_mt_vt.can(_perm_vt) if _mt_vt else False)
+            chk_in_exp_vt.setEnabled(self._master_can(_perm_vt))
             chk_in_exp_vt.setToolTip(
                 self.messages.get('tooltip.in_experiment', 'Mark this animal as currently in experiment'))
             _health_hl_vt.addWidget(chk_in_exp_vt)
@@ -16132,7 +16705,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self.messages.get('error.name_required', 'Name is required.'))
                 return
             selected_species = self._species_from_combo(species_cb)
-            if not editing and self._name_species_conflict(new_name, selected_species):
+            birth_date = self._normalize_identity_birth_for_save(
+                birth_date_le.text(), required=not editing)
+            if birth_date is None:
+                return
+            if not editing and not self._validate_identity_species_for_save(selected_species):
+                return
+            if editing and not self._validate_existing_identity_for_save(
+                    name, new_name, selected_species, birth_date):
+                return
+            if self._name_species_conflict(
+                    new_name, selected_species, birth_date,
+                    exclude_key=name if editing else None):
                 self._show_message_raw(
                     self.messages.get('error.title', 'Error'),
                     self.messages.get('error.name_exists', 'An animal with this name already exists.'))
@@ -16141,8 +16725,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     species_cb, initial_species, selected_species):
                 return
             _orig_name = new_name
-            if not editing:
-                new_name = self._resolve_animal_key(new_name, selected_species)
+            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
             self._save_trace("versuchstier.save.identity_resolved", new_name=new_name, selected_species=selected_species)
             try:
                 ref_w = float(ref_w_le.text()) if ref_w_le.text() else DEFAULT_REF_WEIGHT
@@ -16168,21 +16751,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception:
                     pass
 
-            rec_obj = self.animals.get(new_name, {}) if editing else {}
+            rec_obj = dict(self.animals.get(name, {})) if editing else {}
             rec_obj['rolle']            = Role.EXPERIMENTAL.value
             rec_obj['id']               = id_le.text().strip()
             rec_obj['chip_nr']          = chip_le.text().strip()
             rec_obj['origin']           = origin_le.text().strip()
             rec_obj['project']          = project_le.currentText().strip()
             rec_obj['severity']         = severity_cb.currentData()
-            rec_obj['species']          = selected_species
-            if new_name != _orig_name:
-                rec_obj['_base_name'] = _orig_name
+            self._apply_identity_fields_to_record(
+                rec_obj, new_name, _orig_name, selected_species, birth_date)
             rec_obj['sex']              = sex_cb.currentData() or sex_cb.currentText()
             rec_obj['genotype']         = genotype_le.text().strip()
             rec_obj['special_status']   = special_status_le.text().strip()
             rec_obj['ref_weight']       = ref_w
-            rec_obj['birth_date']       = birth_date_le.text().strip()
             rec_obj['death_date']       = death_date_le.text().strip()
             rec_obj['max_op']           = max_op_sb.value()
             rec_obj['max_measurements'] = max_meas_sb.value()
@@ -16207,11 +16788,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             old_in_exp_vt = rec_obj.get('in_experiment', False)
             new_in_exp_vt = (chk_in_exp_vt.isChecked()
                              if chk_in_exp_vt is not None else old_in_exp_vt)
-            _mt_save = getattr(self, 'master_track', None)
             if new_in_exp_vt != old_in_exp_vt:
                 _p = ('project.unset_in_experiment' if old_in_exp_vt
                       else 'project.set_in_experiment')
-                if _mt_save is None or not _mt_save.can(_p):
+                if not self._master_can(_p):
                     new_in_exp_vt = old_in_exp_vt
             new_in_exp_vt = self._coerce_in_experiment_for_project(
                 new_in_exp_vt, rec_obj.get('project', ''))
@@ -16239,6 +16819,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.animals[new_name] = rec_obj
             if editing and new_name != name:
                 self.animals.pop(name, None)
+                self._rewrite_animal_references_after_identity_change(name, new_name, _orig_name)
             self._save_trace("versuchstier.save.commit.after", new_name=new_name, animal_count=len(self.animals))
             self._save_trace("versuchstier.save.project_updates.schedule.before", new_name=new_name)
             self._schedule_post_animal_save_project_updates(
@@ -16301,7 +16882,224 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._freeze_dialog_inputs(dlg)
         dlg.exec()
 
-    def _dlg_female_animal(self, name: Optional[str], read_only: bool = False) -> None:
+    def _dlg_basic_animal_role(
+        self,
+        name: Optional[str],
+        role_value: Optional[str] = None,
+        read_only: bool = False,
+    ) -> None:
+        creating = name is None
+        if creating and not self._master_can('core.create_animals'):
+            self._show_permission_denied()
+            return
+        if not creating and not (self._master_can('core.edit_animal_core') or self._master_can('core.open_readonly_dialogs')):
+            self._show_permission_denied()
+            return
+
+        rec: Dict[str, Any] = {} if creating else dict(self.animals.get(name, {}))
+        role_value = role_value or rec.get("rolle") or Role.UNKNOWN.value
+        rec.setdefault("rolle", role_value)
+        rec.setdefault("daten", [])
+        rec.setdefault("pdg", [])
+        rec.setdefault("gewicht", [])
+        rec.setdefault("events", [])
+        rec.setdefault("sperm", [])
+        rec.setdefault("ref_weight", DEFAULT_REF_WEIGHT)
+        rec.setdefault("sick", False)
+        rec.setdefault("abnormal_current", False)
+        rec.setdefault("in_experiment", False)
+
+        role_label = self._role_label_with_icon(role_value)
+        title = (
+            self.messages.get("dialog.basic_role.title_new", "New animal: {role}").format(role=role_label)
+            if creating else
+            self.messages.get("dialog.basic_role.title_edit", "Edit animal: {name}").format(name=self._display_name(name))
+        )
+        dlg, v, form = self._new_std_dialog(title)
+
+        name_le, species_cb, initial_species = self._build_name_species_inputs(
+            form,
+            name_value="" if creating else (name or ""),
+            current_species=rec.get("species", ""),
+            editing=not creating,
+            name_label_key="dialog.field.name",
+        )
+        id_le, chip_le, origin_le = self._build_id_chip_origin_row(form, rec)
+
+        project_cb = QComboBox()
+        project_cb.setEditable(True)
+        project_cb.setInsertPolicy(QComboBox.InsertPolicy.InsertAtTop)
+        for project_name in self._load_project_names():
+            project_cb.addItem(project_name)
+        current_project = rec.get("project", "")
+        project_idx = project_cb.findText(current_project)
+        if project_idx >= 0:
+            project_cb.setCurrentIndex(project_idx)
+        elif current_project:
+            project_cb.insertItem(0, current_project)
+            project_cb.setCurrentIndex(0)
+        elif project_cb.lineEdit():
+            project_cb.lineEdit().clear()
+        self._std_widen(project_cb)
+        if not self._master_can('project.project_assign'):
+            project_cb.setEnabled(False)
+        form.addRow(self.messages.get("dialog.field.project", "Project:"), project_cb)
+
+        dates_layout = QHBoxLayout()
+        birth_date_le = QLineEdit(rec.get("birth_date", ""))
+        birth_date_le.setPlaceholderText(self.messages.get("form.placeholder.date_short", "(DD.MM.YYYY)"))
+        birth_date_le.setStyleSheet("min-width: 0; max-width: 110px;")
+        death_date_le = QLineEdit(rec.get("death_date", ""))
+        death_date_le.setPlaceholderText(self.messages.get("form.placeholder.date_short", "(DD.MM.YYYY)"))
+        death_date_le.setStyleSheet("min-width: 0; max-width: 110px;")
+        special_status_le = QLineEdit(rec.get("special_status", ""))
+        special_status_le.setStyleSheet("min-width: 0;")
+        age_label = QLabel(calculate_age(rec.get("birth_date", ""), rec.get("death_date", "")))
+        age_label.setStyleSheet("color: gray; font-style: italic;")
+
+        def update_age():
+            age_label.setText(calculate_age(birth_date_le.text(), death_date_le.text()))
+
+        birth_date_le.textChanged.connect(update_age)
+        death_date_le.textChanged.connect(update_age)
+        dates_layout.addWidget(birth_date_le)
+        dates_layout.addWidget(QLabel("/"))
+        dates_layout.addWidget(death_date_le)
+        dates_layout.addWidget(age_label)
+        dates_layout.addWidget(QLabel(self.messages.get("dialog.field.special_status", "Special Status:")))
+        dates_layout.addWidget(special_status_le)
+        form.addRow(self.messages.get("dialog.field.birth_death_date", "Birth / Death Date:"), dates_layout)
+
+        sex_cb = QComboBox()
+        sex_cb.addItem(self.messages.get("sex.unknown", "Unknown"), "Unknown")
+        sex_cb.addItem(self.messages.get("sex.male", "Male"), "Male")
+        sex_cb.addItem(self.messages.get("sex.female", "Female"), "Female")
+        current_sex = str(rec.get("sex", "Unknown"))
+        sex_idx = sex_cb.findData(current_sex)
+        sex_cb.setCurrentIndex(sex_idx if sex_idx >= 0 else 0)
+        self._std_widen(sex_cb)
+        form.addRow(self.messages.get("dialog.offspring.sex", "Sex:"), sex_cb)
+
+        ref_w_le = QLineEdit(str(rec.get("ref_weight", "")))
+        ref_w_le.setValidator(QDoubleValidator(0.0, 100000.0, 3, ref_w_le))
+        form.addRow(self.messages.get("dialog.field.reference_weight", "Reference weight (g):"), ref_w_le)
+
+        health_w = QWidget()
+        health_l = QHBoxLayout(health_w)
+        health_l.setContentsMargins(0, 0, 0, 0)
+        sick_chk = QCheckBox(self.messages.get("dialog.offspring.checkbox.sick", "Sick"))
+        abnormal_chk = QCheckBox(self.messages.get("dialog.offspring.checkbox.abnormal", "Abnormal"))
+        in_exp_chk = QCheckBox(self.messages.get("checkbox.in_experiment", "In Experiment"))
+        sick_chk.setChecked(bool(rec.get("sick", False)))
+        abnormal_chk.setChecked(bool(rec.get("abnormal_current", False)))
+        in_exp_chk.setChecked(bool(rec.get("in_experiment", False)))
+        in_exp_chk.setVisible(self._is_projects_track_active())
+        for widget in (sick_chk, abnormal_chk, in_exp_chk):
+            health_l.addWidget(widget)
+        health_l.addStretch()
+        form.addRow(self.messages.get("dialog.offspring.health_status", "Health Status:"), health_w)
+
+        v.addLayout(form)
+        save_btn = QPushButton(self.messages.get("button.save", "Save"))
+        save_btn.setEnabled(not read_only and (
+            self._master_can('core.create_animals') if creating else self._master_can('core.edit_animal_core')
+        ))
+        v.addWidget(save_btn)
+        self._apply_dialog_width(dlg)
+
+        if read_only:
+            self._freeze_dialog_inputs(dlg)
+
+        def on_save_basic_role():
+            base_name = name_le.text().strip()
+            if not base_name:
+                self._show_message_raw(
+                    self.messages.get("error.title", "Error"),
+                    self.messages.get("error.name_required", "Name is required."),
+                    "error",
+                )
+                return
+            selected_species = self._species_from_combo(species_cb)
+            if not self._validate_identity_species_for_save(selected_species):
+                return
+            birth_date = self._normalize_identity_birth_for_save(birth_date_le.text(), required=True)
+            if birth_date is None:
+                return
+            death_date = self._normalize_identity_birth_for_save(death_date_le.text(), required=False)
+            if death_date is None:
+                return
+            if not creating and not self._validate_existing_identity_for_save(
+                name, base_name, selected_species, birth_date
+            ):
+                return
+            if self._name_species_conflict(
+                base_name,
+                selected_species,
+                birth_date,
+                exclude_key=name if not creating else None,
+            ):
+                self._show_message_raw(
+                    self.messages.get("error.title", "Error"),
+                    self.messages.get("error.name_exists", "An animal with this name already exists."),
+                    "error",
+                )
+                return
+            if not creating and not self._confirm_species_change_once(
+                species_cb, initial_species, selected_species
+            ):
+                return
+
+            try:
+                new_key = self._resolve_animal_key(base_name, selected_species, birth_date)
+            except ValueError as exc:
+                self._show_message_raw(self.messages.get("error.title", "Error"), str(exc), "error")
+                return
+
+            try:
+                ref_weight = float(ref_w_le.text()) if ref_w_le.text().strip() else DEFAULT_REF_WEIGHT
+            except ValueError:
+                ref_weight = DEFAULT_REF_WEIGHT
+
+            rec_obj = dict(rec)
+            rec_obj.update({
+                "rolle": role_value,
+                "id": id_le.text().strip(),
+                "chip_nr": chip_le.text().strip(),
+                "origin": origin_le.text().strip(),
+                "project": project_cb.currentText().strip(),
+                "birth_date": birth_date,
+                "death_date": death_date,
+                "special_status": special_status_le.text().strip(),
+                "sex": sex_cb.currentData() or "Unknown",
+                "ref_weight": ref_weight,
+                "sick": sick_chk.isChecked(),
+                "abnormal_current": abnormal_chk.isChecked(),
+                "in_experiment": in_exp_chk.isChecked() if in_exp_chk.isVisible() else False,
+                "species": selected_species,
+                "ipid": new_key,
+                "name": base_name,
+                "_base_name": base_name,
+                "display_name": base_name,
+            })
+
+            if not creating and new_key != name:
+                self.animals.pop(name, None)
+            self.animals[new_key] = rec_obj
+            self._write_json({"animals": self.animals, "archived": self.archived})
+            self.selected_animals = [new_key]
+            self._refresh_list(update_tab_visibility=True)
+            self._on_select()
+            dlg.accept()
+
+        save_btn.clicked.connect(on_save_basic_role)
+        dlg.exec()
+
+    def _dlg_female_animal(
+        self,
+        name: Optional[str],
+        read_only: bool = False,
+        default_role: Optional[str] = None,
+    ) -> None:
         """
         Full editor for Spenderin/Amme.
         - Create (name=None): tabs are hidden until the record exists.
@@ -16310,7 +17108,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         creating = (name is None)
         rec: Dict[str, Any] = {} if creating else dict(self.animals.get(name, {}))
         # Normalize/seed fields
-        role_now = rec.get('rolle', Role.SPENDER.value)
+        role_now = rec.get('rolle', default_role or Role.SPENDER.value)
+        if creating and default_role in (Role.SPENDER.value, Role.AMME.value):
+            role_now = default_role
         if not creating and role_now not in (Role.SPENDER.value, Role.AMME.value):
             role_now = Role.SPENDER.value
         rec.setdefault('rolle', role_now)
@@ -16560,10 +17360,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if self._is_projects_track_active():
             chk_in_exp = QCheckBox(self.messages.get("checkbox.in_experiment", "In Experiment"))
             chk_in_exp.setChecked(bool(rec.get('in_experiment', False)))
-            mt = getattr(self, 'master_track', None)
             currently_on = rec.get('in_experiment', False)
             perm = ('project.unset_in_experiment' if currently_on else 'project.set_in_experiment')
-            chk_in_exp.setEnabled(mt.can(perm) if mt else False)
+            chk_in_exp.setEnabled(self._master_can(perm))
             chk_in_exp.setToolTip(self.messages.get('tooltip.in_experiment', 'Mark this animal as currently in experiment'))
             _health_hl_f.addWidget(chk_in_exp)
         else:
@@ -16773,7 +17572,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             selected_species = self._species_from_combo(species_cb)
-            if creating and self._name_species_conflict(new_name, selected_species):
+            birth_date = self._normalize_identity_birth_for_save(
+                birth_date_le.text(), required=creating)
+            if birth_date is None:
+                return
+            if creating and not self._validate_identity_species_for_save(selected_species):
+                return
+            if not creating and not self._validate_existing_identity_for_save(
+                    name, new_name, selected_species, birth_date):
+                return
+            if self._name_species_conflict(
+                    new_name, selected_species, birth_date,
+                    exclude_key=None if creating else name):
                 self._show_message(
                     self.messages.get('error.title', 'Error'),
                     self.messages.get('error.name_exists', 'Name already exists.'),
@@ -16785,8 +17595,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             _orig_name = new_name
-            if creating:
-                new_name = self._resolve_animal_key(new_name, selected_species)
+            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
             self._save_trace(
                 "female_like.save.identity_resolved",
                 new_name=new_name,
@@ -16822,9 +17631,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             # Scalars
             try:
-                rec['species'] = selected_species
-                if new_name != _orig_name:
-                    rec['_base_name'] = _orig_name
+                self._apply_identity_fields_to_record(
+                    rec, new_name, _orig_name, selected_species, birth_date)
                 rec['rolle'] = role_code
                 id_text = id_le.text().strip()
                 project_text = project_le.currentText().strip()
@@ -16834,7 +17642,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec['origin'] = origin_le.text().strip()
                 rec['project'] = project_text
                 rec['severity'] = severity_cb.currentData()
-                rec['birth_date'] = birth_date_le.text().strip()
                 rec['death_date'] = death_date_le.text().strip()
                 rec['special_status'] = special_status_le.text().strip()
                 rec['ref_weight'] = float(ref_w_le.text() or DEFAULT_REF_WEIGHT)
@@ -16871,10 +17678,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     rec, is_sick != _was_sick_f or is_abnormal_f != _was_abnormal_f)
                 old_in_exp_f = rec.get('in_experiment', False)
                 new_in_exp_f = chk_in_exp.isChecked() if chk_in_exp is not None else old_in_exp_f
-                _mt_f = getattr(self, 'master_track', None)
                 if new_in_exp_f != old_in_exp_f:
                     _perm_f = ('project.unset_in_experiment' if old_in_exp_f else 'project.set_in_experiment')
-                    if _mt_f is None or not _mt_f.can(_perm_f):
+                    if not self._master_can(_perm_f):
                         new_in_exp_f = old_in_exp_f
                 new_in_exp_f = self._coerce_in_experiment_for_project(
                     new_in_exp_f, rec.get('project', ''))
@@ -17098,10 +17904,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     logging.error(f"Cage_Track address save failed for {new_name}: {e}")
 
             # Commit
-            key = new_name if creating else name
+            key = new_name
             self._save_trace("female_like.save.commit.before", key=key, new_name=new_name)
             self.animals[key] = rec
-            if creating and key != name:
+            if not creating and new_name != name:
+                self.animals.pop(name, None)
+                self._rewrite_animal_references_after_identity_change(name, new_name, _orig_name)
+            elif creating and key != name:
                 # ensure no leftover incomplete entry
                 self.animals.pop(name, None)
             self._save_trace("female_like.save.commit.after", key=key, animal_count=len(self.animals))
@@ -17290,6 +18099,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not self._master_can('core.import'):
             self._show_permission_denied()
             return
+        self._reset_import_identity_prompt_cache()
         path, _ = QFileDialog.getOpenFileName(
             self, "Excel laden", "", "Excel-Dateien (*.xlsx *.xls)"
         )
@@ -17393,9 +18203,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if progress.wasCanceled():
                         break
 
-                name = row['Name'].strip()
-                if any(c in name for c in r'\/:*?"<>|'):
-                    logging.warning(f"Invalid name skipped: {name}")
+                raw_name = row['Name'].strip()
+                if any(c in raw_name for c in r'\/:*?"<>'):
+                    logging.warning(f"Invalid name skipped: {raw_name}")
+                    skipped += 1
+                    continue
+                name = self._resolve_import_animal_key(row, create_missing=True)
+                if not name:
                     skipped += 1
                     continue
 
@@ -17416,13 +18230,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if sample_id_col and sample_id_col in row:
                     probennummer = str(row[sample_id_col]) if pd.notna(row[sample_id_col]) else None
 
-                # Ensure a default Unbekannt record exists
                 a = self._ensure_defaults_for_new(name)
 
                 # ------------------------
                 # 7.26.7.3 Check max measurements limit
                 # ------------------------
-                if len(self.animals[name].get('daten', [])) >= self.animals[name].get('max_messungen', DEFAULT_MAX_MESS):
+                if len(a.get('daten', [])) >= a.get('max_messungen', DEFAULT_MAX_MESS):
                     logging.warning(f"Max measurements reached for {name}, skipping")
                     skipped += 1
                     continue
@@ -17456,9 +18269,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if progress.wasCanceled():
                         break
 
-                name = row['Name'].strip()
-                if any(c in name for c in r'\/:*?"<>|'):
-                    logging.warning(f"Invalid name skipped: {name}")
+                raw_name = row['Name'].strip()
+                if any(c in raw_name for c in r'\/:*?"<>'):
+                    logging.warning(f"Invalid name skipped: {raw_name}")
+                    skipped += 1
+                    continue
+                name = self._resolve_import_animal_key(row, create_missing=True)
+                if not name:
                     skipped += 1
                     continue
 
@@ -17474,7 +18291,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     skipped += 1
                     continue
 
-                # Ensure a default Unbekannt record exists for events, too
                 a = self._ensure_defaults_for_new(name)
 
                 # ------------------------
@@ -17562,8 +18378,28 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.archived = data.get('archived_animals', {})
         total_skipped = 0
         for d in (self.animals, self.archived):
-            for rec in d.values():
+            for animal_key, rec in d.items():
+                identity_parts = split_animal_identity_key(animal_key)
+                if identity_parts is not None:
+                    rec['ipid'] = animal_key
+                    rec['_base_name'] = rec.get('_base_name') or rec.get('display_name') or rec.get('name') or identity_parts[0]
+                    rec['display_name'] = rec.get('display_name') or rec['_base_name']
+                    rec['name'] = rec.get('name') or rec['_base_name']
+                    if not rec.get('species'):
+                        rec['species'] = identity_parts[1]
+                    if not rec.get('birth_date'):
+                        rec['birth_date'] = normalize_birth_date(identity_parts[2], required=False)
+                else:
+                    logging.error(
+                        "Animal key is not an IPID identity key and is unsupported: %s",
+                        animal_key,
+                    )
                 rec.setdefault('species', '')
+                try:
+                    rec['birth_date'] = normalize_birth_date(rec.get('birth_date'), required=False)
+                except ValueError:
+                    logging.warning(f"Invalid birth date for animal {animal_key}: {rec.get('birth_date')}")
+                    rec['birth_date'] = ''
                 rec.setdefault('chip_nr', '')
                 rec.setdefault('origin', '')
                 rec.setdefault('special_status', '')
@@ -17757,6 +18593,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------
     def _import_pdg(self) -> None:
         """Import PdG data from a separate Excel file."""
+        self._reset_import_identity_prompt_cache()
         path, _ = QFileDialog.getOpenFileName(
             self, "PdG-Daten laden", "", "Excel-Dateien (*.xlsx *.xls)"
         )
@@ -17793,7 +18630,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         added = 0
         _st_urine_pairs: list = []
         for _, r in df.dropna(subset=['Name','Datum','PdG (µg/mg Cr)']).iterrows():
-            name = r['Name'].strip()
+            name = self._resolve_import_animal_key(r, create_missing=True)
+            if not name:
+                continue
             datum = r['Datum']
             val = r['PdG (µg/mg Cr)']
             
@@ -17837,6 +18676,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------
     def _import_weights(self) -> None:
         """Import weights from an Excel file with columns 'Name', 'Datum', and 'Gewicht'."""
+        self._reset_import_identity_prompt_cache()
         path, _ = QFileDialog.getOpenFileName(
             self, "Gewichte laden", "", "Excel-Dateien (*.xlsx *.xls)"
         )
@@ -17865,7 +18705,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         df = df.drop_duplicates(subset=['Name', 'Datum', 'Gewicht'])
         added = 0
         for _, row in df.iterrows():
-            name = row['Name']
+            name = self._resolve_import_animal_key(row, create_missing=True)
+            if not name:
+                continue
             dt   = row['Datum']
             wt   = float(row['Gewicht'])
 
@@ -17893,6 +18735,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Import sperm data from an Excel file."""
         if not self._is_steroid_track_active():
             return
+        self._reset_import_identity_prompt_cache()
         path, _ = QFileDialog.getOpenFileName(
             self, "Spermawerte laden", "", "Excel-Dateien (*.xlsx *.xls)"
         )
@@ -17924,7 +18767,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if pd.isna(row["Name"]) or pd.isna(row["Datum"]):
                 continue  # skip invalid rows
 
-            name = str(row["Name"]).strip()
+            name = self._resolve_import_animal_key(row, create_missing=True)
+            if not name:
+                continue
             date_val = row["Datum"]
 
             # Create or get existing animal record

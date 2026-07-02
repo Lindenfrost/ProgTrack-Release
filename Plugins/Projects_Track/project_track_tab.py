@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QPushButton, QScrollArea, QSpinBox, QSplitter,
     QTextEdit, QVBoxLayout, QWidget,
 )
+from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.project_visibility import diff_project_associated_users
 from Plugins.core.platform_helpers import open_local_path
 logger = logging.getLogger(__name__)
@@ -30,6 +31,11 @@ def _clean_text(value) -> str:
     if value is None:
         return ''
     return str(value).strip()
+
+def _history_animal_key(record: dict) -> str:
+    if not isinstance(record, dict):
+        return ''
+    return _clean_text(record.get('ipid') or record.get('name'))
 
 def _m(messages, key, fallback):
     return messages.get(key, fallback) if isinstance(messages, dict) else fallback
@@ -329,8 +335,13 @@ class ProjectTrackTab(QWidget):
         return r
 
     def _can(self, perm):
-        mt=getattr(self._app,'master_track',None)
+        can_fn = getattr(self._app, '_master_can', None)
+        if callable(can_fn):
+            return bool(can_fn(perm))
+        mt = getattr(self._app, 'master_track', None)
         if mt is None:
+            return True
+        if "master_track" in getattr(self._app, '_disabled_plugins', set()):
             return True
         return bool(getattr(mt, 'can', lambda _: False)(perm))
 
@@ -767,7 +778,7 @@ class ProjectTrackTab(QWidget):
         history_records = [r for r in ah if isinstance(r, dict)]
         active_hist = []
         for record in history_records:
-            animal_name = _clean_text(record.get('name'))
+            animal_name = _history_animal_key(record)
             if not animal_name:
                 logger.warning("Project Track: skipping history record without animal name for project %s", name)
                 continue
@@ -782,7 +793,7 @@ class ProjectTrackTab(QWidget):
         former_sev = []
         previous = []
         for record in history_records:
-            animal_name = _clean_text(record.get('name'))
+            animal_name = _history_animal_key(record)
             if not animal_name:
                 continue
             if record.get('status') == 'former':
@@ -875,7 +886,7 @@ class ProjectTrackTab(QWidget):
             for rec in ah:
                 if not isinstance(rec, dict):
                     continue
-                if _clean_text(rec.get('name')) != aname:
+                if _history_animal_key(rec) != aname:
                     continue
                 if rec.get('status') not in ('active', 'former'):
                     continue
@@ -946,7 +957,7 @@ class ProjectTrackTab(QWidget):
             for rec in ah:
                 if not isinstance(rec, dict):
                     continue
-                animal_name = _clean_text(rec.get('name'))
+                animal_name = _history_animal_key(rec)
                 severity = _clean_text(rec.get('last_severity'))
                 if rec.get('status') != 'former' or not animal_name or not severity:
                     continue
@@ -963,8 +974,10 @@ class ProjectTrackTab(QWidget):
         def _make_name_btn(aname, detail=''):
             is_arch = aname in arch_aa and aname not in aa
             color = '#888888' if is_arch else _name_color(aname)
-            animal_id = (all_known.get(aname, {}).get('id') or '').strip()
-            display = ('   \u2022 ' + aname + ' (' + animal_id + ')') if animal_id else ('   \u2022 ' + aname)
+            animal_record = all_known.get(aname, {})
+            display_name = animal_base_name(aname, animal_record)
+            animal_id = (animal_record.get('id') or '').strip()
+            display = ('   \u2022 ' + display_name + ' (' + animal_id + ')') if animal_id else ('   \u2022 ' + display_name)
             if detail:
                 display += ' - ' + detail
             lbl = QLabel(display)
@@ -973,8 +986,11 @@ class ProjectTrackTab(QWidget):
                 style += 'font-style:italic;'
             lbl.setStyleSheet(style)
             if is_arch:
-                lbl.setToolTip(_m(self._messages, 'project.animals.is_archived',
-                                  'This animal is archived.'))
+                archived_tip = _m(self._messages, 'project.animals.is_archived',
+                                  'This animal is archived.')
+                lbl.setToolTip(f"{archived_tip}\nIPID: {aname}")
+            else:
+                lbl.setToolTip(f"IPID: {aname}")
             return lbl
 
         def _grp(lkey, fb, names, details=None):

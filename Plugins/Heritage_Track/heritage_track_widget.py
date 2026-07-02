@@ -43,6 +43,13 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
+from Plugins.core.animal_identity import (
+    animal_base_name,
+    animal_identity_key,
+    resolve_animal_reference_text,
+    split_animal_identity_key,
+)
+
 from .display_context import DisplayContext, DisplayContextBuilder
 from .display_strategies import AllAnimalsStrategy, CompositeDisplayStrategy, SelectedAnimalsStrategy
 from .ghost_strategies import (
@@ -1121,6 +1128,14 @@ class HeritageTrackWidget(QWidget):
         father_name = (father or "").strip()
         if not key:
             return None
+
+        mother_name, mother_status = self.plugin.resolve_parent_reference(mother_name)
+        father_name, father_status = self.plugin.resolve_parent_reference(father_name)
+        if mother_status == "ambiguous" or father_status == "ambiguous":
+            return self.messages.get(
+                "heritage_track.error.parent_ambiguous",
+                "Parent name is ambiguous. Please select the full animal identity.",
+            )
 
         if mother_name and mother_name == key:
             return self.messages.get(
@@ -3008,10 +3023,23 @@ class HeritageTrackWidget(QWidget):
             return
 
         values = dlg.values()
+        mother_value, mother_status = self.plugin.resolve_parent_reference(values.get("mother", ""), animal_species)
+        father_value, father_status = self.plugin.resolve_parent_reference(values.get("father", ""), animal_species)
+        if mother_status == "ambiguous" or father_status == "ambiguous":
+            QMessageBox.warning(
+                self,
+                self.messages.get("error.title", "Error"),
+                self.messages.get(
+                    "heritage_track.error.parent_ambiguous",
+                    "Parent name is ambiguous. Please select the full animal identity.",
+                ),
+            )
+            return
+
         validation_error = self._validate_parent_selection(
             node,
-            values.get("mother", ""),
-            values.get("father", ""),
+            mother_value,
+            father_value,
             engine=engine,
         )
         if validation_error:
@@ -3019,14 +3047,14 @@ class HeritageTrackWidget(QWidget):
             return
 
         updated_parentage = dict(parentage)
-        updated_parentage["egg_donor"] = values.get("mother", "")
-        updated_parentage["sperm_donor"] = values.get("father", "")
+        updated_parentage["egg_donor"] = mother_value
+        updated_parentage["sperm_donor"] = father_value
 
         self.plugin.save_parentage(node, updated_parentage, source="plugin")
 
         # Create heritage-only placeholders for new parents with correct sex and species
-        mother_name = values.get("mother", "")
-        father_name = values.get("father", "")
+        mother_name = mother_value
+        father_name = father_value
         if mother_name or father_name:
             self.plugin._ensure_parent_placeholders(mother_name, father_name, animal_species)
 
@@ -3122,11 +3150,26 @@ class HeritageTrackWidget(QWidget):
             )
             return
 
+        species = values.get("species", "")
+
         # Validate parent selection
+        mother_value, mother_status = self.plugin.resolve_parent_reference(values.get("mother", ""), species)
+        father_value, father_status = self.plugin.resolve_parent_reference(values.get("father", ""), species)
+        if mother_status == "ambiguous" or father_status == "ambiguous":
+            QMessageBox.warning(
+                self,
+                self.messages.get("error.title", "Error"),
+                self.messages.get(
+                    "heritage_track.error.parent_ambiguous",
+                    "Parent name is ambiguous. Please select the full animal identity.",
+                ),
+            )
+            return
+
         validation_error = self._validate_parent_selection(
             name,
-            values.get("mother", ""),
-            values.get("father", ""),
+            mother_value,
+            father_value,
             engine=engine,
         )
         if validation_error:
@@ -3134,11 +3177,10 @@ class HeritageTrackWidget(QWidget):
             return
 
         # Create the heritage-only animal
-        species = values.get("species", "")
         success = self.plugin.create_heritage_only_animal(
             name=name,
-            mother=values.get("mother", ""),
-            father=values.get("father", ""),
+            mother=mother_value,
+            father=father_value,
             genotype=values.get("genotype", ""),
             fill_color=values.get("fill_color", ""),
             sex=values.get("sex", ""),
@@ -3154,8 +3196,8 @@ class HeritageTrackWidget(QWidget):
             return
 
         # Create heritage-only placeholders for new parents with correct sex and species
-        mother_name = values.get("mother", "")
-        father_name = values.get("father", "")
+        mother_name = mother_value
+        father_name = father_value
         if mother_name or father_name:
             self.plugin._ensure_parent_placeholders(mother_name, father_name, species)
 
@@ -3293,6 +3335,36 @@ class HeritageTrackPlugin:
     def get_effective_sex(self, animal_name: Optional[str], fallback_record: Optional[Dict[str, Any]] = None) -> str:
         return self.store.get_effective_sex(animal_name, fallback_record)
 
+    def _all_identity_records(self) -> Dict[str, Dict[str, Any]]:
+        records: Dict[str, Dict[str, Any]] = {}
+        animals = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
+        archived = getattr(self.app, "archived", {}) or {}
+        records.update(animals)
+        if isinstance(archived, dict):
+            records.update(archived)
+        for key, entry in self.store.get_all_entries().items():
+            if isinstance(entry, dict):
+                records.setdefault(key, entry)
+        return records
+
+    def resolve_parent_reference(self, parent_name: str, target_species: str = "") -> Tuple[str, str]:
+        """Resolve a parent text value to an IPID when possible.
+
+        Returns (value, status), where status is "resolved", "missing", or
+        "ambiguous". Missing values are allowed so the caller can create a
+        heritage-only placeholder.
+        """
+        text = str(parent_name or "").strip()
+        if not text:
+            return "", "resolved"
+
+        key, _record, status = resolve_animal_reference_text(
+            text,
+            self._all_identity_records(),
+            target_species=target_species,
+        )
+        return key, status
+
     def create_heritage_only_animal(
         self,
         name: str,
@@ -3303,9 +3375,25 @@ class HeritageTrackPlugin:
         sex: str,
         species: str = "",
     ) -> bool:
-        key = str(name or "").strip()
-        if not key:
+        raw_name = str(name or "").strip()
+        if not raw_name:
             return False
+        parts = split_animal_identity_key(raw_name)
+        review_required = False
+        review_reason = ""
+        if parts is None:
+            base_name = animal_base_name(raw_name)
+            species_value = str(species or "").strip() or "Unknown species"
+            birth_date = "01.01.1900"
+            try:
+                key = animal_identity_key(base_name, species_value, birth_date)
+            except ValueError:
+                return False
+            review_required = True
+            review_reason = "Heritage-only placeholder was created without an explicit birth date."
+        else:
+            base_name, species_value, birth_date = parts
+            key = raw_name
 
         animals = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
         if key in animals:
@@ -3315,11 +3403,18 @@ class HeritageTrackPlugin:
         if key in existing_entries:
             return False
 
+        resolved_mother, mother_status = self.resolve_parent_reference(mother, species_value)
+        if mother_status == "ambiguous":
+            return False
+        resolved_father, father_status = self.resolve_parent_reference(father, species_value)
+        if father_status == "ambiguous":
+            return False
+
         self.store.set_parentage(
             key,
             {
-                "egg_donor": mother,
-                "sperm_donor": father,
+                "egg_donor": resolved_mother,
+                "sperm_donor": resolved_father,
                 "surrogate_mother": "",
                 "surrogate_father": "",
             },
@@ -3328,8 +3423,14 @@ class HeritageTrackPlugin:
         self.store.set_node_visual(key, genotype, fill_color)
         self.store.set_manual_sex(key, sex)
         self.store.set_heritage_only(key, True)
-        if species:
-            self.store.set_species(key, species)
+        self.store.set_identity_fields(
+            key,
+            display_name=base_name,
+            species=species_value,
+            birth_date=birth_date,
+            review_required=review_required,
+            review_reason=review_reason,
+        )
         return True
 
     def _parent_exists_in_system(self, parent_name: str) -> bool:
@@ -3337,6 +3438,11 @@ class HeritageTrackPlugin:
         name = (parent_name or "").strip()
         if not name:
             return False
+        resolved, status = self.resolve_parent_reference(name)
+        if status == "ambiguous":
+            return True
+        if status == "resolved":
+            name = resolved
         # Check in active animals
         animals = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
         if name in animals:
@@ -3400,9 +3506,10 @@ class HeritageTrackPlugin:
         # Build base-name → [(key, species)] map for resolving same-name animals by species.
         _base_to_variants: Dict[str, List[tuple]] = {}
         for _k, _r in animals.items():
-            _base = (_r.get("_base_name") or _k).strip()
+            _base = animal_base_name(_k, _r).strip()
             _sp = (_r.get("species") or "").strip()
-            _base_to_variants.setdefault(_base.lower(), []).append((_k, _sp))
+            _birth = (_r.get("birth_date") or "").strip()
+            _base_to_variants.setdefault(_base.lower(), []).append((_k, _sp, _birth))
 
         _store_lookup = self.store.get_parentage
 
@@ -3428,12 +3535,12 @@ class HeritageTrackPlugin:
                     resolved[fld] = variants[0][0]
                     continue
                 # Multiple animals share this base name: prefer the one with same species as child
-                sp_matches = [k for k, sp in variants if sp == child_species]
-                if sp_matches:
+                sp_matches = [k for k, sp, _birth in variants if sp == child_species]
+                if len(sp_matches) == 1:
                     resolved[fld] = sp_matches[0]
                 else:
-                    plain = [k for k, sp in variants if k == parent_name]
-                    resolved[fld] = plain[0] if plain else variants[0][0]
+                    plain = [k for k, _sp, _birth in variants if k == parent_name]
+                    resolved[fld] = plain[0] if len(plain) == 1 else parent_name
             return resolved
 
         # Use cached engine for better performance (3-5x speedup)

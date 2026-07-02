@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping
 
+from Plugins.core.animal_identity import animal_identity_label
+
 
 ANIMAL_WELFARE_ROLE = "animal_welfare_officer"
 UNRESTRICTED_PROJECT_ROLES = {"lord", "master"}
@@ -85,9 +87,12 @@ def animal_matches_name_filter(
         return True
     candidates = {
         _clean(animal_key),
+        _clean(animal_identity_label(animal_key, animal_record)),
         _clean(animal_record.get("name")),
         _clean(animal_record.get("_base_name")),
         _clean(animal_record.get("display_name")),
+        _clean(animal_record.get("birth_date")),
+        _clean(animal_record.get("species")),
     }
     return any(needle in candidate.casefold() for candidate in candidates if candidate)
 

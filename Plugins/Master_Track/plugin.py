@@ -20,6 +20,7 @@ from .permissions import (
     ROLE_ANIMAL_WELFARE,
     ROLE_USER,
     JOB_BUNDLES,
+    ALL_PERMISSIONS,
     PERM_MASTER_CREATE_USERS,
     ROLE_BASELINES,
     DEFAULT_JOB_BUNDLES,
@@ -96,9 +97,17 @@ class MasterTrackPlugin:
             with open(path, "r", encoding="utf-8") as f:
                 raw = json.load(f)
             if isinstance(raw, dict):
+                known_permissions = set(ALL_PERMISSIONS)
                 for job_name, perms in raw.items():
                     if isinstance(perms, list):
-                        JOB_BUNDLES[job_name] = set(perms)
+                        unknown = sorted(set(perms) - known_permissions)
+                        if unknown:
+                            logger.warning(
+                                "Ignoring unknown Master Track permissions in job %s: %s",
+                                job_name,
+                                ", ".join(unknown),
+                            )
+                        JOB_BUNDLES[job_name] = {p for p in perms if p in known_permissions}
         except Exception as exc:
             logger.error("Failed to load jobs.json: %s", exc)
 

@@ -145,9 +145,6 @@
     "network.view",
     "project.view",
     "reports.view",
-    "research.edit_measurements",
-    "research.run_analysis",
-    "research.view_measurements",
     "sample_track.use"
   ]
 }

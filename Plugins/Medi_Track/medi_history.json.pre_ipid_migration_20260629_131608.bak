@@ -1,14 +1,12 @@
 {
   "version": "1.7",
   "animals": {
-    "Elurín | Callitrix jacchus | 17.07.2007": {
+    "Elurín": {
       "animal_id": "",
       "entries": [],
-      "documents": [],
-      "ipid": "Elurín | Callitrix jacchus | 17.07.2007",
-      "name": "Elurín"
+      "documents": []
     },
-    "Anton | Callitrix jacchus | 25.05.2015": {
+    "Anton": {
       "animal_id": "",
       "entries": [
         {
@@ -44,11 +42,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Anton | Callitrix jacchus | 25.05.2015",
-      "name": "Anton"
+      "documents": []
     },
-    "Ekaterina | Callitrix jacchus | 02.04.2016": {
+    "Ekaterina": {
       "animal_id": "",
       "entries": [
         {
@@ -84,11 +80,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Ekaterina | Callitrix jacchus | 02.04.2016",
-      "name": "Ekaterina"
+      "documents": []
     },
-    "Konstantin | Callitrix jacchus | 18.08.2020": {
+    "Konstantin": {
       "animal_id": "",
       "entries": [
         {
@@ -124,11 +118,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Konstantin | Callitrix jacchus | 18.08.2020",
-      "name": "Konstantin"
+      "documents": []
     },
-    "Legolas | Callitrix jacchus | 04.03.2026": {
+    "Legolas": {
       "animal_id": "",
       "entries": [
         {
@@ -164,11 +156,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Legolas | Callitrix jacchus | 04.03.2026",
-      "name": "Legolas"
+      "documents": []
     },
-    "Olga | Callitrix jacchus | 20.06.2015": {
+    "Olga": {
       "animal_id": "",
       "entries": [
         {
@@ -204,11 +194,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Olga | Callitrix jacchus | 20.06.2015",
-      "name": "Olga"
+      "documents": []
     },
-    "Oropher | Callitrix jacchus | 25.05.2015": {
+    "Oropher": {
       "animal_id": "",
       "entries": [
         {
@@ -244,11 +232,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Oropher | Callitrix jacchus | 25.05.2015",
-      "name": "Oropher"
+      "documents": []
     },
-    "Svetlana | Callitrix jacchus | 03.05.2021": {
+    "Svetlana": {
       "animal_id": "",
       "entries": [
         {
@@ -284,11 +270,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Svetlana | Callitrix jacchus | 03.05.2021",
-      "name": "Svetlana"
+      "documents": []
     },
-    "Thranduil | Callitrix jacchus | 11.02.2021": {
+    "Thranduil": {
       "animal_id": "",
       "entries": [
         {
@@ -324,11 +308,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Thranduil | Callitrix jacchus | 11.02.2021",
-      "name": "Thranduil"
+      "documents": []
     },
-    "Aragorn I | Callitrix jacchus | 07.02.2018": {
+    "Aragorn I": {
       "animal_id": "",
       "entries": [
         {
@@ -364,11 +346,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Aragorn I | Callitrix jacchus | 07.02.2018",
-      "name": "Aragorn I"
+      "documents": []
     },
-    "Aragorn II | Callitrix jacchus | 11.02.2021": {
+    "Aragorn II": {
       "animal_id": "",
       "entries": [
         {
@@ -404,11 +384,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Aragorn II | Callitrix jacchus | 11.02.2021",
-      "name": "Aragorn II"
+      "documents": []
     },
-    "Arwen | Callitrix jacchus | 23.02.2015": {
+    "Arwen": {
       "animal_id": "",
       "entries": [
         {
@@ -444,11 +422,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Arwen | Callitrix jacchus | 23.02.2015",
-      "name": "Arwen"
+      "documents": []
     },
-    "Celebrían | Callitrix jacchus | 06.05.2007": {
+    "Celebrían": {
       "animal_id": "",
       "entries": [
         {
@@ -484,11 +460,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Celebrían | Callitrix jacchus | 06.05.2007",
-      "name": "Celebrían"
+      "documents": []
     },
-    "Eldarion | Callitrix jacchus | 01.03.2026": {
+    "Eldarion": {
       "animal_id": "",
       "entries": [
         {
@@ -524,11 +498,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Eldarion | Callitrix jacchus | 01.03.2026",
-      "name": "Eldarion"
+      "documents": []
     },
-    "Elladan | Callitrix jacchus | 23.07.2015": {
+    "Elladan": {
       "animal_id": "",
       "entries": [
         {
@@ -564,11 +536,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Elladan | Callitrix jacchus | 23.07.2015",
-      "name": "Elladan"
+      "documents": []
     },
-    "Elrohir | Callitrix jacchus | 21.01.2016": {
+    "Elrohir": {
       "animal_id": "",
       "entries": [
         {
@@ -604,11 +574,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Elrohir | Callitrix jacchus | 21.01.2016",
-      "name": "Elrohir"
+      "documents": []
     },
-    "Elrond | Callitrix jacchus | 04.02.2012": {
+    "Elrond": {
       "animal_id": "",
       "entries": [
         {
@@ -644,11 +612,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Elrond | Callitrix jacchus | 04.02.2012",
-      "name": "Elrond"
+      "documents": []
     },
-    "Isildur | Callitrix jacchus | 23.02.2015": {
+    "Isildur": {
       "animal_id": "",
       "entries": [
         {
@@ -684,11 +650,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Isildur | Callitrix jacchus | 23.02.2015",
-      "name": "Isildur"
+      "documents": []
     },
-    "Jessica | Callitrix jacchus | 06.07.2015": {
+    "Jessica": {
       "animal_id": "",
       "entries": [
         {
@@ -724,11 +688,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Jessica | Callitrix jacchus | 06.07.2015",
-      "name": "Jessica"
+      "documents": []
     },
-    "Taylor | Callitrix jacchus | 14.06.2018": {
+    "Taylor": {
       "animal_id": "",
       "entries": [
         {
@@ -764,11 +726,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Taylor | Callitrix jacchus | 14.06.2018",
-      "name": "Taylor"
+      "documents": []
     },
-    "Animal_A | Callitrix jacchus | 01.01.1900": {
+    "Animal_A": {
       "animal_id": "",
       "entries": [
         {
@@ -916,11 +876,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Animal_A | Callitrix jacchus | 01.01.1900",
-      "name": "Animal_A"
+      "documents": []
     },
-    "Animal_C | Unknown species | 01.01.1900": {
+    "Animal_C": {
       "animal_id": "",
       "entries": [
         {
@@ -956,11 +914,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Animal_C | Unknown species | 01.01.1900",
-      "name": "Animal_C"
+      "documents": []
     },
-    "Animal_B_ | Unknown species | 01.01.1900": {
+    "Animal_B_": {
       "animal_id": "",
       "entries": [
         {
@@ -1012,11 +968,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Animal_B_ | Unknown species | 01.01.1900",
-      "name": "Animal_B_"
+      "documents": []
     },
-    "Animal_A_ | Unknown species | 01.01.1900": {
+    "Animal_A_": {
       "animal_id": "",
       "entries": [
         {
@@ -1132,11 +1086,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Animal_A_ | Unknown species | 01.01.1900",
-      "name": "Animal_A_"
+      "documents": []
     },
-    "Animal_A! | Unknown species | 01.01.1900": {
+    "Animal_A!": {
       "animal_id": "",
       "entries": [
         {
@@ -1428,11 +1380,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Animal_A! | Unknown species | 01.01.1900",
-      "name": "Animal_A!"
+      "documents": []
     },
-    "Animal_BB | Unknown species | 01.01.1900": {
+    "Animal_BB": {
       "animal_id": "",
       "entries": [
         {
@@ -1468,11 +1418,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Animal_BB | Unknown species | 01.01.1900",
-      "name": "Animal_BB"
+      "documents": []
     },
-    "Zeta | Unknown species | 01.01.1900": {
+    "Zeta": {
       "animal_id": "",
       "entries": [
         {
@@ -1636,11 +1584,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Zeta | Unknown species | 01.01.1900",
-      "name": "Zeta"
+      "documents": []
     },
-    "Betta | Unknown species | 01.01.1900": {
+    "Betta": {
       "animal_id": "",
       "entries": [
         {
@@ -1772,11 +1718,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Betta | Unknown species | 01.01.1900",
-      "name": "Betta"
+      "documents": []
     },
-    "Andy | Unknown species | 01.01.1900": {
+    "Andy": {
       "animal_id": "",
       "entries": [
         {
@@ -2244,18 +2188,14 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Andy | Unknown species | 01.01.1900",
-      "name": "Andy"
+      "documents": []
     },
-    "Thrór | Macaca mulatta | 04.03.2017": {
+    "Thrór": {
       "animal_id": "",
       "entries": [],
-      "documents": [],
-      "ipid": "Thrór | Macaca mulatta | 04.03.2017",
-      "name": "Thrór"
+      "documents": []
     },
-    "Bobby | Unknown species | 01.01.1900": {
+    "Bobby": {
       "animal_id": "",
       "entries": [
         {
@@ -2307,11 +2247,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Bobby | Unknown species | 01.01.1900",
-      "name": "Bobby"
+      "documents": []
     },
-    "Cindy | Unknown species | 01.01.1900": {
+    "Cindy": {
       "animal_id": "",
       "entries": [
         {
@@ -2459,11 +2397,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Cindy | Unknown species | 01.01.1900",
-      "name": "Cindy"
+      "documents": []
     },
-    "AAA | Unknown species | 01.01.1900": {
+    "AAA": {
       "animal_id": "",
       "entries": [
         {
@@ -2595,11 +2531,9 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "AAA | Unknown species | 01.01.1900",
-      "name": "AAA"
+      "documents": []
     },
-    "Dana | Unknown species | 01.01.1900": {
+    "Dana": {
       "animal_id": "",
       "entries": [
         {
@@ -2699,30 +2633,22 @@
           "linked_document_ids": []
         }
       ],
-      "documents": [],
-      "ipid": "Dana | Unknown species | 01.01.1900",
-      "name": "Dana"
+      "documents": []
     },
-    "Beate II | Macaca mulatta | 04.03.2023": {
+    "Beate II": {
       "animal_id": "",
       "entries": [],
-      "documents": [],
-      "ipid": "Beate II | Macaca mulatta | 04.03.2023",
-      "name": "Beate II"
+      "documents": []
     },
-    "Aurore | Papio hamadryas anubis | 04.09.2023": {
+    "Aurore": {
       "animal_id": "",
       "entries": [],
-      "documents": [],
-      "ipid": "Aurore | Papio hamadryas anubis | 04.09.2023",
-      "name": "Aurore"
+      "documents": []
     },
-    "Echo | Unknown species | 01.01.1900": {
+    "Echo": {
       "animal_id": "",
       "entries": [],
-      "documents": [],
-      "ipid": "Echo | Unknown species | 01.01.1900",
-      "name": "Echo"
+      "documents": []
     }
   }
 }

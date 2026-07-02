@@ -9,9 +9,12 @@ import os
 import sys
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
+
+from Plugins.core.animal_identity import animal_base_name
 
 # Set up paths
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -624,13 +627,22 @@ class FlowTrackWidget:
             # Freezer embryo: FZ_{freeze_date}_E{counter:05d}
             embryo_id = f"FZ_{freeze_date}_E{counter:05d}"
         else:
-            # Surrogate transfer embryo: {surrogate_name}_{transfer_date}_E{counter:05d}
+            # Surrogate transfer embryo: use a sanitized short-name token, never raw IPID.
             transfer_data = self.manual_data.get('transfers_by_id', {}).get(transfer_id, {})
             surrogate_name = transfer_data.get('surrogate_name', 'UNKNOWN')
             transfer_date = transfer_data.get('transfer_date', 'UNKNOWN')
-            embryo_id = f"{surrogate_name}_{transfer_date}_E{counter:05d}"
+            embryo_id = f"{self._safe_identity_token(surrogate_name)}_{transfer_date}_E{counter:05d}"
         
         return embryo_id
+
+    @staticmethod
+    def _safe_identity_token(value: str) -> str:
+        token = animal_base_name(value) or "UNKNOWN"
+        token = re.sub(r"[^A-Za-z0-9._-]+", "_", token).strip("_")
+        return token or "UNKNOWN"
+
+    def _format_embryo_id(self, surrogate_name: str, transfer_date: str, embryo_num: int) -> str:
+        return f"{self._safe_identity_token(surrogate_name)}_{transfer_date}_embryo_{embryo_num}"
     
     def _collect_timeline_data(self):
         """Collect transfer and implantation data for timeline chart."""
@@ -935,7 +947,7 @@ class FlowTrackWidget:
             
             surrogate_name = transfer_data.get('surrogate_name', 'Unknown')
             transfer_date = transfer_data.get('transfer_date', 'Unknown')
-            item_text = f"{surrogate_name} - {transfer_date}"
+            item_text = f"{self._animal_export_name(surrogate_name)} - {transfer_date}"
             transfer_list.addItem(item_text)
             available_transfers.append(transfer_id)
         
@@ -1667,7 +1679,7 @@ class FlowTrackWidget:
                     y_offset_points = 10  # Above the node for freezer
                     va = 'bottom'
                 else:
-                    label_text = animal_name
+                    label_text = self._animal_export_name(animal_name)
                     # Calculate offset: negative values go downward
                     if num_lifebars > 0:
                         # Initial offset - (bars * spacing) - gap = further down
@@ -1792,7 +1804,7 @@ class FlowTrackWidget:
                                     break
                         
                         embryos.append({
-                            'embryo_id': f"{surrogate}_{date_str}_embryo_{embryo_num}",
+                            'embryo_id': self._format_embryo_id(surrogate, date_str, embryo_num),
                             'egg_donor_name': egg_donor,
                             'egg_donation_date': egg_donation_date,
                             'sperm_donor_name': sperm_donor,
@@ -1854,7 +1866,7 @@ class FlowTrackWidget:
                                             break
                                 
                                 current_embryos.append({
-                                    'embryo_id': f"{surrogate}_{date_str}_embryo_{embryo_num}",
+                                    'embryo_id': self._format_embryo_id(surrogate, date_str, embryo_num),
                                     'egg_donor_name': egg_donor,
                                     'egg_donation_date': egg_donation_date,
                                     'sperm_donor_name': sperm_donor,
@@ -3139,7 +3151,7 @@ class FlowTrackWidget:
         layout = QtWidgets.QVBoxLayout()
         
         # Title
-        title = QtWidgets.QLabel(f"<b>{animal_name}</b> - {self.messages.get('flow_track.dialog.egg_donor.label', 'Egg Donor')}")
+        title = QtWidgets.QLabel(f"<b>{self._animal_export_name(animal_name)}</b> - {self.messages.get('flow_track.dialog.egg_donor.label', 'Egg Donor')}")
         layout.addWidget(title)
         layout.addSpacing(10)
         
@@ -3785,7 +3797,7 @@ class FlowTrackWidget:
         layout = QtWidgets.QVBoxLayout()
         
         # Title
-        title = QtWidgets.QLabel(f"<b>{animal_name}</b> - {self.messages.get('flow_track.dialog.sperm_donor.label', 'Sperm Donor')}")
+        title = QtWidgets.QLabel(f"<b>{self._animal_export_name(animal_name)}</b> - {self.messages.get('flow_track.dialog.sperm_donor.label', 'Sperm Donor')}")
         layout.addWidget(title)
         layout.addSpacing(10)
         
@@ -4328,7 +4340,7 @@ class FlowTrackWidget:
         layout = QtWidgets.QVBoxLayout()
         
         # Title
-        title = QtWidgets.QLabel(f"<b>{animal_name}</b> - {self.messages.get('flow_track.dialog.surrogate.label', 'Surrogate')}")
+        title = QtWidgets.QLabel(f"<b>{self._animal_export_name(animal_name)}</b> - {self.messages.get('flow_track.dialog.surrogate.label', 'Surrogate')}")
         layout.addWidget(title)
         layout.addSpacing(10)
         
@@ -5456,8 +5468,8 @@ class FlowTrackWidget:
                     # Get embryo position
                     emb_x, emb_y = artist.get_data()
                     
-                    egg = embryo.get('egg_donor_name', '?')
-                    sperm = embryo.get('sperm_donor_name', '?')
+                    egg = self._animal_export_name(embryo.get('egg_donor_name', '?'))
+                    sperm = self._animal_export_name(embryo.get('sperm_donor_name', '?'))
                     implanted = "✓" if embryo.get('implanted', embryo.get('pregnant', False)) else "✗"
                     cryo = "✓" if embryo.get('cryopreserved', False) else "✗"
                     
@@ -5869,6 +5881,13 @@ class FlowTrackWidget:
                 data = {
                     'schema_version': '3.0',
                     'export_date': datetime.now().isoformat(),
+                    'animal_identity': {
+                        animal_name: {
+                            'ipid': animal_name,
+                            'name': animal_base_name(animal_name, record),
+                        }
+                        for animal_name, record in sorted((self.parent_app.animals or {}).items())
+                    },
                     'transfers': self.manual_data.get('transfers_by_id', {}),
                     'manual_data': self.manual_data
                 }
@@ -5887,8 +5906,37 @@ class FlowTrackWidget:
                     self.widget,
                     self.messages.get("error.title", "Error"),
                     self.messages.get("flow_track.export.error.json", "Export failed:\n{error}").format(error=e)
-                )
+            )
     
+    def _animal_export_name(self, animal_name):
+        """Return the human-readable animal name for exports while keeping IPID elsewhere."""
+        records = dict(self.parent_app.animals or {})
+        archived = getattr(self.parent_app, 'archived', {}) or {}
+        if isinstance(archived, dict):
+            records.update(archived)
+        record = records.get(animal_name, {})
+        return animal_base_name(animal_name, record)
+
+    def _safe_excel_sheet_token(self, value, max_length=28):
+        text = str(value or '').strip() or 'Animal'
+        for char in '\\/:*?[]|':
+            text = text.replace(char, '_')
+        text = text[:max_length].strip()
+        return text or 'Animal'
+
+    def _create_animal_sheet(self, wb, prefix, animal_name):
+        name_token = self._safe_excel_sheet_token(self._animal_export_name(animal_name), 22)
+        suffix_source = ''.join(ch for ch in str(animal_name) if ch.isalnum())
+        suffix = (suffix_source[-4:] or 'IPID')[:4]
+        base_title = f"{prefix}_{name_token}_{suffix}"
+        title = self._safe_excel_sheet_token(base_title, 31)
+        counter = 2
+        while title in wb.sheetnames:
+            counter_suffix = f"_{counter}"
+            title = f"{self._safe_excel_sheet_token(base_title, 31 - len(counter_suffix))}{counter_suffix}"
+            counter += 1
+        return wb.create_sheet(title)
+
     def _export_excel(self):
         """Export comprehensive flow track data to Excel with formulas."""
         QtWidgets = self.parent_app.QtWidgets
@@ -5967,7 +6015,7 @@ class FlowTrackWidget:
         ws = wb.create_sheet("All Animals Overview", 0)
         Role = self.parent_app.Role
         
-        headers = ['Animal', 'Role', 'Embryos Donated', 'Embryos Received', 'Transferred', 'Frozen', 'Implanted']
+        headers = ['IPID', 'Animal', 'Role', 'Embryos Donated', 'Embryos Received', 'Transferred', 'Frozen', 'Implanted']
         ws.append(headers)
         
         for cell in ws[1]:
@@ -6009,7 +6057,7 @@ class FlowTrackWidget:
                         if embryo.get('egg_donor_name') == animal_name or embryo.get('sperm_donor_name') == animal_name:
                             frozen += 1
             
-            ws.append([animal_name, role_name, donated, received, transferred, frozen, implanted])
+            ws.append([animal_name, self._animal_export_name(animal_name), role_name, donated, received, transferred, frozen, implanted])
         
         for column in ws.columns:
             max_length = 0
@@ -6030,7 +6078,7 @@ class FlowTrackWidget:
         ws = wb.create_sheet("Egg Donors Overview")
         Role = self.parent_app.Role
         
-        headers = ['Egg Donor', 'Surgeries', 'Total GV', 'Total IVM M2', 'IVM M2 Fert', 
+        headers = ['IPID', 'Egg Donor', 'Surgeries', 'Total GV', 'Total IVM M2', 'IVM M2 Fert',
                    'Transferred', 'Frozen', 'Implanted', 'IVM %', 'Fert %', 'Impl %']
         ws.append(headers)
         
@@ -6048,7 +6096,7 @@ class FlowTrackWidget:
             total = efficiency['total']
             
             num_surgeries = len(efficiency['per_surgery'])
-            ws.append([animal_name, num_surgeries, 
+            ws.append([animal_name, self._animal_export_name(animal_name), num_surgeries,
                        total.get('total_gv_isolated', 0),
                        total.get('total_ivm_m2', 0),
                        total.get('total_ivm_m2_fertilized', 0),
@@ -6057,12 +6105,12 @@ class FlowTrackWidget:
                        total.get('total_implanted_ivm', 0),
                        '', '', ''])
             
-            ws[f'I{row}'] = f'=IF(C{row}>0, D{row}/C{row}*100, 0)'
             ws[f'J{row}'] = f'=IF(D{row}>0, E{row}/D{row}*100, 0)'
-            ws[f'K{row}'] = f'=IF(F{row}>0, H{row}/F{row}*100, 0)'
-            ws[f'I{row}'].number_format = '0.0'
+            ws[f'K{row}'] = f'=IF(E{row}>0, F{row}/E{row}*100, 0)'
+            ws[f'L{row}'] = f'=IF(G{row}>0, I{row}/G{row}*100, 0)'
             ws[f'J{row}'].number_format = '0.0'
             ws[f'K{row}'].number_format = '0.0'
+            ws[f'L{row}'].number_format = '0.0'
             row += 1
         
         for column in ws.columns:
@@ -6084,7 +6132,7 @@ class FlowTrackWidget:
         ws = wb.create_sheet("Sperm Donors Overview")
         Role = self.parent_app.Role
         
-        headers = ['Sperm Donor', 'Donations', 'IVM M2 Insem', 'IVM M2 Fert', 
+        headers = ['IPID', 'Sperm Donor', 'Donations', 'IVM M2 Insem', 'IVM M2 Fert',
                    'Transferred', 'Frozen', 'Implanted', 'Fert %', 'Impl %']
         ws.append(headers)
         
@@ -6102,7 +6150,7 @@ class FlowTrackWidget:
             total = efficiency['total']
             
             num_donations = len(efficiency['per_donation'])
-            ws.append([animal_name, num_donations,
+            ws.append([animal_name, self._animal_export_name(animal_name), num_donations,
                        total.get('total_ivm_m2_inseminated', 0),
                        total.get('total_ivm_m2_fertilized', 0),
                        total.get('total_transferred_ivm', 0),
@@ -6110,10 +6158,10 @@ class FlowTrackWidget:
                        total.get('total_implanted_ivm', 0),
                        '', ''])
             
-            ws[f'H{row}'] = f'=IF(C{row}>0, D{row}/C{row}*100, 0)'
-            ws[f'I{row}'] = f'=IF(E{row}>0, G{row}/E{row}*100, 0)'
-            ws[f'H{row}'].number_format = '0.0'
+            ws[f'I{row}'] = f'=IF(D{row}>0, E{row}/D{row}*100, 0)'
+            ws[f'J{row}'] = f'=IF(F{row}>0, H{row}/F{row}*100, 0)'
             ws[f'I{row}'].number_format = '0.0'
+            ws[f'J{row}'].number_format = '0.0'
             row += 1
         
         for column in ws.columns:
@@ -6135,7 +6183,7 @@ class FlowTrackWidget:
         ws = wb.create_sheet("Surrogates Overview")
         Role = self.parent_app.Role
         
-        headers = ['Surrogate', 'Transfers', 'Embryos Received', 'Implanted', 
+        headers = ['IPID', 'Surrogate', 'Transfers', 'Embryos Received', 'Implanted',
                    'Implantation %', 'Success Rate %']
         ws.append(headers)
         
@@ -6152,16 +6200,16 @@ class FlowTrackWidget:
             efficiency = self._calculate_surrogate_efficiency(animal_name)
             total = efficiency['total']
             
-            ws.append([animal_name,
+            ws.append([animal_name, self._animal_export_name(animal_name),
                        total.get('total_transfers', 0),
                        total.get('total_embryos', 0),
                        total.get('total_implanted', 0),
                        '', ''])
             
-            ws[f'E{row}'] = f'=IF(C{row}>0, D{row}/C{row}*100, 0)'
-            ws[f'F{row}'] = f'=IF(B{row}>0, {total.get("successful_transfers", 0)}/B{row}*100, 0)'
-            ws[f'E{row}'].number_format = '0.0'
+            ws[f'F{row}'] = f'=IF(D{row}>0, E{row}/D{row}*100, 0)'
+            ws[f'G{row}'] = f'=IF(C{row}>0, {total.get("successful_transfers", 0)}/C{row}*100, 0)'
             ws[f'F{row}'].number_format = '0.0'
+            ws[f'G{row}'].number_format = '0.0'
             row += 1
         
         for column in ws.columns:
@@ -6184,19 +6232,21 @@ class FlowTrackWidget:
         if not efficiency['per_surgery'] and efficiency['total'].get('total_gv_isolated', 0) == 0:
             return
         
-        safe_name = animal_name.replace('/', '_').replace('\\', '_')[:31]
-        ws = wb.create_sheet(f"ED_{safe_name}")
+        ws = self._create_animal_sheet(wb, "ED", animal_name)
+        ws.append(['IPID', animal_name])
+        ws.append(['Animal', self._animal_export_name(animal_name)])
+        ws.append([])
         
         headers = ['Date', 'GV Isolated', 'IVM M2', 'IVM M2 Fert', 'Transferred', 'Frozen', 
                    'Implanted', 'IVM %', 'Fert %', 'Impl %']
         ws.append(headers)
         
-        for cell in ws[1]:
+        for cell in ws[4]:
             cell.font = Font(bold=True, size=11, color="FFFFFF")
             cell.fill = PatternFill(start_color="FF1493", end_color="FF1493", fill_type="solid")
             cell.alignment = Alignment(horizontal='center')
         
-        row = 2
+        row = 5
         for surgery in efficiency['per_surgery']:
             date_obj = surgery['date']
             if date_obj and hasattr(date_obj, 'strftime'):
@@ -6224,12 +6274,12 @@ class FlowTrackWidget:
         total_row = row
         ws.append(['TOTAL', '', '', '', '', '', '', '', '', ''])
         ws[f'A{total_row}'].font = Font(bold=True, size=12)
-        ws[f'B{total_row}'] = f'=SUM(B2:B{total_row-1})'
-        ws[f'C{total_row}'] = f'=SUM(C2:C{total_row-1})'
-        ws[f'D{total_row}'] = f'=SUM(D2:D{total_row-1})'
-        ws[f'E{total_row}'] = f'=SUM(E2:E{total_row-1})'
-        ws[f'F{total_row}'] = f'=SUM(F2:F{total_row-1})'
-        ws[f'G{total_row}'] = f'=SUM(G2:G{total_row-1})'
+        ws[f'B{total_row}'] = f'=SUM(B5:B{total_row-1})'
+        ws[f'C{total_row}'] = f'=SUM(C5:C{total_row-1})'
+        ws[f'D{total_row}'] = f'=SUM(D5:D{total_row-1})'
+        ws[f'E{total_row}'] = f'=SUM(E5:E{total_row-1})'
+        ws[f'F{total_row}'] = f'=SUM(F5:F{total_row-1})'
+        ws[f'G{total_row}'] = f'=SUM(G5:G{total_row-1})'
         ws[f'H{total_row}'] = f'=IF(B{total_row}>0, C{total_row}/B{total_row}*100, 0)'
         ws[f'I{total_row}'] = f'=IF(C{total_row}>0, D{total_row}/C{total_row}*100, 0)'
         ws[f'J{total_row}'] = f'=IF(E{total_row}>0, G{total_row}/E{total_row}*100, 0)'
@@ -6259,7 +6309,7 @@ class FlowTrackWidget:
         ws[f'A{embryo_start_row}'].font = Font(bold=True, size=11)
         embryo_start_row += 1
         
-        embryo_headers = ['Embryo ID', 'Sperm Donor', 'Surrogate', 'Transfer Date', 'Stage', 'Implanted', 'Frozen']
+        embryo_headers = ['Embryo ID', 'Sperm Donor IPID', 'Sperm Donor', 'Surrogate IPID', 'Surrogate', 'Transfer Date', 'Stage', 'Implanted', 'Frozen']
         ws.append(embryo_headers)
         for cell in ws[embryo_start_row]:
             cell.font = Font(bold=True)
@@ -6270,7 +6320,9 @@ class FlowTrackWidget:
                     ws.append([
                         embryo.get('embryo_id', ''),
                         embryo.get('sperm_donor_name', ''),
+                        self._animal_export_name(embryo.get('sperm_donor_name', '')),
                         transfer_data.get('surrogate_name', ''),
+                        self._animal_export_name(transfer_data.get('surrogate_name', '')),
                         transfer_data.get('transfer_date', ''),
                         embryo.get('stage', ''),
                         'Yes' if embryo.get('implanted', False) else 'No',
@@ -6285,19 +6337,21 @@ class FlowTrackWidget:
         if not efficiency['per_donation'] and efficiency['total'].get('total_ivm_m2_inseminated', 0) == 0:
             return
         
-        safe_name = animal_name.replace('/', '_').replace('\\', '_')[:31]
-        ws = wb.create_sheet(f"SD_{safe_name}")
+        ws = self._create_animal_sheet(wb, "SD", animal_name)
+        ws.append(['IPID', animal_name])
+        ws.append(['Animal', self._animal_export_name(animal_name)])
+        ws.append([])
         
         headers = ['Date', 'IVM M2 Insem', 'IVM M2 Fert', 'Transferred', 'Frozen', 
                    'Implanted', 'Fert %', 'Impl %']
         ws.append(headers)
         
-        for cell in ws[1]:
+        for cell in ws[4]:
             cell.font = Font(bold=True, size=11, color="FFFFFF")
             cell.fill = PatternFill(start_color="000000", end_color="000000", fill_type="solid")
             cell.alignment = Alignment(horizontal='center')
         
-        row = 2
+        row = 5
         for donation in efficiency['per_donation']:
             date_obj = donation['date']
             if date_obj and hasattr(date_obj, 'strftime'):
@@ -6322,11 +6376,11 @@ class FlowTrackWidget:
         total_row = row
         ws.append(['TOTAL', '', '', '', '', '', '', ''])
         ws[f'A{total_row}'].font = Font(bold=True, size=12)
-        ws[f'B{total_row}'] = f'=SUM(B2:B{total_row-1})'
-        ws[f'C{total_row}'] = f'=SUM(C2:C{total_row-1})'
-        ws[f'D{total_row}'] = f'=SUM(D2:D{total_row-1})'
-        ws[f'E{total_row}'] = f'=SUM(E2:E{total_row-1})'
-        ws[f'F{total_row}'] = f'=SUM(F2:F{total_row-1})'
+        ws[f'B{total_row}'] = f'=SUM(B5:B{total_row-1})'
+        ws[f'C{total_row}'] = f'=SUM(C5:C{total_row-1})'
+        ws[f'D{total_row}'] = f'=SUM(D5:D{total_row-1})'
+        ws[f'E{total_row}'] = f'=SUM(E5:E{total_row-1})'
+        ws[f'F{total_row}'] = f'=SUM(F5:F{total_row-1})'
         ws[f'G{total_row}'] = f'=IF(B{total_row}>0, C{total_row}/B{total_row}*100, 0)'
         ws[f'H{total_row}'] = f'=IF(D{total_row}>0, F{total_row}/D{total_row}*100, 0)'
         ws[f'G{total_row}'].number_format = '0.0'
@@ -6354,7 +6408,7 @@ class FlowTrackWidget:
         ws[f'A{embryo_start_row}'].font = Font(bold=True, size=11)
         embryo_start_row += 1
         
-        embryo_headers = ['Embryo ID', 'Egg Donor', 'Surrogate', 'Transfer Date', 'Stage', 'Implanted', 'Frozen']
+        embryo_headers = ['Embryo ID', 'Egg Donor IPID', 'Egg Donor', 'Surrogate IPID', 'Surrogate', 'Transfer Date', 'Stage', 'Implanted', 'Frozen']
         ws.append(embryo_headers)
         for cell in ws[embryo_start_row]:
             cell.font = Font(bold=True)
@@ -6365,7 +6419,9 @@ class FlowTrackWidget:
                     ws.append([
                         embryo.get('embryo_id', ''),
                         embryo.get('egg_donor_name', ''),
+                        self._animal_export_name(embryo.get('egg_donor_name', '')),
                         transfer_data.get('surrogate_name', ''),
+                        self._animal_export_name(transfer_data.get('surrogate_name', '')),
                         transfer_data.get('transfer_date', ''),
                         embryo.get('stage', ''),
                         'Yes' if embryo.get('implanted', False) else 'No',
@@ -6380,18 +6436,20 @@ class FlowTrackWidget:
         if not efficiency['per_transfer'] and efficiency['total'].get('total_embryos', 0) == 0:
             return
         
-        safe_name = animal_name.replace('/', '_').replace('\\', '_')[:31]
-        ws = wb.create_sheet(f"SU_{safe_name}")
+        ws = self._create_animal_sheet(wb, "SU", animal_name)
+        ws.append(['IPID', animal_name])
+        ws.append(['Animal', self._animal_export_name(animal_name)])
+        ws.append([])
         
         headers = ['Date', 'Embryos Received', 'In Vivo', 'In Vitro', 'Implanted', 'Implant %']
         ws.append(headers)
         
-        for cell in ws[1]:
+        for cell in ws[4]:
             cell.font = Font(bold=True, size=11, color="FFFFFF")
             cell.fill = PatternFill(start_color="9370DB", end_color="9370DB", fill_type="solid")
             cell.alignment = Alignment(horizontal='center')
         
-        row = 2
+        row = 5
         for transfer in efficiency['per_transfer']:
             date_obj = transfer['date']
             if date_obj and hasattr(date_obj, 'strftime'):
@@ -6413,10 +6471,10 @@ class FlowTrackWidget:
         total_row = row
         ws.append(['TOTAL', '', '', '', '', ''])
         ws[f'A{total_row}'].font = Font(bold=True, size=12)
-        ws[f'B{total_row}'] = f'=SUM(B2:B{total_row-1})'
-        ws[f'C{total_row}'] = f'=SUM(C2:C{total_row-1})'
-        ws[f'D{total_row}'] = f'=SUM(D2:D{total_row-1})'
-        ws[f'E{total_row}'] = f'=SUM(E2:E{total_row-1})'
+        ws[f'B{total_row}'] = f'=SUM(B5:B{total_row-1})'
+        ws[f'C{total_row}'] = f'=SUM(C5:C{total_row-1})'
+        ws[f'D{total_row}'] = f'=SUM(D5:D{total_row-1})'
+        ws[f'E{total_row}'] = f'=SUM(E5:E{total_row-1})'
         ws[f'F{total_row}'] = f'=IF(B{total_row}>0, E{total_row}/B{total_row}*100, 0)'
         ws[f'F{total_row}'].number_format = '0.0'
         
@@ -6442,7 +6500,7 @@ class FlowTrackWidget:
         ws[f'A{embryo_start_row}'].font = Font(bold=True, size=11)
         embryo_start_row += 1
         
-        embryo_headers = ['Embryo ID', 'Egg Donor', 'Sperm Donor', 'Transfer Date', 'Stage', 'Implanted']
+        embryo_headers = ['Embryo ID', 'Egg Donor IPID', 'Egg Donor', 'Sperm Donor IPID', 'Sperm Donor', 'Transfer Date', 'Stage', 'Implanted']
         ws.append(embryo_headers)
         for cell in ws[embryo_start_row]:
             cell.font = Font(bold=True)
@@ -6453,7 +6511,9 @@ class FlowTrackWidget:
                     ws.append([
                         embryo.get('embryo_id', ''),
                         embryo.get('egg_donor_name', ''),
+                        self._animal_export_name(embryo.get('egg_donor_name', '')),
                         embryo.get('sperm_donor_name', ''),
+                        self._animal_export_name(embryo.get('sperm_donor_name', '')),
                         transfer_data.get('transfer_date', ''),
                         embryo.get('stage', ''),
                         'Yes' if embryo.get('implanted', False) else 'No'
@@ -6465,8 +6525,8 @@ class FlowTrackWidget:
         
         ws = wb.create_sheet("All Embryos")
         
-        headers = ['Embryo ID', 'Egg Donor', 'Sperm Donor', 'Surrogate', 'Transfer Date', 
-                   'Stage', 'Implanted', 'Frozen', 'Comment']
+        headers = ['Embryo ID', 'Egg Donor IPID', 'Egg Donor', 'Sperm Donor IPID', 'Sperm Donor',
+                   'Surrogate IPID', 'Surrogate', 'Transfer Date', 'Stage', 'Implanted', 'Frozen', 'Comment']
         ws.append(headers)
         
         for cell in ws[1]:
@@ -6479,8 +6539,11 @@ class FlowTrackWidget:
                 ws.append([
                     embryo.get('embryo_id', ''),
                     embryo.get('egg_donor_name', ''),
+                    self._animal_export_name(embryo.get('egg_donor_name', '')),
                     embryo.get('sperm_donor_name', ''),
+                    self._animal_export_name(embryo.get('sperm_donor_name', '')),
                     transfer_data.get('surrogate_name', '') if transfer_id != FREEZER_TRANSFER_ID else '',
+                    self._animal_export_name(transfer_data.get('surrogate_name', '')) if transfer_id != FREEZER_TRANSFER_ID else '',
                     transfer_data.get('transfer_date', '') if transfer_id != FREEZER_TRANSFER_ID else '',
                     embryo.get('stage', ''),
                     'Yes' if embryo.get('implanted', False) else 'No',
@@ -6506,7 +6569,7 @@ class FlowTrackWidget:
         
         ws = wb.create_sheet("Freezer")
         
-        headers = ['Embryo ID', 'Egg Donor', 'Sperm Donor', 'Freeze Date', 'Stage', 'Comment']
+        headers = ['Embryo ID', 'Egg Donor IPID', 'Egg Donor', 'Sperm Donor IPID', 'Sperm Donor', 'Freeze Date', 'Stage', 'Comment']
         ws.append(headers)
         
         for cell in ws[1]:
@@ -6521,7 +6584,9 @@ class FlowTrackWidget:
             ws.append([
                 embryo.get('embryo_id', ''),
                 embryo.get('egg_donor_name', ''),
+                self._animal_export_name(embryo.get('egg_donor_name', '')),
                 embryo.get('sperm_donor_name', ''),
+                self._animal_export_name(embryo.get('sperm_donor_name', '')),
                 embryo.get('freeze_date', ''),
                 embryo.get('stage', ''),
                 embryo.get('comment', '')
@@ -6577,7 +6642,7 @@ class FlowTrackWidget:
                         self.widget,
                         self.messages.get("flow_track.export.error.title", "Export Failed"),
                         self.messages.get("flow_track.export.pdf.error", 
-                                         f"PDF export failed:\n{error}")
+                                         f"PDF export failed:\n{e}")
                     )
         else:
             # Existing PDF export logic for main chart only

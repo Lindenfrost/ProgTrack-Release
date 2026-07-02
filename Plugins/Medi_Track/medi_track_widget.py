@@ -52,6 +52,8 @@ from PyQt6.QtWidgets import (
     QWidget,
     QApplication,
 )
+from Plugins.core.animal_identity import animal_base_name
+from Plugins.core.animal_status import status_summary_with_death_priority
 from Plugins.core.platform_helpers import open_local_path
 
 logger = logging.getLogger(__name__)
@@ -182,8 +184,16 @@ class MediStore:
         data = self.load()
         key = str(name).strip()
         if key not in data["animals"]:
-            data["animals"][key] = {"animal_id": "", "entries": [], "documents": []}
+            data["animals"][key] = {
+                "ipid": key,
+                "name": animal_base_name(key),
+                "animal_id": "",
+                "entries": [],
+                "documents": [],
+            }
         blk = data["animals"][key]
+        blk.setdefault("ipid", key)
+        blk.setdefault("name", animal_base_name(key))
         if not isinstance(blk.get("entries"), list):
             blk["entries"] = []
         if not isinstance(blk.get("documents"), list):
@@ -926,7 +936,8 @@ class MediTrackWidget(QWidget):
         mt = getattr(self.app, 'master_track', None)
         readonly_sig = bool(mt and getattr(mt, 'is_logged_in', False))
         _app_animals = getattr(self.app, 'animals', {}) or {}
-        _dname_entry = (_app_animals.get(self._current_animal) or {}).get('_base_name') or (self._current_animal or '')
+        _rec_entry = (_app_animals.get(self._current_animal) or {})
+        _dname_entry = animal_base_name(self._current_animal or '', _rec_entry)
         dlg = ManualEntryDialog(
             self, self.messages, self._current_animal,
             default_signature=sig,
@@ -1016,17 +1027,11 @@ class MediTrackWidget(QWidget):
         id_display = (f"{_id_part} <i>{_esc(_species_raw)}</i>"
                       if _species_raw else _id_part)
 
-        # Status
-        status_parts: List[str] = []
-        if rec.get('sick'):
-            status_parts.append(_msg(_messages, 'status.sick', 'Sick'))
-        if rec.get('abnormal_current'):
-            status_parts.append(_msg(_messages, 'status.abnormal', 'Abnormal'))
-        if rec.get('in_experiment'):
-            status_parts.append(_msg(_messages, 'status.in_experiment', 'In Experiment'))
-        _status_base = ', '.join(status_parts) if status_parts else _msg(_messages, 'status.normal', 'Normal')
-        _special_st = rec.get('special_status', '').strip()
-        status_display = _esc(_status_base + (' \u2014 ' + _special_st if _special_st else ''))
+        status_display = _esc(status_summary_with_death_priority(
+            rec,
+            _messages,
+            projects_track_active=True,
+        ))
 
         # Active diagnoses
         active_sick = self.store.get_active_issues(animal_name, 'sick')
@@ -1072,6 +1077,7 @@ class MediTrackWidget(QWidget):
         _em   = '\u2014'
         _h_history  = _msg(_messages, 'medi_track.section.history', 'Medical History')
         _h_name     = _msg(_messages, 'report.header.name', 'Name')
+        _h_ipid     = _msg(_messages, 'report.header.ipid', 'IPID')
         _h_id       = _msg(_messages, 'report.header.id', 'ID')
         _h_genotype = _msg(_messages, 'reports.header.genotype', 'Genotype')
         _h_project  = _msg(_messages, 'report.header.project', 'Project')
@@ -1084,7 +1090,8 @@ class MediTrackWidget(QWidget):
         _h_cond_col = _msg(_messages, 'medi_track.table.condition', 'Condition')
         _h_det_col  = _msg(_messages, 'medi_track.table.details', 'Details')
         _h_sig_col  = _msg(_messages, 'medi_track.table.signature', 'Signature')
-        _v_name     = _esc(rec.get('_base_name') or animal_name)
+        _v_name     = _esc(animal_base_name(animal_name, rec))
+        _v_ipid     = _esc(animal_name)
         _v_genotype = _esc(rec.get('genotype') or _dash)
         _proj_sev_fn = getattr(self.app, '_format_project_severity', None)
         _cur_proj = _proj_sev_fn(rec) if callable(_proj_sev_fn) else (rec.get('project') or '')
@@ -1128,6 +1135,7 @@ class MediTrackWidget(QWidget):
         <h2>{_h_history} {_em} {_v_name}</h2>
         <table class='it'>
           <tr><td class='lbl'>{_h_name}</td><td>{_v_name}</td></tr>
+          <tr><td class='lbl'>{_h_ipid}</td><td>{_v_ipid}</td></tr>
           <tr><td class='lbl'>{_h_id}</td><td>{id_display}</td></tr>
           <tr><td class='lbl'>{_h_genotype}</td><td>{_v_genotype}</td></tr>
           <tr><td class='lbl'>{_h_project}</td><td>{_v_project}</td></tr>
@@ -1344,17 +1352,11 @@ class MediTrackWidget(QWidget):
                 _proj_parts.append(f"{_fmr_lbl}: {', '.join(_fmr_items)}")
         self._lbl_project.setText('\n'.join(_proj_parts) if _proj_parts else '\u2013')
 
-        # Status (sick/abnormal/in_experiment/special)
-        parts = []
-        if rec.get("sick", False):
-            parts.append(_msg(self.messages, "status.sick", "Sick"))
-        if rec.get("abnormal_current", False):
-            parts.append(_msg(self.messages, "status.abnormal", "Abnormal"))
-        if rec.get("in_experiment", False):
-            parts.append(_msg(self.messages, "status.in_experiment", "In Experiment"))
-        _status_base = ", ".join(parts) if parts else _msg(self.messages, 'status.normal', 'Normal')
-        _special = str(rec.get("special_status", "") or "").strip()
-        self._lbl_status.setText(_status_base + (" \u2014 " + _special if _special else ""))
+        self._lbl_status.setText(status_summary_with_death_priority(
+            rec,
+            self.messages,
+            projects_track_active=True,
+        ))
 
         self._lbl_birth.setText(str(rec.get("geburtsdatum", rec.get("birth_date", "\u2013"))) or "\u2013")
         death = rec.get("sterbedatum") or rec.get("death_date") or ""
@@ -1612,7 +1614,7 @@ class MediTrackPlugin:
         readonly_sig = bool(mt and getattr(mt, 'is_logged_in', False))
         active = self.store.get_active_issues(animal_name, status_type)
         _app_animals = getattr(self.app, 'animals', {}) or {}
-        _dname = (_app_animals.get(animal_name) or {}).get('_base_name') or animal_name
+        _dname = animal_base_name(animal_name, _app_animals.get(animal_name) or {})
         dlg = StatusManagementDialog(
             parent, self.messages, animal_name, status_type, active,
             lang_code=self._lang,
@@ -1726,7 +1728,7 @@ class MediTrackPlugin:
         readonly_sig = bool(mt and getattr(mt, 'is_logged_in', False))
         active = self.store.get_active_issues(animal_name, "sick")
         _app_animals = getattr(self.app, 'animals', {}) or {}
-        _dname_sick = (_app_animals.get(animal_name) or {}).get('_base_name') or animal_name
+        _dname_sick = animal_base_name(animal_name, _app_animals.get(animal_name) or {})
         dlg = StatusManagementDialog(
             parent_widget, self.messages, animal_name, "sick", active,
             lang_code=self._lang,
@@ -1773,7 +1775,7 @@ class MediTrackPlugin:
         readonly_sig = bool(mt and getattr(mt, 'is_logged_in', False))
         active = self.store.get_active_issues(animal_name, "abnormal")
         _app_animals = getattr(self.app, 'animals', {}) or {}
-        _dname_abn = (_app_animals.get(animal_name) or {}).get('_base_name') or animal_name
+        _dname_abn = animal_base_name(animal_name, _app_animals.get(animal_name) or {})
         dlg = StatusManagementDialog(
             parent_widget, self.messages, animal_name, "abnormal", active,
             lang_code=self._lang,

@@ -147,8 +147,9 @@ PERM_FLOW_TRACK_EDIT = "flow_track.edit"
 PERM_FLOW_TRACK_CREATE = "flow_track.create"
 PERM_FLOW_TRACK_DELETE = "flow_track.delete"
 
-# Internal plugin control (not in public catalog)
+# Master Track plugin control
 PERM_TOGGLE_MASTER_TRACK = "toggle_master_track"
+INTERNAL_PERMISSIONS: Set[str] = {PERM_TOGGLE_MASTER_TRACK}
 
 # Permissions that ROLE_MASTER explicitly lacks (everything else is granted)
 _MASTER_EXCLUDED: Set[str] = {PERM_MASTER_CREATE_USERS, PERM_TOGGLE_MASTER_TRACK}
@@ -336,6 +337,7 @@ def resolve_effective_permissions(
         job_perms |= JOB_BUNDLES.get(job, set())
 
     effective = baseline | job_perms | set(granted)
+    effective -= INTERNAL_PERMISSIONS
     effective -= set(revoked)
     return effective
 
@@ -354,6 +356,8 @@ def can(
     """
     if role == ROLE_LORD:
         return True
+    if permission_name in INTERNAL_PERMISSIONS:
+        return False
     if role == ROLE_MASTER:
         return permission_name not in _MASTER_EXCLUDED
     effective = resolve_effective_permissions(role, jobs, granted, revoked)

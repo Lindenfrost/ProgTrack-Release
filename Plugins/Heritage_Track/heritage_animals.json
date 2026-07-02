@@ -2,9 +2,9 @@
   "version": "1.0.0",
   "updated_at": "2026-06-26T10:25:45.433604Z",
   "animals": {
-    "Eluréd": {
-      "egg_donor": "Nimloth",
-      "sperm_donor": "Dior",
+    "Eluréd | Callitrix jacchus | 20.01.2007": {
+      "egg_donor": "Nimloth | Callitrix jacchus | 06.09.2004",
+      "sperm_donor": "Dior | Callitrix jacchus | 09.05.2004",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/H-",
@@ -14,9 +14,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:18:53.474631Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Eluréd | Callitrix jacchus | 20.01.2007",
+      "name": "Eluréd",
+      "_base_name": "Eluréd",
+      "display_name": "Eluréd",
+      "birth_date": "20.01.2007"
     },
-    "Nimloth": {
+    "Nimloth | Callitrix jacchus | 06.09.2004": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -24,13 +29,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T09:53:21.906719Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Nimloth | Callitrix jacchus | 06.09.2004",
+      "name": "Nimloth",
+      "_base_name": "Nimloth",
+      "display_name": "Nimloth",
+      "birth_date": "06.09.2004"
     },
-    "Dior": {
+    "Dior | Callitrix jacchus | 09.05.2004": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -38,15 +48,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "male",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T09:53:21.906602Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Dior | Callitrix jacchus | 09.05.2004",
+      "name": "Dior",
+      "_base_name": "Dior",
+      "display_name": "Dior",
+      "birth_date": "09.05.2004"
     },
-    "Elurín": {
-      "egg_donor": "Nimloth",
-      "sperm_donor": "Dior",
+    "Elurín | Callitrix jacchus | 17.07.2007": {
+      "egg_donor": "Nimloth | Callitrix jacchus | 06.09.2004",
+      "sperm_donor": "Dior | Callitrix jacchus | 09.05.2004",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/H-",
@@ -56,11 +71,16 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:48:13.795055Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Elurín | Callitrix jacchus | 17.07.2007",
+      "name": "Elurín",
+      "_base_name": "Elurín",
+      "display_name": "Elurín",
+      "birth_date": "17.07.2007"
     },
-    "Arwen": {
-      "egg_donor": "Celebrían",
-      "sperm_donor": "Elrond",
+    "Arwen | Callitrix jacchus | 23.02.2015": {
+      "egg_donor": "Celebrían | Callitrix jacchus | 06.05.2007",
+      "sperm_donor": "Elrond | Callitrix jacchus | 04.02.2012",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/H-",
@@ -70,39 +90,54 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:52:00.754817Z",
-      "inbreeding_f": 0.00390625
+      "inbreeding_f": 0.00390625,
+      "ipid": "Arwen | Callitrix jacchus | 23.02.2015",
+      "name": "Arwen",
+      "_base_name": "Arwen",
+      "display_name": "Arwen",
+      "birth_date": "23.02.2015"
     },
-    "Celebrían": {
-      "egg_donor": "Galadriel",
-      "sperm_donor": "Celeborn",
+    "Celebrían | Callitrix jacchus | 06.05.2007": {
+      "egg_donor": "Galadriel | Callitrix jacchus | 17.06.2005",
+      "sperm_donor": "Celeborn | Callitrix jacchus | 29.08.2004",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:52:00.754817Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Celebrían | Callitrix jacchus | 06.05.2007",
+      "name": "Celebrían",
+      "_base_name": "Celebrían",
+      "display_name": "Celebrían",
+      "birth_date": "06.05.2007"
     },
-    "Elrond": {
-      "egg_donor": "Elwing",
-      "sperm_donor": "Eärendil",
+    "Elrond | Callitrix jacchus | 04.02.2012": {
+      "egg_donor": "Elwing | Callitrix jacchus | 08.01.2008",
+      "sperm_donor": "Eärendil | Callitrix jacchus | 14.02.2010",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
       "node_fill_color": "",
       "sex": "male",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:52:00.754817Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Elrond | Callitrix jacchus | 04.02.2012",
+      "name": "Elrond",
+      "_base_name": "Elrond",
+      "display_name": "Elrond",
+      "birth_date": "04.02.2012"
     },
-    "Isildur": {
-      "egg_donor": "Madison",
-      "sperm_donor": "Elros",
+    "Isildur | Callitrix jacchus | 23.02.2015": {
+      "egg_donor": "Madison | Callitrix jacchus | 31.12.2012",
+      "sperm_donor": "Elros | Callitrix jacchus | 24.07.2012",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/H-",
@@ -112,9 +147,14 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-05-08T13:13:02.045846Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Isildur | Callitrix jacchus | 23.02.2015",
+      "name": "Isildur",
+      "_base_name": "Isildur",
+      "display_name": "Isildur",
+      "birth_date": "23.02.2015"
     },
-    "Madison": {
+    "Madison | Callitrix jacchus | 31.12.2012": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -122,13 +162,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T09:53:21.907027Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Madison | Callitrix jacchus | 31.12.2012",
+      "name": "Madison",
+      "_base_name": "Madison",
+      "display_name": "Madison",
+      "birth_date": "31.12.2012"
     },
-    "Elros": {
+    "Elros | Callitrix jacchus | 24.07.2012": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -136,15 +181,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "male",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T09:53:21.906920Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Elros | Callitrix jacchus | 24.07.2012",
+      "name": "Elros",
+      "_base_name": "Elros",
+      "display_name": "Elros",
+      "birth_date": "24.07.2012"
     },
-    "Aragorn II": {
-      "egg_donor": "Taylor",
-      "sperm_donor": "Aragorn I",
+    "Aragorn II | Callitrix jacchus | 11.02.2021": {
+      "egg_donor": "Taylor | Callitrix jacchus | 14.06.2018",
+      "sperm_donor": "Aragorn I | Callitrix jacchus | 07.02.2018",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/H-",
@@ -154,9 +204,14 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:52:12.182404Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Aragorn II | Callitrix jacchus | 11.02.2021",
+      "name": "Aragorn II",
+      "_base_name": "Aragorn II",
+      "display_name": "Aragorn II",
+      "birth_date": "11.02.2021"
     },
-    "Taylor": {
+    "Taylor | Callitrix jacchus | 14.06.2018": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -164,29 +219,39 @@
       "genotype": "H-/H-",
       "node_fill_color": "#ffaaff",
       "sex": "female",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-05-08T13:13:02.045846Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Taylor | Callitrix jacchus | 14.06.2018",
+      "name": "Taylor",
+      "_base_name": "Taylor",
+      "display_name": "Taylor",
+      "birth_date": "14.06.2018"
     },
-    "Aragorn I": {
-      "egg_donor": "Jessica",
-      "sperm_donor": "Isildur",
+    "Aragorn I | Callitrix jacchus | 07.02.2018": {
+      "egg_donor": "Jessica | Callitrix jacchus | 06.07.2015",
+      "sperm_donor": "Isildur | Callitrix jacchus | 23.02.2015",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/H-",
       "node_fill_color": "#ffe4f2",
       "sex": "male",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-05-08T13:13:02.045846Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Aragorn I | Callitrix jacchus | 07.02.2018",
+      "name": "Aragorn I",
+      "_base_name": "Aragorn I",
+      "display_name": "Aragorn I",
+      "birth_date": "07.02.2018"
     },
-    "Eldarion": {
-      "egg_donor": "Arwen",
-      "sperm_donor": "Aragorn II",
+    "Eldarion | Callitrix jacchus | 01.03.2026": {
+      "egg_donor": "Arwen | Callitrix jacchus | 23.02.2015",
+      "sperm_donor": "Aragorn II | Callitrix jacchus | 11.02.2021",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -196,9 +261,14 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:52:12.182404Z",
-      "inbreeding_f": 0.015869140625
+      "inbreeding_f": 0.015869140625,
+      "ipid": "Eldarion | Callitrix jacchus | 01.03.2026",
+      "name": "Eldarion",
+      "_base_name": "Eldarion",
+      "display_name": "Eldarion",
+      "birth_date": "01.03.2026"
     },
-    "Oropher": {
+    "Oropher | Callitrix jacchus | 25.05.2015": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -210,9 +280,14 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:49:37.778811Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Oropher | Callitrix jacchus | 25.05.2015",
+      "name": "Oropher",
+      "_base_name": "Oropher",
+      "display_name": "Oropher",
+      "birth_date": "25.05.2015"
     },
-    "Ekaterina": {
+    "Ekaterina | Callitrix jacchus | 02.04.2016": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -224,13 +299,18 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:49:08.363395Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Ekaterina | Callitrix jacchus | 02.04.2016",
+      "name": "Ekaterina",
+      "_base_name": "Ekaterina",
+      "display_name": "Ekaterina",
+      "birth_date": "02.04.2016"
     },
-    "Thranduil": {
-      "egg_donor": "Ekaterina",
-      "sperm_donor": "Oropher",
-      "surrogate_mother": "Olga",
-      "surrogate_father": "Anton",
+    "Thranduil | Callitrix jacchus | 11.02.2021": {
+      "egg_donor": "Ekaterina | Callitrix jacchus | 02.04.2016",
+      "sperm_donor": "Oropher | Callitrix jacchus | 25.05.2015",
+      "surrogate_mother": "Olga | Callitrix jacchus | 20.06.2015",
+      "surrogate_father": "Anton | Callitrix jacchus | 25.05.2015",
       "genotype": "OTOF-/OTOF-",
       "node_fill_color": "#8bf314",
       "sex": "male",
@@ -238,9 +318,14 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:49:48.865215Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Thranduil | Callitrix jacchus | 11.02.2021",
+      "name": "Thranduil",
+      "_base_name": "Thranduil",
+      "display_name": "Thranduil",
+      "birth_date": "11.02.2021"
     },
-    "Olga": {
+    "Olga | Callitrix jacchus | 20.06.2015": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -252,9 +337,14 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:49:32.564092Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Olga | Callitrix jacchus | 20.06.2015",
+      "name": "Olga",
+      "_base_name": "Olga",
+      "display_name": "Olga",
+      "birth_date": "20.06.2015"
     },
-    "Anton": {
+    "Anton | Callitrix jacchus | 25.05.2015": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -266,9 +356,14 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-05-08T13:27:00.296184Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Anton | Callitrix jacchus | 25.05.2015",
+      "name": "Anton",
+      "_base_name": "Anton",
+      "display_name": "Anton",
+      "birth_date": "25.05.2015"
     },
-    "Svetlana": {
+    "Svetlana | Callitrix jacchus | 03.05.2021": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -280,9 +375,14 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:49:43.842824Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Svetlana | Callitrix jacchus | 03.05.2021",
+      "name": "Svetlana",
+      "_base_name": "Svetlana",
+      "display_name": "Svetlana",
+      "birth_date": "03.05.2021"
     },
-    "Konstantin": {
+    "Konstantin | Callitrix jacchus | 18.08.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -294,13 +394,18 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:49:20.914463Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Konstantin | Callitrix jacchus | 18.08.2020",
+      "name": "Konstantin",
+      "_base_name": "Konstantin",
+      "display_name": "Konstantin",
+      "birth_date": "18.08.2020"
     },
-    "Legolas": {
-      "egg_donor": "Svetlana",
-      "sperm_donor": "Thranduil",
-      "surrogate_mother": "Olga",
-      "surrogate_father": "Anton",
+    "Legolas | Callitrix jacchus | 04.03.2026": {
+      "egg_donor": "Svetlana | Callitrix jacchus | 03.05.2021",
+      "sperm_donor": "Thranduil | Callitrix jacchus | 11.02.2021",
+      "surrogate_mother": "Olga | Callitrix jacchus | 20.06.2015",
+      "surrogate_father": "Anton | Callitrix jacchus | 25.05.2015",
       "genotype": "OTOF-/WT",
       "node_fill_color": "#d0ffd0",
       "sex": "male",
@@ -308,11 +413,16 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:49:26.618787Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Legolas | Callitrix jacchus | 04.03.2026",
+      "name": "Legolas",
+      "_base_name": "Legolas",
+      "display_name": "Legolas",
+      "birth_date": "04.03.2026"
     },
-    "Elladan": {
-      "egg_donor": "Celebrían",
-      "sperm_donor": "Elrond",
+    "Elladan | Callitrix jacchus | 23.07.2015": {
+      "egg_donor": "Celebrían | Callitrix jacchus | 06.05.2007",
+      "sperm_donor": "Elrond | Callitrix jacchus | 04.02.2012",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/H-",
@@ -322,11 +432,16 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:52:00.754817Z",
-      "inbreeding_f": 0.00390625
+      "inbreeding_f": 0.00390625,
+      "ipid": "Elladan | Callitrix jacchus | 23.07.2015",
+      "name": "Elladan",
+      "_base_name": "Elladan",
+      "display_name": "Elladan",
+      "birth_date": "23.07.2015"
     },
-    "Elrohir": {
-      "egg_donor": "Celebrían",
-      "sperm_donor": "Elrond",
+    "Elrohir | Callitrix jacchus | 21.01.2016": {
+      "egg_donor": "Celebrían | Callitrix jacchus | 06.05.2007",
+      "sperm_donor": "Elrond | Callitrix jacchus | 04.02.2012",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/H-",
@@ -336,9 +451,14 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:52:00.754817Z",
-      "inbreeding_f": 0.00390625
+      "inbreeding_f": 0.00390625,
+      "ipid": "Elrohir | Callitrix jacchus | 21.01.2016",
+      "name": "Elrohir",
+      "_base_name": "Elrohir",
+      "display_name": "Elrohir",
+      "birth_date": "21.01.2016"
     },
-    "Jessica": {
+    "Jessica | Callitrix jacchus | 06.07.2015": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -350,11 +470,16 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-05-08T13:13:02.045846Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Jessica | Callitrix jacchus | 06.07.2015",
+      "name": "Jessica",
+      "_base_name": "Jessica",
+      "display_name": "Jessica",
+      "birth_date": "06.07.2015"
     },
-    "Gimli": {
-      "egg_donor": "Simone",
-      "sperm_donor": "Glóin II",
+    "Gimli | Macaca mulatta | 04.03.2026": {
+      "egg_donor": "Simone | Macaca mulatta | 04.03.2023",
+      "sperm_donor": "Glóin II | Macaca mulatta | 04.03.2023",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -364,9 +489,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Gimli | Macaca mulatta | 04.03.2026",
+      "name": "Gimli",
+      "_base_name": "Gimli",
+      "display_name": "Gimli",
+      "birth_date": "04.03.2026"
     },
-    "Simone": {
+    "Simone | Macaca mulatta | 04.03.2023": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -374,13 +504,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Macaca mulatta",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Simone | Macaca mulatta | 04.03.2023",
+      "name": "Simone",
+      "_base_name": "Simone",
+      "display_name": "Simone",
+      "birth_date": "04.03.2023"
     },
-    "Glóin II": {
+    "Glóin II | Macaca mulatta | 04.03.2023": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -388,15 +523,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "male",
-      "species": "",
+      "species": "Macaca mulatta",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-16T18:06:16.206471Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Glóin II | Macaca mulatta | 04.03.2023",
+      "name": "Glóin II",
+      "_base_name": "Glóin II",
+      "display_name": "Glóin II",
+      "birth_date": "04.03.2023"
     },
-    "Thrór": {
-      "egg_donor": "Irmgard II",
-      "sperm_donor": "Dáin I",
+    "Thrór | Macaca mulatta | 04.03.2017": {
+      "egg_donor": "Irmgard II | Macaca mulatta | 04.03.2014",
+      "sperm_donor": "Dáin I | Macaca mulatta | 04.03.2014",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -406,9 +546,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Thrór | Macaca mulatta | 04.03.2017",
+      "name": "Thrór",
+      "_base_name": "Thrór",
+      "display_name": "Thrór",
+      "birth_date": "04.03.2017"
     },
-    "Irmgard II": {
+    "Irmgard II | Macaca mulatta | 04.03.2014": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -416,13 +561,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Macaca mulatta",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:46:19.269235Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Irmgard II | Macaca mulatta | 04.03.2014",
+      "name": "Irmgard II",
+      "_base_name": "Irmgard II",
+      "display_name": "Irmgard II",
+      "birth_date": "04.03.2014"
     },
-    "Dáin I": {
+    "Dáin I | Macaca mulatta | 04.03.2014": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -430,15 +580,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "male",
-      "species": "",
+      "species": "Macaca mulatta",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:46:19.269235Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Dáin I | Macaca mulatta | 04.03.2014",
+      "name": "Dáin I",
+      "_base_name": "Dáin I",
+      "display_name": "Dáin I",
+      "birth_date": "04.03.2014"
     },
-    "Frór": {
-      "egg_donor": "Irmgard II",
-      "sperm_donor": "Dáin I",
+    "Frór | Macaca mulatta | 04.03.2017": {
+      "egg_donor": "Irmgard II | Macaca mulatta | 04.03.2014",
+      "sperm_donor": "Dáin I | Macaca mulatta | 04.03.2014",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -448,11 +603,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Frór | Macaca mulatta | 04.03.2017",
+      "name": "Frór",
+      "_base_name": "Frór",
+      "display_name": "Frór",
+      "birth_date": "04.03.2017"
     },
-    "Grór": {
-      "egg_donor": "Irmgard II",
-      "sperm_donor": "Dáin I",
+    "Grór | Macaca mulatta | 04.03.2017": {
+      "egg_donor": "Irmgard II | Macaca mulatta | 04.03.2014",
+      "sperm_donor": "Dáin I | Macaca mulatta | 04.03.2014",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -462,9 +622,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Grór | Macaca mulatta | 04.03.2017",
+      "name": "Grór",
+      "_base_name": "Grór",
+      "display_name": "Grór",
+      "birth_date": "04.03.2017"
     },
-    "Gerda": {
+    "Gerda | Macaca mulatta | 04.03.2017": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -476,9 +641,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Gerda | Macaca mulatta | 04.03.2017",
+      "name": "Gerda",
+      "_base_name": "Gerda",
+      "display_name": "Gerda",
+      "birth_date": "04.03.2017"
     },
-    "Gudrun II": {
+    "Gudrun II | Macaca mulatta | 04.03.2017": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -490,11 +660,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Gudrun II | Macaca mulatta | 04.03.2017",
+      "name": "Gudrun II",
+      "_base_name": "Gudrun II",
+      "display_name": "Gudrun II",
+      "birth_date": "04.03.2017"
     },
-    "Thráin II": {
-      "egg_donor": "Gerda",
-      "sperm_donor": "Thrór",
+    "Thráin II | Macaca mulatta | 04.03.2020": {
+      "egg_donor": "Gerda | Macaca mulatta | 04.03.2017",
+      "sperm_donor": "Thrór | Macaca mulatta | 04.03.2017",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -504,9 +679,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Thráin II | Macaca mulatta | 04.03.2020",
+      "name": "Thráin II",
+      "_base_name": "Thráin II",
+      "display_name": "Thráin II",
+      "birth_date": "04.03.2020"
     },
-    "Hilda": {
+    "Hilda | Macaca mulatta | 04.03.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -518,11 +698,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Hilda | Macaca mulatta | 04.03.2020",
+      "name": "Hilda",
+      "_base_name": "Hilda",
+      "display_name": "Hilda",
+      "birth_date": "04.03.2020"
     },
-    "Thorin II": {
-      "egg_donor": "Hilda",
-      "sperm_donor": "Thráin II",
+    "Thorin II | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Hilda | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Thráin II | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -532,11 +717,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Thorin II | Macaca mulatta | 04.03.2023",
+      "name": "Thorin II",
+      "_base_name": "Thorin II",
+      "display_name": "Thorin II",
+      "birth_date": "04.03.2023"
     },
-    "Frerin": {
-      "egg_donor": "Hilda",
-      "sperm_donor": "Thráin II",
+    "Frerin | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Hilda | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Thráin II | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -546,11 +736,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Frerin | Macaca mulatta | 04.03.2023",
+      "name": "Frerin",
+      "_base_name": "Frerin",
+      "display_name": "Frerin",
+      "birth_date": "04.03.2023"
     },
-    "Dís": {
-      "egg_donor": "Hilda",
-      "sperm_donor": "Thráin II",
+    "Dís | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Hilda | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Thráin II | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -560,9 +755,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Dís | Macaca mulatta | 04.03.2023",
+      "name": "Dís",
+      "_base_name": "Dís",
+      "display_name": "Dís",
+      "birth_date": "04.03.2023"
     },
-    "Manfred": {
+    "Manfred | Macaca mulatta | 04.03.2023": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -574,11 +774,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:40.301664Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Manfred | Macaca mulatta | 04.03.2023",
+      "name": "Manfred",
+      "_base_name": "Manfred",
+      "display_name": "Manfred",
+      "birth_date": "04.03.2023"
     },
-    "Fíli": {
-      "egg_donor": "Dís",
-      "sperm_donor": "Manfred",
+    "Fíli | Macaca mulatta | 04.03.2026": {
+      "egg_donor": "Dís | Macaca mulatta | 04.03.2023",
+      "sperm_donor": "Manfred | Macaca mulatta | 04.03.2023",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -588,11 +793,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:40.301664Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Fíli | Macaca mulatta | 04.03.2026",
+      "name": "Fíli",
+      "_base_name": "Fíli",
+      "display_name": "Fíli",
+      "birth_date": "04.03.2026"
     },
-    "Kíli": {
-      "egg_donor": "Dís",
-      "sperm_donor": "Manfred",
+    "Kíli | Macaca mulatta | 04.03.2026": {
+      "egg_donor": "Dís | Macaca mulatta | 04.03.2023",
+      "sperm_donor": "Manfred | Macaca mulatta | 04.03.2023",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -602,11 +812,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:40.301664Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Kíli | Macaca mulatta | 04.03.2026",
+      "name": "Kíli",
+      "_base_name": "Kíli",
+      "display_name": "Kíli",
+      "birth_date": "04.03.2026"
     },
-    "Náin III": {
-      "egg_donor": "Gudrun II",
-      "sperm_donor": "Grór",
+    "Náin III | Macaca mulatta | 04.03.2020": {
+      "egg_donor": "Gudrun II | Macaca mulatta | 04.03.2017",
+      "sperm_donor": "Grór | Macaca mulatta | 04.03.2017",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -616,11 +831,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Náin III | Macaca mulatta | 04.03.2020",
+      "name": "Náin III",
+      "_base_name": "Náin III",
+      "display_name": "Náin III",
+      "birth_date": "04.03.2020"
     },
-    "Dáin II": {
-      "egg_donor": "Beate I",
-      "sperm_donor": "Náin III",
+    "Dáin II | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Beate I | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Náin III | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -630,9 +850,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Dáin II | Macaca mulatta | 04.03.2023",
+      "name": "Dáin II",
+      "_base_name": "Dáin II",
+      "display_name": "Dáin II",
+      "birth_date": "04.03.2023"
     },
-    "Beate I": {
+    "Beate I | Macaca mulatta | 04.03.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -640,13 +865,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Macaca mulatta",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Beate I | Macaca mulatta | 04.03.2020",
+      "name": "Beate I",
+      "_base_name": "Beate I",
+      "display_name": "Beate I",
+      "birth_date": "04.03.2020"
     },
-    "Dorothea": {
+    "Dorothea | Macaca mulatta | 04.03.2023": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -658,11 +888,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Dorothea | Macaca mulatta | 04.03.2023",
+      "name": "Dorothea",
+      "_base_name": "Dorothea",
+      "display_name": "Dorothea",
+      "birth_date": "04.03.2023"
     },
-    "Thorin III": {
-      "egg_donor": "Dorothea",
-      "sperm_donor": "Dáin II",
+    "Thorin III | Macaca mulatta | 04.03.2026": {
+      "egg_donor": "Dorothea | Macaca mulatta | 04.03.2023",
+      "sperm_donor": "Dáin II | Macaca mulatta | 04.03.2023",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -672,9 +907,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Thorin III | Macaca mulatta | 04.03.2026",
+      "name": "Thorin III",
+      "_base_name": "Thorin III",
+      "display_name": "Thorin III",
+      "birth_date": "04.03.2026"
     },
-    "Claudia": {
+    "Claudia | Macaca mulatta | 04.03.2026": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -686,11 +926,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Claudia | Macaca mulatta | 04.03.2026",
+      "name": "Claudia",
+      "_base_name": "Claudia",
+      "display_name": "Claudia",
+      "birth_date": "04.03.2026"
     },
-    "Durin VII": {
-      "egg_donor": "Claudia",
-      "sperm_donor": "Thorin III",
+    "Durin VII | Macaca mulatta | 04.03.2029": {
+      "egg_donor": "Claudia | Macaca mulatta | 04.03.2026",
+      "sperm_donor": "Thorin III | Macaca mulatta | 04.03.2026",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -700,11 +945,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Durin VII | Macaca mulatta | 04.03.2029",
+      "name": "Durin VII",
+      "_base_name": "Durin VII",
+      "display_name": "Durin VII",
+      "birth_date": "04.03.2029"
     },
-    "Farin": {
-      "egg_donor": "Elke",
-      "sperm_donor": "Borin",
+    "Farin | Macaca mulatta | 04.03.2017": {
+      "egg_donor": "Elke | Macaca mulatta | 04.03.2014",
+      "sperm_donor": "Borin | Macaca mulatta | 04.03.2014",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -714,9 +964,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:16.206471Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Farin | Macaca mulatta | 04.03.2017",
+      "name": "Farin",
+      "_base_name": "Farin",
+      "display_name": "Farin",
+      "birth_date": "04.03.2017"
     },
-    "Elke": {
+    "Elke | Macaca mulatta | 04.03.2014": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -724,13 +979,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Macaca mulatta",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-05-29T09:11:16.846218Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Elke | Macaca mulatta | 04.03.2014",
+      "name": "Elke",
+      "_base_name": "Elke",
+      "display_name": "Elke",
+      "birth_date": "04.03.2014"
     },
-    "Borin": {
+    "Borin | Macaca mulatta | 04.03.2014": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -738,13 +998,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "male",
-      "species": "",
+      "species": "Macaca mulatta",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-05-29T09:11:16.846218Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Borin | Macaca mulatta | 04.03.2014",
+      "name": "Borin",
+      "_base_name": "Borin",
+      "display_name": "Borin",
+      "birth_date": "04.03.2014"
     },
-    "Martina": {
+    "Martina | Macaca mulatta | 04.03.2017": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -756,11 +1021,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:16.206471Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Martina | Macaca mulatta | 04.03.2017",
+      "name": "Martina",
+      "_base_name": "Martina",
+      "display_name": "Martina",
+      "birth_date": "04.03.2017"
     },
-    "Fundin": {
-      "egg_donor": "Martina",
-      "sperm_donor": "Farin",
+    "Fundin | Macaca mulatta | 04.03.2020": {
+      "egg_donor": "Martina | Macaca mulatta | 04.03.2017",
+      "sperm_donor": "Farin | Macaca mulatta | 04.03.2017",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -770,11 +1040,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Fundin | Macaca mulatta | 04.03.2020",
+      "name": "Fundin",
+      "_base_name": "Fundin",
+      "display_name": "Fundin",
+      "birth_date": "04.03.2020"
     },
-    "Gróin": {
-      "egg_donor": "Martina",
-      "sperm_donor": "Farin",
+    "Gróin | Macaca mulatta | 04.03.2020": {
+      "egg_donor": "Martina | Macaca mulatta | 04.03.2017",
+      "sperm_donor": "Farin | Macaca mulatta | 04.03.2017",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -784,9 +1059,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:16.206471Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Gróin | Macaca mulatta | 04.03.2020",
+      "name": "Gróin",
+      "_base_name": "Gróin",
+      "display_name": "Gróin",
+      "birth_date": "04.03.2020"
     },
-    "Marianne": {
+    "Marianne | Macaca mulatta | 04.03.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -798,9 +1078,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Marianne | Macaca mulatta | 04.03.2020",
+      "name": "Marianne",
+      "_base_name": "Marianne",
+      "display_name": "Marianne",
+      "birth_date": "04.03.2020"
     },
-    "Petra": {
+    "Petra | Macaca mulatta | 04.03.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -812,11 +1097,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:16.206471Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Petra | Macaca mulatta | 04.03.2020",
+      "name": "Petra",
+      "_base_name": "Petra",
+      "display_name": "Petra",
+      "birth_date": "04.03.2020"
     },
-    "Balin": {
-      "egg_donor": "Marianne",
-      "sperm_donor": "Fundin",
+    "Balin | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Marianne | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Fundin | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -826,11 +1116,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Balin | Macaca mulatta | 04.03.2023",
+      "name": "Balin",
+      "_base_name": "Balin",
+      "display_name": "Balin",
+      "birth_date": "04.03.2023"
     },
-    "Dwalin": {
-      "egg_donor": "Marianne",
-      "sperm_donor": "Fundin",
+    "Dwalin | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Marianne | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Fundin | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -840,11 +1135,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Dwalin | Macaca mulatta | 04.03.2023",
+      "name": "Dwalin",
+      "_base_name": "Dwalin",
+      "display_name": "Dwalin",
+      "birth_date": "04.03.2023"
     },
-    "Óin II": {
-      "egg_donor": "Petra",
-      "sperm_donor": "Gróin",
+    "Óin II | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Petra | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Gróin | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -854,11 +1154,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:16.206471Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Óin II | Macaca mulatta | 04.03.2023",
+      "name": "Óin II",
+      "_base_name": "Óin II",
+      "display_name": "Óin II",
+      "birth_date": "04.03.2023"
     },
-    "Konrad II": {
-      "egg_donor": "Jutta",
-      "sperm_donor": "Dieter",
+    "Konrad II | Macaca mulatta | 04.03.2017": {
+      "egg_donor": "Jutta | Macaca mulatta | 04.03.2014",
+      "sperm_donor": "Dieter | Macaca mulatta | 04.03.2014",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -868,9 +1173,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Konrad II | Macaca mulatta | 04.03.2017",
+      "name": "Konrad II",
+      "_base_name": "Konrad II",
+      "display_name": "Konrad II",
+      "birth_date": "04.03.2017"
     },
-    "Jutta": {
+    "Jutta | Macaca mulatta | 04.03.2014": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -878,13 +1188,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Macaca mulatta",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-17T11:06:27.326096Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Jutta | Macaca mulatta | 04.03.2014",
+      "name": "Jutta",
+      "_base_name": "Jutta",
+      "display_name": "Jutta",
+      "birth_date": "04.03.2014"
     },
-    "Dieter": {
+    "Dieter | Macaca mulatta | 04.03.2014": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -892,13 +1207,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "male",
-      "species": "",
+      "species": "Macaca mulatta",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-20T08:46:19.269235Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Dieter | Macaca mulatta | 04.03.2014",
+      "name": "Dieter",
+      "_base_name": "Dieter",
+      "display_name": "Dieter",
+      "birth_date": "04.03.2014"
     },
-    "Heike": {
+    "Heike | Macaca mulatta | 04.03.2017": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -910,11 +1230,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Heike | Macaca mulatta | 04.03.2017",
+      "name": "Heike",
+      "_base_name": "Heike",
+      "display_name": "Heike",
+      "birth_date": "04.03.2017"
     },
-    "Karl": {
-      "egg_donor": "Heike",
-      "sperm_donor": "Konrad II",
+    "Karl | Macaca mulatta | 04.03.2020": {
+      "egg_donor": "Heike | Macaca mulatta | 04.03.2017",
+      "sperm_donor": "Konrad II | Macaca mulatta | 04.03.2017",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -924,11 +1249,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Karl | Macaca mulatta | 04.03.2020",
+      "name": "Karl",
+      "_base_name": "Karl",
+      "display_name": "Karl",
+      "birth_date": "04.03.2020"
     },
-    "Wilhelm": {
-      "egg_donor": "Heike",
-      "sperm_donor": "Konrad II",
+    "Wilhelm | Macaca mulatta | 04.03.2020": {
+      "egg_donor": "Heike | Macaca mulatta | 04.03.2017",
+      "sperm_donor": "Konrad II | Macaca mulatta | 04.03.2017",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -938,9 +1268,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Wilhelm | Macaca mulatta | 04.03.2020",
+      "name": "Wilhelm",
+      "_base_name": "Wilhelm",
+      "display_name": "Wilhelm",
+      "birth_date": "04.03.2020"
     },
-    "Rita": {
+    "Rita | Macaca mulatta | 04.03.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -952,9 +1287,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Rita | Macaca mulatta | 04.03.2020",
+      "name": "Rita",
+      "_base_name": "Rita",
+      "display_name": "Rita",
+      "birth_date": "04.03.2020"
     },
-    "Erika II": {
+    "Erika II | Macaca mulatta | 04.03.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -966,11 +1306,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Erika II | Macaca mulatta | 04.03.2020",
+      "name": "Erika II",
+      "_base_name": "Erika II",
+      "display_name": "Erika II",
+      "birth_date": "04.03.2020"
     },
-    "Dori": {
-      "egg_donor": "Rita",
-      "sperm_donor": "Karl",
+    "Dori | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Rita | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Karl | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -980,11 +1325,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Dori | Macaca mulatta | 04.03.2023",
+      "name": "Dori",
+      "_base_name": "Dori",
+      "display_name": "Dori",
+      "birth_date": "04.03.2023"
     },
-    "Nori": {
-      "egg_donor": "Rita",
-      "sperm_donor": "Karl",
+    "Nori | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Rita | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Karl | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -994,11 +1344,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Nori | Macaca mulatta | 04.03.2023",
+      "name": "Nori",
+      "_base_name": "Nori",
+      "display_name": "Nori",
+      "birth_date": "04.03.2023"
     },
-    "Ori": {
-      "egg_donor": "Erika II",
-      "sperm_donor": "Wilhelm",
+    "Ori | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Erika II | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Wilhelm | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1008,9 +1363,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Ori | Macaca mulatta | 04.03.2023",
+      "name": "Ori",
+      "_base_name": "Ori",
+      "display_name": "Ori",
+      "birth_date": "04.03.2023"
     },
-    "Albrecht": {
+    "Albrecht | Macaca mulatta | 04.03.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1022,9 +1382,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:09.891420Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Albrecht | Macaca mulatta | 04.03.2020",
+      "name": "Albrecht",
+      "_base_name": "Albrecht",
+      "display_name": "Albrecht",
+      "birth_date": "04.03.2020"
     },
-    "Kunigunde": {
+    "Kunigunde | Macaca mulatta | 04.03.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1036,11 +1401,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:09.891420Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Kunigunde | Macaca mulatta | 04.03.2020",
+      "name": "Kunigunde",
+      "_base_name": "Kunigunde",
+      "display_name": "Kunigunde",
+      "birth_date": "04.03.2020"
     },
-    "Joachim": {
-      "egg_donor": "Kunigunde",
-      "sperm_donor": "Albrecht",
+    "Joachim | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Kunigunde | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Albrecht | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1050,11 +1420,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:48.670680Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Joachim | Macaca mulatta | 04.03.2023",
+      "name": "Joachim",
+      "_base_name": "Joachim",
+      "display_name": "Joachim",
+      "birth_date": "04.03.2023"
     },
-    "Rudolf": {
-      "egg_donor": "Kunigunde",
-      "sperm_donor": "Albrecht",
+    "Rudolf | Macaca mulatta | 04.03.2023": {
+      "egg_donor": "Kunigunde | Macaca mulatta | 04.03.2020",
+      "sperm_donor": "Albrecht | Macaca mulatta | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1064,9 +1439,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:09.891420Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Rudolf | Macaca mulatta | 04.03.2023",
+      "name": "Rudolf",
+      "_base_name": "Rudolf",
+      "display_name": "Rudolf",
+      "birth_date": "04.03.2023"
     },
-    "Beate II": {
+    "Beate II | Macaca mulatta | 04.03.2023": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1078,9 +1458,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:48.670680Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Beate II | Macaca mulatta | 04.03.2023",
+      "name": "Beate II",
+      "_base_name": "Beate II",
+      "display_name": "Beate II",
+      "birth_date": "04.03.2023"
     },
-    "Margarete": {
+    "Margarete | Macaca mulatta | 04.03.2023": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1088,43 +1473,39 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "Macaca mulatta",
-      "heritage_only": false,
-      "source": "core",
-      "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
-    },
-    "Bifur": {
-      "egg_donor": "Beate II",
-      "sperm_donor": "Joachim",
-      "surrogate_mother": "",
-      "surrogate_father": "",
-      "genotype": "",
-      "node_fill_color": "",
-      "sex": "male",
-      "species": "Macaca mulatta",
-      "heritage_only": false,
-      "source": "core",
-      "updated_at": "2026-04-16T11:47:48.670680Z",
-      "inbreeding_f": 0.0
-    },
-    "Bofur": {
-      "egg_donor": "Margarete",
-      "sperm_donor": "Rudolf",
-      "surrogate_mother": "",
-      "surrogate_father": "",
-      "genotype": "",
-      "node_fill_color": "",
-      "sex": "male",
       "species": "Macaca mulatta",
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Margarete | Macaca mulatta | 04.03.2023",
+      "name": "Margarete",
+      "_base_name": "Margarete",
+      "display_name": "Margarete",
+      "birth_date": "04.03.2023"
     },
-    "Bombur": {
-      "egg_donor": "Margarete",
-      "sperm_donor": "Rudolf",
+    "Bifur | Macaca mulatta | 04.03.2026": {
+      "egg_donor": "Beate II | Macaca mulatta | 04.03.2023",
+      "sperm_donor": "Joachim | Macaca mulatta | 04.03.2023",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "male",
+      "species": "Macaca mulatta",
+      "heritage_only": false,
+      "source": "core",
+      "updated_at": "2026-04-16T11:47:48.670680Z",
+      "inbreeding_f": 0.0,
+      "ipid": "Bifur | Macaca mulatta | 04.03.2026",
+      "name": "Bifur",
+      "_base_name": "Bifur",
+      "display_name": "Bifur",
+      "birth_date": "04.03.2026"
+    },
+    "Bofur | Macaca mulatta | 04.03.2026": {
+      "egg_donor": "Margarete | Macaca mulatta | 04.03.2023",
+      "sperm_donor": "Rudolf | Macaca mulatta | 04.03.2023",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1134,9 +1515,33 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:17.046772Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Bofur | Macaca mulatta | 04.03.2026",
+      "name": "Bofur",
+      "_base_name": "Bofur",
+      "display_name": "Bofur",
+      "birth_date": "04.03.2026"
     },
-    "Boldog": {
+    "Bombur | Macaca mulatta | 04.03.2026": {
+      "egg_donor": "Margarete | Macaca mulatta | 04.03.2023",
+      "sperm_donor": "Rudolf | Macaca mulatta | 04.03.2023",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "male",
+      "species": "Macaca mulatta",
+      "heritage_only": false,
+      "source": "core",
+      "updated_at": "2026-04-16T18:06:17.046772Z",
+      "inbreeding_f": 0.0,
+      "ipid": "Bombur | Macaca mulatta | 04.03.2026",
+      "name": "Bombur",
+      "_base_name": "Bombur",
+      "display_name": "Bombur",
+      "birth_date": "04.03.2026"
+    },
+    "Boldog | Papio hamadryas anubis | 04.03.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1148,65 +1553,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:48.670680Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Boldog | Papio hamadryas anubis | 04.03.2020",
+      "name": "Boldog",
+      "_base_name": "Boldog",
+      "display_name": "Boldog",
+      "birth_date": "04.03.2020"
     },
-    "Adèle": {
-      "egg_donor": "",
-      "sperm_donor": "",
-      "surrogate_mother": "",
-      "surrogate_father": "",
-      "genotype": "",
-      "node_fill_color": "",
-      "sex": "female",
-      "species": "Papio hamadryas anubis",
-      "heritage_only": false,
-      "source": "core",
-      "updated_at": "2026-04-16T11:47:48.670680Z",
-      "inbreeding_f": 0.0
-    },
-    "Gorgol": {
-      "egg_donor": "Adèle",
-      "sperm_donor": "Boldog",
-      "surrogate_mother": "",
-      "surrogate_father": "",
-      "genotype": "",
-      "node_fill_color": "",
-      "sex": "male",
-      "species": "Papio hamadryas anubis",
-      "heritage_only": false,
-      "source": "core",
-      "updated_at": "2026-04-16T11:47:48.670680Z",
-      "inbreeding_f": 0.0
-    },
-    "Balcmeg": {
-      "egg_donor": "Adèle",
-      "sperm_donor": "Boldog",
-      "surrogate_mother": "",
-      "surrogate_father": "",
-      "genotype": "",
-      "node_fill_color": "",
-      "sex": "male",
-      "species": "Papio hamadryas anubis",
-      "heritage_only": false,
-      "source": "core",
-      "updated_at": "2026-04-16T11:47:48.670680Z",
-      "inbreeding_f": 0.0
-    },
-    "Othrod": {
-      "egg_donor": "Adèle",
-      "sperm_donor": "Boldog",
-      "surrogate_mother": "",
-      "surrogate_father": "",
-      "genotype": "",
-      "node_fill_color": "",
-      "sex": "male",
-      "species": "Papio hamadryas anubis",
-      "heritage_only": false,
-      "source": "core",
-      "updated_at": "2026-04-16T11:47:48.670680Z",
-      "inbreeding_f": 0.0
-    },
-    "Béatrice": {
+    "Adèle | Papio hamadryas anubis | 04.03.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1217,12 +1571,17 @@
       "species": "Papio hamadryas anubis",
       "heritage_only": false,
       "source": "core",
-      "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "updated_at": "2026-04-16T11:47:48.670680Z",
+      "inbreeding_f": 0.0,
+      "ipid": "Adèle | Papio hamadryas anubis | 04.03.2020",
+      "name": "Adèle",
+      "_base_name": "Adèle",
+      "display_name": "Adèle",
+      "birth_date": "04.03.2020"
     },
-    "Grishnákh": {
-      "egg_donor": "Béatrice",
-      "sperm_donor": "Gorgol",
+    "Gorgol | Papio hamadryas anubis | 04.03.2021": {
+      "egg_donor": "Adèle | Papio hamadryas anubis | 04.03.2020",
+      "sperm_donor": "Boldog | Papio hamadryas anubis | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1231,12 +1590,17 @@
       "species": "Papio hamadryas anubis",
       "heritage_only": false,
       "source": "core",
-      "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "updated_at": "2026-04-16T11:47:48.670680Z",
+      "inbreeding_f": 0.0,
+      "ipid": "Gorgol | Papio hamadryas anubis | 04.03.2021",
+      "name": "Gorgol",
+      "_base_name": "Gorgol",
+      "display_name": "Gorgol",
+      "birth_date": "04.03.2021"
     },
-    "Orcobal": {
-      "egg_donor": "Béatrice",
-      "sperm_donor": "Gorgol",
+    "Balcmeg | Papio hamadryas anubis | 04.06.2021": {
+      "egg_donor": "Adèle | Papio hamadryas anubis | 04.03.2020",
+      "sperm_donor": "Boldog | Papio hamadryas anubis | 04.03.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1245,10 +1609,34 @@
       "species": "Papio hamadryas anubis",
       "heritage_only": false,
       "source": "core",
-      "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "updated_at": "2026-04-16T11:47:48.670680Z",
+      "inbreeding_f": 0.0,
+      "ipid": "Balcmeg | Papio hamadryas anubis | 04.06.2021",
+      "name": "Balcmeg",
+      "_base_name": "Balcmeg",
+      "display_name": "Balcmeg",
+      "birth_date": "04.06.2021"
     },
-    "Camille": {
+    "Othrod | Papio hamadryas anubis | 04.09.2021": {
+      "egg_donor": "Adèle | Papio hamadryas anubis | 04.03.2020",
+      "sperm_donor": "Boldog | Papio hamadryas anubis | 04.03.2020",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "male",
+      "species": "Papio hamadryas anubis",
+      "heritage_only": false,
+      "source": "core",
+      "updated_at": "2026-04-16T11:47:48.670680Z",
+      "inbreeding_f": 0.0,
+      "ipid": "Othrod | Papio hamadryas anubis | 04.09.2021",
+      "name": "Othrod",
+      "_base_name": "Othrod",
+      "display_name": "Othrod",
+      "birth_date": "04.09.2021"
+    },
+    "Béatrice | Papio hamadryas anubis | 04.03.2021": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1260,11 +1648,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Béatrice | Papio hamadryas anubis | 04.03.2021",
+      "name": "Béatrice",
+      "_base_name": "Béatrice",
+      "display_name": "Béatrice",
+      "birth_date": "04.03.2021"
     },
-    "Shagrat": {
-      "egg_donor": "Camille",
-      "sperm_donor": "Grishnákh",
+    "Grishnákh | Papio hamadryas anubis | 04.03.2022": {
+      "egg_donor": "Béatrice | Papio hamadryas anubis | 04.03.2021",
+      "sperm_donor": "Gorgol | Papio hamadryas anubis | 04.03.2021",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1274,11 +1667,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Grishnákh | Papio hamadryas anubis | 04.03.2022",
+      "name": "Grishnákh",
+      "_base_name": "Grishnákh",
+      "display_name": "Grishnákh",
+      "birth_date": "04.03.2022"
     },
-    "Lugdush": {
-      "egg_donor": "Camille",
-      "sperm_donor": "Grishnákh",
+    "Orcobal | Papio hamadryas anubis | 04.06.2022": {
+      "egg_donor": "Béatrice | Papio hamadryas anubis | 04.03.2021",
+      "sperm_donor": "Gorgol | Papio hamadryas anubis | 04.03.2021",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1288,11 +1686,35 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Orcobal | Papio hamadryas anubis | 04.06.2022",
+      "name": "Orcobal",
+      "_base_name": "Orcobal",
+      "display_name": "Orcobal",
+      "birth_date": "04.06.2022"
     },
-    "Gorbag": {
-      "egg_donor": "Camille",
-      "sperm_donor": "Grishnákh",
+    "Camille | Papio hamadryas anubis | 04.03.2022": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "female",
+      "species": "Papio hamadryas anubis",
+      "heritage_only": false,
+      "source": "core",
+      "updated_at": "2026-04-16T18:09:18.309214Z",
+      "inbreeding_f": 0.0,
+      "ipid": "Camille | Papio hamadryas anubis | 04.03.2022",
+      "name": "Camille",
+      "_base_name": "Camille",
+      "display_name": "Camille",
+      "birth_date": "04.03.2022"
+    },
+    "Shagrat | Papio hamadryas anubis | 04.03.2023": {
+      "egg_donor": "Camille | Papio hamadryas anubis | 04.03.2022",
+      "sperm_donor": "Grishnákh | Papio hamadryas anubis | 04.03.2022",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1302,11 +1724,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Shagrat | Papio hamadryas anubis | 04.03.2023",
+      "name": "Shagrat",
+      "_base_name": "Shagrat",
+      "display_name": "Shagrat",
+      "birth_date": "04.03.2023"
     },
-    "Orc-chieftain": {
-      "egg_donor": "Camille",
-      "sperm_donor": "Grishnákh",
+    "Lugdush | Papio hamadryas anubis | 04.06.2023": {
+      "egg_donor": "Camille | Papio hamadryas anubis | 04.03.2022",
+      "sperm_donor": "Grishnákh | Papio hamadryas anubis | 04.03.2022",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1316,9 +1743,52 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Lugdush | Papio hamadryas anubis | 04.06.2023",
+      "name": "Lugdush",
+      "_base_name": "Lugdush",
+      "display_name": "Lugdush",
+      "birth_date": "04.06.2023"
     },
-    "Delphine": {
+    "Gorbag | Papio hamadryas anubis | 04.09.2023": {
+      "egg_donor": "Camille | Papio hamadryas anubis | 04.03.2022",
+      "sperm_donor": "Grishnákh | Papio hamadryas anubis | 04.03.2022",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "male",
+      "species": "Papio hamadryas anubis",
+      "heritage_only": false,
+      "source": "core",
+      "updated_at": "2026-04-16T18:09:18.309214Z",
+      "inbreeding_f": 0.0,
+      "ipid": "Gorbag | Papio hamadryas anubis | 04.09.2023",
+      "name": "Gorbag",
+      "_base_name": "Gorbag",
+      "display_name": "Gorbag",
+      "birth_date": "04.09.2023"
+    },
+    "Orc-chieftain | Papio hamadryas anubis | 04.11.2023": {
+      "egg_donor": "Camille | Papio hamadryas anubis | 04.03.2022",
+      "sperm_donor": "Grishnákh | Papio hamadryas anubis | 04.03.2022",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "male",
+      "species": "Papio hamadryas anubis",
+      "heritage_only": false,
+      "source": "core",
+      "updated_at": "2026-04-16T18:09:18.309214Z",
+      "inbreeding_f": 0.0,
+      "ipid": "Orc-chieftain | Papio hamadryas anubis | 04.11.2023",
+      "name": "Orc-chieftain",
+      "_base_name": "Orc-chieftain",
+      "display_name": "Orc-chieftain",
+      "birth_date": "04.11.2023"
+    },
+    "Delphine | Papio hamadryas anubis | 04.03.2023": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1330,9 +1800,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Delphine | Papio hamadryas anubis | 04.03.2023",
+      "name": "Delphine",
+      "_base_name": "Delphine",
+      "display_name": "Delphine",
+      "birth_date": "04.03.2023"
     },
-    "Hélène": {
+    "Hélène | Papio hamadryas anubis | 04.06.2023": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1344,9 +1819,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:25.108843Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Hélène | Papio hamadryas anubis | 04.06.2023",
+      "name": "Hélène",
+      "_base_name": "Hélène",
+      "display_name": "Hélène",
+      "birth_date": "04.06.2023"
     },
-    "Aurore": {
+    "Aurore | Papio hamadryas anubis | 04.09.2023": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1358,11 +1838,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:48.670680Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Aurore | Papio hamadryas anubis | 04.09.2023",
+      "name": "Aurore",
+      "_base_name": "Aurore",
+      "display_name": "Aurore",
+      "birth_date": "04.09.2023"
     },
-    "Lagduf": {
-      "egg_donor": "Delphine",
-      "sperm_donor": "Shagrat",
+    "Lagduf | Papio hamadryas anubis | 04.03.2024": {
+      "egg_donor": "Delphine | Papio hamadryas anubis | 04.03.2023",
+      "sperm_donor": "Shagrat | Papio hamadryas anubis | 04.03.2023",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1372,11 +1857,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Lagduf | Papio hamadryas anubis | 04.03.2024",
+      "name": "Lagduf",
+      "_base_name": "Lagduf",
+      "display_name": "Lagduf",
+      "birth_date": "04.03.2024"
     },
-    "Snaga I": {
-      "egg_donor": "Delphine",
-      "sperm_donor": "Shagrat",
+    "Snaga I | Papio hamadryas anubis | 04.06.2024": {
+      "egg_donor": "Delphine | Papio hamadryas anubis | 04.03.2023",
+      "sperm_donor": "Shagrat | Papio hamadryas anubis | 04.03.2023",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1386,11 +1876,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Snaga I | Papio hamadryas anubis | 04.06.2024",
+      "name": "Snaga I",
+      "_base_name": "Snaga I",
+      "display_name": "Snaga I",
+      "birth_date": "04.06.2024"
     },
-    "Muzgash": {
-      "egg_donor": "Delphine",
-      "sperm_donor": "Shagrat",
+    "Muzgash | Papio hamadryas anubis | 04.09.2024": {
+      "egg_donor": "Delphine | Papio hamadryas anubis | 04.03.2023",
+      "sperm_donor": "Shagrat | Papio hamadryas anubis | 04.03.2023",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1400,11 +1895,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Muzgash | Papio hamadryas anubis | 04.09.2024",
+      "name": "Muzgash",
+      "_base_name": "Muzgash",
+      "display_name": "Muzgash",
+      "birth_date": "04.09.2024"
     },
-    "Uglúk": {
-      "egg_donor": "Hélène",
-      "sperm_donor": "Lugdush",
+    "Uglúk | Papio hamadryas anubis | 04.06.2024": {
+      "egg_donor": "Hélène | Papio hamadryas anubis | 04.06.2023",
+      "sperm_donor": "Lugdush | Papio hamadryas anubis | 04.06.2023",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1414,9 +1914,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:25.108843Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Uglúk | Papio hamadryas anubis | 04.06.2024",
+      "name": "Uglúk",
+      "_base_name": "Uglúk",
+      "display_name": "Uglúk",
+      "birth_date": "04.06.2024"
     },
-    "Élodie": {
+    "Élodie | Papio hamadryas anubis | 04.03.2024": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1428,9 +1933,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Élodie | Papio hamadryas anubis | 04.03.2024",
+      "name": "Élodie",
+      "_base_name": "Élodie",
+      "display_name": "Élodie",
+      "birth_date": "04.03.2024"
     },
-    "Josiane": {
+    "Josiane | Papio hamadryas anubis | 04.09.2024": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1442,9 +1952,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:25.108843Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Josiane | Papio hamadryas anubis | 04.09.2024",
+      "name": "Josiane",
+      "_base_name": "Josiane",
+      "display_name": "Josiane",
+      "birth_date": "04.09.2024"
     },
-    "Isabelle": {
+    "Isabelle | Papio hamadryas anubis | 04.06.2024": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1456,11 +1971,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:25.108843Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Isabelle | Papio hamadryas anubis | 04.06.2024",
+      "name": "Isabelle",
+      "_base_name": "Isabelle",
+      "display_name": "Isabelle",
+      "birth_date": "04.06.2024"
     },
-    "Ufthak": {
-      "egg_donor": "Élodie",
-      "sperm_donor": "Lagduf",
+    "Ufthak | Papio hamadryas anubis | 04.03.2025": {
+      "egg_donor": "Élodie | Papio hamadryas anubis | 04.03.2024",
+      "sperm_donor": "Lagduf | Papio hamadryas anubis | 04.03.2024",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1470,11 +1990,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Ufthak | Papio hamadryas anubis | 04.03.2025",
+      "name": "Ufthak",
+      "_base_name": "Ufthak",
+      "display_name": "Ufthak",
+      "birth_date": "04.03.2025"
     },
-    "Lug": {
-      "egg_donor": "Élodie",
-      "sperm_donor": "Lagduf",
+    "Lug | Papio hamadryas anubis | 04.06.2025": {
+      "egg_donor": "Élodie | Papio hamadryas anubis | 04.03.2024",
+      "sperm_donor": "Lagduf | Papio hamadryas anubis | 04.03.2024",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1484,11 +2009,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:25.108843Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Lug | Papio hamadryas anubis | 04.06.2025",
+      "name": "Lug",
+      "_base_name": "Lug",
+      "display_name": "Lug",
+      "birth_date": "04.06.2025"
     },
-    "Naglur-Danlo": {
-      "egg_donor": "Florence",
-      "sperm_donor": "Ufthak",
+    "Naglur-Danlo | Papio hamadryas anubis | 04.09.2025": {
+      "egg_donor": "Florence | Papio hamadryas anubis | 04.03.2025",
+      "sperm_donor": "Ufthak | Papio hamadryas anubis | 04.03.2025",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1498,9 +2028,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Naglur-Danlo | Papio hamadryas anubis | 04.09.2025",
+      "name": "Naglur-Danlo",
+      "_base_name": "Naglur-Danlo",
+      "display_name": "Naglur-Danlo",
+      "birth_date": "04.09.2025"
     },
-    "Florence": {
+    "Florence | Papio hamadryas anubis | 04.03.2025": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1508,15 +2043,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Papio hamadryas anubis",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Florence | Papio hamadryas anubis | 04.03.2025",
+      "name": "Florence",
+      "_base_name": "Florence",
+      "display_name": "Florence",
+      "birth_date": "04.03.2025"
     },
-    "Mauhúr": {
-      "egg_donor": "Isabelle",
-      "sperm_donor": "Uglúk",
+    "Mauhúr | Papio hamadryas anubis | 04.06.2025": {
+      "egg_donor": "Isabelle | Papio hamadryas anubis | 04.06.2024",
+      "sperm_donor": "Uglúk | Papio hamadryas anubis | 04.06.2024",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1526,11 +2066,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:25.108843Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Mauhúr | Papio hamadryas anubis | 04.06.2025",
+      "name": "Mauhúr",
+      "_base_name": "Mauhúr",
+      "display_name": "Mauhúr",
+      "birth_date": "04.06.2025"
     },
-    "Snaga II": {
-      "egg_donor": "Isabelle",
-      "sperm_donor": "Uglúk",
+    "Snaga II | Papio hamadryas anubis | 04.09.2025": {
+      "egg_donor": "Isabelle | Papio hamadryas anubis | 04.06.2024",
+      "sperm_donor": "Uglúk | Papio hamadryas anubis | 04.06.2024",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1540,9 +2085,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:25.108843Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Snaga II | Papio hamadryas anubis | 04.09.2025",
+      "name": "Snaga II",
+      "_base_name": "Snaga II",
+      "display_name": "Snaga II",
+      "birth_date": "04.09.2025"
     },
-    "Gisèle": {
+    "Gisèle | Papio hamadryas anubis | 04.09.2025": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1554,9 +2104,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Gisèle | Papio hamadryas anubis | 04.09.2025",
+      "name": "Gisèle",
+      "_base_name": "Gisèle",
+      "display_name": "Gisèle",
+      "birth_date": "04.09.2025"
     },
-    "Josette": {
+    "Josette | Papio hamadryas anubis | 04.06.2025": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1568,11 +2123,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:25.108843Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Josette | Papio hamadryas anubis | 04.06.2025",
+      "name": "Josette",
+      "_base_name": "Josette",
+      "display_name": "Josette",
+      "birth_date": "04.06.2025"
     },
-    "Gothmog": {
-      "egg_donor": "Gisèle",
-      "sperm_donor": "Naglur-Danlo",
+    "Gothmog | Papio hamadryas anubis | 04.03.2026": {
+      "egg_donor": "Gisèle | Papio hamadryas anubis | 04.09.2025",
+      "sperm_donor": "Naglur-Danlo | Papio hamadryas anubis | 04.09.2025",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1582,11 +2142,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Gothmog | Papio hamadryas anubis | 04.03.2026",
+      "name": "Gothmog",
+      "_base_name": "Gothmog",
+      "display_name": "Gothmog",
+      "birth_date": "04.03.2026"
     },
-    "Lurz": {
-      "egg_donor": "Josette",
-      "sperm_donor": "Mauhúr",
+    "Lurz | Papio hamadryas anubis | 04.03.2026": {
+      "egg_donor": "Josette | Papio hamadryas anubis | 04.06.2025",
+      "sperm_donor": "Mauhúr | Papio hamadryas anubis | 04.06.2025",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1596,9 +2161,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:25.108843Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Lurz | Papio hamadryas anubis | 04.03.2026",
+      "name": "Lurz",
+      "_base_name": "Lurz",
+      "display_name": "Lurz",
+      "birth_date": "04.03.2026"
     },
-    "Golfimbul": {
+    "Golfimbul | Papio hamadryas anubis | 04.04.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1610,37 +2180,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Golfimbul | Papio hamadryas anubis | 04.04.2020",
+      "name": "Golfimbul",
+      "_base_name": "Golfimbul",
+      "display_name": "Golfimbul",
+      "birth_date": "04.04.2020"
     },
-    "Blanche": {
-      "egg_donor": "",
-      "sperm_donor": "",
-      "surrogate_mother": "",
-      "surrogate_father": "",
-      "genotype": "",
-      "node_fill_color": "",
-      "sex": "female",
-      "species": "Papio hamadryas anubis",
-      "heritage_only": false,
-      "source": "core",
-      "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
-    },
-    "Greatgoblin": {
-      "egg_donor": "Blanche",
-      "sperm_donor": "Golfimbul",
-      "surrogate_mother": "",
-      "surrogate_father": "",
-      "genotype": "",
-      "node_fill_color": "",
-      "sex": "male",
-      "species": "Papio hamadryas anubis",
-      "heritage_only": false,
-      "source": "core",
-      "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
-    },
-    "Cécile": {
+    "Blanche | Papio hamadryas anubis | 04.04.2020": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1652,11 +2199,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Blanche | Papio hamadryas anubis | 04.04.2020",
+      "name": "Blanche",
+      "_base_name": "Blanche",
+      "display_name": "Blanche",
+      "birth_date": "04.04.2020"
     },
-    "Azog": {
-      "egg_donor": "Cécile",
-      "sperm_donor": "Greatgoblin",
+    "Greatgoblin | Papio hamadryas anubis | 04.04.2021": {
+      "egg_donor": "Blanche | Papio hamadryas anubis | 04.04.2020",
+      "sperm_donor": "Golfimbul | Papio hamadryas anubis | 04.04.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1666,9 +2218,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Greatgoblin | Papio hamadryas anubis | 04.04.2021",
+      "name": "Greatgoblin",
+      "_base_name": "Greatgoblin",
+      "display_name": "Greatgoblin",
+      "birth_date": "04.04.2021"
     },
-    "Diane": {
+    "Cécile | Papio hamadryas anubis | 04.04.2021": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1680,11 +2237,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Cécile | Papio hamadryas anubis | 04.04.2021",
+      "name": "Cécile",
+      "_base_name": "Cécile",
+      "display_name": "Cécile",
+      "birth_date": "04.04.2021"
     },
-    "Bolg": {
-      "egg_donor": "Diane",
-      "sperm_donor": "Azog",
+    "Azog | Papio hamadryas anubis | 04.04.2022": {
+      "egg_donor": "Cécile | Papio hamadryas anubis | 04.04.2021",
+      "sperm_donor": "Greatgoblin | Papio hamadryas anubis | 04.04.2021",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1694,9 +2256,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Azog | Papio hamadryas anubis | 04.04.2022",
+      "name": "Azog",
+      "_base_name": "Azog",
+      "display_name": "Azog",
+      "birth_date": "04.04.2022"
     },
-    "Estelle": {
+    "Diane | Papio hamadryas anubis | 04.04.2022": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1708,11 +2275,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Diane | Papio hamadryas anubis | 04.04.2022",
+      "name": "Diane",
+      "_base_name": "Diane",
+      "display_name": "Diane",
+      "birth_date": "04.04.2022"
     },
-    "Bodyguard": {
-      "egg_donor": "Estelle",
-      "sperm_donor": "Bolg",
+    "Bolg | Papio hamadryas anubis | 04.04.2023": {
+      "egg_donor": "Diane | Papio hamadryas anubis | 04.04.2022",
+      "sperm_donor": "Azog | Papio hamadryas anubis | 04.04.2022",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1722,9 +2294,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Bolg | Papio hamadryas anubis | 04.04.2023",
+      "name": "Bolg",
+      "_base_name": "Bolg",
+      "display_name": "Bolg",
+      "birth_date": "04.04.2023"
     },
-    "Fabienne": {
+    "Estelle | Papio hamadryas anubis | 04.04.2023": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1736,11 +2313,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Estelle | Papio hamadryas anubis | 04.04.2023",
+      "name": "Estelle",
+      "_base_name": "Estelle",
+      "display_name": "Estelle",
+      "birth_date": "04.04.2023"
     },
-    "Yellowfang": {
-      "egg_donor": "Fabienne",
-      "sperm_donor": "Bodyguard",
+    "Bodyguard | Papio hamadryas anubis | 04.04.2024": {
+      "egg_donor": "Estelle | Papio hamadryas anubis | 04.04.2023",
+      "sperm_donor": "Bolg | Papio hamadryas anubis | 04.04.2023",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1750,9 +2332,52 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Bodyguard | Papio hamadryas anubis | 04.04.2024",
+      "name": "Bodyguard",
+      "_base_name": "Bodyguard",
+      "display_name": "Bodyguard",
+      "birth_date": "04.04.2024"
     },
-    "Gaëlle": {
+    "Fabienne | Papio hamadryas anubis | 04.04.2024": {
+      "egg_donor": "",
+      "sperm_donor": "",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "female",
+      "species": "Papio hamadryas anubis",
+      "heritage_only": false,
+      "source": "core",
+      "updated_at": "2026-04-16T18:09:18.309214Z",
+      "inbreeding_f": 0.0,
+      "ipid": "Fabienne | Papio hamadryas anubis | 04.04.2024",
+      "name": "Fabienne",
+      "_base_name": "Fabienne",
+      "display_name": "Fabienne",
+      "birth_date": "04.04.2024"
+    },
+    "Yellowfang | Papio hamadryas anubis | 04.04.2025": {
+      "egg_donor": "Fabienne | Papio hamadryas anubis | 04.04.2024",
+      "sperm_donor": "Bodyguard | Papio hamadryas anubis | 04.04.2024",
+      "surrogate_mother": "",
+      "surrogate_father": "",
+      "genotype": "",
+      "node_fill_color": "",
+      "sex": "male",
+      "species": "Papio hamadryas anubis",
+      "heritage_only": false,
+      "source": "core",
+      "updated_at": "2026-04-16T18:09:18.309214Z",
+      "inbreeding_f": 0.0,
+      "ipid": "Yellowfang | Papio hamadryas anubis | 04.04.2025",
+      "name": "Yellowfang",
+      "_base_name": "Yellowfang",
+      "display_name": "Yellowfang",
+      "birth_date": "04.04.2025"
+    },
+    "Gaëlle | Papio hamadryas anubis | 04.04.2025": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1764,11 +2389,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Gaëlle | Papio hamadryas anubis | 04.04.2025",
+      "name": "Gaëlle",
+      "_base_name": "Gaëlle",
+      "display_name": "Gaëlle",
+      "birth_date": "04.04.2025"
     },
-    "Snot": {
-      "egg_donor": "Gaëlle",
-      "sperm_donor": "Yellowfang",
+    "Snot | Papio hamadryas anubis | 04.03.2026": {
+      "egg_donor": "Gaëlle | Papio hamadryas anubis | 04.04.2025",
+      "sperm_donor": "Yellowfang | Papio hamadryas anubis | 04.04.2025",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1778,11 +2408,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.682758Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Snot | Papio hamadryas anubis | 04.03.2026",
+      "name": "Snot",
+      "_base_name": "Snot",
+      "display_name": "Snot",
+      "birth_date": "04.03.2026"
     },
-    "Gaston": {
-      "egg_donor": "Blanche",
-      "sperm_donor": "Golfimbul",
+    "Gaston | Papio hamadryas anubis | 04.07.2021": {
+      "egg_donor": "Blanche | Papio hamadryas anubis | 04.04.2020",
+      "sperm_donor": "Golfimbul | Papio hamadryas anubis | 04.04.2020",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1792,11 +2427,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Gaston | Papio hamadryas anubis | 04.07.2021",
+      "name": "Gaston",
+      "_base_name": "Gaston",
+      "display_name": "Gaston",
+      "birth_date": "04.07.2021"
     },
-    "Honoré": {
-      "egg_donor": "Cécile",
-      "sperm_donor": "Greatgoblin",
+    "Honoré | Papio hamadryas anubis | 04.07.2022": {
+      "egg_donor": "Cécile | Papio hamadryas anubis | 04.04.2021",
+      "sperm_donor": "Greatgoblin | Papio hamadryas anubis | 04.04.2021",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1806,11 +2446,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Honoré | Papio hamadryas anubis | 04.07.2022",
+      "name": "Honoré",
+      "_base_name": "Honoré",
+      "display_name": "Honoré",
+      "birth_date": "04.07.2022"
     },
-    "Marcel": {
-      "egg_donor": "Diane",
-      "sperm_donor": "Azog",
+    "Marcel | Papio hamadryas anubis | 04.07.2023": {
+      "egg_donor": "Diane | Papio hamadryas anubis | 04.04.2022",
+      "sperm_donor": "Azog | Papio hamadryas anubis | 04.04.2022",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1820,11 +2465,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Marcel | Papio hamadryas anubis | 04.07.2023",
+      "name": "Marcel",
+      "_base_name": "Marcel",
+      "display_name": "Marcel",
+      "birth_date": "04.07.2023"
     },
-    "Noémie": {
-      "egg_donor": "Fabienne",
-      "sperm_donor": "Bodyguard",
+    "Noémie | Papio hamadryas anubis | 04.07.2025": {
+      "egg_donor": "Fabienne | Papio hamadryas anubis | 04.04.2024",
+      "sperm_donor": "Bodyguard | Papio hamadryas anubis | 04.04.2024",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -1834,9 +2484,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:09:18.309214Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Noémie | Papio hamadryas anubis | 04.07.2025",
+      "name": "Noémie",
+      "_base_name": "Noémie",
+      "display_name": "Noémie",
+      "birth_date": "04.07.2025"
     },
-    "Elwing": {
+    "Elwing | Callitrix jacchus | 08.01.2008": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1844,13 +2499,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T09:53:21.906815Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Elwing | Callitrix jacchus | 08.01.2008",
+      "name": "Elwing",
+      "_base_name": "Elwing",
+      "display_name": "Elwing",
+      "birth_date": "08.01.2008"
     },
-    "Eärendil": {
+    "Eärendil | Callitrix jacchus | 14.02.2010": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1858,13 +2518,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "male",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T09:53:21.906212Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Eärendil | Callitrix jacchus | 14.02.2010",
+      "name": "Eärendil",
+      "_base_name": "Eärendil",
+      "display_name": "Eärendil",
+      "birth_date": "14.02.2010"
     },
-    "Galadriel": {
+    "Galadriel | Callitrix jacchus | 17.06.2005": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1872,13 +2537,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T09:41:31.477443Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Galadriel | Callitrix jacchus | 17.06.2005",
+      "name": "Galadriel",
+      "_base_name": "Galadriel",
+      "display_name": "Galadriel",
+      "birth_date": "17.06.2005"
     },
-    "Celeborn": {
+    "Celeborn | Callitrix jacchus | 29.08.2004": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1886,13 +2556,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "male",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T09:41:31.477895Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Celeborn | Callitrix jacchus | 29.08.2004",
+      "name": "Celeborn",
+      "_base_name": "Celeborn",
+      "display_name": "Celeborn",
+      "birth_date": "29.08.2004"
     },
-    "Míriel": {
+    "Míriel | Callitrix jacchus | 08.01.2000": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1904,9 +2579,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Míriel | Callitrix jacchus | 08.01.2000",
+      "name": "Míriel",
+      "_base_name": "Míriel",
+      "display_name": "Míriel",
+      "birth_date": "08.01.2000"
     },
-    "Finwë": {
+    "Finwë | Callitrix jacchus | 15.05.2000": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1918,9 +2598,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-20T08:52:15.474763Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Finwë | Callitrix jacchus | 15.05.2000",
+      "name": "Finwë",
+      "_base_name": "Finwë",
+      "display_name": "Finwë",
+      "birth_date": "15.05.2000"
     },
-    "Indis": {
+    "Indis | Callitrix jacchus | 05.03.2000": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -1932,11 +2617,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-20T08:52:15.474763Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Indis | Callitrix jacchus | 05.03.2000",
+      "name": "Indis",
+      "_base_name": "Indis",
+      "display_name": "Indis",
+      "birth_date": "05.03.2000"
     },
-    "Fëanor": {
-      "egg_donor": "Míriel",
-      "sperm_donor": "Finwë",
+    "Fëanor | Callitrix jacchus | 13.03.2002": {
+      "egg_donor": "Míriel | Callitrix jacchus | 08.01.2000",
+      "sperm_donor": "Finwë | Callitrix jacchus | 15.05.2000",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -1946,11 +2636,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Fëanor | Callitrix jacchus | 13.03.2002",
+      "name": "Fëanor",
+      "_base_name": "Fëanor",
+      "display_name": "Fëanor",
+      "birth_date": "13.03.2002"
     },
-    "Findis": {
-      "egg_donor": "Indis",
-      "sperm_donor": "Finwë",
+    "Findis | Callitrix jacchus | 02.05.2002": {
+      "egg_donor": "Indis | Callitrix jacchus | 05.03.2000",
+      "sperm_donor": "Finwë | Callitrix jacchus | 15.05.2000",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -1960,11 +2655,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Findis | Callitrix jacchus | 02.05.2002",
+      "name": "Findis",
+      "_base_name": "Findis",
+      "display_name": "Findis",
+      "birth_date": "02.05.2002"
     },
-    "Fingolfin": {
-      "egg_donor": "Indis",
-      "sperm_donor": "Finwë",
+    "Fingolfin | Callitrix jacchus | 01.08.2002": {
+      "egg_donor": "Indis | Callitrix jacchus | 05.03.2000",
+      "sperm_donor": "Finwë | Callitrix jacchus | 15.05.2000",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -1974,11 +2674,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Fingolfin | Callitrix jacchus | 01.08.2002",
+      "name": "Fingolfin",
+      "_base_name": "Fingolfin",
+      "display_name": "Fingolfin",
+      "birth_date": "01.08.2002"
     },
-    "Írimë": {
-      "egg_donor": "Indis",
-      "sperm_donor": "Finwë",
+    "Írimë | Callitrix jacchus | 18.01.2003": {
+      "egg_donor": "Indis | Callitrix jacchus | 05.03.2000",
+      "sperm_donor": "Finwë | Callitrix jacchus | 15.05.2000",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -1988,9 +2693,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Írimë | Callitrix jacchus | 18.01.2003",
+      "name": "Írimë",
+      "_base_name": "Írimë",
+      "display_name": "Írimë",
+      "birth_date": "18.01.2003"
     },
-    "Nerdanel": {
+    "Nerdanel | Callitrix jacchus | 08.09.2001": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2002,9 +2712,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:03:16.318253Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Nerdanel | Callitrix jacchus | 08.09.2001",
+      "name": "Nerdanel",
+      "_base_name": "Nerdanel",
+      "display_name": "Nerdanel",
+      "birth_date": "08.09.2001"
     },
-    "Anairë": {
+    "Anairë | Callitrix jacchus | 20.08.2001": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2016,9 +2731,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.374786Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Anairë | Callitrix jacchus | 20.08.2001",
+      "name": "Anairë",
+      "_base_name": "Anairë",
+      "display_name": "Anairë",
+      "birth_date": "20.08.2001"
     },
-    "Eärwen": {
+    "Eärwen | Callitrix jacchus | 03.08.2001": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2030,11 +2750,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-06-17T09:41:31.476028Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Eärwen | Callitrix jacchus | 03.08.2001",
+      "name": "Eärwen",
+      "_base_name": "Eärwen",
+      "display_name": "Eärwen",
+      "birth_date": "03.08.2001"
     },
-    "Maedhros": {
-      "egg_donor": "Nerdanel",
-      "sperm_donor": "Fëanor",
+    "Maedhros | Callitrix jacchus | 25.02.2004": {
+      "egg_donor": "Nerdanel | Callitrix jacchus | 08.09.2001",
+      "sperm_donor": "Fëanor | Callitrix jacchus | 13.03.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2044,11 +2769,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:03:16.318253Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Maedhros | Callitrix jacchus | 25.02.2004",
+      "name": "Maedhros",
+      "_base_name": "Maedhros",
+      "display_name": "Maedhros",
+      "birth_date": "25.02.2004"
     },
-    "Maglor": {
-      "egg_donor": "Nerdanel",
-      "sperm_donor": "Fëanor",
+    "Maglor | Callitrix jacchus | 12.07.2004": {
+      "egg_donor": "Nerdanel | Callitrix jacchus | 08.09.2001",
+      "sperm_donor": "Fëanor | Callitrix jacchus | 13.03.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2058,11 +2788,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:03:16.318253Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Maglor | Callitrix jacchus | 12.07.2004",
+      "name": "Maglor",
+      "_base_name": "Maglor",
+      "display_name": "Maglor",
+      "birth_date": "12.07.2004"
     },
-    "Celegorm": {
-      "egg_donor": "Nerdanel",
-      "sperm_donor": "Fëanor",
+    "Celegorm | Callitrix jacchus | 08.01.2005": {
+      "egg_donor": "Nerdanel | Callitrix jacchus | 08.09.2001",
+      "sperm_donor": "Fëanor | Callitrix jacchus | 13.03.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2072,11 +2807,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:03:16.318253Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Celegorm | Callitrix jacchus | 08.01.2005",
+      "name": "Celegorm",
+      "_base_name": "Celegorm",
+      "display_name": "Celegorm",
+      "birth_date": "08.01.2005"
     },
-    "Caranthir": {
-      "egg_donor": "Nerdanel",
-      "sperm_donor": "Fëanor",
+    "Caranthir | Callitrix jacchus | 23.06.2005": {
+      "egg_donor": "Nerdanel | Callitrix jacchus | 08.09.2001",
+      "sperm_donor": "Fëanor | Callitrix jacchus | 13.03.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2086,11 +2826,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:03:16.319254Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Caranthir | Callitrix jacchus | 23.06.2005",
+      "name": "Caranthir",
+      "_base_name": "Caranthir",
+      "display_name": "Caranthir",
+      "birth_date": "23.06.2005"
     },
-    "Curufin": {
-      "egg_donor": "Nerdanel",
-      "sperm_donor": "Fëanor",
+    "Curufin | Callitrix jacchus | 10.12.2005": {
+      "egg_donor": "Nerdanel | Callitrix jacchus | 08.09.2001",
+      "sperm_donor": "Fëanor | Callitrix jacchus | 13.03.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2100,11 +2845,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:03:16.319254Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Curufin | Callitrix jacchus | 10.12.2005",
+      "name": "Curufin",
+      "_base_name": "Curufin",
+      "display_name": "Curufin",
+      "birth_date": "10.12.2005"
     },
-    "Amrod": {
-      "egg_donor": "Nerdanel",
-      "sperm_donor": "Fëanor",
+    "Amrod | Callitrix jacchus | 22.05.2006": {
+      "egg_donor": "Nerdanel | Callitrix jacchus | 08.09.2001",
+      "sperm_donor": "Fëanor | Callitrix jacchus | 13.03.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2114,11 +2864,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:53:30.429218Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Amrod | Callitrix jacchus | 22.05.2006",
+      "name": "Amrod",
+      "_base_name": "Amrod",
+      "display_name": "Amrod",
+      "birth_date": "22.05.2006"
     },
-    "Amras": {
-      "egg_donor": "Nerdanel",
-      "sperm_donor": "Fëanor",
+    "Amras | Callitrix jacchus | 02.11.2006": {
+      "egg_donor": "Nerdanel | Callitrix jacchus | 08.09.2001",
+      "sperm_donor": "Fëanor | Callitrix jacchus | 13.03.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2128,9 +2883,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:03:16.319785Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Amras | Callitrix jacchus | 02.11.2006",
+      "name": "Amras",
+      "_base_name": "Amras",
+      "display_name": "Amras",
+      "birth_date": "02.11.2006"
     },
-    "Ashley": {
+    "Ashley | Callitrix jacchus | 16.05.2004": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2142,11 +2902,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520290Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Ashley | Callitrix jacchus | 16.05.2004",
+      "name": "Ashley",
+      "_base_name": "Ashley",
+      "display_name": "Ashley",
+      "birth_date": "16.05.2004"
     },
-    "Celebrimbor": {
-      "egg_donor": "Ashley",
-      "sperm_donor": "Curufin",
+    "Celebrimbor | Callitrix jacchus | 26.09.2007": {
+      "egg_donor": "Ashley | Callitrix jacchus | 16.05.2004",
+      "sperm_donor": "Curufin | Callitrix jacchus | 10.12.2005",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2156,11 +2921,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520290Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Celebrimbor | Callitrix jacchus | 26.09.2007",
+      "name": "Celebrimbor",
+      "_base_name": "Celebrimbor",
+      "display_name": "Celebrimbor",
+      "birth_date": "26.09.2007"
     },
-    "Fingon": {
-      "egg_donor": "Anairë",
-      "sperm_donor": "Fingolfin",
+    "Fingon | Callitrix jacchus | 25.05.2004": {
+      "egg_donor": "Anairë | Callitrix jacchus | 20.08.2001",
+      "sperm_donor": "Fingolfin | Callitrix jacchus | 01.08.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2170,11 +2940,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Fingon | Callitrix jacchus | 25.05.2004",
+      "name": "Fingon",
+      "_base_name": "Fingon",
+      "display_name": "Fingon",
+      "birth_date": "25.05.2004"
     },
-    "Turgon": {
-      "egg_donor": "Anairë",
-      "sperm_donor": "Fingolfin",
+    "Turgon | Callitrix jacchus | 03.08.2004": {
+      "egg_donor": "Anairë | Callitrix jacchus | 20.08.2001",
+      "sperm_donor": "Fingolfin | Callitrix jacchus | 01.08.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2184,11 +2959,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Turgon | Callitrix jacchus | 03.08.2004",
+      "name": "Turgon",
+      "_base_name": "Turgon",
+      "display_name": "Turgon",
+      "birth_date": "03.08.2004"
     },
-    "Aredhel": {
-      "egg_donor": "Anairë",
-      "sperm_donor": "Fingolfin",
+    "Aredhel | Callitrix jacchus | 22.01.2005": {
+      "egg_donor": "Anairë | Callitrix jacchus | 20.08.2001",
+      "sperm_donor": "Fingolfin | Callitrix jacchus | 01.08.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2198,11 +2978,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Aredhel | Callitrix jacchus | 22.01.2005",
+      "name": "Aredhel",
+      "_base_name": "Aredhel",
+      "display_name": "Aredhel",
+      "birth_date": "22.01.2005"
     },
-    "Argon": {
-      "egg_donor": "Anairë",
-      "sperm_donor": "Fingolfin",
+    "Argon | Callitrix jacchus | 16.07.2005": {
+      "egg_donor": "Anairë | Callitrix jacchus | 20.08.2001",
+      "sperm_donor": "Fingolfin | Callitrix jacchus | 01.08.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2212,9 +2997,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Argon | Callitrix jacchus | 16.07.2005",
+      "name": "Argon",
+      "_base_name": "Argon",
+      "display_name": "Argon",
+      "birth_date": "16.07.2005"
     },
-    "Elenwë": {
+    "Elenwë | Callitrix jacchus | 19.12.2004": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2226,11 +3016,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Elenwë | Callitrix jacchus | 19.12.2004",
+      "name": "Elenwë",
+      "_base_name": "Elenwë",
+      "display_name": "Elenwë",
+      "birth_date": "19.12.2004"
     },
-    "Idril": {
-      "egg_donor": "Elenwë",
-      "sperm_donor": "Turgon",
+    "Idril | Callitrix jacchus | 14.02.2007": {
+      "egg_donor": "Elenwë | Callitrix jacchus | 19.12.2004",
+      "sperm_donor": "Turgon | Callitrix jacchus | 03.08.2004",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2240,9 +3035,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-06-17T09:53:21.905128Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Idril | Callitrix jacchus | 14.02.2007",
+      "name": "Idril",
+      "_base_name": "Idril",
+      "display_name": "Idril",
+      "birth_date": "14.02.2007"
     },
-    "Eöl": {
+    "Eöl | Callitrix jacchus | 30.04.2004": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2254,11 +3054,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520290Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Eöl | Callitrix jacchus | 30.04.2004",
+      "name": "Eöl",
+      "_base_name": "Eöl",
+      "display_name": "Eöl",
+      "birth_date": "30.04.2004"
     },
-    "Maeglin": {
-      "egg_donor": "Aredhel",
-      "sperm_donor": "Eöl",
+    "Maeglin | Callitrix jacchus | 22.01.2007": {
+      "egg_donor": "Aredhel | Callitrix jacchus | 22.01.2005",
+      "sperm_donor": "Eöl | Callitrix jacchus | 30.04.2004",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2268,11 +3073,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520290Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Maeglin | Callitrix jacchus | 22.01.2007",
+      "name": "Maeglin",
+      "_base_name": "Maeglin",
+      "display_name": "Maeglin",
+      "birth_date": "22.01.2007"
     },
-    "Finrod": {
-      "egg_donor": "Eärwen",
-      "sperm_donor": "Finarfin",
+    "Finrod | Callitrix jacchus | 12.08.2005": {
+      "egg_donor": "Eärwen | Callitrix jacchus | 03.08.2001",
+      "sperm_donor": "Finarfin | Callitrix jacchus | 06.07.2003",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2282,9 +3092,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Finrod | Callitrix jacchus | 12.08.2005",
+      "name": "Finrod",
+      "_base_name": "Finrod",
+      "display_name": "Finrod",
+      "birth_date": "12.08.2005"
     },
-    "Finarfin": {
+    "Finarfin | Callitrix jacchus | 06.07.2003": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2292,15 +3107,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "male",
-      "species": "",
+      "species": "Callitrix jacchus",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T09:41:31.481736Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Finarfin | Callitrix jacchus | 06.07.2003",
+      "name": "Finarfin",
+      "_base_name": "Finarfin",
+      "display_name": "Finarfin",
+      "birth_date": "06.07.2003"
     },
-    "Angrod": {
-      "egg_donor": "Eärwen",
-      "sperm_donor": "Finarfin",
+    "Angrod | Callitrix jacchus | 26.07.2005": {
+      "egg_donor": "Eärwen | Callitrix jacchus | 03.08.2001",
+      "sperm_donor": "Finarfin | Callitrix jacchus | 06.07.2003",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2310,11 +3130,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Angrod | Callitrix jacchus | 26.07.2005",
+      "name": "Angrod",
+      "_base_name": "Angrod",
+      "display_name": "Angrod",
+      "birth_date": "26.07.2005"
     },
-    "Aegnor": {
-      "egg_donor": "Eärwen",
-      "sperm_donor": "Finarfin",
+    "Aegnor | Callitrix jacchus | 17.04.2005": {
+      "egg_donor": "Eärwen | Callitrix jacchus | 03.08.2001",
+      "sperm_donor": "Finarfin | Callitrix jacchus | 06.07.2003",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2324,9 +3149,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.374786Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Aegnor | Callitrix jacchus | 17.04.2005",
+      "name": "Aegnor",
+      "_base_name": "Aegnor",
+      "display_name": "Aegnor",
+      "birth_date": "17.04.2005"
     },
-    "Brittany": {
+    "Brittany | Callitrix jacchus | 14.08.2004": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2338,11 +3168,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Brittany | Callitrix jacchus | 14.08.2004",
+      "name": "Brittany",
+      "_base_name": "Brittany",
+      "display_name": "Brittany",
+      "birth_date": "14.08.2004"
     },
-    "Orodreth": {
-      "egg_donor": "Brittany",
-      "sperm_donor": "Angrod",
+    "Orodreth | Callitrix jacchus | 07.08.2007": {
+      "egg_donor": "Brittany | Callitrix jacchus | 14.08.2004",
+      "sperm_donor": "Angrod | Callitrix jacchus | 26.07.2005",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2352,9 +3187,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Orodreth | Callitrix jacchus | 07.08.2007",
+      "name": "Orodreth",
+      "_base_name": "Orodreth",
+      "display_name": "Orodreth",
+      "birth_date": "07.08.2007"
     },
-    "Jennifer": {
+    "Jennifer | Callitrix jacchus | 08.07.2007": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2366,11 +3206,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Jennifer | Callitrix jacchus | 08.07.2007",
+      "name": "Jennifer",
+      "_base_name": "Jennifer",
+      "display_name": "Jennifer",
+      "birth_date": "08.07.2007"
     },
-    "Finduilas": {
-      "egg_donor": "Jennifer",
-      "sperm_donor": "Orodreth",
+    "Finduilas | Callitrix jacchus | 23.01.2010": {
+      "egg_donor": "Jennifer | Callitrix jacchus | 08.07.2007",
+      "sperm_donor": "Orodreth | Callitrix jacchus | 07.08.2007",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2380,11 +3225,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Finduilas | Callitrix jacchus | 23.01.2010",
+      "name": "Finduilas",
+      "_base_name": "Finduilas",
+      "display_name": "Finduilas",
+      "birth_date": "23.01.2010"
     },
-    "Gil-galad": {
-      "egg_donor": "Jennifer",
-      "sperm_donor": "Orodreth",
+    "Gil-galad | Callitrix jacchus | 06.07.2010": {
+      "egg_donor": "Jennifer | Callitrix jacchus | 08.07.2007",
+      "sperm_donor": "Orodreth | Callitrix jacchus | 07.08.2007",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2394,9 +3244,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Gil-galad | Callitrix jacchus | 06.07.2010",
+      "name": "Gil-galad",
+      "_base_name": "Gil-galad",
+      "display_name": "Gil-galad",
+      "birth_date": "06.07.2010"
     },
-    "Tuor": {
+    "Tuor | Callitrix jacchus | 17.10.2007": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2408,9 +3263,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-06-17T09:53:21.906098Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Tuor | Callitrix jacchus | 17.10.2007",
+      "name": "Tuor",
+      "_base_name": "Tuor",
+      "display_name": "Tuor",
+      "birth_date": "17.10.2007"
     },
-    "Thingol": {
+    "Thingol | Callitrix jacchus | 17.08.2000": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2422,9 +3282,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:00:16.973450Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Thingol | Callitrix jacchus | 17.08.2000",
+      "name": "Thingol",
+      "_base_name": "Thingol",
+      "display_name": "Thingol",
+      "birth_date": "17.08.2000"
     },
-    "Melian": {
+    "Melian | Callitrix jacchus | 29.06.2000": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2436,11 +3301,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:00:16.973450Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Melian | Callitrix jacchus | 29.06.2000",
+      "name": "Melian",
+      "_base_name": "Melian",
+      "display_name": "Melian",
+      "birth_date": "29.06.2000"
     },
-    "Lúthien": {
-      "egg_donor": "Melian",
-      "sperm_donor": "Thingol",
+    "Lúthien | Callitrix jacchus | 29.07.2002": {
+      "egg_donor": "Melian | Callitrix jacchus | 29.06.2000",
+      "sperm_donor": "Thingol | Callitrix jacchus | 17.08.2000",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "WT/WT",
@@ -2450,9 +3320,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Lúthien | Callitrix jacchus | 29.07.2002",
+      "name": "Lúthien",
+      "_base_name": "Lúthien",
+      "display_name": "Lúthien",
+      "birth_date": "29.07.2002"
     },
-    "Beren": {
+    "Beren | Callitrix jacchus | 25.08.2001": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2464,9 +3339,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-17T11:04:01.373848Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Beren | Callitrix jacchus | 25.08.2001",
+      "name": "Beren",
+      "_base_name": "Beren",
+      "display_name": "Beren",
+      "birth_date": "25.08.2001"
     },
-    "Durin I": {
+    "Durin I | Macaca mulatta | 04.03.1963": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2478,9 +3358,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Durin I | Macaca mulatta | 04.03.1963",
+      "name": "Durin I",
+      "_base_name": "Durin I",
+      "display_name": "Durin I",
+      "birth_date": "04.03.1963"
     },
-    "Gertrud": {
+    "Gertrud | Macaca mulatta | 04.03.1963": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2492,11 +3377,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Gertrud | Macaca mulatta | 04.03.1963",
+      "name": "Gertrud",
+      "_base_name": "Gertrud",
+      "display_name": "Gertrud",
+      "birth_date": "04.03.1963"
     },
-    "Hartmut": {
-      "egg_donor": "Gertrud",
-      "sperm_donor": "Durin I",
+    "Hartmut | Macaca mulatta | 04.03.1966": {
+      "egg_donor": "Gertrud | Macaca mulatta | 04.03.1963",
+      "sperm_donor": "Durin I | Macaca mulatta | 04.03.1963",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2506,9 +3396,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Hartmut | Macaca mulatta | 04.03.1966",
+      "name": "Hartmut",
+      "_base_name": "Hartmut",
+      "display_name": "Hartmut",
+      "birth_date": "04.03.1966"
     },
-    "Ingrid": {
+    "Ingrid | Macaca mulatta | 04.03.1966": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2520,11 +3415,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Ingrid | Macaca mulatta | 04.03.1966",
+      "name": "Ingrid",
+      "_base_name": "Ingrid",
+      "display_name": "Ingrid",
+      "birth_date": "04.03.1966"
     },
-    "Durin II": {
-      "egg_donor": "Ingrid",
-      "sperm_donor": "Hartmut",
+    "Durin II | Macaca mulatta | 04.03.1969": {
+      "egg_donor": "Ingrid | Macaca mulatta | 04.03.1966",
+      "sperm_donor": "Hartmut | Macaca mulatta | 04.03.1966",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2534,9 +3434,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Durin II | Macaca mulatta | 04.03.1969",
+      "name": "Durin II",
+      "_base_name": "Durin II",
+      "display_name": "Durin II",
+      "birth_date": "04.03.1969"
     },
-    "Irmgard I": {
+    "Irmgard I | Macaca mulatta | 04.03.1969": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2548,11 +3453,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Irmgard I | Macaca mulatta | 04.03.1969",
+      "name": "Irmgard I",
+      "_base_name": "Irmgard I",
+      "display_name": "Irmgard I",
+      "birth_date": "04.03.1969"
     },
-    "Bernhard": {
-      "egg_donor": "Irmgard I",
-      "sperm_donor": "Durin II",
+    "Bernhard | Macaca mulatta | 04.03.1972": {
+      "egg_donor": "Irmgard I | Macaca mulatta | 04.03.1969",
+      "sperm_donor": "Durin II | Macaca mulatta | 04.03.1969",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2562,9 +3472,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Bernhard | Macaca mulatta | 04.03.1972",
+      "name": "Bernhard",
+      "_base_name": "Bernhard",
+      "display_name": "Bernhard",
+      "birth_date": "04.03.1972"
     },
-    "Adelheid": {
+    "Adelheid | Macaca mulatta | 04.03.1972": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2576,11 +3491,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Adelheid | Macaca mulatta | 04.03.1972",
+      "name": "Adelheid",
+      "_base_name": "Adelheid",
+      "display_name": "Adelheid",
+      "birth_date": "04.03.1972"
     },
-    "Durin III": {
-      "egg_donor": "Adelheid",
-      "sperm_donor": "Bernhard",
+    "Durin III | Macaca mulatta | 04.03.1975": {
+      "egg_donor": "Adelheid | Macaca mulatta | 04.03.1972",
+      "sperm_donor": "Bernhard | Macaca mulatta | 04.03.1972",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2590,9 +3510,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Durin III | Macaca mulatta | 04.03.1975",
+      "name": "Durin III",
+      "_base_name": "Durin III",
+      "display_name": "Durin III",
+      "birth_date": "04.03.1975"
     },
-    "Hildegard": {
+    "Hildegard | Macaca mulatta | 04.03.1975": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2604,11 +3529,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Hildegard | Macaca mulatta | 04.03.1975",
+      "name": "Hildegard",
+      "_base_name": "Hildegard",
+      "display_name": "Hildegard",
+      "birth_date": "04.03.1975"
     },
-    "Konrad I": {
-      "egg_donor": "Hildegard",
-      "sperm_donor": "Durin III",
+    "Konrad I | Macaca mulatta | 04.03.1978": {
+      "egg_donor": "Hildegard | Macaca mulatta | 04.03.1975",
+      "sperm_donor": "Durin III | Macaca mulatta | 04.03.1975",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2618,9 +3548,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Konrad I | Macaca mulatta | 04.03.1978",
+      "name": "Konrad I",
+      "_base_name": "Konrad I",
+      "display_name": "Konrad I",
+      "birth_date": "04.03.1978"
     },
-    "Mathilde": {
+    "Mathilde | Macaca mulatta | 04.03.1978": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2632,11 +3567,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Mathilde | Macaca mulatta | 04.03.1978",
+      "name": "Mathilde",
+      "_base_name": "Mathilde",
+      "display_name": "Mathilde",
+      "birth_date": "04.03.1978"
     },
-    "Durin IV": {
-      "egg_donor": "Mathilde",
-      "sperm_donor": "Konrad I",
+    "Durin IV | Macaca mulatta | 04.03.1981": {
+      "egg_donor": "Mathilde | Macaca mulatta | 04.03.1978",
+      "sperm_donor": "Konrad I | Macaca mulatta | 04.03.1978",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2646,9 +3586,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:38.301748Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Durin IV | Macaca mulatta | 04.03.1981",
+      "name": "Durin IV",
+      "_base_name": "Durin IV",
+      "display_name": "Durin IV",
+      "birth_date": "04.03.1981"
     },
-    "Gudrun I": {
+    "Gudrun I | Macaca mulatta | 04.03.1981": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2660,11 +3605,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:06:38.301748Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Gudrun I | Macaca mulatta | 04.03.1981",
+      "name": "Gudrun I",
+      "_base_name": "Gudrun I",
+      "display_name": "Gudrun I",
+      "birth_date": "04.03.1981"
     },
-    "Eckhard": {
-      "egg_donor": "Gudrun I",
-      "sperm_donor": "Durin IV",
+    "Eckhard | Macaca mulatta | 04.03.1984": {
+      "egg_donor": "Gudrun I | Macaca mulatta | 04.03.1981",
+      "sperm_donor": "Durin IV | Macaca mulatta | 04.03.1981",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2674,9 +3624,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Eckhard | Macaca mulatta | 04.03.1984",
+      "name": "Eckhard",
+      "_base_name": "Eckhard",
+      "display_name": "Eckhard",
+      "birth_date": "04.03.1984"
     },
-    "Gerlinde": {
+    "Gerlinde | Macaca mulatta | 04.03.1984": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2688,11 +3643,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Gerlinde | Macaca mulatta | 04.03.1984",
+      "name": "Gerlinde",
+      "_base_name": "Gerlinde",
+      "display_name": "Gerlinde",
+      "birth_date": "04.03.1984"
     },
-    "Durin V": {
-      "egg_donor": "Gerlinde",
-      "sperm_donor": "Eckhard",
+    "Durin V | Macaca mulatta | 04.03.1987": {
+      "egg_donor": "Gerlinde | Macaca mulatta | 04.03.1984",
+      "sperm_donor": "Eckhard | Macaca mulatta | 04.03.1984",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2702,9 +3662,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Durin V | Macaca mulatta | 04.03.1987",
+      "name": "Durin V",
+      "_base_name": "Durin V",
+      "display_name": "Durin V",
+      "birth_date": "04.03.1987"
     },
-    "Walburga": {
+    "Walburga | Macaca mulatta | 04.03.1987": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2716,11 +3681,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Walburga | Macaca mulatta | 04.03.1987",
+      "name": "Walburga",
+      "_base_name": "Walburga",
+      "display_name": "Walburga",
+      "birth_date": "04.03.1987"
     },
-    "Rüdiger": {
-      "egg_donor": "Walburga",
-      "sperm_donor": "Durin V",
+    "Rüdiger | Macaca mulatta | 04.03.1990": {
+      "egg_donor": "Walburga | Macaca mulatta | 04.03.1987",
+      "sperm_donor": "Durin V | Macaca mulatta | 04.03.1987",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2730,9 +3700,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Rüdiger | Macaca mulatta | 04.03.1990",
+      "name": "Rüdiger",
+      "_base_name": "Rüdiger",
+      "display_name": "Rüdiger",
+      "birth_date": "04.03.1990"
     },
-    "Brigitte": {
+    "Brigitte | Macaca mulatta | 04.03.1990": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2744,11 +3719,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Brigitte | Macaca mulatta | 04.03.1990",
+      "name": "Brigitte",
+      "_base_name": "Brigitte",
+      "display_name": "Brigitte",
+      "birth_date": "04.03.1990"
     },
-    "Durin VI": {
-      "egg_donor": "Brigitte",
-      "sperm_donor": "Rüdiger",
+    "Durin VI | Macaca mulatta | 04.03.1993": {
+      "egg_donor": "Brigitte | Macaca mulatta | 04.03.1990",
+      "sperm_donor": "Rüdiger | Macaca mulatta | 04.03.1990",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2758,9 +3738,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Durin VI | Macaca mulatta | 04.03.1993",
+      "name": "Durin VI",
+      "_base_name": "Durin VI",
+      "display_name": "Durin VI",
+      "birth_date": "04.03.1993"
     },
-    "Hannelore": {
+    "Hannelore | Macaca mulatta | 04.03.1993": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2772,11 +3757,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Hannelore | Macaca mulatta | 04.03.1993",
+      "name": "Hannelore",
+      "_base_name": "Hannelore",
+      "display_name": "Hannelore",
+      "birth_date": "04.03.1993"
     },
-    "Náin I": {
-      "egg_donor": "Hannelore",
-      "sperm_donor": "Durin VI",
+    "Náin I | Macaca mulatta | 04.03.1996": {
+      "egg_donor": "Hannelore | Macaca mulatta | 04.03.1993",
+      "sperm_donor": "Durin VI | Macaca mulatta | 04.03.1993",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2786,9 +3776,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Náin I | Macaca mulatta | 04.03.1996",
+      "name": "Náin I",
+      "_base_name": "Náin I",
+      "display_name": "Náin I",
+      "birth_date": "04.03.1996"
     },
-    "Ursula": {
+    "Ursula | Macaca mulatta | 04.03.1996": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2800,11 +3795,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Ursula | Macaca mulatta | 04.03.1996",
+      "name": "Ursula",
+      "_base_name": "Ursula",
+      "display_name": "Ursula",
+      "birth_date": "04.03.1996"
     },
-    "Thráin I": {
-      "egg_donor": "Ursula",
-      "sperm_donor": "Náin I",
+    "Thráin I | Macaca mulatta | 04.03.1999": {
+      "egg_donor": "Ursula | Macaca mulatta | 04.03.1996",
+      "sperm_donor": "Náin I | Macaca mulatta | 04.03.1996",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2814,9 +3814,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Thráin I | Macaca mulatta | 04.03.1999",
+      "name": "Thráin I",
+      "_base_name": "Thráin I",
+      "display_name": "Thráin I",
+      "birth_date": "04.03.1999"
     },
-    "Renate": {
+    "Renate | Macaca mulatta | 04.03.1999": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2828,11 +3833,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Renate | Macaca mulatta | 04.03.1999",
+      "name": "Renate",
+      "_base_name": "Renate",
+      "display_name": "Renate",
+      "birth_date": "04.03.1999"
     },
-    "Thorin I": {
-      "egg_donor": "Renate",
-      "sperm_donor": "Thráin I",
+    "Thorin I | Macaca mulatta | 04.03.2002": {
+      "egg_donor": "Renate | Macaca mulatta | 04.03.1999",
+      "sperm_donor": "Thráin I | Macaca mulatta | 04.03.1999",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2842,9 +3852,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Thorin I | Macaca mulatta | 04.03.2002",
+      "name": "Thorin I",
+      "_base_name": "Thorin I",
+      "display_name": "Thorin I",
+      "birth_date": "04.03.2002"
     },
-    "Erika I": {
+    "Erika I | Macaca mulatta | 04.03.2002": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2856,11 +3871,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T18:07:48.895867Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Erika I | Macaca mulatta | 04.03.2002",
+      "name": "Erika I",
+      "_base_name": "Erika I",
+      "display_name": "Erika I",
+      "birth_date": "04.03.2002"
     },
-    "Glóin I": {
-      "egg_donor": "Erika I",
-      "sperm_donor": "Thorin I",
+    "Glóin I | Macaca mulatta | 04.03.2005": {
+      "egg_donor": "Erika I | Macaca mulatta | 04.03.2002",
+      "sperm_donor": "Thorin I | Macaca mulatta | 04.03.2002",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2870,9 +3890,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-20T08:46:19.269235Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Glóin I | Macaca mulatta | 04.03.2005",
+      "name": "Glóin I",
+      "_base_name": "Glóin I",
+      "display_name": "Glóin I",
+      "birth_date": "04.03.2005"
     },
-    "Monika": {
+    "Monika | Macaca mulatta | 04.03.2005": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2884,11 +3909,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-20T08:46:19.269235Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Monika | Macaca mulatta | 04.03.2005",
+      "name": "Monika",
+      "_base_name": "Monika",
+      "display_name": "Monika",
+      "birth_date": "04.03.2005"
     },
-    "Óin I": {
-      "egg_donor": "Monika",
-      "sperm_donor": "Glóin I",
+    "Óin I | Macaca mulatta | 04.03.2008": {
+      "egg_donor": "Monika | Macaca mulatta | 04.03.2005",
+      "sperm_donor": "Glóin I | Macaca mulatta | 04.03.2005",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2898,9 +3928,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-20T08:46:19.269235Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Óin I | Macaca mulatta | 04.03.2008",
+      "name": "Óin I",
+      "_base_name": "Óin I",
+      "display_name": "Óin I",
+      "birth_date": "04.03.2008"
     },
-    "Sabine": {
+    "Sabine | Macaca mulatta | 04.03.2008": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2912,11 +3947,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-20T08:46:19.269235Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Sabine | Macaca mulatta | 04.03.2008",
+      "name": "Sabine",
+      "_base_name": "Sabine",
+      "display_name": "Sabine",
+      "birth_date": "04.03.2008"
     },
-    "Náin II": {
-      "egg_donor": "Sabine",
-      "sperm_donor": "Óin I",
+    "Náin II | Macaca mulatta | 04.03.2011": {
+      "egg_donor": "Sabine | Macaca mulatta | 04.03.2008",
+      "sperm_donor": "Óin I | Macaca mulatta | 04.03.2008",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2926,9 +3966,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-20T08:46:19.269235Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Náin II | Macaca mulatta | 04.03.2011",
+      "name": "Náin II",
+      "_base_name": "Náin II",
+      "display_name": "Náin II",
+      "birth_date": "04.03.2011"
     },
-    "Helga": {
+    "Helga | Macaca mulatta | 04.03.2011": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2940,11 +3985,16 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-20T08:46:19.269235Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Helga | Macaca mulatta | 04.03.2011",
+      "name": "Helga",
+      "_base_name": "Helga",
+      "display_name": "Helga",
+      "birth_date": "04.03.2011"
     },
-    "Dietmar": {
-      "egg_donor": "Helga",
-      "sperm_donor": "Náin II",
+    "Dietmar | Macaca mulatta | 04.03.2014": {
+      "egg_donor": "Helga | Macaca mulatta | 04.03.2011",
+      "sperm_donor": "Náin II | Macaca mulatta | 04.03.2011",
       "surrogate_mother": "",
       "surrogate_father": "",
       "genotype": "",
@@ -2954,9 +4004,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-20T08:46:19.269235Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Dietmar | Macaca mulatta | 04.03.2014",
+      "name": "Dietmar",
+      "_base_name": "Dietmar",
+      "display_name": "Dietmar",
+      "birth_date": "04.03.2014"
     },
-    "Anneliese": {
+    "Anneliese | Macaca mulatta | 04.03.2014": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2968,9 +4023,14 @@
       "heritage_only": false,
       "source": "core",
       "updated_at": "2026-04-16T11:47:39.520895Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Anneliese | Macaca mulatta | 04.03.2014",
+      "name": "Anneliese",
+      "_base_name": "Anneliese",
+      "display_name": "Anneliese",
+      "birth_date": "04.03.2014"
     },
-    "Testina": {
+    "Testina | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2978,13 +4038,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-04-16T11:55:10.470514Z",
-      "inbreeding_f": 0.0
+      "inbreeding_f": 0.0,
+      "ipid": "Testina | Unknown species | 01.01.1900",
+      "name": "Testina",
+      "_base_name": "Testina",
+      "display_name": "Testina",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in heritage data."
     },
-    "Animal_A": {
+    "Animal_A | Callitrix jacchus | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -2996,9 +4063,16 @@
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-15T13:33:42.985905Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Animal_A | Callitrix jacchus | 01.01.1900",
+      "name": "Animal_A",
+      "_base_name": "Animal_A",
+      "display_name": "Animal_A",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing birth_date in heritage data."
     },
-    "Animal_C": {
+    "Animal_C | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3006,13 +4080,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-15T13:34:39.678166Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Animal_C | Unknown species | 01.01.1900",
+      "name": "Animal_C",
+      "_base_name": "Animal_C",
+      "display_name": "Animal_C",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in heritage data."
     },
-    "Animal_A_": {
+    "Animal_A_ | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3020,13 +4101,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-15T13:40:06.145672Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Animal_A_ | Unknown species | 01.01.1900",
+      "name": "Animal_A_",
+      "_base_name": "Animal_A_",
+      "display_name": "Animal_A_",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in heritage data."
     },
-    "Animal_B_": {
+    "Animal_B_ | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3034,13 +4122,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-15T13:37:57.891758Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Animal_B_ | Unknown species | 01.01.1900",
+      "name": "Animal_B_",
+      "_base_name": "Animal_B_",
+      "display_name": "Animal_B_",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in heritage data."
     },
-    "Animal_C_": {
+    "Animal_C_ | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3048,13 +4143,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-15T13:36:53.845121Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Animal_C_ | Unknown species | 01.01.1900",
+      "name": "Animal_C_",
+      "_base_name": "Animal_C_",
+      "display_name": "Animal_C_",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in heritage data."
     },
-    "Animal_A!": {
+    "Animal_A! | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3062,13 +4164,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-16T10:11:26.750707Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Animal_A! | Unknown species | 01.01.1900",
+      "name": "Animal_A!",
+      "_base_name": "Animal_A!",
+      "display_name": "Animal_A!",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in heritage data."
     },
-    "Zeta": {
+    "Zeta | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3076,13 +4185,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-16T11:27:05.919931Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Zeta | Unknown species | 01.01.1900",
+      "name": "Zeta",
+      "_base_name": "Zeta",
+      "display_name": "Zeta",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in heritage data."
     },
-    "Betta": {
+    "Betta | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3090,13 +4206,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-16T12:32:55.573068Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Betta | Unknown species | 01.01.1900",
+      "name": "Betta",
+      "_base_name": "Betta",
+      "display_name": "Betta",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack archived_animals data."
     },
-    "Andy": {
+    "Andy | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3104,13 +4227,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "female",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T10:41:40.504732Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Andy | Unknown species | 01.01.1900",
+      "name": "Andy",
+      "_base_name": "Andy",
+      "display_name": "Andy",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
     },
-    "Bobby": {
+    "Bobby | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3118,13 +4248,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "male",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T10:43:58.848448Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Bobby | Unknown species | 01.01.1900",
+      "name": "Bobby",
+      "_base_name": "Bobby",
+      "display_name": "Bobby",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
     },
-    "Cindy": {
+    "Cindy | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3132,13 +4269,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T10:44:25.955111Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Cindy | Unknown species | 01.01.1900",
+      "name": "Cindy",
+      "_base_name": "Cindy",
+      "display_name": "Cindy",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
     },
-    "AAA": {
+    "AAA | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3146,13 +4290,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-16T13:58:35.987886Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "AAA | Unknown species | 01.01.1900",
+      "name": "AAA",
+      "_base_name": "AAA",
+      "display_name": "AAA",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in heritage data."
     },
-    "Dana": {
+    "Dana | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3160,13 +4311,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T10:44:43.346695Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Dana | Unknown species | 01.01.1900",
+      "name": "Dana",
+      "_base_name": "Dana",
+      "display_name": "Dana",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
     },
-    "Echo": {
+    "Echo | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3174,13 +4332,20 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-16T15:09:05.259445Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Echo | Unknown species | 01.01.1900",
+      "name": "Echo",
+      "_base_name": "Echo",
+      "display_name": "Echo",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
     },
-    "Fredi": {
+    "Fredi | Unknown species | 01.01.1900": {
       "egg_donor": "",
       "sperm_donor": "",
       "surrogate_mother": "",
@@ -3188,11 +4353,18 @@
       "genotype": "",
       "node_fill_color": "",
       "sex": "",
-      "species": "",
+      "species": "Unknown species",
       "heritage_only": false,
       "source": "plugin",
       "updated_at": "2026-06-17T09:07:16.901849Z",
-      "inbreeding_f": null
+      "inbreeding_f": null,
+      "ipid": "Fredi | Unknown species | 01.01.1900",
+      "name": "Fredi",
+      "_base_name": "Fredi",
+      "display_name": "Fredi",
+      "birth_date": "01.01.1900",
+      "identity_review_required": true,
+      "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
     }
   },
   "genotype_colors": {

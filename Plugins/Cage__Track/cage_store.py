@@ -14,6 +14,8 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from Plugins.core.animal_identity import animal_base_name
+
 
 UNASSIGNED_CAGE_ID = "cage_unassigned"
 
@@ -131,6 +133,11 @@ class CageStore:
         raw.setdefault("occupants", {})
         if not isinstance(raw["occupants"], dict):
             raw["occupants"] = {}
+        for key, occupant in list(raw["occupants"].items()):
+            if not isinstance(occupant, dict):
+                continue
+            occupant.setdefault("ipid", key)
+            occupant.setdefault("name", animal_base_name(key))
         raw.setdefault("movement_history", {})
         if not isinstance(raw["movement_history"], dict):
             raw["movement_history"] = {}
@@ -332,6 +339,8 @@ class CageStore:
         target_cage = cage_id or UNASSIGNED_CAGE_ID
         entry = {
             "occupant_id": name.strip(),
+            "ipid": name.strip(),
+            "name": animal_base_name(name),
             "type": occ_type,
             "cage_id": target_cage,
             "moved_at": now,
@@ -580,11 +589,13 @@ class CageStore:
         changed = False
 
         # 1. Create occupant entries for new ProgTrack animals
-        for animal_name in animals_dict:
+        for animal_name, record in animals_dict.items():
             if animal_name not in occupants:
                 now = self._now_iso()
                 occupants[animal_name] = {
                     "occupant_id": animal_name,
+                    "ipid": animal_name,
+                    "name": animal_base_name(animal_name, record),
                     "type": "real",
                     "cage_id": UNASSIGNED_CAGE_ID,
                     "moved_at": now,
@@ -623,6 +634,15 @@ class CageStore:
         # 3. Check for invalid cage references
         valid_cages = set(data["structures"]["cages"].keys())
         for occ_id, occ in occupants.items():
+            rec = animals_dict.get(occ_id, {}) or archived_dict.get(occ_id, {})
+            if occ.get("type") == "real":
+                expected_name = animal_base_name(occ_id, rec)
+                if occ.get("ipid") != occ_id:
+                    occ["ipid"] = occ_id
+                    changed = True
+                if occ.get("name") != expected_name:
+                    occ["name"] = expected_name
+                    changed = True
             if occ.get("cage_id") and occ["cage_id"] not in valid_cages:
                 occ["cage_id"] = UNASSIGNED_CAGE_ID
                 occ["moved_at"] = self._now_iso()

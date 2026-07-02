@@ -15,6 +15,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
+from Plugins.core.animal_identity import animal_base_name
 
 PARENT_KEYS = ("egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father")
 
@@ -270,13 +271,28 @@ class HeritageStore:
             if not isinstance(entry, dict):
                 entry = {}
             normalized_entry = self._normalize_parents(entry)
+            visible_name = (
+                self._normalize_text(entry.get("name", ""))
+                or self._normalize_text(entry.get("display_name", ""))
+                or self._normalize_text(entry.get("_base_name", ""))
+                or animal_base_name(name)
+            )
+            normalized_entry["ipid"] = self._normalize_text(entry.get("ipid", "")) or name.strip()
+            normalized_entry["name"] = visible_name
+            normalized_entry["_base_name"] = visible_name
+            normalized_entry["display_name"] = visible_name
             normalized_entry["genotype"] = self._normalize_text(entry.get("genotype", ""))
             normalized_entry["node_fill_color"] = self._normalize_text(entry.get("node_fill_color", ""))
             normalized_entry["sex"] = self._normalize_sex(entry.get("sex", ""))
             normalized_entry["species"] = self._normalize_text(entry.get("species", ""))
+            normalized_entry["birth_date"] = self._normalize_text(entry.get("birth_date", ""))
             normalized_entry["heritage_only"] = bool(entry.get("heritage_only", False))
             normalized_entry["source"] = self._normalize_text(entry.get("source", "plugin")) or "plugin"
             normalized_entry["updated_at"] = self._normalize_text(entry.get("updated_at", ""))
+            if entry.get("identity_review_required"):
+                normalized_entry["identity_review_required"] = True
+                normalized_entry["identity_review_reason"] = self._normalize_text(
+                    entry.get("identity_review_reason", ""))
             raw_f = entry.get("inbreeding_f")
             if raw_f is None:
                 normalized_entry["inbreeding_f"] = None
@@ -700,6 +716,38 @@ class HeritageStore:
         entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
         self.save()
 
+    def set_identity_fields(
+        self,
+        animal_name: str,
+        *,
+        display_name: Optional[str] = None,
+        species: Optional[str] = None,
+        birth_date: Optional[str] = None,
+        review_required: bool = False,
+        review_reason: str = "",
+    ) -> None:
+        key = self._normalize_text(animal_name)
+        if not key:
+            return
+        visible = self._normalize_text(display_name) or animal_base_name(key)
+        entry = self._entry(key)
+        entry["ipid"] = key
+        entry["name"] = visible
+        entry["_base_name"] = visible
+        entry["display_name"] = visible
+        if species is not None:
+            entry["species"] = self._normalize_text(species)
+        if birth_date is not None:
+            entry["birth_date"] = self._normalize_text(birth_date)
+        if review_required:
+            entry["identity_review_required"] = True
+            entry["identity_review_reason"] = self._normalize_text(review_reason)
+        else:
+            entry.pop("identity_review_required", None)
+            entry.pop("identity_review_reason", None)
+        entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        self.save()
+
     def get_species(self, animal_name: str) -> str:
         key = self._normalize_text(animal_name)
         if not key:
@@ -825,6 +873,17 @@ class HeritageStore:
         entry_exists = isinstance(animals, dict) and key in animals
         entry = self._entry(key)
         changed = False
+
+        visible_name = animal_base_name(key, record)
+        for field, value in (
+            ("ipid", key),
+            ("name", visible_name),
+            ("_base_name", visible_name),
+            ("display_name", visible_name),
+        ):
+            if self._normalize_text(entry.get(field, "")) != value:
+                entry[field] = value
+                changed = True
 
         if not entry_exists and self._normalize_text(entry.get("source", "")).lower() != "core":
             entry["source"] = "core"

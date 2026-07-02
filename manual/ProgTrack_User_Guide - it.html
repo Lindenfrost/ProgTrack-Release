@@ -293,6 +293,9 @@
   <h3>4.1 Creazione delle schede</h3>
   <p>Usare l’azione del pannello laterale per creare una scheda. Nella categoria Tutti ProgTrack chiede prima il ruolo, poi apre l’editor corrispondente. I campi obbligatori dipendono dal ruolo; campi ID, progetto, origine, genotipo, genitori, alloggio e limiti appaiono quando rilevanti.</p>
   <p><strong>➕ Nuovo animale</strong> · <strong>Seleziona ruolo</strong> · <strong>Salva</strong></p>
+  <div class="hint">
+    <strong>Identità animale:</strong> ProgTrack identifica ogni animale tramite IPID nel formato <code>Name | Species | DD.MM.YYYY</code>. Il pannello laterale mostra ancora il nome breve, mentre tooltip, dati JSON, importazioni ed esportazioni conservano l'IPID completo. Le modifiche successive a nome, specie o data di nascita richiedono permessi manager.
+  </div>
 
   <h3>4.2 Ruoli animali ed editor specifici</h3>
   <p>Il ruolo determina quale editor e quali schede dati vengono mostrati. Ruoli e controlli steroidei sono disponibili solo quando Steroid Track è attivo.</p>
@@ -335,6 +338,7 @@
   <h3>5.3 Importazione da Excel</h3>
   <p>Le importazioni Excel si basano su nomi colonna esatti. Usare il pulsante di importazione corrispondente al tipo di dato e correggere date non valide, nomi vuoti o valori non numerici prima dell’importazione.</p>
   <table class="basic"><tr><th>Pulsante</th><th>Colonne richieste</th></tr><tr><td><strong>📈 Carica valori sangue</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Carica valori urina</strong></td><td><code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Carica pesi</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Carica valori sperma</strong></td><td><code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
+  <p>Quando un'importazione di sangue, urina, peso o sperma crea un nuovo animale e mancano specie o data di nascita, ProgTrack le richiede all'utente. I file possono contenere colonne identità come <code>Species</code>/<code>Art</code> e <code>Birth Date</code>/<code>Geburtsdatum</code>. I nomi brevi ripetuti devono essere risolti tramite IPID o con informazioni complete di nome/specie/data di nascita.</p>
   <p>Gli identificativi campione opzionali sono riconosciuti da colonne comuni come Probennummer, Sample ID, Sample, Probe, ID, sample_id o probe.</p>
 
   
@@ -495,6 +499,7 @@
     <li>Confermare l'esportazione di tutte le misurazioni e gli eventi
       rilevanti in una cartella di lavoro Excel.</li>
   </ul>
+  <p>Le esportazioni con dati animali includono sia il nome leggibile sia l'<code>IPID</code> (Internal ProgTrack ID). Usare l'IPID per collegamenti o re-importazioni esatte e il nome breve per il controllo umano.</p>
 
   <h3>8.3 Esportazione PDF (con plugin Animal Reports)</h3>
   <p>

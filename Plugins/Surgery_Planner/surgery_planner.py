@@ -56,6 +56,8 @@ from PyQt6.QtWidgets import (
 from typing import Optional, Dict, Any, Union, List, Tuple, Set
 from functools import lru_cache
 
+from Plugins.core.animal_identity import animal_base_name
+
 # Translation helper function
 def tr(messages: Dict[str, Any], key: str, default: str = '', **kwargs) -> str:
     """
@@ -125,6 +127,21 @@ class ScheduleEntry:
         # by default, new entries are unfixed (can be regenerated)
         self.fixed = False
 
+
+def schedule_entry_to_dict(entry: ScheduleEntry, *, date_format: str = "iso") -> Dict[str, Any]:
+    date_value = entry.date.isoformat() if date_format == "iso" else entry.date.strftime(date_format)
+    return {
+        'animal': entry.animal,
+        'ipid': entry.animal,
+        'name': animal_base_name(entry.animal),
+        'event_type': entry.event_type,
+        'date': date_value,
+        'override_weekday': entry.override_weekday,
+        'created_by': entry.created_by,
+        'timestamp': entry.timestamp,
+        'fixed': entry.fixed,
+    }
+
 # ─── JSON I/O ──────────────────────────────────────────────
 
 # Determine the root directory relative to this plugin's location. The plugin lives
@@ -167,7 +184,9 @@ def load_animals() -> list[dict]:
                         continue
                     # Make a shallow copy so we don't mutate the original data
                     rec_copy: dict = rec.copy()
+                    rec_copy['ipid'] = name
                     rec_copy['name'] = name
+                    rec_copy['display_name'] = animal_base_name(name, rec)
                     # Normalise max surgery/embryo keys.  Older files use lower‑case keys.
                     rec_copy.setdefault('OP_max', rec_copy.get('max_op', rec_copy.get('OP_max', 0)))
                     rec_copy.setdefault('Embryo_max', rec_copy.get('max_embryo', rec_copy.get('Embryo_max', 0)))
@@ -284,15 +303,7 @@ def save_schedule_to_plugin(entries: list[ScheduleEntry]) -> None:
         # Convert entries to dict format for JSON serialization
         schedule_data = []
         for entry in entries:
-            schedule_data.append({
-                'animal': entry.animal,
-                'event_type': entry.event_type,
-                'date': entry.date.isoformat(),
-                'override_weekday': entry.override_weekday,
-                'created_by': entry.created_by,
-                'timestamp': entry.timestamp,
-                'fixed': entry.fixed
-            })
+            schedule_data.append(schedule_entry_to_dict(entry, date_format="iso"))
         
         with open(schedule_file, 'w', encoding='utf-8') as f:
             json.dump(schedule_data, f, indent=2, ensure_ascii=False)
@@ -350,10 +361,17 @@ def export_schedule_to_csv(entries: list[ScheduleEntry], filename: str) -> None:
     try:
         with open(filename, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow(['Animal', 'Event Type', 'Date', 'Override Weekday', 'Created By', 'Timestamp'])
+            writer.writerow(['IPID', 'Animal', 'Event Type', 'Date', 'Override Weekday', 'Created By', 'Timestamp'])
             for entry in entries:
-                writer.writerow([entry.animal, entry.event_type, entry.date.isoformat(), 
-                               entry.override_weekday, entry.created_by, entry.timestamp])
+                writer.writerow([
+                    entry.animal,
+                    animal_base_name(entry.animal),
+                    entry.event_type,
+                    entry.date.isoformat(),
+                    entry.override_weekday,
+                    entry.created_by,
+                    entry.timestamp,
+                ])
         logger.debug(f"Exported schedule to {filename}")
     except Exception as e:
         logger.error(f"Failed to export CSV: {e}")
@@ -446,8 +464,13 @@ class GanttWidget(QDialog):
         parent = getattr(self, '_parent', None)
         if parent is None:
             return True
+        can_fn = getattr(parent, '_master_can', None)
+        if callable(can_fn):
+            return bool(can_fn(perm))
         mt = getattr(parent, 'master_track', None)
         if mt is None:
+            return True
+        if "master_track" in getattr(parent, '_disabled_plugins', set()):
             return True
         return bool(getattr(mt, 'can', lambda _: False)(perm))
 
@@ -1210,15 +1233,7 @@ class GanttWidget(QDialog):
         try:
             schedule_data = []
             for entry in self.planned:
-                schedule_data.append({
-                    'animal': entry.animal,
-                    'event_type': entry.event_type,
-                    'date': entry.date.isoformat(),
-                    'override_weekday': entry.override_weekday,
-                    'created_by': entry.created_by,
-                    'timestamp': entry.timestamp,
-                    'fixed': entry.fixed
-                })
+                schedule_data.append(schedule_entry_to_dict(entry, date_format="iso"))
             
             with open(temp_file, 'w', encoding='utf-8') as f:
                 json.dump(schedule_data, f, indent=2, ensure_ascii=False)
@@ -1493,15 +1508,7 @@ class GanttWidget(QDialog):
         try:
             temp_out = {'schedule': []}
             for entry in getattr(self, 'planned', []):
-                temp_out['schedule'].append({
-                    'animal':           entry.animal,
-                    'event_type':       entry.event_type,
-                    'date':             entry.date.strftime(DATE_FORMAT),
-                    'override_weekday': entry.override_weekday,
-                    'fixed':            entry.fixed,
-                    'created_by':       entry.created_by,
-                    'timestamp':        entry.timestamp,
-                })
+                temp_out['schedule'].append(schedule_entry_to_dict(entry, date_format=DATE_FORMAT))
                 # write out our new plan
                 with open(TEMP_SCHEDULE_JSON_FILE, 'w', encoding='utf-8') as f:
                     json.dump(temp_out, f, ensure_ascii=False, indent=2)
@@ -2478,15 +2485,7 @@ class GanttWidget(QDialog):
             try:
                 temp_out = {'schedule': []}
                 for entry in planned:
-                    temp_out['schedule'].append({
-                        'animal': entry.animal,
-                        'event_type': entry.event_type,
-                        'date': entry.date.strftime(DATE_FORMAT),
-                        'override_weekday': entry.override_weekday,
-                        'fixed': entry.fixed,
-                        'created_by': entry.created_by,
-                        'timestamp': entry.timestamp,
-                    })
+                    temp_out['schedule'].append(schedule_entry_to_dict(entry, date_format=DATE_FORMAT))
                 with open(TEMP_SCHEDULE_JSON_FILE, 'w', encoding='utf-8') as f:
                     json.dump(temp_out, f, ensure_ascii=False, indent=2)
                 logger.debug(f"Saved temporary schedule ({len(planned)} entries) to {TEMP_SCHEDULE_JSON_FILE}")
@@ -2734,15 +2733,7 @@ class GanttWidget(QDialog):
                 try:
                     temp_out = {'schedule': []}
                     for e in self.planned:
-                        temp_out['schedule'].append({
-                            'animal':           e.animal,
-                            'event_type':       e.event_type,
-                            'date':             e.date.strftime(DATE_FORMAT),
-                            'override_weekday': e.override_weekday,
-                            'fixed':            e.fixed,
-                            'created_by':       e.created_by,
-                            'timestamp':        e.timestamp,
-                        })
+                        temp_out['schedule'].append(schedule_entry_to_dict(e, date_format=DATE_FORMAT))
                     with open(TEMP_SCHEDULE_JSON_FILE, 'w', encoding='utf-8') as f:
                         json.dump(temp_out, f, ensure_ascii=False, indent=2)
                 except Exception as ex:
@@ -3275,15 +3266,7 @@ class GanttWidget(QDialog):
             # Serialize entries
             out = {'schedule': []}
             for entry in self.planned:
-                out['schedule'].append({
-                    'animal': entry.animal,
-                    'event_type': entry.event_type,
-                    'fixed': entry.fixed,
-                    'date': entry.date.strftime(DATE_FORMAT),
-                    'override_weekday': entry.override_weekday,
-                    'created_by': entry.created_by,
-                    'timestamp': entry.timestamp,
-                })
+                out['schedule'].append(schedule_entry_to_dict(entry, date_format=DATE_FORMAT))
 
             # Write JSON file
             with open(SCHEDULE_JSON_FILE, 'w', encoding='utf-8') as f:
@@ -3539,11 +3522,3 @@ class Plugin:
                                 'An unexpected error occurred while starting the Surgery Planner.') + 
                                 f"\n\n{str(e)}"
             )
-
-if __name__ == '__main__':
-    import sys
-    from PyQt6.QtWidgets import QApplication
-    app = QApplication(sys.argv)
-    window = SurgeryPlannerWidget()
-    window.show()
-    sys.exit(app.exec())

@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+from Plugins.core.animal_identity import animal_base_name
+
 from .converter import PdGConverter, get_paired_data
 
 
@@ -69,7 +71,13 @@ class PdGConverterPlugin:
             # Remove entry if params is None
             all_models.pop(animal_name, None)
         else:
-            all_models[animal_name] = params
+            stored_params = dict(params)
+            stored_params["ipid"] = animal_name
+            stored_params["name"] = animal_base_name(
+                animal_name,
+                getattr(self.app, "animals", {}).get(animal_name, {}),
+            )
+            all_models[animal_name] = stored_params
         
         with open(self.models_file, 'w') as f:
             json.dump(all_models, f, indent=2)

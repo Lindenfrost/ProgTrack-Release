@@ -1,40 +1,48 @@
 {
   "schedule": [
     {
-      "animal": "Ekaterina",
+      "animal": "Ekaterina | Callitrix jacchus | 02.04.2016",
       "event_type": "op",
       "fixed": false,
       "date": "01.07.2026",
       "override_weekday": false,
       "created_by": "surgery_planner_plugin_v1.0.0",
-      "timestamp": "2026-06-26T10:29:46.840263"
+      "timestamp": "2026-06-26T10:29:46.840263",
+      "ipid": "Ekaterina | Callitrix jacchus | 02.04.2016",
+      "name": "Ekaterina"
     },
     {
-      "animal": "Olga",
+      "animal": "Olga | Callitrix jacchus | 20.06.2015",
       "event_type": "embryoübertragung",
       "fixed": false,
       "date": "07.07.2026",
       "override_weekday": false,
       "created_by": "surgery_planner_plugin_v1.0.0",
-      "timestamp": "2026-06-26T10:29:46.842900"
+      "timestamp": "2026-06-26T10:29:46.842900",
+      "ipid": "Olga | Callitrix jacchus | 20.06.2015",
+      "name": "Olga"
     },
     {
-      "animal": "Ekaterina",
+      "animal": "Ekaterina | Callitrix jacchus | 02.04.2016",
       "event_type": "op",
       "fixed": false,
       "date": "30.09.2026",
       "override_weekday": false,
       "created_by": "surgery_planner_plugin_v1.0.0",
-      "timestamp": "2026-06-26T10:29:46.859549"
+      "timestamp": "2026-06-26T10:29:46.859549",
+      "ipid": "Ekaterina | Callitrix jacchus | 02.04.2016",
+      "name": "Ekaterina"
     },
     {
-      "animal": "Olga",
+      "animal": "Olga | Callitrix jacchus | 20.06.2015",
       "event_type": "embryoübertragung",
       "fixed": false,
       "date": "06.10.2026",
       "override_weekday": false,
       "created_by": "surgery_planner_plugin_v1.0.0",
-      "timestamp": "2026-06-26T10:29:46.862468"
+      "timestamp": "2026-06-26T10:29:46.862468",
+      "ipid": "Olga | Callitrix jacchus | 20.06.2015",
+      "name": "Olga"
     }
   ]
 }

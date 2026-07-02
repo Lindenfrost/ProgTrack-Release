@@ -289,6 +289,9 @@
   <h3>4.1 Datensätze anlegen</h3>
   <p>Verwenden Sie die Aktion der Seitenleiste, um einen Datensatz anzulegen. In der Kategorie Alle fragt ProgTrack zuerst nach der Rolle und öffnet danach den passenden Editor. Pflichtfelder hängen von der Rolle ab; optionale ID-, Projekt-, Herkunfts-, Genotyp-, Eltern-, Haltungs- und Grenzwertfelder erscheinen dort, wo sie relevant sind.</p>
   <p><strong>➕ Neues Tier</strong> · <strong>Rolle auswählen</strong> · <strong>Speichern</strong></p>
+  <div class="hint">
+    <strong>Tieridentität:</strong> ProgTrack identifiziert jedes Tier über die IPID im Format <code>Name | Spezies | TT.MM.JJJJ</code>. Die Seitenleiste zeigt weiterhin den kurzen Namen, aber Tooltips, gespeicherte JSON-Daten, Importe und Exporte behalten die vollständige IPID. Nachträgliche Änderungen an Name, Spezies oder Geburtsdatum dürfen nur Manager durchführen.
+  </div>
 
   <h3>4.2 Tierrollen und rollenspezifische Editoren</h3>
   <p>Die Rolle bestimmt, welcher Editor und welche Datentabs angezeigt werden. Steroidbezogene Rollen und Steuerungen sind nur verfügbar, wenn Steroid Track aktiv ist.</p>
@@ -331,6 +334,7 @@
   <h3>5.3 Import aus Excel</h3>
   <p>Excel-Importe basieren auf exakten Spaltennamen. Verwenden Sie die zum Datentyp passende Import-Schaltfläche und bereinigen Sie ungültige Datumswerte, leere Namen oder nicht-numerische Werte vor dem Import.</p>
   <table class="basic"><tr><th>Schaltfläche</th><th>Erforderliche Spalten</th></tr><tr><td><strong>📈 Blutwerte laden</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Urinwerte laden</strong></td><td><code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Gewichte laden</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Spermawerte laden</strong></td><td><code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
+  <p>Wenn beim Import von Blut-, Urin-, Gewichts- oder Spermadaten ein neues Tier entsteht und Spezies oder Geburtsdatum fehlen, fragt ProgTrack diese Angaben nach. Importdateien können Identitätsspalten wie <code>Species</code>/<code>Art</code> und <code>Birth Date</code>/<code>Geburtsdatum</code> enthalten. Wiederholte Kurznamen sollten über IPID oder vollständige Name/Spezies/Geburtsdatum-Information eindeutig gemacht werden.</p>
   <p>Optionale Probennummern werden aus üblichen Spalten wie Probennummer, Sample ID, Sample, Probe, ID, sample_id oder probe erkannt.</p>
 
   
@@ -491,6 +495,7 @@
     <li>Bestätigen, dass alle relevanten Messungen und Ereignisse in eine
       Excel-Arbeitsmappe exportiert werden.</li>
   </ul>
+  <p>Tierbezogene Exporte enthalten den lesbaren Tiernamen und die <code>IPID</code> (Internal ProgTrack ID). Verwenden Sie die IPID für eindeutige Zuordnung oder Re-Importe und den Kurznamen für die menschliche Kontrolle.</p>
 
   <h3>8.3 PDF-Export (mit Animal Reports-Plugin)</h3>
   <p>
