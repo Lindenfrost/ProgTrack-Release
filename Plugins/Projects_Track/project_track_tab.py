@@ -19,6 +19,16 @@ from PyQt6.QtWidgets import (
     QTextEdit, QVBoxLayout, QWidget,
 )
 from Plugins.core.animal_identity import animal_base_name
+from Plugins.core.animal_roles import (
+    ROLE_VALUE_AMME,
+    ROLE_VALUE_EXPERIMENTAL,
+    ROLE_VALUE_OFFSPRING,
+    ROLE_VALUE_PARTNER,
+    ROLE_VALUE_SAMENSP,
+    ROLE_VALUE_SPENDER,
+    ROLE_VALUE_ZUCHTTIER,
+    canonical_role_value,
+)
 from Plugins.core.project_visibility import diff_project_associated_users
 from Plugins.core.platform_helpers import open_local_path
 logger = logging.getLogger(__name__)
@@ -55,19 +65,20 @@ def _doc_icon(fname: str) -> str:
             '.csv': '\U0001f4ca', '.txt': '\U0001f4dd', '.md': '\U0001f4dd'}.get(ext, '\U0001f4ce')
 
 _ROLE_KEY_MAP: dict = {
-    'Spenderin':   'role.spenderin',
-    'Amme':        'role.amme',
-    'Samenspender':'role.samenspender',
-    'Nachkomme':   'role.offspring',
-    'Partnertier': 'role.partnertier',
-    'Zuchttier':   'role.zuchttier',
-    'Versuchstier':'role.experimental',
+    ROLE_VALUE_SPENDER: 'role.egg_cell_donor',
+    ROLE_VALUE_AMME: 'role.surrogate',
+    ROLE_VALUE_SAMENSP: 'role.sperm_donor',
+    ROLE_VALUE_OFFSPRING: 'role.offspring',
+    ROLE_VALUE_PARTNER: 'role.partner_animal',
+    ROLE_VALUE_ZUCHTTIER: 'role.breeding_animal',
+    ROLE_VALUE_EXPERIMENTAL: 'role.experimental_animal',
 }
 
 def _localize_role(role: str, messages: dict) -> str:
-    if not role:
+    role_value = canonical_role_value(role)
+    if not role_value:
         return messages.get('role.unknown', 'Unknown')
-    return messages.get(_ROLE_KEY_MAP.get(role, ''), role)
+    return messages.get(_ROLE_KEY_MAP.get(role_value, ''), role_value)
 
 def _mk_form() -> QFormLayout:
     f = QFormLayout()
@@ -267,14 +278,21 @@ class _RoleCountList(QWidget):
         add=QPushButton(_m(messages,"project.roles.add","+ Add role"))
         add.setFlat(True); add.setEnabled(can_edit); add.clicked.connect(lambda: self._add_row())
         self._v.addWidget(add)
-    _VALID_ROLES = ['Spenderin', 'Amme', 'Samenspender', 'Nachkomme', 'Partnertier', 'Zuchttier']
+    _VALID_ROLES = [
+        ROLE_VALUE_SPENDER,
+        ROLE_VALUE_AMME,
+        ROLE_VALUE_SAMENSP,
+        ROLE_VALUE_OFFSPRING,
+        ROLE_VALUE_PARTNER,
+        ROLE_VALUE_ZUCHTTIER,
+    ]
 
     def _add_row(self, role='', count=0):
         row_w = QWidget(); row_h = QHBoxLayout(row_w); row_h.setContentsMargins(0, 0, 0, 0)
         role_cb = QComboBox(); role_cb.setEnabled(self._can_edit)
         for r in self._VALID_ROLES:
             role_cb.addItem(_localize_role(r, self._messages), r)
-        idx = role_cb.findData(role)
+        idx = role_cb.findData(canonical_role_value(role))
         if idx >= 0: role_cb.setCurrentIndex(idx)
         elif role: role_cb.insertItem(0, _localize_role(role, self._messages) or role, role); role_cb.setCurrentIndex(0)
         count_sb = QSpinBox(); count_sb.setRange(0, 999999); count_sb.setValue(count)
@@ -291,7 +309,7 @@ class _RoleCountList(QWidget):
             item = self._v.takeAt(idx)
             if item and item.widget(): item.widget().deleteLater()
     def get_roles(self):
-        return [{'role': r['role_cb'].currentData() or r['role_cb'].currentText(), 'count': r['count_sb'].value()}
+        return [{'role': canonical_role_value(r['role_cb'].currentData() or r['role_cb'].currentText()), 'count': r['count_sb'].value()}
                 for r in self._rows if r['role_cb'].currentData() or r['role_cb'].currentText()]
     def set_roles(self, roles):
         for r in list(self._rows): self._remove_row(r)
@@ -482,16 +500,27 @@ class ProjectTrackTab(QWidget):
         self._current_project = pname
         self._refresh_project_list()
 
+    def _audit_project_action(self, action: str, project_name: str) -> None:
+        mt = getattr(self._app, 'master_track', None)
+        if mt and hasattr(mt, 'audit'):
+            try:
+                mt.audit(action, project_name)
+            except Exception as exc:
+                logger.warning(
+                    "Project audit failed: action=%s project=%s error=%s",
+                    action,
+                    project_name,
+                    exc,
+                    exc_info=True,
+                )
+
     def _on_archive(self):
         name = self._current_project
         if not name or self._history.is_archived(name): return
         msg = _m(self._messages, "project.tab.archive_confirm", "Archive project '{name}'?").replace('{name}', name)
         if QMessageBox.question(self, "", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes: return
         self._history.set_archived(name, True)
-        mt = getattr(self._app, 'master_track', None)
-        if mt and hasattr(mt, 'audit'):
-            try: mt.audit('archive_project', name)
-            except Exception: pass
+        self._audit_project_action('archive_project', name)
         self._refresh_project_list()
 
     def _on_restore_project(self):
@@ -500,10 +529,7 @@ class ProjectTrackTab(QWidget):
         msg = _m(self._messages, "project.tab.restore_confirm", "Restore project '{name}'?").replace('{name}', name)
         if QMessageBox.question(self, "", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes: return
         self._history.set_archived(name, False)
-        mt = getattr(self._app, 'master_track', None)
-        if mt and hasattr(mt, 'audit'):
-            try: mt.audit('restore_project', name)
-            except Exception: pass
+        self._audit_project_action('restore_project', name)
         self._refresh_project_list()
 
     def _on_delete_project(self):
@@ -516,10 +542,7 @@ class ProjectTrackTab(QWidget):
         # Also delete from history (projects_history.json)
         if self._history and hasattr(self._history, 'delete_project'):
             self._history.delete_project(name)
-        mt = getattr(self._app, 'master_track', None)
-        if mt and hasattr(mt, 'audit'):
-            try: mt.audit('delete_project', name)
-            except Exception: pass
+        self._audit_project_action('delete_project', name)
         self._current_project = None
         self._archive_btn.setEnabled(False)
         self._restore_btn.setEnabled(False)
@@ -850,34 +873,42 @@ class ProjectTrackTab(QWidget):
         not_in   = [n for n in active if n not in in_exp]
         m = self._messages
         rec = self._project_record(name)
-        role_max = {r['role']: r['count']
+        role_max = {canonical_role_value(r.get('role')): r['count']
                     for r in (rec.get('animals_config', {}).get('roles') or [])
                     if r.get('role')}
 
-        _ROLE_ORDER = ['Spenderin', 'Amme', 'Samenspender', 'Nachkomme', 'Partnertier', 'Zuchttier', 'Versuchstier']
+        _ROLE_ORDER = [
+            ROLE_VALUE_SPENDER,
+            ROLE_VALUE_AMME,
+            ROLE_VALUE_SAMENSP,
+            ROLE_VALUE_OFFSPRING,
+            ROLE_VALUE_PARTNER,
+            ROLE_VALUE_ZUCHTTIER,
+            ROLE_VALUE_EXPERIMENTAL,
+        ]
         _ROLE_COLORS = {
-            'Spenderin':   'deeppink',
-            'Amme':        'mediumpurple',
-            'Samenspender':'#1a1aff',
-            'Nachkomme':   'gray',
-            'Partnertier': 'darkorange',
-            'Zuchttier':   'gray',
-            'Versuchstier':'#00AAAA',
+            ROLE_VALUE_SPENDER: 'deeppink',
+            ROLE_VALUE_AMME: 'mediumpurple',
+            ROLE_VALUE_SAMENSP: '#1a1aff',
+            ROLE_VALUE_OFFSPRING: 'gray',
+            ROLE_VALUE_PARTNER: 'darkorange',
+            ROLE_VALUE_ZUCHTTIER: 'gray',
+            ROLE_VALUE_EXPERIMENTAL: '#00AAAA',
         }
 
         def _name_color(aname):
             data = all_known.get(aname)
             if data is None:
                 return '#888888'
-            role_val = (data.get('rolle') or '').strip()
+            role_val = canonical_role_value(data.get('rolle') or '')
             sex = (data.get('sex') or '').lower()
-            if role_val in ('Nachkomme', 'Zuchttier'):
+            if role_val in (ROLE_VALUE_OFFSPRING, ROLE_VALUE_ZUCHTTIER):
                 if 'female' in sex or 'weiblich' in sex:
-                    return 'deeppink' if role_val == 'Nachkomme' else '#C71585'
+                    return 'deeppink' if role_val == ROLE_VALUE_OFFSPRING else '#C71585'
                 if 'male' in sex or 'männlich' in sex:
-                    return '#1a1aff' if role_val == 'Nachkomme' else '#00008B'
+                    return '#1a1aff' if role_val == ROLE_VALUE_OFFSPRING else '#00008B'
                 return 'gray'
-            if role_val == 'Versuchstier':
+            if role_val == ROLE_VALUE_EXPERIMENTAL:
                 return '#FF7788' if ('female' in sex or 'weiblich' in sex) else '#00FFDD'
             return _ROLE_COLORS.get(role_val, '#333333')
 
@@ -999,7 +1030,7 @@ class ProjectTrackTab(QWidget):
             if names:
                 role_groups = defaultdict(list)
                 for aname in names:
-                    role_val = (all_known.get(aname, {}).get('rolle') or '').strip()
+                    role_val = canonical_role_value(all_known.get(aname, {}).get('rolle') or '')
                     role_groups[role_val].append(aname)
                 for r in role_groups:
                     role_groups[r].sort()
@@ -1169,10 +1200,7 @@ class ProjectTrackTab(QWidget):
         mt_dirty = getattr(self._app, 'master_track', None)
         if changed_users and mt_dirty and hasattr(mt_dirty, 'mark_project_visibility_dirty'):
             mt_dirty.mark_project_visibility_dirty(sorted(changed_users))
-        mt = getattr(self._app, 'master_track', None)
-        if mt and hasattr(mt, 'audit'):
-            try: mt.audit('edit_project', name)
-            except Exception: pass
+        self._audit_project_action('edit_project', name)
         self._refresh_animals_section(name)
 
     def select_project(self, name):

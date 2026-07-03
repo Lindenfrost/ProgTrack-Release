@@ -49,6 +49,7 @@ from Plugins.core.animal_identity import (
     resolve_animal_reference_text,
     split_animal_identity_key,
 )
+from Plugins.core.animal_roles import ROLE_VALUE_AMME, ROLE_VALUE_SAMENSP, ROLE_VALUE_SPENDER, canonical_role_value
 
 from .display_context import DisplayContext, DisplayContextBuilder
 from .display_strategies import AllAnimalsStrategy, SelectedAnimalsStrategy
@@ -2418,11 +2419,11 @@ class HeritageTrackWidget(QWidget):
             # Get record from main app data (active or archived) for proper sex/shape
             record = self._get_node_record(node)
             display_label = self._get_node_display_label(node, record)
-            role = str(record.get("rolle", "")).strip().lower()
+            role = canonical_role_value(record.get("rolle", ""))
             # Determine sex: role takes priority, then sex field, then heritage manual sex, default female
-            if role in ("spenderin", "amme"):
+            if role in (ROLE_VALUE_SPENDER, ROLE_VALUE_AMME):
                 sex = "female"
-            elif role == "samenspender":
+            elif role == ROLE_VALUE_SAMENSP:
                 sex = "male"
             else:
                 sex_field = str(record.get("sex", "")).strip().lower()

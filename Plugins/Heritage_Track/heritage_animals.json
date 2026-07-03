@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "updated_at": "2026-07-02T12:40:42.817682Z",
+  "updated_at": "2026-07-03T12:31:42.370574Z",
   "animals": {
     "Eluréd | Callitrix jacchus | 20.01.2007": {
       "egg_donor": "Nimloth | Callitrix jacchus | 06.09.2004",
@@ -37,7 +37,7 @@
       "birth_date": "06.09.2004",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-07-02T12:33:08.661988Z",
+      "updated_at": "2026-07-03T12:31:42.366203Z",
       "inbreeding_f": 0.0
     },
     "Dior | Callitrix jacchus | 09.05.2004": {
@@ -56,7 +56,7 @@
       "birth_date": "09.05.2004",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-07-02T12:33:08.661868Z",
+      "updated_at": "2026-07-03T12:31:42.366086Z",
       "inbreeding_f": 0.0
     },
     "Elurín | Callitrix jacchus | 17.07.2007": {
@@ -75,8 +75,8 @@
       "birth_date": "17.07.2007",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-04-20T08:48:13.795055Z",
-      "inbreeding_f": null
+      "updated_at": "2026-07-03T12:31:42.135276Z",
+      "inbreeding_f": 0.0
     },
     "Arwen | Callitrix jacchus | 23.02.2015": {
       "egg_donor": "Celebrían | Callitrix jacchus | 06.05.2007",
@@ -2507,7 +2507,7 @@
       "birth_date": "08.01.2008",
       "heritage_only": false,
       "source": "plugin",
-      "updated_at": "2026-07-02T12:33:08.662098Z",
+      "updated_at": "2026-07-03T12:31:42.366309Z",
       "inbreeding_f": 0.0
     },
     "Eärendil | Callitrix jacchus | 14.02.2010": {
@@ -3286,7 +3286,7 @@
       "birth_date": "17.08.2000",
       "heritage_only": false,
       "source": "core",
-      "updated_at": "2026-04-17T11:00:16.973450Z",
+      "updated_at": "2026-07-03T12:31:42.365602Z",
       "inbreeding_f": 0.0
     },
     "Melian | Callitrix jacchus | 29.06.2000": {
@@ -3305,7 +3305,7 @@
       "birth_date": "29.06.2000",
       "heritage_only": false,
       "source": "core",
-      "updated_at": "2026-04-17T11:00:16.973450Z",
+      "updated_at": "2026-07-03T12:31:42.365747Z",
       "inbreeding_f": 0.0
     },
     "Lúthien | Callitrix jacchus | 29.07.2002": {
@@ -3324,7 +3324,7 @@
       "birth_date": "29.07.2002",
       "heritage_only": false,
       "source": "core",
-      "updated_at": "2026-07-02T12:33:08.661635Z",
+      "updated_at": "2026-07-03T12:31:42.365859Z",
       "inbreeding_f": 0.0
     },
     "Beren | Callitrix jacchus | 25.08.2001": {
@@ -3343,7 +3343,7 @@
       "birth_date": "25.08.2001",
       "heritage_only": false,
       "source": "core",
-      "updated_at": "2026-07-02T12:33:08.661758Z",
+      "updated_at": "2026-07-03T12:31:42.365979Z",
       "inbreeding_f": 0.0
     },
     "Durin I | Macaca mulatta | 04.03.1963": {

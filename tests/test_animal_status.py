@@ -1,7 +1,12 @@
 import unittest
 
 from Plugins.core.animal_status import (
+    ABNORMAL_STATUS_SYMBOL,
     DECEASED_STATUS_SYMBOL,
+    OFFSPRING_STATUS_SYMBOL,
+    POSSIBLY_PREGNANT_STATUS_SYMBOL,
+    PREGNANT_STATUS_SYMBOL,
+    SICK_STATUS_SYMBOL,
     compact_death_status,
     compact_status_with_death_priority,
     has_death_date,
@@ -19,6 +24,14 @@ MESSAGES = {
 
 
 class AnimalStatusTest(unittest.TestCase):
+    def test_compact_status_symbol_constants_keep_existing_tokens(self):
+        self.assertEqual(PREGNANT_STATUS_SYMBOL, "☉")
+        self.assertEqual(POSSIBLY_PREGNANT_STATUS_SYMBOL, "☉?")
+        self.assertEqual(OFFSPRING_STATUS_SYMBOL, "Oo")
+        self.assertEqual(SICK_STATUS_SYMBOL, "+")
+        self.assertEqual(ABNORMAL_STATUS_SYMBOL, "!")
+        self.assertEqual(DECEASED_STATUS_SYMBOL, "✝")
+
     def test_death_date_detection_uses_death_date_and_legacy_sterbedatum(self):
         self.assertTrue(has_death_date({"death_date": "01.02.2024"}))
         self.assertTrue(has_death_date({"sterbedatum": "01.02.2024"}))

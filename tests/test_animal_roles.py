@@ -7,8 +7,16 @@ from Plugins.core.animal_roles import (
     REQUIRED_DIALOG_BLOCKS,
     ROLE_VALUE_AMME,
     ROLE_VALUE_EXPERIMENTAL,
+    ROLE_VALUE_OFFSPRING,
+    ROLE_VALUE_PARTNER,
+    ROLE_VALUE_SAMENSP,
     ROLE_VALUE_SPENDER,
+    ROLE_VALUE_UNKNOWN,
+    ROLE_VALUE_ZUCHTTIER,
+    canonical_role_value,
     clear_deleted_role_assignments,
+    import_capabilities_for_blocks,
+    normalize_animal_record_roles,
     normalize_block_list,
 )
 
@@ -28,21 +36,50 @@ class AnimalRoleRegistryTest(unittest.TestCase):
         self.assertIn(ROLE_VALUE_EXPERIMENTAL, values)
         self.assertTrue(registry.get_by_value(ROLE_VALUE_SPENDER)["built_in"])
 
-    def test_custom_role_uses_stable_custom_value_and_emoji(self):
+    def test_builtin_roles_use_internal_ids_and_display_labels(self):
         registry = self._registry()
-        role = registry.make_custom_role("Training group", "🧪")
+        expected_values = {
+            ROLE_VALUE_SPENDER,
+            ROLE_VALUE_AMME,
+            ROLE_VALUE_SAMENSP,
+            ROLE_VALUE_OFFSPRING,
+            ROLE_VALUE_PARTNER,
+            ROLE_VALUE_ZUCHTTIER,
+            ROLE_VALUE_EXPERIMENTAL,
+            ROLE_VALUE_UNKNOWN,
+        }
+        roles = [role for role in registry.roles() if role.get("built_in")]
+
+        self.assertEqual(expected_values, {role["value"] for role in roles})
+        for role in roles:
+            label = role["label"]
+            self.assertNotIn("_", label)
+            self.assertEqual(label[:1].upper(), label[:1])
+
+    def test_legacy_role_values_normalize_to_internal_ids(self):
+        self.assertEqual(ROLE_VALUE_SPENDER, canonical_role_value("Spenderin"))
+        self.assertEqual(ROLE_VALUE_AMME, canonical_role_value("amme"))
+        self.assertEqual(ROLE_VALUE_SAMENSP, canonical_role_value("Samenspender"))
+        self.assertEqual(ROLE_VALUE_PARTNER, canonical_role_value("Partnertier"))
+        self.assertEqual(ROLE_VALUE_ZUCHTTIER, canonical_role_value("Zuchttier"))
+        self.assertEqual(ROLE_VALUE_EXPERIMENTAL, canonical_role_value("Versuchstier"))
+
+    def test_custom_role_uses_stable_custom_value_and_icon(self):
+        registry = self._registry()
+        role = registry.make_custom_role("Training group", "*")
 
         self.assertEqual("Training group", role["label"])
-        self.assertEqual("🧪", role["icon"])
+        self.assertEqual("*", role["icon"])
         self.assertTrue(role["value"].startswith("custom.training_group"))
+        self.assertEqual("role.custom.training_group", role["label_key"])
         self.assertEqual("basic", role["base_editor"])
 
     def test_custom_role_values_are_unique(self):
         registry = self._registry()
-        first = registry.make_custom_role("Training group", "🧪")
+        first = registry.make_custom_role("Training group", "*")
         second = registry.make_custom_role(
             "Training group",
-            "🧪",
+            "*",
             existing_values={first["value"]},
         )
 
@@ -50,7 +87,7 @@ class AnimalRoleRegistryTest(unittest.TestCase):
 
     def test_save_and_reload_preserves_custom_roles(self):
         registry = self._registry()
-        custom = registry.make_custom_role("Observation", "🔎")
+        custom = registry.make_custom_role("Observation", "*")
         registry.save_roles([*registry.roles(), custom])
 
         reloaded = AnimalRoleRegistry(registry.path)
@@ -58,17 +95,16 @@ class AnimalRoleRegistryTest(unittest.TestCase):
 
         self.assertIsNotNone(saved)
         self.assertEqual("Observation", saved["label"])
-        self.assertEqual("🔎", saved["icon"])
+        self.assertEqual("*", saved["icon"])
 
     def test_display_uses_translation_for_builtins_and_label_for_custom(self):
         registry = self._registry()
-        messages = {"role.spenderin": "Egg donor"}
-        custom = registry.make_custom_role("Observation", "🔎")
+        messages = {"role.egg_cell_donor": "Egg cell donor"}
+        custom = registry.make_custom_role("Observation", "*")
         registry.save_roles([*registry.roles(), custom])
 
-        self.assertEqual("♀ Egg donor", registry.display_for_value(ROLE_VALUE_SPENDER, messages))
-        self.assertEqual("🔎 Observation", registry.display_for_value(custom["value"], messages))
-
+        self.assertEqual("\u2640 Egg cell donor", registry.display_for_value(ROLE_VALUE_SPENDER, messages))
+        self.assertEqual("* Observation", registry.display_for_value(custom["value"], messages))
 
     def test_dialog_blocks_always_include_required_blocks(self):
         blocks = normalize_block_list(["health_flags", "unknown_block"])
@@ -80,7 +116,7 @@ class AnimalRoleRegistryTest(unittest.TestCase):
 
     def test_custom_roles_get_basic_dialog_and_event_recipes(self):
         registry = self._registry()
-        custom = registry.make_custom_role("Observation", "ðŸ”Ž")
+        custom = registry.make_custom_role("Observation", "*")
         registry.save_roles([*registry.roles(), custom])
 
         reloaded = AnimalRoleRegistry(registry.path)
@@ -113,6 +149,7 @@ class AnimalRoleRegistryTest(unittest.TestCase):
         self.assertEqual("confirmed", saved["review_state"])
         self.assertEqual("Facility breeder", saved["original_label"])
         self.assertEqual("basic", saved["base_editor"])
+        self.assertEqual(f"role.{imported['value']}", saved["label_key"])
 
     def test_imported_role_with_existing_exact_label_integrates_existing_role(self):
         registry = self._registry()
@@ -147,6 +184,22 @@ class AnimalRoleRegistryTest(unittest.TestCase):
         self.assertEqual("", animals["A"]["rolle"])
         self.assertEqual(ROLE_VALUE_SPENDER, animals["B"]["rolle"])
 
+    def test_animal_record_roles_are_normalized_to_internal_ids(self):
+        animals = {
+            "A": {"rolle": "Spenderin"},
+            "B": {"rolle": "Samenspender"},
+            "C": {"rolle": ROLE_VALUE_EXPERIMENTAL},
+            "D": {"rolle": ""},
+        }
+
+        changed = normalize_animal_record_roles(animals)
+
+        self.assertEqual(["A", "B", "D"], changed)
+        self.assertEqual(ROLE_VALUE_SPENDER, animals["A"]["rolle"])
+        self.assertEqual(ROLE_VALUE_SAMENSP, animals["B"]["rolle"])
+        self.assertEqual(ROLE_VALUE_EXPERIMENTAL, animals["C"]["rolle"])
+        self.assertEqual(ROLE_VALUE_UNKNOWN, animals["D"]["rolle"])
+
     def test_builtin_dialog_block_overrides_are_preserved(self):
         registry = self._registry()
         roles = registry.roles()
@@ -164,6 +217,31 @@ class AnimalRoleRegistryTest(unittest.TestCase):
             self.assertIn(required, new_blocks)
             self.assertIn(required, edit_blocks)
         self.assertIn("health_flags", edit_blocks)
+
+    def test_sidebar_import_capabilities_follow_dialog_blocks(self):
+        caps = import_capabilities_for_blocks([
+            "blood_progesterone",
+            "urine_pdg",
+            "weight",
+            "sperm_measurements",
+        ])
+
+        self.assertEqual(
+            {"blood": True, "urine": True, "weight": True, "sperm": True},
+            caps,
+        )
+
+    def test_sidebar_import_capabilities_respect_plugin_gates(self):
+        caps = import_capabilities_for_blocks(
+            ["blood_progesterone", "urine_pdg", "weight", "sperm_measurements"],
+            steroid_active=False,
+            has_pdg_plugin=False,
+        )
+
+        self.assertEqual(
+            {"blood": False, "urine": False, "weight": True, "sperm": False},
+            caps,
+        )
 
 
 if __name__ == "__main__":

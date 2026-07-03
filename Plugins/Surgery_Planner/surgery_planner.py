@@ -53,10 +53,12 @@ from PyQt6.QtWidgets import (
     QMenu, QFileDialog
 )
 
-from typing import Optional, Dict, Any, Union, List, Tuple, Set
-from functools import lru_cache
-
 from Plugins.core.animal_identity import animal_base_name
+from Plugins.core.animal_roles import ROLE_VALUE_AMME, ROLE_VALUE_SPENDER, canonical_role_value
+
+
+def _animal_role_value(animal: Dict[str, Any]) -> str:
+    return canonical_role_value((animal or {}).get('rolle', ''))
 
 # Translation helper function
 def tr(messages: Dict[str, Any], key: str, default: str = '', **kwargs) -> str:
@@ -653,10 +655,6 @@ class GanttWidget(QDialog):
         # ── Main container: a horizontal splitter between left (calendar+settings) and right (Gantt) ──
         main_layout = QVBoxLayout(self)
         splitter = QSplitter(Qt.Orientation.Horizontal)
-
-        # Import remaining Qt components needed for this method
-        from PyQt6.QtGui import QIcon
-        from PyQt6 import QtWidgets
 
         # ── Left pane: calendar (top) + settings (scrollable) ─────────────────────
         left_widget = QWidget()
@@ -1268,11 +1266,11 @@ class GanttWidget(QDialog):
 
     def generate_new_schedule_workflow(self):
         """Two-stage schedule generation with proper file handling."""
-        # Stage 1: Generate to temporary file
+        # Stage 1: generate the editable staging schedule.
         temp_file = os.path.join(PLUGIN_DIR, 'Surgery_Pre_Planner.schedule.json')
         self._generate_schedule_to_memory()  # Generate schedule in memory first
         
-        # Save generated schedule to temporary file
+        # Save generated schedule to the staging file.
         try:
             schedule_data = []
             for entry in self.planned:
@@ -1280,12 +1278,12 @@ class GanttWidget(QDialog):
             
             with open(temp_file, 'w', encoding='utf-8') as f:
                 json.dump(schedule_data, f, indent=2, ensure_ascii=False)
-            logger.info(f"Temporary schedule saved to {temp_file}")
+            logger.info(f"Staging schedule saved to {temp_file}")
         except Exception as e:
-            logger.error(f"Failed to save temporary schedule: {e}")
+            logger.error(f"Failed to save staging schedule: {e}")
             return False
         
-        # Stage 2: Copy to main schedule file
+        # Stage 2: publish the staging schedule to the main schedule file.
         main_file = os.path.join(PLUGIN_DIR, 'surgery_planner.schedule.json')
         try:
             shutil.copy2(temp_file, main_file)
@@ -1294,15 +1292,15 @@ class GanttWidget(QDialog):
             # Load the new schedule
             self.load_schedule_on_startup()
             
-            # Keep temp file for debugging (as requested)
-            logger.info("Temporary file kept for debugging purposes")
+            # Keep the staging file so manual edits can continue from the last generated plan.
+            logger.info("Staging schedule retained for further edits")
             return True
         except Exception as e:
             logger.error(f"Failed to copy schedule: {e}")
             return False
 
     def _generate_schedule_to_memory(self):
-        """Generate schedule data in memory - replaces _generate_schedule_to_file()."""
+        """Generate schedule data in memory before writing the staging schedule."""
         self.planned = []
         
         # Get flexible ratio requirements
@@ -1314,7 +1312,7 @@ class GanttWidget(QDialog):
             logger.warning("Both donor and surrogate counts are zero - no events scheduled")
             return
         
-        # For now, maintain existing generation logic (will be updated in Task 8)
+        # Reuse the central generator so all schedule paths share the same allocation rules.
         self._generate()  # Use existing generation method
         
         logger.info(f"Generated schedule with {len(self.planned)} entries")
@@ -1322,18 +1320,18 @@ class GanttWidget(QDialog):
     def _load_saved_schedule(self) -> None:
         """Load and render an existing schedule on startup, if present."""
         try:
-            # Prefer loading from the temporary schedule; fall back to permanent
+            # Prefer the editable staging schedule; fall back to the published schedule.
             if os.path.exists(TEMP_SCHEDULE_JSON_FILE):
                 sched_file = TEMP_SCHEDULE_JSON_FILE
             elif os.path.exists(SCHEDULE_JSON_FILE):
-                # Copy permanent to temp and load from temp
+                # Copy published schedule into staging and load from there.
                 sched_file = TEMP_SCHEDULE_JSON_FILE
                 try:
                     shutil.copyfile(SCHEDULE_JSON_FILE, TEMP_SCHEDULE_JSON_FILE)
-                    logger.debug(f"Copied permanent schedule to temporary for load: "
+                    logger.debug(f"Copied published schedule to staging for load: "
                                  f"{TEMP_SCHEDULE_JSON_FILE}")
                 except Exception as e:
-                    logger.error(f"Failed to copy permanent schedule to temporary: {e}")
+                    logger.error(f"Failed to copy published schedule to staging: {e}")
             else:
                 return
             with open(sched_file, 'r', encoding='utf-8') as f:
@@ -1383,9 +1381,9 @@ class GanttWidget(QDialog):
 
         # layout animals - sort by role (donors first, then surrogates)
         all_animals = {e.animal for e in self.planned}
-        animal_roles = {a['name']: a.get('rolle', '').lower() for a in self.animals}
-        donors_names = sorted([n for n in all_animals if animal_roles.get(n) == 'spenderin'])
-        surrogates_names = sorted([n for n in all_animals if animal_roles.get(n) == 'amme'])
+        animal_roles = {a['name']: _animal_role_value(a) for a in self.animals}
+        donors_names = sorted([n for n in all_animals if animal_roles.get(n) == ROLE_VALUE_SPENDER])
+        surrogates_names = sorted([n for n in all_animals if animal_roles.get(n) == ROLE_VALUE_AMME])
         names = donors_names + surrogates_names  # Donors at top, surrogates below
         y_spacing = 1.0 / max(len(names), 1)
         y_positions = {n:(i+0.5)*y_spacing for i,n in enumerate(names)}
@@ -1460,17 +1458,17 @@ class GanttWidget(QDialog):
         self.checked_animals.clear()
         
         # Sort animals by role: donors first, then surrogates
-        donors = [a for a in self.animals if a.get('rolle', '').lower() == 'spenderin']
-        surrogates = [a for a in self.animals if a.get('rolle', '').lower() == 'amme']
+        donors = [a for a in self.animals if _animal_role_value(a) == ROLE_VALUE_SPENDER]
+        surrogates = [a for a in self.animals if _animal_role_value(a) == ROLE_VALUE_AMME]
         sorted_animals = sorted(donors, key=lambda x: x.get('name', '')) + sorted(surrogates, key=lambda x: x.get('name', ''))
 
         # For each animal, compute performed vs. allowed
         for a in sorted_animals:
             name = a.get('name')
-            role = a.get('rolle', '').lower()
+            role = _animal_role_value(a)
             status = a.get('status', '')
             
-            if role == 'spenderin':
+            if role == ROLE_VALUE_SPENDER:
                 performed = len(a.get('op', []))                
                 allowed   = int(a.get('OP_max', 0))
                 label_txt = f"{performed}/{allowed} {tr(self.messages, 'surgery_planner.label.operations_short', 'OPs')}"
@@ -1651,7 +1649,7 @@ class GanttWidget(QDialog):
                 if entry.date.weekday() not in valid_days:
                     msg = self.messages.get('op_planner.warning.not_surgery_weekday', 'Not a surgery Weekday!') if entry.event_type=='op' \
                           else self.messages.get('op_planner.warning.not_transfer_weekday', 'Not an allowed transfer weekday!')
-                    msg += f"\nCheck 'Ignore Blocked Dates' to override."
+                    msg += "\nCheck 'Ignore Blocked Dates' to override."
                     QMessageBox.warning(
                         self, 
                         self.messages.get('op_planner.warning.conflict', 'Conflict'), 
@@ -2003,8 +2001,8 @@ class GanttWidget(QDialog):
                 if name not in self.checked_animals:
                     continue
                     
-                role = a.get('rolle', '').lower()
-                if role == 'spenderin':
+                role = _animal_role_value(a)
+                if role == ROLE_VALUE_SPENDER:
                     total_allowed = int(a.get('OP_max', 0))
                     performed = len(a.get('op', []))
                     used_fixed = sum(1 for e in fixed_events
@@ -2016,7 +2014,7 @@ class GanttWidget(QDialog):
                         'performed': performed,
                         'next': start_date
                     })
-                elif role == 'amme':
+                elif role == ROLE_VALUE_AMME:
                     total_allowed = int(a.get('Embryo_max', 0))
                     performed = len(a.get('embryoübertragung', []))
                     used_fixed = sum(1 for e in fixed_events
@@ -2058,8 +2056,8 @@ class GanttWidget(QDialog):
                 return
 
             # Prepare y positions for Gantt chart - sort by role (donors first, then surrogates)
-            donors_names = sorted([a['name'] for a in self.animals if a.get('rolle', '').lower() == 'spenderin'])
-            surrogates_names = sorted([a['name'] for a in self.animals if a.get('rolle', '').lower() == 'amme'])
+            donors_names = sorted([a['name'] for a in self.animals if _animal_role_value(a) == ROLE_VALUE_SPENDER])
+            surrogates_names = sorted([a['name'] for a in self.animals if _animal_role_value(a) == ROLE_VALUE_AMME])
             names = donors_names + surrogates_names  # Donors at top, surrogates below
             y_spacing = 1.0 / max(len(names), 1)
             y_positions = {name: (i + 0.5) * y_spacing for i, name in enumerate(names)}
@@ -2098,13 +2096,13 @@ class GanttWidget(QDialog):
                 previous_events = []
                 
                 # Add events from animal data
-                if animal_data.get('animal', {}).get('rolle', '').lower() == 'spenderin':
+                if _animal_role_value(animal_data.get('animal', {})) == ROLE_VALUE_SPENDER:
                     ops = animal.get('op', [])
                     for op_date_str in ops:
                         try:
                             op_date = datetime.strptime(op_date_str, DATE_FORMAT).date()
                             previous_events.append(op_date)
-                        except:
+                        except (TypeError, ValueError):
                             continue
                 else:
                     transfers = animal.get('embryoübertragung', [])
@@ -2112,7 +2110,7 @@ class GanttWidget(QDialog):
                         try:
                             tr_date = datetime.strptime(tr_date_str, DATE_FORMAT).date()
                             previous_events.append(tr_date)
-                        except:
+                        except (TypeError, ValueError):
                             continue
                 
                 # Add already planned events for this animal
@@ -2192,8 +2190,10 @@ class GanttWidget(QDialog):
                             logger.info(f"Fixed surgery group: Found optimal {len(additional_donors)} donors "
                                        f"using set-aware selection: {[d['animal']['name'] for d in additional_donors]}")
                         else:
-                            logger.warning(f"Fixed surgery group: Could not find optimal donor selection "
-                                          f"that preserves future complete sets - SKIPPING this fixed group")
+                            logger.warning(
+                                "Fixed surgery group: Could not find optimal donor selection "
+                                "that preserves future complete sets - SKIPPING this fixed group"
+                            )
                             continue
                     
                     # Only store the fixed group if it can be completed
@@ -2525,16 +2525,16 @@ class GanttWidget(QDialog):
                         planned.append(entry)
                         # Note: s['remaining'] and s['next'] already updated in first pass
 
-            # Save generated plan to temporary file
+            # Save generated plan to the editable staging file.
             try:
                 temp_out = {'schedule': []}
                 for entry in planned:
                     temp_out['schedule'].append(schedule_entry_to_dict(entry, date_format=DATE_FORMAT))
                 with open(TEMP_SCHEDULE_JSON_FILE, 'w', encoding='utf-8') as f:
                     json.dump(temp_out, f, ensure_ascii=False, indent=2)
-                logger.debug(f"Saved temporary schedule ({len(planned)} entries) to {TEMP_SCHEDULE_JSON_FILE}")
+                logger.debug(f"Saved staging schedule ({len(planned)} entries) to {TEMP_SCHEDULE_JSON_FILE}")
             except Exception as e:
-                logger.error(f"Failed to save temporary schedule: {e}")
+                logger.error(f"Failed to save staging schedule: {e}")
 
             # Update internal schedule
             self.planned = planned
@@ -2587,64 +2587,6 @@ class GanttWidget(QDialog):
                 f"{self.messages.get('op_planner.error.generating_schedule', 'Error generating schedule')}: {str(e)}"
             )
 
-    def _parse_weekdays(self, text: str) -> set[int]:
-        """
-        Convert a comma or whitespace‑separated list of weekday names into
-        a set of weekday indices (Monday=0 .. Sunday=6).  Supports English,
-        German, and Russian weekday names. Unrecognized tokens are ignored.
-        """
-        # Mapping of weekday names to indices (Monday=0 .. Sunday=6)
-        weekday_map = {
-            # English
-            'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3, 'friday': 4, 'saturday': 5, 'sunday': 6,
-            'mon': 0, 'tue': 1, 'wed': 2, 'thu': 3, 'fri': 4, 'sat': 5, 'sun': 6,
-            # German
-            'montag': 0, 'dienstag': 1, 'mittwoch': 2, 'donnerstag': 3, 'freitag': 4, 'samstag': 5, 'sonntag': 6,
-            # Russian
-            'понедельник': 0, 'вторник': 1, 'среда': 2, 'четверг': 3, 'пятница': 4, 'суббота': 5, 'воскресенье': 6
-        }
-        
-        # Split by comma or whitespace and convert to lowercase
-        tokens = re.split(r'[,\s]+', text.strip().lower())
-        valid_days = set()
-        
-        for token in tokens:
-            if token in weekday_map:
-                valid_days.add(weekday_map[token])
-        
-        return valid_days
-
-    def _on_calendar_date_clicked(self, date):
-        """Handle calendar date clicks - toggle block/unblock status."""
-        try:
-            # Check if the selected date is already blocked
-            is_blocked = any(bd.date == date for bd in self.block_days)
-            
-            if is_blocked:
-                # Unblock the date
-                self.block_days = [bd for bd in self.block_days if bd.date != date]
-                logger.info(f"Unblocked date: {date}")
-                msg = tr(self.messages, 'surgery_planner.msg.day_unblocked', 'Unblocked day: {date}').format(date=date)
-            else:
-                # Block the date
-                name = tr(self.messages, 'surgery_planner.default_holiday_name', 'Holiday')
-                self.block_days.append(BlockDay(date, name))
-                logger.info(f"Blocked date: {date} as {name}")
-                msg = tr(self.messages, 'surgery_planner.msg.day_blocked', 'Blocked day: {date}').format(date=date)
-            
-            # Refresh calendar formatting to apply red text on blocked days
-            self._update_calendar_format()
-            
-            # Show success message
-            QMessageBox.information(
-                self,
-                tr(self.messages, 'op_planner.window_title', 'Surgery Planner'),
-                msg
-            )
-            
-        except Exception as e:
-            logger.error(f"Error handling calendar date click: {e}")
-
     def _delete_event(self, entry: ScheduleEntry) -> bool:
         """
         Delete an event from the schedule and return it to the possibility pool.
@@ -2665,7 +2607,7 @@ class GanttWidget(QDialog):
                 # because _generate() recalculates from animal data each time
                 # No need to manually update animal records
                 
-                # Persist the updated schedule to temporary file
+                # Persist the updated schedule to the staging file.
                 self._persist_temp_schedule()
                 
                 # Redraw the schedule
@@ -2773,7 +2715,7 @@ class GanttWidget(QDialog):
                     entry.override_weekday = orig_override
                     return
 
-                # Persist the updated plan to the temporary JSON
+                # Persist the updated plan to the staging JSON.
                 try:
                     temp_out = {'schedule': []}
                     for e in self.planned:
@@ -2866,9 +2808,9 @@ class GanttWidget(QDialog):
             available_animals = []
             for animal in self.animals:
                 name = animal.get('name', '')
-                role = animal.get('rolle', '').lower()
+                role = _animal_role_value(animal)
                 
-                if role == 'spenderin':
+                if role == ROLE_VALUE_SPENDER:
                     # Check if donor has remaining capacity
                     total_allowed = int(animal.get('OP_max', 0))
                     performed = len(animal.get('op', []))
@@ -2878,7 +2820,7 @@ class GanttWidget(QDialog):
                             'role': 'donor',
                             'display': f"{name} (Donor: {performed}/{total_allowed})"
                         })
-                elif role == 'amme':
+                elif role == ROLE_VALUE_AMME:
                     # Check if surrogate has remaining capacity
                     total_allowed = int(animal.get('Embryo_max', 0))
                     performed = len(animal.get('embryoübertragung', []))
@@ -3002,7 +2944,7 @@ class GanttWidget(QDialog):
                 self.planned.append(entry)
                 logger.info(f"Manually created event: {event_type} for {animal_data['name']} on {event_date}")
                 
-                # Persist to temporary schedule
+                # Persist to the staging schedule.
                 self._persist_temp_schedule()
                 
                 # Redraw schedule
@@ -3203,7 +3145,7 @@ class GanttWidget(QDialog):
             logger.error(f"Failed to update calendar formatting: {e}")
 
     def _export_csv(self):
-        """Export CSV with user-selectable location - REPLACES existing _export_csv()"""
+        """Export the current schedule as CSV to a user-selected location."""
         suggested_name = f"schedule_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         filename, _ = QFileDialog.getSaveFileName(
             self, 
@@ -3227,7 +3169,7 @@ class GanttWidget(QDialog):
                 logger.error(f"CSV export failed: {e}")
 
     def _export_png(self):
-        """Export PNG with user-selectable location - REPLACES existing _export_png()"""
+        """Export the current schedule figure as PNG to a user-selected location."""
         suggested_name = f"schedule_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         filename, _ = QFileDialog.getSaveFileName(
             self, 
@@ -3251,7 +3193,7 @@ class GanttWidget(QDialog):
                 logger.error(f"PNG export failed: {e}")
 
     def _save_schedule_as(self):
-        """Save schedule JSON with user-selectable location - NEW function"""
+        """Save the current schedule JSON to a user-selected location."""
         if not hasattr(self, 'planned') or not self.planned:
             QMessageBox.warning(
                 self,

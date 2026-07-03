@@ -1,6 +1,5 @@
 {
   "app.title": "ProgTrack v.0.1.1",
-
   "menu.program": "Einstellungen",
   "menu.program.language_settings": "Sprache",
   "menu.program.language_settings.english": "Englisch",
@@ -11,8 +10,8 @@
   "style.dialog.title": "Stileinstellungen",
   "settings.tab.visual_style": "Visueller Stil",
   "settings.tab.role_setup": "Rollen-Setup",
-  "settings.role_setup.notice": "Tierrollen sind global. Neue eigene Rollen verwenden vorerst ein Emoji-Label; später werden diese durch UI-Grafiken ersetzt.",
-  "settings.role_setup.locked": "Nur Lord- oder Master-Benutzer können das Tierrollen-Setup ändern.",
+  "settings.role_setup.notice": "",
+  "settings.role_setup.locked": "Nur Lord-, Master- oder Manager-Benutzer k?nnen das Tierrollen-Setup ?ndern.",
   "settings.role_setup.col.active": "Aktiv",
   "settings.role_setup.col.order": "Reihenfolge",
   "settings.role_setup.col.icon": "Emoji",
@@ -65,7 +64,6 @@
   "style.sperm_progressive_marker": "Spermien Progressiv-Markierung:",
   "style.line_style": "Linienstil:",
   "style.reset_defaults": "Auf Standard zurücksetzen",
-
   "menu.file": "Datei",
   "menu.file.section.reports": "Berichte",
   "menu.file.export": "Berichte exportieren (.xlsx)",
@@ -159,25 +157,20 @@
   "tab.flow_track": "Flow Track",
   "flow_track.visualization.title": "Embryotransfer-Fluss",
   "flow_track.visualization.subtitle": "Visualisierung der Spender-Leihmutter-Beziehungen",
-  
   "flow_track.dialog.egg_donor.title": "Eizellspender-Statistiken",
   "flow_track.dialog.egg_donor.label": "Eizellspender",
   "flow_track.dialog.egg_donor.surgeries": "Operationen",
-  
   "flow_track.dialog.sperm_donor.title": "Samenspender-Statistiken",
   "flow_track.dialog.sperm_donor.label": "Samenspender",
   "flow_track.dialog.sperm_donor.donations": "Samenspenden",
-  
   "flow_track.dialog.surrogate.title": "Leihmutter-Statistiken",
   "flow_track.dialog.surrogate.label": "Leihmutter",
   "flow_track.dialog.surrogate.transfers": "Embryotransfers",
   "flow_track.dialog.surrogate.no_transfers": "Keine Transfers erfasst",
-  
   "flow_track.button.settings": "Einstellungen",
   "flow_track.button.refresh": "Von ProgTrack aktualisieren",
   "flow_track.button.fit_auto": "Automatisch anpassen",
   "flow_track.button.freezer": "Gefrierschrank zeigen/verbergen",
-  
   "flow_track.settings.title": "Flow Track Einstellungen",
   "flow_track.settings.display": "Anzeigeoptionen",
   "flow_track.settings.show_names": "Tiernamen anzeigen",
@@ -197,20 +190,16 @@
   "flow_track.settings.metric.fert_rate_in_vivo": "Befruchtungsrate (in vivo M2)",
   "flow_track.settings.metric.total_implantation": "Gesamt-Implantationsrate",
   "flow_track.settings.metric.transfer_success_rate": "Transfer-Erfolgsrate",
-  
   "flow_track.export.title": "Flow Track Daten exportieren",
   "flow_track.export.format": "Exportformat",
   "flow_track.export.json": "JSON-Sicherung",
   "flow_track.export.excel": "Excel (.xlsx)",
   "flow_track.export.pdf": "PDF-Bericht",
-  
   "flow_track.confirm_save.title": "Speichern bestätigen",
   "flow_track.confirm_save.message": "Änderungen an {name}s {type}-Daten speichern?",
-  
   "flow_track.error.save_failed.title": "Speicherfehler",
   "flow_track.error.save_failed.message": "Speichern fehlgeschlagen: {error}",
   "flow_track.animal_info.title": "Tierinformationen",
-  
   "flow_track.edit_embryo.title": "Embryo bearbeiten",
   "flow_track.edit_embryo.embryo_label": "Embryo:",
   "flow_track.edit_embryo.egg_donor": "Eizellspender:",
@@ -222,7 +211,6 @@
   "flow_track.edit_embryo.none": "(Keine)",
   "flow_track.edit_embryo.implanted": "Implantiert",
   "flow_track.edit_embryo.cryopreserved": "Kryokonserviert",
-  
   "flow_track.settings.lifebar_metrics": "LIFEBAR-EFFIZIENZMETRIKEN",
   "flow_track.settings.egg_donors": "Eizellspenderinnen:",
   "flow_track.settings.sperm_donors": "Samenspender:",
@@ -240,7 +228,6 @@
   "flow_track.settings.aggregation.per_donation": "Pro Spende",
   "flow_track.settings.aggregation.per_transfer": "Pro Transfer",
   "flow_track.settings.aggregation.total": "Gesamt",
-  
   "flow_track.metric.per_surgery_m1_embryo": "M1→Embryo",
   "flow_track.metric.per_surgery_m2_embryo": "M2→Embryo",
   "flow_track.metric.per_surgery_all_eggs_embryo": "Alle Eizellen→Embryo",
@@ -259,7 +246,6 @@
   "flow_track.metric.per_donation_pregnancy": "Befruchtete Eizellen→Schwangerschaft",
   "flow_track.metric.total_embryo": "Befruchtete Eizellen→Embryo (Gesamt)",
   "flow_track.metric.total_pregnancy": "Befruchtete Eizellen→Schwangerschaft (Gesamt)",
-  
   "flow_track.efficiency.unknown_date": "Unbekannt",
   "flow_track.efficiency.m1_to_embryo": "M1→Embryo",
   "flow_track.efficiency.m2_to_embryo": "M2→Embryo",
@@ -278,7 +264,6 @@
   "flow_track.efficiency.embryos": "Embryonen",
   "flow_track.efficiency.total_transferred": "Gesamt transferiert",
   "flow_track.efficiency.total_implanted": "Gesamt implantiert",
-  
   "flow_track.dialog.per_surgery": "Effizienz pro Operation:",
   "flow_track.dialog.per_donation": "Effizienz pro Spende:",
   "flow_track.dialog.per_transfer": "Effizienz pro Transfer:",
@@ -286,7 +271,6 @@
   "flow_track.dialog.efficiency_metrics": "EFFIZIENZMETRIKEN",
   "flow_track.dialog.sperm_donor.m1_fert": "M1 befruchtet: ",
   "flow_track.dialog.sperm_donor.m2_fert": "M2 befruchtet: ",
-  
   "flow_track.export.save_json": "JSON-Sicherung speichern",
   "flow_track.export.save_excel": "Excel-Datei speichern",
   "flow_track.export.save_pdf": "PDF-Bericht speichern",
@@ -328,7 +312,6 @@
   "flow_track.export.col.pregnancies": "Schwangerschaften",
   "flow_track.export.col.fert_preg_pct": "Befr.→Schw. %",
   "flow_track.export.col.embryos_transferred": "Transferierte Embryonen",
-  
   "flow_track.tooltip.surgeries": "Operationen",
   "flow_track.tooltip.sperm_samples": "Samenproben",
   "flow_track.tooltip.transfers": "Transfers",
@@ -337,17 +320,14 @@
   "flow_track.tooltip.sperm": "Samen:",
   "flow_track.tooltip.implanted": "Implantiert:",
   "flow_track.tooltip.cryo": "Kryo:",
-  
   "flow_track.stage.in_vivo_m2": "in vivo M2",
   "flow_track.stage.in_vitro_m2": "IVM M2",
   "flow_track.freezer_label": "GEFRIERSCHRANK",
   "flow_track.freezer.frozen_prefix": "Eingefroren:",
   "flow_track.unknown": "Unbekannt",
-  
   "flow_track.dialog.no_donation": "-- Keine Spende ausgewählt --",
   "flow_track.confirm_change.title": "Änderung bestätigen",
   "flow_track.confirm_change.message": "Möchten Sie diese Daten ändern?",
-  
   "flow_track.dialog.egg_donor.date_label": "Datum:",
   "flow_track.dialog.egg_donor.gv_label": "GV isoliert:",
   "flow_track.dialog.egg_donor.m2_label": "M2 isoliert:",
@@ -380,7 +360,6 @@
   "flow_track.dialog.egg_donor.usable_per_gv_desc": "Anzahl transferierbarer/einfrierbarerer Embryonen pro entnommener GV-Eizelle",
   "flow_track.dialog.egg_donor.fert_per_gv": "Befruchtete pro GV (Frühergebnis-KPI)",
   "flow_track.dialog.egg_donor.fert_per_gv_desc": "Anzahl erfolgreich befruchteter IVM-abgeleiteter Eizellen pro entnommener GV-Eizelle",
-  
   "flow_track.dialog.sperm_donor.date_label": "Datum:",
   "flow_track.dialog.sperm_donor.ivm_m2_applied_label": "IVM M2 verwendet:",
   "flow_track.dialog.sperm_donor.ivm_m2_fert_label": "IVM M2 befruchtet:",
@@ -414,24 +393,19 @@
   "flow_track.dialog.sperm_donor.implantation_rate_desc": "Anteil der transferierten, die implantieren",
   "flow_track.dialog.sperm_donor.fert_rate_in_vivo": "Befruchtungsrate (in vivo M2)",
   "flow_track.dialog.sperm_donor.fert_rate_in_vivo_desc": "Anteil der in vivo M2, die befruchtet werden (optional)",
-  
   "flow_track.dialog.surrogate.proportion_transferred": "Anteil der transferierten Embryonen, die zur Implantation führten",
   "flow_track.dialog.surrogate.proportion_transfers": "Anteil der Transfers, die zur Implantation führten",
   "flow_track.dialog.total_implantation_rate": "Gesamt-Implantationsrate:",
   "flow_track.dialog.transfer_success_rate": "Transfer-Erfolgsrate:",
   "flow_track.confirm_delete.title": "Löschen bestätigen",
   "flow_track.confirm_delete.embryo_message": "Embryo {embryo_id} löschen?",
-  
   "flow_track.no_data": "Keine Daten",
-  
   "button.create": "Erstellen",
   "button.close": "Schließen",
   "button.export": "Exportieren",
-  
   "menu.view": "Ansicht",
   "menu.info": "Info",
   "menu.info.about": "Über das Programm",
-
   "sidebar.available_animals": "Verfügbare Tiere:",
   "sidebar.archived_animals": "Archivierte Tiere:",
   "sidebar.no_archived_animals": "Keine archivierten Tiere",
@@ -439,16 +413,14 @@
   "sidebar.filter.all": "Alle",
   "sidebar.filter.follicle_phase": "Follikelphase",
   "sidebar.filter.luteal_phase": "Lutealphase",
-  "sidebar.category.tooltip.female":    "Spenderinnen und Ammen",
-  "sidebar.category.tooltip.male":      "Samenspender",
+  "sidebar.category.tooltip.female": "Eizellspenderinnen und Ammen",
+  "sidebar.category.tooltip.male": "Samenspender",
   "sidebar.category.tooltip.offspring": "Nachkommen",
-  "sidebar.category.tooltip.partners":  "Partnertiere",
-  "sidebar.category.tooltip.breeders":  "Zuchttiere",
-  "sidebar.category.tooltip.all":       "Alle Tiere",
-
+  "sidebar.category.tooltip.partners": "Partnertiere",
+  "sidebar.category.tooltip.breeders": "Zuchttiere",
+  "sidebar.category.tooltip.all": "Alle Tiere",
   "tab.plots": "Diagramme",
   "tab.reports": "Berichte",
-
   "button.sidebar.new_animal": "➕    Neues Tier",
   "button.sidebar.edit_animal": "✏️    Bearbeiten",
   "button.sidebar.edit_role": "🫥    Rolle bearbeiten",
@@ -459,10 +431,8 @@
   "button.sidebar.archive": "📦    Archivieren",
   "button.sidebar.restore": "⤴️    Wiederherstellen",
   "button.sidebar.delete": "🗑️    Löschen",
-
   "button.yes": "Ja",
   "button.no": "Nein",
-
   "button.save": "Speichern",
   "button.export_xlsx": "Export *.xlsx",
   "button.fit_auto": "Fit automatisch",
@@ -500,12 +470,10 @@
   "form.field.max_prog": "Max Prog.:",
   "form.field.max_pgf": "Max PGF:",
   "form.field.max_sperm_samples": "Max. Spermaproben:",
-  
   "dialog.field.id": "ID:",
   "dialog.field.chip_nr": "Chip-Nr.:",
   "dialog.field.origin": "Herkunft:",
   "dialog.field.project": "Projekt:",
-  
   "form.label.name": "Name:",
   "form.label.ref_weight": "Referenzgewicht (g):",
   "form.label.max_sperm_samples": "Max Spermaproben:",
@@ -537,34 +505,26 @@
   "dialog.save_excel.filter": "Excel-Dateien (*.xlsx)",
   "line_style.sperm.label": "Spermawerte:",
   "line_style.sperm.group": "Spermawerte",
-  
   "group.visibility.title": "Anzeige",
   "group.line_style.title": "Liniendarstellung",
-  
   "checkbox.progesterone": "Progesteron",
   "checkbox.weight": "Gewicht",
   "checkbox.events": "Ereignisse",
-  
   "mode.combined": "Kombiniert",
   "mode.blood": "Blut (Pgr)",
   "mode.urine": "Urin (PdG)",
-  
   "line_style.prog.label": "Progesteron:",
   "line_style.combined.label": "Blut + Urin",
   "line_style.blood.label": "Blut (Pgr)",
   "line_style.urine.label": "Urin (PdG)",
   "line_style.weight.label": "Gewicht:",
-  
   "label.on": "Ein",
   "label.off": "Aus",
-  
   "stats.max_embryo_short": "Max Embryo:",
   "stats.max_embryo": "Max. Embryotransfers:",
   "stats.max_op": "Max. Operationen:",
   "stats.max_births": "Max. Geburten:",
-  
   "footer.rights": "Copyright © {year} Dimitri L. Lindenwald und Deutsches Primatenzentrum GmbH",
-  
   "edit_animal.tab.prog": "Progesteron",
   "edit_animal.tab.pdg": "PdG",
   "edit_animal.tab.unified": "Vereinheitl. Prog.",
@@ -572,9 +532,8 @@
   "edit_animal.tab.weight": "Gewicht",
   "edit_animal.tab.events": "Ereignisse",
   "edit_animal.tab.op": "Operationen",
-  
   "role.spender": "Spender",
-  "role.spenderin": "Spenderin",
+  "role.spenderin": "Eizellspenderin",
   "role.amme": "Amme",
   "role.samenspender": "Samenspender",
   "role.offspring": "Nachkomme",
@@ -595,7 +554,6 @@
   "dialog.versuchstier.field.max_measurements": "Max. Messungen:",
   "dialog.new_animal.select_role": "Rolle auswählen",
   "dialog.new_animal.select_role_prompt": "Rolle für das neue Tier wählen:",
-  
   "error.read_json.too_large": "Die Datendatei ist zu groß.",
   "error.read_json.cannot_read": "Konnte {file} nicht lesen.",
   "error.write_json.no_permission": "Keine Schreibberechtigung für Verzeichnis {target_dir}: {error}",
@@ -604,17 +562,14 @@
   "error.write_json.fallback_failure": "Speichern fehlgeschlagen: {error}. Daten wurden nicht gespeichert.",
   "warning.load.json.invalid_records": "{count} ungültige Datensätze wurden ignoriert.",
   "warning.load.json.no_data": "Keine Daten gefunden. Überprüfen Sie die JSON-Datei oder importieren Sie neue Tierdaten.",
-  
   "warning.import_pdg.invalid_rows": "{count} ungültige Zeilen wurden ignoriert.",
   "info.import_pdg.added": "{count} PdG-Einträge hinzugefügt.",
   "info.import_pdg.none_added": "Keine neuen PdG-Einträge hinzugefügt.",
-  
   "error.import_weights.load": "Fehler beim Laden der Excel-Datei: {error}",
   "error.import_weights.columns_required": "Die Excel-Datei muss die Spalten 'Name', 'Datum' und 'Gewicht' enthalten.",
   "error.import_pdg.load": "Fehler beim Laden der PdG-Excel-Datei: {error}",
   "info.import_weights.added": "{count} Gewichtsmessungen hinzugefügt.",
   "info.import_weights.none_added": "Keine neuen Gewichtsmessungen hinzugefügt.",
-  
   "dialog.field.name": "Name:",
   "dialog.field.species": "Spezies:",
   "dialog.species.placeholder": "(Bitte auswählen)",
@@ -624,12 +579,10 @@
   "dialog.field.max_pgf": "Max PGF:",
   "dialog.field.birth_death_date": "Geburts- / Todesdatum:",
   "dialog.field.special_status": "Besonderer Status:",
-  
   "error.print.no_selection": "Bitte wählen Sie mindestens ein Tier aus.",
   "error.print.date_order": "Das 'Von'-Datum muss vor dem 'Bis'-Datum liegen.",
   "error.print.openpyxl_not_installed": "Openpyxl ist nicht installiert. Bitte installieren Sie es mit 'pip install openpyxl'.",
   "warning.print.same_date": "Die 'Von'- und 'Bis'-Daten sind identisch. Es werden nur Daten für diesen Tag exportiert.",
-  
   "app.initializing": "Initialisiere...",
   "app.loading_data": "Lade Daten, bitte warten...",
   "app.data_loaded": "Daten erfolgreich geladen!",
@@ -640,7 +593,6 @@
   "status.sick": "Krank",
   "status.abnormal": "Auffällig",
   "status.pregnant": "Trächtig",
-  
   "dialog.female_animal.checkbox.sick": "Krank",
   "dialog.female_animal.checkbox.abnormal": "Auffällig",
   "dialog.female_animal.health_status": "Gesundheitsstatus:",
@@ -668,7 +620,6 @@
   "dialog.female_animal.button.add": "Hinzufügen",
   "dialog.female_animal.button.delete": "Löschen",
   "dialog.female_animal.tab.events": "Ereignisse",
-  
   "dialog.partner.checkbox.sick": "Krank",
   "dialog.partner.checkbox.abnormal": "Abnormal",
   "dialog.partner.health_status": "Gesundheitsstatus:",
@@ -691,7 +642,6 @@
   "dialog.partner.error.name_exists": "Name existiert bereits.",
   "dialog.partner.error.invalid_date": "Ungültiges Datum: {date}",
   "dialog.partner.error.invalid_weight": "Ungültiges Gewicht: {weight}",
-  
   "dialog.sperm_donor.checkbox.sick": "Krank",
   "dialog.sperm_donor.health_status": "Gesundheitsstatus:",
   "dialog.sperm_donor.title": "Samenspender",
@@ -711,7 +661,6 @@
   "dialog.sperm_donor.column.volume": "Volumen (ml)",
   "dialog.sperm_donor.column.total": "Gesamt (M)",
   "dialog.sperm_donor.column.weight": "Gewicht (g)",
-  
   "dialog.offspring.checkbox.sick": "Krank",
   "dialog.offspring.checkbox.abnormal": "Abnormal",
   "dialog.offspring.health_status": "Gesundheitsstatus:",
@@ -767,7 +716,6 @@
   "table.header.delete": "Löschen",
   "table.header.progesterone": "Progesteron (ng/ml)",
   "table.header.sample_id": "Proben-ID",
-  
   "plot.ylabel.weight": "Gewicht (g)",
   "plot.ylabel.progesterone": "Pgr (ng/ml)",
   "plot.ylabel.pdg": "PdG (µg/mg Cr)",
@@ -840,17 +788,14 @@
   "error.initialization.title": "Initialisierungsfehler",
   "error.initialization.message": "Fehler beim Starten der Anwendung: {error}\n\nWeitere Details finden Sie in der Protokolldatei.",
   "error.settings.load": "Fehler beim Laden der Einstellungen",
-  
   "error.archive.no_selection": "Bitte wählen Sie ein Tier aus.",
   "question.species_change.confirm": "Spezies auf '{species}' setzen? Dies kann nur einmal geändert werden.",
   "question.delete_archived.confirm": "'{name}' endgültig löschen?",
-  
   "error.new_animal.name_empty": "Name darf nicht leer sein.",
   "error.name_required": "Name darf nicht leer sein.",
   "error.new_animal.name_invalid": "Ungültiger Name.",
   "error.new_animal.name_exists": "Ein Tier mit diesem Namen existiert bereits.",
   "error.new_animal.numbers_invalid": "Bitte gültige Zahlen eingeben.",
-  
   "error.edit_animal.no_selection": "Bitte wählen Sie ein Tier aus.",
   "error.edit_animal.progesterone_invalid": "Ungültige Progesteronwerte: {error}",
   "info.edit_animal.max_measurements": "Maximal {max} Messungen erlaubt.",
@@ -866,21 +811,17 @@
   "warning.in_experiment_requires_project": "Der Experimentstatus kann nicht für Tiere gesetzt werden, die keinem experimentellen Projekt zugeordnet sind.",
   "info.converter.fit_need_two_points": "Mindestens zwei übereinstimmende Datenpunkte zwischen PdG und Progesteron werden für die Anpassung benötigt.",
   "info.converter.saved": "Formel gespeichert.",
-  
   "title.error": "Fehler",
   "title.warning": "Warnung",
   "title.info": "Info",
   "title.deletion": "Gelöscht",
   "title.hint": "Hinweis",
   "title.question": "Frage",
-  
   "info.print.saved": "Daten erfolgreich in {path} gespeichert.",
   "error.print.save_failed": "Fehler beim Speichern: {error}",
   "info.import_sperm.added": "{count} Sperma-Einträge importiert.",
   "info.import_sperm.none_added": "Keine neuen Sperma-Einträge importiert.",
   "tooltip.color_picker": "Farbe auswählen",
-
-  
   "menu.tools.op_planner": "OP-Planner",
   "op_planner.window_title": "OP-Planer",
   "error.op_planner_not_available": "OP-Planer-Plugin ist nicht installiert.",
@@ -938,17 +879,15 @@
   "button.pdg.save_formula": "Formel speichern",
   "op_planner.button.export_png": "Als PNG exportieren",
   "op_planner.weekday.monday": "Montag",
-  
   "status.recovery_period": "Erholungspause",
   "label.recovery_days": "Erholungszeit (Tage):",
   "dialog.animal_label": "Tier: {name}",
-  "dialog.category.spenderin": "Spenderin",
+  "dialog.category.spenderin": "Eizellspenderin",
   "dialog.category.surrogate": "Amme",
   "dialog.category.sperm_donor": "Samenspender",
   "dialog.category.offspring": "Nachkomme",
   "dialog.category.partner": "Partnertier",
   "dialog.category.zuchttier": "Zuchttier",
-  
   "dialog.zuchttier.title_new": "Neues Zuchttier",
   "dialog.zuchttier.title_edit": "Zuchttier bearbeiten: {name}",
   "dialog.zuchttier.sex": "Geschlecht:",
@@ -1028,7 +967,6 @@
   "op_planner.checkbox.ignore_blocked": "Alle Datumseinschränkungen ignorieren",
   "op_planner.checkbox.fix_event": "Ereignis fixieren",
   "error.title": "Fehler",
-
   "surgery_planner.group.date_range": "Datumsbereich",
   "surgery_planner.label.start_date": "Startdatum:",
   "surgery_planner.label.end_date": "Enddatum:",
@@ -1040,7 +978,6 @@
   "surgery_planner.label.select_transfer_days": "Wählen Sie Tage aus, an denen Embryotransfers geplant werden können:",
   "surgery_planner.msg.day_unblocked": "Tag freigegeben: {date}",
   "surgery_planner.msg.day_blocked": "Tag blockiert: {date}",
-
   "general.weekday.monday": "Montag",
   "general.weekday.tuesday": "Dienstag",
   "general.weekday.wednesday": "Mittwoch",
@@ -1048,7 +985,6 @@
   "general.weekday.friday": "Freitag",
   "general.weekday.saturday": "Samstag",
   "general.weekday.sunday": "Sonntag",
-
   "surgery_planner.default_holiday_name": "Feiertag",
   "surgery_planner.block_day_name": "Feiertag",
   "surgery_planner.button.block_unblock_date": "Datum sperren/entsperren",
@@ -1059,7 +995,6 @@
   "surgery_planner.label.transfer_offset_days": "Transfer-Versatz (Tage):",
   "surgery_planner.label.operations_short": "OPs",
   "surgery_planner.label.embryo_transfers_short": "Embryotransfers",
-
   "menu.file.section.database": "Datenbank",
   "menu.file.save_database": "Datenbank speichern",
   "file_dialog.save_database.title": "Datenbank speichern",
@@ -1067,7 +1002,6 @@
   "info.save_database.success": "Datenbank erfolgreich gespeichert unter: {path}",
   "error.save_database.file_not_found": "Datenbankdatei nicht gefunden. Bitte stellen Sie sicher, dass die Anwendungsdaten ordnungsgemäß initialisiert sind.",
   "error.save_database.failed": "Fehler beim Speichern der Datenbank: {error}",
-  
   "dialog.export_pdf.title": "PDF-Berichte exportieren",
   "button.export_pdf": "PDF exportieren",
   "dialog.select_output_directory": "Ausgabeverzeichnis auswählen",
@@ -1080,9 +1014,7 @@
   "info.pdf_export.location": "Speicherort: {0}",
   "button.open_folder": "Ordner öffnen",
   "error.pdf_export.failed": "Fehler beim Exportieren der PDF-Berichte: {error}",
-  
   "dialog.export_pdf.language": "Berichtssprache",
-  
   "month.1": "Januar",
   "month.2": "Februar",
   "month.3": "März",
@@ -1095,13 +1027,11 @@
   "month.10": "Oktober",
   "month.11": "November",
   "month.12": "Dezember",
-  
   "report.column.date": "Datum",
   "report.column.daily_data": "Tägliche Daten",
   "report.column.scores": "Scores",
   "report.column.signatures": "Unterschriften",
   "report.column.pi": "PI",
-  
   "report.title": "Tierbericht",
   "report.name_with_species": "{name} ({species})",
   "report.id_with_species": "{id} {species}",
@@ -1114,7 +1044,6 @@
   "report.header.birth_date": "Geburtsdatum",
   "report.header.genotype": "Genotyp",
   "report.header.statistics": "Statistiken",
-  
   "stats.sperm": "Sperma",
   "stats.special": "Gehörmessung",
   "stats.surgery": "OP",
@@ -1125,10 +1054,8 @@
   "stats.embryo": "Embryo",
   "stats.pregnancy": "Trächtigkeit",
   "stats.birth": "Geburt",
-  
   "status.recent_birth": "Kürzliche Geburt",
   "status.paired_with": "Verpaart mit",
-  
   "daily.status": "Status",
   "daily.health_status": "Gesundheitszustand",
   "daily.abnormal_status": "Auffälliger Zustand",
@@ -1137,7 +1064,6 @@
   "daily.surgery": "OP",
   "daily.blood_sample": "Blutprobe",
   "daily.reproduction_status": "Reproduktionsstatus",
-  
   "reports.header.title": "Tierinformationen",
   "reports.header.name": "Name:",
   "reports.header.id": "ID:",
@@ -1156,13 +1082,11 @@
   "reports.column.scores": "Scores",
   "reports.column.signatures": "Unterschriften",
   "warning.read_only_mode": "ProgTrack wird im NUR-LESEN-Modus ausgeführt.\n\nEine andere Instanz von ProgTrack bearbeitet derzeit die Datendateien.\nSie können alle Daten ansehen, aber Änderungen werden NICHT gespeichert.\n\nUm Daten zu bearbeiten, schließen Sie bitte zuerst die andere Instanz.",
-  
   "age.year_abbrev": "J.",
   "age.month_abbrev": "M.",
   "age.day_abbrev": "T.",
   "age.at_death": "verstorben",
   "age.unknown": "Alter unbekannt",
-  
   "flow_track.edit_embryo.implanted_blocked_freezer": "Implantationsstatus kann für Embryonen in der Gefriertruhe nicht gesetzt werden",
   "flow_track.error.freezer_embryo_implanted": "Embryonen in der Gefriertruhe können nicht als implantiert markiert werden",
   "flow_track.settings.show_timeline": "Transfer-Zeitleiste anzeigen",
@@ -1176,7 +1100,6 @@
   "flow_track.export.pdf.title": "Als PDF exportieren",
   "flow_track.export.pdf.success": "Flow Track und Zeitleiste erfolgreich als PDF exportiert",
   "flow_track.export.pdf.error": "PDF-Export fehlgeschlagen:\n{error}",
-
   "surgery_planner.group.animal_numbers": "Tieranzahlen",
   "surgery_planner.label.donors_per_surgery": "Spenderinnen pro Operation:",
   "surgery_planner.label.surrogates_per_transfer": "Ammen pro Transfer:",
@@ -1234,9 +1157,8 @@
   "surgery_planner.warning.missing_animals_title": "Fehlende Tiere",
   "surgery_planner.warning.missing_animals": "Die folgenden Tiere waren zuvor ausgewählt, sind aber nicht mehr verfügbar (gelöscht oder archiviert): {animals}",
   "surgery_planner.tooltip.auto_excluded": "Automatisch ausgeschlossen: {status}",
-  "surgery_planner.role.donor": "Spenderin",
+  "surgery_planner.role.donor": "Eizellspenderin",
   "surgery_planner.role.surrogate": "Amme",
-
   "pdg_converter.dialog.title": "PdG → Progesteron Konverter",
   "pdg_converter.label.animal": "Tier:",
   "pdg_converter.select.animal": "-- Tier auswählen --",
@@ -1280,7 +1202,6 @@
   "pdg_converter.confirm.title": "Bestätigen",
   "pdg_converter.confirm.clear_model": "Das angepasste Modell löschen? Dies kann nicht rückgängig gemacht werden.",
   "pdg_converter.model.info": "Modell: {model_type} | Paare: {n_pairs} | MSE: {mse:.4f}",
-
   "projects.label": "Projekt:",
   "projects.tooltip.all": "Alle Tiere anzeigen",
   "projects.tooltip.project": "Projekttiere anzeigen",
@@ -1358,7 +1279,6 @@
   "heritage_track.tooltip.double_click_edit": "Doppelklick auf einen Knoten zum Bearbeiten",
   "heritage_track.node.inbreeding_f_exact": "F: {value}",
   "heritage_track.node.inbreeding_f_approx": "F: ~{value}",
-
   "tab.medi_track": "Medi Track",
   "menu.tools.medi_track": "Medi Track",
   "tab.cage_track": "Käfig-Übersicht",
@@ -1438,7 +1358,6 @@
   "cage_track.history.export_pdf": "PDF exportieren",
   "cage_track.history.close": "Schließen",
   "cage_track.history.export_success": "Umzugsverlauf erfolgreich exportiert",
-
   "cage_track.unassigned": "Nicht zugewiesen",
   "cage_track.toolbar.inspection": "Inspektion",
   "cage_track.inspection.title": "Inspektionsprotokoll",
@@ -1456,7 +1375,6 @@
   "cage_track.inspection.no_records": "Keine Einträge entsprechen den ausgewählten Filtern.",
   "cage_track.inspection.report_title": "Käfig-Inspektionsbericht",
   "cage_track.inspection.export_success": "Inspektionsbericht erfolgreich exportiert.",
-
   "menu.tools.master_track": "Master Track",
   "master_track.menu.manage": "Benutzer verwalten",
   "master_track.menu.logs": "Protokolle",
@@ -1560,7 +1478,7 @@
   "master_track.manage.confirm_save_job_title": "Bestätigung",
   "master_track.manage.confirm_save_job": "Auftragsbündel '{job}' aktualisieren? Dies betrifft alle Benutzer mit diesem Auftrag.",
   "master_track.error.permission_denied": "Sie haben keine Berechtigung füfcr diese Aktion.",
-  "master_track.timeout.warning": "Sitzung läuft in 2 Minuten ab \u2014 interagieren Sie, um angemeldet zu bleiben.",
+  "master_track.timeout.warning": "Sitzung läuft in 2 Minuten ab — interagieren Sie, um angemeldet zu bleiben.",
   "master_track.menu.toggle": "Master Track aktivieren/deaktivieren",
   "master_track.menu.edit_jobs": "Aufträge bearbeiten…",
   "master_track.menu.disable": "Master Track deaktivieren",
@@ -1605,8 +1523,8 @@
   "status.in_experiment": "Im Experiment",
   "medi_track.entry.experiment_started": "Experiment gestartet",
   "medi_track.entry.experiment_ended": "Experiment beendet",
-  "medi_track.report.event.experiment_started": "Experiment \u2014 gestartet",
-  "medi_track.report.event.experiment_ended": "Experiment \u2014 beendet",
+  "medi_track.report.event.experiment_started": "Experiment — gestartet",
+  "medi_track.report.event.experiment_ended": "Experiment — beendet",
   "project.animals.no_legal_overflow_warn": "Wert überschreitet die berechnete Anzahl 'Abgegangen mit Schweregrad'. Die Daten werden wie eingegeben gespeichert.",
   "project.tab.list_header": "Projekte",
   "project.tab.show_archived": "Archivierte anzeigen",
@@ -1668,13 +1586,13 @@
   "project.animals.alive_not_in_exp": "Lebendig, aber nicht im Experiment:",
   "project.animals.no_prev_history": "Davon ohne frühere Versuchsgeschichte:",
   "project.animals.with_prev_history": "Davon mit früherer Versuchsgeschichte:",
-  "project.animals.show_names": "\u25b6 Namen anzeigen",
-  "project.animals.hide_names": "\u25bc Namen ausblenden",
+  "project.animals.show_names": "▶ Namen anzeigen",
+  "project.animals.hide_names": "▼ Namen ausblenden",
   "project.docs.upload": "Dokument hochladen",
   "project.docs.delete": "Auswahl löschen",
   "project.docs.upload_dialog": "Dokumente auswählen",
   "project.docs.delete_confirm": "'{name}' löschen?",
-  "project.user_field.placeholder": "Benutzer suchen\u2026",
+  "project.user_field.placeholder": "Benutzer suchen…",
   "project.user_info.title": "Benutzerinformation",
   "project.user_info.remove": "Aus Protokoll entfernen",
   "project.user_info.remove_confirm": "Diesen Benutzer aus dem Protokoll entfernen?",
@@ -1699,12 +1617,10 @@
   "project.animals.archived_or_missing": "Das Tier wurde archiviert oder ist nicht mehr vorhanden.",
   "project.animals.role_unknown": "Unbekannte Rolle",
   "project.tab.delete_confirm": "Projekt ‘{name}’ dauerhaft löschen?",
-
   "menu.tools.sample_track": "Sample Track",
   "sample_track.window_title": "Sample Track",
   "sample_track.tab.organ_samples": "Organproben",
   "sample_track.tab.other_samples": "Zeitreihenproben",
-
   "sample_track.header.name": "Name",
   "sample_track.header.species": "Spezies",
   "sample_track.header.id": "ID",
@@ -1720,27 +1636,22 @@
   "sample_track.header.collection_date_to": "Entnahme bis",
   "sample_track.header.filter_types": "Nur anzeigen:",
   "sample_track.header.sample_number": "Proben-Nr.",
-
   "sample_track.button.add_sample": "Probe hinzufügen",
   "sample_track.button.export_pdf": "PDF exportieren",
   "sample_track.button.save": "Speichern",
   "sample_track.button.cancel": "Abbrechen",
-
   "sample_track.header.filter_by": "Filtern nach:",
   "sample_track.header.filter_by_age": "Nach Alter filtern:",
   "sample_track.header.age_separator": "Alter",
   "sample_track.header.filter_by_date": "Nach Entnahmedatum filtern:",
   "sample_track.header.date_separator": "Datum",
-
   "sample_track.row.action.edit_entry": "Eintrag bearbeiten",
   "sample_track.row.action.edit_location": "Ort bearbeiten",
   "sample_track.row.action.delete_all_samples": "Alle Proben leeren",
   "sample_track.row.action.delete": "Löschen",
-
   "sample_track.field.birth": "Geburt:",
   "sample_track.field.death": "Tod:",
   "sample_track.field.collection_date": "Entnahme:",
-
   "sample_track.sample_dialog.section.location": "Lagerort",
   "sample_track.sample_dialog.field.unit": "Einheit:",
   "sample_track.sample_dialog.field.storage": "Lagerplatz:",
@@ -1750,13 +1661,11 @@
   "sample_track.sample_dialog.button.ok": "OK",
   "sample_track.sample_dialog.field.num_aliquots": "Anzahl Aliquots:",
   "sample_track.sample_dialog.section.aliquot": "Aliquot {n}",
-
   "sample_track.confirm.delete_all_samples": "Alle Proben leeren?",
   "sample_track.confirm.delete_sample": "Probe löschen?",
   "sample_track.confirm.delete_sample_entry": "Diesen Probeneintrag löschen?",
   "sample_track.confirm.save_changes": "Änderungen speichern?",
   "sample_track.confirm.edit_location_multi": "Dies überschreibt die Einheitenzuweisung für alle ausgewählten Proben. Bestehende Zuweisungen gehen verloren. Fortfahren?",
-
   "sample_track.error.no_login.title": "Anmeldung erforderlich",
   "sample_track.error.no_login": "Bitte anmelden, um Sample Track zu verwenden.",
   "sample_track.error.duplicate_animal": "Ein Eintrag für dieses Tier existiert bereits.",
@@ -1764,13 +1673,11 @@
   "sample_track.info.pdf_saved": "PDF gespeichert unter: {path}",
   "sample_track.pdf.export_title": "PDF speichern",
   "sample_track.pdf.export_filter": "PDF-Dateien (*.pdf)",
-
   "sample_track.pdf.title": "Sample Track — {tab}",
   "sample_track.pdf.exported_by": "Exportiert von:",
   "sample_track.pdf.export_date": "Datum:",
   "sample_track.pdf.filter_header": "Aktive Filter",
   "sample_track.pdf.no_data": "Keine Proben vorhanden.",
-
   "project.section.arrive": "ARRIVE-Protokoll",
   "project.arrive.study_design": "Studiendesign:",
   "project.arrive.sample_size": "Stichprobengröße:",
@@ -1792,9 +1699,7 @@
   "project.arrive.protocol_registration": "Protokollregistrierung:",
   "project.arrive.data_access": "Datenzugang:",
   "project.arrive.declaration_interests": "Interessenkonflikte:",
-
   "master_track.warn.no_permission": "Sie haben keine Berechtigung, auf diese Funktion zuzugreifen.",
-
   "medi_track.entry_type.note": "Notiz",
   "medi_track.entry_type.observation": "Beobachtung",
   "medi_track.entry_type.treatment": "Behandlung",
@@ -1802,7 +1707,6 @@
   "medi_track.entry_type.other": "Sonstiges",
   "medi_track.entry_type.unknown": "Unbekannt",
   "medi_track.condition.search_placeholder": "Bedingungen suchen…",
-
   "medi_track.dialog.status_manage.title": "Status verwalten — {animal}",
   "medi_track.dialog.label.date": "Datum:",
   "medi_track.dialog.label.note": "Notiz:",
@@ -1811,5 +1715,23 @@
   "medi_track.dialog.mode.add": "Neues Problem hinzufügen",
   "medi_track.dialog.mode.resolve": "Problem lösen",
   "medi_track.dialog.label.active_issue": "Aktive Probleme zum Lösen:",
-  "medi_track.dialog.label.condition_free": "Bedingung"
+  "medi_track.dialog.label.condition_free": "Bedingung",
+  "role.egg_cell_donor": "Eizellspenderin",
+  "role.surrogate": "Amme",
+  "role.sperm_donor": "Samenspender",
+  "role.partner_animal": "Partnertier",
+  "role.breeding_animal": "Zuchttier",
+  "role.experimental_animal": "Versuchstier",
+  "settings.role_setup.preset.basic": "Basistier",
+  "settings.role_setup.preset.egg_cell_donor": "Eizellspenderin",
+  "settings.role_setup.preset.surrogate": "Amme",
+  "settings.role_setup.preset.sperm_donor": "Samenspender",
+  "settings.role_setup.preset.offspring": "Nachkomme",
+  "settings.role_setup.preset.partner": "Partnertier",
+  "settings.role_setup.preset.breeding": "Zuchttier",
+  "settings.role_setup.preset.experimental": "Versuchstier",
+  "settings.role_setup.preset.custom": "Benutzerdefiniert",
+  "settings.role_setup.custom_blocks.title": "Benutzerdefiniertes Block-Preset",
+  "settings.role_setup.custom_blocks.name": "Preset-Name:",
+  "settings.role_setup.custom_blocks.name_placeholder": "Preset-Name"
 }

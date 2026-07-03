@@ -82,7 +82,11 @@ from Plugins.core.animal_roles import (
     ALL_DIALOG_BLOCKS,
     AnimalRoleRegistry,
     REQUIRED_DIALOG_BLOCKS,
+    canonical_role_value,
     clear_deleted_role_assignments,
+    default_dialog_blocks,
+    import_capabilities_for_blocks,
+    normalize_animal_record_roles,
     normalize_block_list,
 )
 from Plugins.core.animal_status import (
@@ -91,7 +95,7 @@ from Plugins.core.animal_status import (
     has_death_date,
     status_summary_with_death_priority,
 )
-from typing import List, Dict, Any, Optional, Tuple, Callable, TYPE_CHECKING
+from typing import List, Dict, Any, Optional, Tuple, Callable, Iterable, TYPE_CHECKING
 
 APP_BASE_DIR = Path(__file__).resolve().parent
 APP_RUNTIME_DIR = (
@@ -158,7 +162,6 @@ class LazyLoader:
 # Lazy-loaded modules
 np = LazyLoader('numpy')
 pd = LazyLoader('pandas')
-plt = LazyLoader('matplotlib.pyplot')
 matplotlib = LazyLoader('matplotlib')
 scipy = LazyLoader('scipy')
 scipy_optimize = LazyLoader('scipy.optimize', 'scipy.optimize')
@@ -251,16 +254,16 @@ class Role(Enum):
     on their role. Each animal has exactly one role that determines its display,
     coloring, and processing throughout the application.
     """
-    SPENDER   = "Spenderin"    # Female donor
-    AMME      = "Amme"         # Surrogate mother
-    SAMENSP   = "Samenspender" # Male donor / sperm donor
-    OFFSPRING = "Nachkomme"    # Offspring
-    PARTNER   = "Partnertier"  # Partner animal
-    ZUCHTTIER    = "Zuchttier"    # Breeding animal (male or female)
-    EXPERIMENTAL = "Versuchstier" # Experimental animal
+    SPENDER   = "egg_cell_donor"     # Egg cell donor
+    AMME      = "surrogate"          # Surrogate mother
+    SAMENSP   = "sperm_donor"        # Male donor / sperm donor
+    OFFSPRING = "offspring"          # Offspring
+    PARTNER   = "partner_animal"     # Partner animal
+    ZUCHTTIER    = "breeding_animal"     # Breeding animal (male or female)
+    EXPERIMENTAL = "experimental_animal" # Experimental animal
     # Unknown/unassigned role; used for newly created animals where the
     # keeper has not yet classified the animal.
-    UNKNOWN   = "Unbekannt"
+    UNKNOWN   = "unknown"
 
 class Phase(Enum):
     ALLE = "alle"
@@ -1010,17 +1013,10 @@ class StyleSettingsDialog(QDialog):
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
-        notice = QLabel(self.messages.get(
-            "settings.role_setup.notice",
-            "Animal roles are global. New custom roles use an emoji label for now; later UI graphics will replace this.",
-        ))
-        notice.setWordWrap(True)
-        layout.addWidget(notice)
-
         if not self._role_setup_editable:
             locked = QLabel(self.messages.get(
                 "settings.role_setup.locked",
-                "Only Lord or Master users can change animal role setup.",
+                "Only Lord, Master or Manager users can change animal role setup.",
             ))
             locked.setWordWrap(True)
             locked.setStyleSheet("color: #666;")
@@ -1039,6 +1035,8 @@ class StyleSettingsDialog(QDialog):
         ])
         self.role_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.role_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.role_table.setColumnHidden(4, True)
+        self.role_table.setColumnHidden(5, True)
         self.role_table.verticalHeader().setVisible(False)
         self.role_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
         self.role_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
@@ -1071,6 +1069,164 @@ class StyleSettingsDialog(QDialog):
         for role in sorted(roles, key=lambda r: (int(r.get("order", 1000)), str(r.get("label", "")).casefold())):
             self._add_role_table_row(role)
 
+    def _role_block_preset_options(self):
+        m = self.messages
+        return [
+            ("basic", m.get("settings.role_setup.preset.basic", "Basic animal")),
+            ("egg_cell_donor", m.get("settings.role_setup.preset.egg_cell_donor", "Egg cell donor")),
+            ("surrogate", m.get("settings.role_setup.preset.surrogate", "Surrogate")),
+            ("sperm_donor", m.get("settings.role_setup.preset.sperm_donor", "Sperm donor")),
+            ("offspring", m.get("settings.role_setup.preset.offspring", "Offspring")),
+            ("partner", m.get("settings.role_setup.preset.partner", "Partner animal")),
+            ("breeding", m.get("settings.role_setup.preset.breeding", "Breeding animal")),
+            ("experimental", m.get("settings.role_setup.preset.experimental", "Experimental animal")),
+        ]
+
+    def _blocks_for_preset(self, preset_id: str, mode: str):
+        recipe = default_dialog_blocks(preset_id)
+        return self.parent_app._normalize_role_dialog_blocks(recipe.get(mode, recipe.get("edit", [])))
+
+    def _role_block_label(self, block_id: str) -> str:
+        fallback = str(block_id or "").replace("_", " ").strip().capitalize()
+        return self.messages.get(f"settings.role_setup.block.{block_id}.name", fallback)
+
+    def _role_block_description(self, block_id: str) -> str:
+        defaults = {
+            "identity": "Core animal identity fields.",
+            "cage_address": "Current housing and cage address.",
+            "weight": "Weight entries and import support.",
+            "parenting": "Parent and origin information.",
+            "sperm_measurements": "Sperm value entry and import support.",
+            "blood_progesterone": "Blood progesterone values and import support.",
+            "urine_pdg": "Urine PdG values and import support.",
+            "reproductive_events": "Reproductive event timeline.",
+            "procedure_events": "Procedure and measurement event timeline.",
+        }
+        return self.messages.get(
+            f"settings.role_setup.block.{block_id}.description",
+            defaults.get(block_id, "Optional dialog block."),
+        )
+
+    def _make_role_block_preset_combo(self, blocks_text: str, mode: str, custom_name: str = ""):
+        current_blocks = self.parent_app._normalize_role_dialog_blocks(blocks_text)
+        combo = QComboBox()
+        combo.setEnabled(self._role_setup_editable)
+        combo.setProperty("roleSetupMode", mode)
+        combo.setProperty("roleSetupPreviousIndex", 0)
+
+        matched_index = -1
+        for preset_id, label in self._role_block_preset_options():
+            preset_blocks = self._blocks_for_preset(preset_id, mode)
+            combo.addItem(label, {"preset": preset_id, "blocks": preset_blocks, "name": label})
+            if preset_blocks == current_blocks:
+                matched_index = combo.count() - 1
+
+        custom_label = custom_name or self.messages.get("settings.role_setup.preset.custom", "Custom")
+        combo.addItem(custom_label, {"preset": "custom", "blocks": current_blocks, "name": custom_label})
+        combo.setCurrentIndex(matched_index if matched_index >= 0 else combo.count() - 1)
+        combo.setProperty("roleSetupPreviousIndex", combo.currentIndex())
+        combo.currentIndexChanged.connect(lambda _idx, c=combo: self._on_role_block_preset_changed(c))
+        return combo
+
+    def _on_role_block_preset_changed(self, combo: QComboBox) -> None:
+        data = combo.currentData()
+        if not isinstance(data, dict):
+            return
+        if data.get("preset") != "custom":
+            combo.setProperty("roleSetupPreviousIndex", combo.currentIndex())
+            return
+        if not self._role_setup_editable:
+            return
+
+        result = self._exec_custom_role_blocks_dialog(
+            data.get("blocks") or [],
+            str(data.get("name") or self.messages.get("settings.role_setup.preset.custom", "Custom")),
+        )
+        if result is None:
+            previous = combo.property("roleSetupPreviousIndex")
+            combo.blockSignals(True)
+            combo.setCurrentIndex(previous if isinstance(previous, int) else 0)
+            combo.blockSignals(False)
+            return
+
+        preset_name, blocks = result
+        insert_at = max(combo.count() - 1, 0)
+        combo.insertItem(insert_at, preset_name, {"preset": "custom_saved", "blocks": blocks, "name": preset_name})
+        combo.setItemData(combo.count() - 1, {
+            "preset": "custom",
+            "blocks": blocks,
+            "name": self.messages.get("settings.role_setup.preset.custom", "Custom"),
+        })
+        combo.setCurrentIndex(insert_at)
+        combo.setProperty("roleSetupPreviousIndex", insert_at)
+
+    def _exec_custom_role_blocks_dialog(self, current_blocks, current_name: str):
+        dlg = QDialog(self)
+        dlg.setWindowTitle(self.messages.get("settings.role_setup.custom_blocks.title", "Custom block preset"))
+        layout = QVBoxLayout(dlg)
+
+        name_le = QLineEdit(current_name if current_name != "Custom" else "")
+        name_le.setPlaceholderText(self.messages.get("settings.role_setup.custom_blocks.name_placeholder", "Preset name"))
+        layout.addWidget(QLabel(self.messages.get("settings.role_setup.custom_blocks.name", "Preset name:")))
+        layout.addWidget(name_le)
+
+        scroll = QScrollArea(dlg)
+        scroll.setWidgetResizable(True)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        selected = set(self.parent_app._normalize_role_dialog_blocks(current_blocks))
+        checkboxes = {}
+        for block_id in ALL_DIALOG_BLOCKS:
+            cb = QCheckBox(self._role_block_label(block_id))
+            cb.setChecked(block_id in selected or block_id in REQUIRED_DIALOG_BLOCKS)
+            if block_id in REQUIRED_DIALOG_BLOCKS:
+                cb.setEnabled(False)
+            desc = QLabel(self._role_block_description(block_id))
+            desc.setWordWrap(True)
+            desc.setStyleSheet("color: #666; margin-left: 18px;")
+            body_layout.addWidget(cb)
+            body_layout.addWidget(desc)
+            checkboxes[block_id] = cb
+        body_layout.addStretch()
+        scroll.setWidget(body)
+        layout.addWidget(scroll, 1)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            dlg,
+        )
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return None
+        preset_name = name_le.text().strip() or self.messages.get("settings.role_setup.preset.custom", "Custom")
+        blocks = [
+            block_id
+            for block_id in ALL_DIALOG_BLOCKS
+            if checkboxes[block_id].isChecked() or block_id in REQUIRED_DIALOG_BLOCKS
+        ]
+        return preset_name, self.parent_app._normalize_role_dialog_blocks(blocks)
+
+    def _role_blocks_from_table_cell(self, row: int, col: int, mode: str):
+        widget = self.role_table.cellWidget(row, col) if self.role_table else None
+        if isinstance(widget, QComboBox):
+            data = widget.currentData()
+            if isinstance(data, dict):
+                return self.parent_app._normalize_role_dialog_blocks(data.get("blocks") or [])
+        return self.parent_app._normalize_role_dialog_blocks(
+            self.role_table.item(row, col).text() if self.role_table.item(row, col) else "",
+        )
+
+    def _role_custom_preset_name_from_table_cell(self, row: int, col: int) -> str:
+        widget = self.role_table.cellWidget(row, col) if self.role_table else None
+        if isinstance(widget, QComboBox):
+            data = widget.currentData()
+            if isinstance(data, dict) and str(data.get("preset") or "").startswith("custom"):
+                return str(data.get("name") or "").strip()
+        return ""
+
     def _add_role_table_row(self, role):
         row = self.role_table.rowCount()
         self.role_table.insertRow(row)
@@ -1094,6 +1250,7 @@ class StyleSettingsDialog(QDialog):
             ", ".join(dialog_blocks.get("new", [])),
             ", ".join(dialog_blocks.get("edit", [])),
         ]
+        custom_preset_names = role.get("custom_preset_names", {}) if isinstance(role.get("custom_preset_names"), dict) else {}
         for col, value in enumerate(values, start=1):
             item = QTableWidgetItem(value)
             item.setData(Qt.ItemDataRole.UserRole, dict(role))
@@ -1101,6 +1258,13 @@ class StyleSettingsDialog(QDialog):
             if immutable or not self._role_setup_editable:
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.role_table.setItem(row, col, item)
+            if col in (6, 7):
+                mode = "new" if col == 6 else "edit"
+                self.role_table.setCellWidget(
+                    row,
+                    col,
+                    self._make_role_block_preset_combo(value, mode, str(custom_preset_names.get(mode, ""))),
+                )
 
     def _current_role_values_in_table(self):
         values = set()
@@ -1185,16 +1349,16 @@ class StyleSettingsDialog(QDialog):
                 "order": order,
                 "active": active_item.checkState() == Qt.CheckState.Checked if active_item else True,
                 "dialog_blocks": {
-                    "new": self.parent_app._normalize_role_dialog_blocks(
-                        self.role_table.item(row, 6).text() if self.role_table.item(row, 6) else "",
-                    ),
-                    "edit": self.parent_app._normalize_role_dialog_blocks(
-                        self.role_table.item(row, 7).text() if self.role_table.item(row, 7) else "",
-                    ),
+                    "new": self._role_blocks_from_table_cell(row, 6, "new"),
+                    "edit": self._role_blocks_from_table_cell(row, 7, "edit"),
+                },
+                "custom_preset_names": {
+                    "new": self._role_custom_preset_name_from_table_cell(row, 6),
+                    "edit": self._role_custom_preset_name_from_table_cell(row, 7),
                 },
             })
             if not role.get("built_in"):
-                role["label_key"] = ""
+                role["label_key"] = role.get("label_key") or f"role.{value}"
                 role.setdefault("base_editor", "basic")
                 role.setdefault("field_preset", "basic")
             roles.append(role)
@@ -1486,8 +1650,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                    self.messages.get("error.initialization.title", "Initialization Error"), 
                                    self.messages.get("error.initialization.message", 
                                                    "Failed to initialize application: {error}\n\nCheck the log file for more details.").format(error=str(e)))
-            except:
-                pass  # If we can't show a message box, at least log the error
+            except Exception as dialog_error:
+                logger.error("Could not show initialization error dialog: %s", dialog_error)
             raise
         
     def _init_lazy_imports(self):
@@ -1653,8 +1817,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 from PyQt6.QtWidgets import QMessageBox
                 QMessageBox.critical(None, "UI Initialization Error", 
                                    f"Failed to initialize UI: {str(e)}\n\nCheck the log file for more details.")
-            except:
-                pass  # If we can't show a message box, at least log the error
+            except Exception as dialog_error:
+                logger.error("Could not show UI initialization error dialog: %s", dialog_error)
             raise
     
     def _init_main_window(self):
@@ -2800,6 +2964,57 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             fallback_path = os.path.join(base_path, "lang", "messages_de.json")
             with open(fallback_path, encoding="utf-8") as f:
                 self.messages = json.load(f)
+        self._merge_user_messages(lang_code)
+
+    def _user_messages_path(self, lang_code: Optional[str] = None) -> Path:
+        lang_code = lang_code or getattr(self, "lang", "de") or "de"
+        return APP_BASE_DIR / "Plugins" / "core" / "user_lang" / f"messages_{lang_code}.json"
+
+    def _merge_user_messages(self, lang_code: Optional[str] = None) -> None:
+        path = self._user_messages_path(lang_code)
+        if not path.is_file():
+            return
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                overrides = json.load(handle)
+        except (OSError, json.JSONDecodeError) as exc:
+            logging.warning("Failed to load user language overrides from %s: %s", path, exc)
+            return
+        if isinstance(overrides, dict):
+            self.messages.update({str(key): str(value) for key, value in overrides.items()})
+
+    def _save_role_label_overrides(self, roles: List[Dict[str, Any]]) -> None:
+        path = self._user_messages_path()
+        existing: Dict[str, str] = {}
+        if path.is_file():
+            try:
+                with path.open("r", encoding="utf-8") as handle:
+                    loaded = json.load(handle)
+                    if isinstance(loaded, dict):
+                        existing = {str(key): str(value) for key, value in loaded.items()}
+            except (OSError, json.JSONDecodeError) as exc:
+                logging.warning("Failed to read user language overrides from %s: %s", path, exc)
+
+        changed = False
+        for role in roles:
+            if not isinstance(role, dict):
+                continue
+            value = canonical_role_value(role.get("value") or role.get("role_id") or "")
+            label = str(role.get("label") or "").strip()
+            if not value or not label:
+                continue
+            label_key = str(role.get("label_key") or "").strip() or f"role.{value}"
+            if existing.get(label_key) != label:
+                existing[label_key] = label
+                changed = True
+        if not changed:
+            return
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as handle:
+            json.dump(existing, handle, indent=2, ensure_ascii=False)
+            handle.write("\n")
+        self.messages.update(existing)
     
     def _init_all_plugins_deferred(self, _step=0):
         """Initialize all plugins in background while login dialog is open.
@@ -3760,6 +3975,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             
             for name, rec in source_data.items():
                 rec_copy = rec.copy()
+                rec_copy['rolle'] = canonical_role_value(rec_copy.get('rolle'), default=Role.UNKNOWN.value)
                 visible_name = animal_base_name(name, rec_copy)
                 rec_copy['ipid'] = name
                 rec_copy['name'] = visible_name
@@ -4555,28 +4771,32 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # 7.13 Build Sidebar
     #     Create and configure the sidebar layout for animal selection and controls.
     # ------------------------
+    def _category_tab_tooltips(self) -> List[str]:
+        return [
+            f"{self._get_localized_role(Role.SPENDER.value)} / {self._get_localized_role(Role.AMME.value)}",
+            self._get_localized_role(Role.SAMENSP.value),
+            self._get_localized_role(Role.OFFSPRING.value),
+            self._get_localized_role(Role.PARTNER.value),
+            self._get_localized_role(Role.ZUCHTTIER.value),
+            self._get_localized_role(Role.EXPERIMENTAL.value),
+            self.messages.get("sidebar.category.tooltip.all", "All animals"),
+        ]
+
     def _build_sidebar(self) -> QVBoxLayout:
         """Build the sidebar layout."""
         sidebar = QVBoxLayout()
         # ── Category tabs ─────────────────────────────────────────────────────────
         # Use a QTabBar instead of buttons, with ♀ as the default
         self.category_tab = QTabBar()
+        role_tooltips = self._category_tab_tooltips()
         categories = [
-            ("♀", self.messages.get("sidebar.category.tooltip.female",
-                                    "Egg donors & surrogates")),
-            ("♂", self.messages.get("sidebar.category.tooltip.male",
-                                    "Sperm donors")),
-            ("👶", self.messages.get("sidebar.category.tooltip.offspring",
-                                     "Offspring")),
-            ("🐾", self.messages.get("sidebar.category.tooltip.partners",
-                                     "Partners")),
-            ("⚤", self.messages.get("sidebar.category.tooltip.breeders",
-                                     "Breeding animals")),
-            ("💡", self.messages.get("sidebar.category.tooltip.experimental",
-                                     "Experimental animals")),
-            (self.messages["sidebar.filter.all"],
-             self.messages.get("sidebar.category.tooltip.all",
-                               "All animals"))
+            ("♀", role_tooltips[0]),
+            ("♂", role_tooltips[1]),
+            ("👶", role_tooltips[2]),
+            ("🐾", role_tooltips[3]),
+            ("⚤", role_tooltips[4]),
+            ("💡", role_tooltips[5]),
+            (self.messages["sidebar.filter.all"], role_tooltips[6]),
         ]
         for idx, (label, tip) in enumerate(categories):
             self.category_tab.addTab(label)
@@ -4868,72 +5088,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         except Exception:
             pass
 
-        # show/hide load-buttons per category tab
-        # idx: 0=♀, 1=♂, 2=👶, 3=🐾, 4=⚤, 5=💡, 6=Alle
-        if idx == 1:
-            # ♂: only sperm import
-            self.btn_load_blood.setVisible(False)
-            if self.has_pdg_plugin:
-                self.btn_load_urine.setVisible(False)
-            self.btn_load_weights.setVisible(True)
-            self.btn_load_sperm.setVisible(steroid_active)
-            self.btn_new.setVisible(True)
-            self.btn_archive.setVisible(True)
-            # normal edit dialog
-            self.btn_edit.setVisible(True)
-            self.btn_edit.setText(self.messages.get("button.sidebar.edit_animal", "\u270f\ufe0f    Edit"))
-            self.btn_edit.clicked.connect(self._dlg_edit_animal)
-            if hasattr(self, 'btn_edit_animal'):
-                self.btn_edit_animal.setVisible(False)
-        elif idx in (2, 3, 4, 5):
-            # 👶 or 🐾 or ⚤ or 💡: only weights import
-            self.btn_load_blood.setVisible(False)
-            if self.has_pdg_plugin:
-                self.btn_load_urine.setVisible(False)
-            self.btn_load_sperm.setVisible(False)
-            self.btn_load_weights.setVisible(True)
-            self.btn_new.setVisible(True)
-            self.btn_archive.setVisible(True)
-            # normal edit dialog
-            self.btn_edit.setVisible(True)
-            self.btn_edit.setText(self.messages.get("button.sidebar.edit_animal", "\u270f\ufe0f    Edit"))
-            self.btn_edit.clicked.connect(self._dlg_edit_animal)
-            if hasattr(self, 'btn_edit_animal'):
-                self.btn_edit_animal.setVisible(False)
-        elif idx == 6:
-            # Alle: show New (with role selector), hide data-import buttons
-            self.btn_new.setVisible(True)
-            self.btn_load_blood.setVisible(False)
-            if self.has_pdg_plugin:
-                self.btn_load_urine.setVisible(False)
-            self.btn_load_weights.setVisible(False)
-            self.btn_load_sperm.setVisible(False)
-            self.btn_archive.setVisible(True)
-            self.btn_edit.setVisible(True)
-            self.btn_edit.setText(self.messages.get(
-                "button.sidebar.edit_role", "\U0001fae5    Edit Role"))
-            # sort-only dialog in Alle
-            self.btn_edit.clicked.connect(self._on_edit_in_all_tab)
-            if hasattr(self, 'btn_edit_animal'):
-                self.btn_edit_animal.setVisible(True)
-                self.btn_edit_animal.setText(self.messages.get(
-                    "button.sidebar.edit_animal", "\u270f\ufe0f    Edit"))
-        else:
-            # ♀ default + restore normal controls
-            self.btn_new.setVisible(True)
-            self.btn_load_blood.setVisible(steroid_active)
-            if self.has_pdg_plugin:
-                self.btn_load_urine.setVisible(steroid_active)
-            self.btn_load_weights.setVisible(True)
-            self.btn_load_sperm.setVisible(False)
-            self.btn_archive.setVisible(True)
-            # normal edit dialog
-            self.btn_edit.setVisible(True)
-            self.btn_edit.setText(self.messages.get(
-                "button.sidebar.edit_animal", "\u270f\ufe0f    Edit"))
-            self.btn_edit.clicked.connect(self._dlg_edit_animal)
-            if hasattr(self, 'btn_edit_animal'):
-                self.btn_edit_animal.setVisible(False)
+        self._apply_sidebar_button_visibility_for_category(idx)
 
         # Show sperm controls only on Samenspender tab and only while Steroid_track is active.
         # Progesterone/events controls are shown for the ♀ category and events-only for other tabs.
@@ -6145,7 +6300,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         mt = getattr(self, "master_track", None)
         if mt is None or "master_track" in getattr(self, "_disabled_plugins", set()):
             return True
-        return getattr(mt, "_current_role", "") in {"lord", "master"}
+        return getattr(mt, "_current_role", "") in {"lord", "master", "manager"}
 
     def _load_animal_role_definitions(self) -> List[Dict[str, Any]]:
         registry = getattr(self, "animal_role_registry", None)
@@ -6160,14 +6315,28 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             for role in registry.roles()
             if str(role.get("value") or "")
         }
+        roles_for_save = []
+        for role in roles:
+            if not isinstance(role, dict):
+                continue
+            role_for_save = dict(role)
+            value = canonical_role_value(role_for_save.get("value") or role_for_save.get("role_id") or "")
+            if value:
+                role_for_save["value"] = value
+                role_for_save["role_id"] = canonical_role_value(role_for_save.get("role_id") or value)
+                role_for_save["label_key"] = str(role_for_save.get("label_key") or "").strip() or f"role.{value}"
+            roles_for_save.append(role_for_save)
         next_values = {
             str(role.get("value") or "")
-            for role in roles
+            for role in roles_for_save
             if isinstance(role, dict) and str(role.get("value") or "")
         }
         deleted_values = previous_values - next_values
         try:
-            registry.save_roles(roles)
+            registry.save_roles(roles_for_save)
+            self._save_role_label_overrides(registry.roles())
+            if hasattr(self, "category_tab"):
+                self._setup_sidebar_texts()
             changed_active = clear_deleted_role_assignments(self.animals, deleted_values)
             changed_archived = clear_deleted_role_assignments(self.archived, deleted_values)
             if changed_active or changed_archived:
@@ -6198,7 +6367,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 "role_id": label.casefold().replace(" ", "_"),
                 "value": f"custom.{label.casefold().replace(' ', '_')}",
                 "label": label,
-                "label_key": "",
+                "label_key": f"role.custom.{label.casefold().replace(' ', '_')}",
                 "icon": icon or "●",
                 "order": 1000,
                 "active": True,
@@ -6215,7 +6384,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 "role_id": str(original_label or "imported_role").strip().replace(" ", "_"),
                 "value": f"imported.{str(original_label or 'role').strip().replace(' ', '_')}",
                 "label": str(original_label or "Imported role").strip(),
-                "label_key": "",
+                "label_key": f"role.imported.{str(original_label or 'role').strip().replace(' ', '_')}",
                 "icon": "!",
                 "order": 1000,
                 "active": True,
@@ -6261,6 +6430,75 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return True
         return block_id in self._role_dialog_blocks(role_value, mode)
 
+    def _role_import_capabilities(self, role_value: str) -> Dict[str, bool]:
+        return import_capabilities_for_blocks(
+            self._role_dialog_blocks(role_value, "edit"),
+            steroid_active=self._is_steroid_track_active(),
+            has_pdg_plugin=bool(getattr(self, "has_pdg_plugin", False)),
+        )
+
+    def _combine_role_import_capabilities(self, role_values: Iterable[str]) -> Dict[str, bool]:
+        combined = {"blood": False, "urine": False, "weight": False, "sperm": False}
+        for role_value in role_values:
+            caps = self._role_import_capabilities(role_value)
+            for key, enabled in caps.items():
+                combined[key] = combined[key] or enabled
+        return combined
+
+    def _role_values_for_category_tab(self, idx: int) -> List[str]:
+        if idx == 6:
+            return [
+                self.animals.get(name, {}).get("rolle") or Role.UNKNOWN.value
+                for name in getattr(self, "selected_animals", [])
+                if name in self.animals
+            ]
+
+        roles = []
+        for role in self._active_animal_role_definitions():
+            value = role.get("value", "")
+            if value and self._category_tab_index_for_role(value) == idx:
+                roles.append(value)
+        return roles
+
+    def _sidebar_import_capabilities_for_tab(self, idx: int) -> Dict[str, bool]:
+        return self._combine_role_import_capabilities(self._role_values_for_category_tab(idx))
+
+    def _apply_sidebar_button_visibility_for_category(self, idx: int) -> None:
+        caps = self._sidebar_import_capabilities_for_tab(idx)
+        is_all_tab = idx == 6
+
+        for slot in (getattr(self, "_dlg_edit_animal", None),
+                     getattr(self, "_on_edit_in_all_tab", None)):
+            if slot:
+                try:
+                    self.btn_edit.clicked.disconnect(slot)
+                except Exception:
+                    pass
+
+        self.btn_new.setVisible(True)
+        self.btn_archive.setVisible(True)
+        self.btn_load_blood.setVisible(caps["blood"])
+        if self.has_pdg_plugin:
+            self.btn_load_urine.setVisible(caps["urine"])
+        self.btn_load_weights.setVisible(caps["weight"])
+        self.btn_load_sperm.setVisible(caps["sperm"])
+
+        self.btn_edit.setVisible(True)
+        if is_all_tab:
+            self.btn_edit.setText(self.messages.get(
+                "button.sidebar.edit_role", "🫥    Edit Role"))
+            self.btn_edit.clicked.connect(self._on_edit_in_all_tab)
+            if hasattr(self, 'btn_edit_animal'):
+                self.btn_edit_animal.setVisible(True)
+                self.btn_edit_animal.setText(self.messages.get(
+                    "button.sidebar.edit_animal", "✏️    Edit"))
+        else:
+            self.btn_edit.setText(self.messages.get(
+                "button.sidebar.edit_animal", "✏️    Edit"))
+            self.btn_edit.clicked.connect(self._dlg_edit_animal)
+            if hasattr(self, 'btn_edit_animal'):
+                self.btn_edit_animal.setVisible(False)
+
     def _role_label_with_icon(self, rolle: str) -> str:
         registry = getattr(self, "animal_role_registry", None)
         if registry:
@@ -6280,7 +6518,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         for name, data in sorted(self.animals.items()):
             if visible_only and not self._animal_visible_to_current_user(data):
                 continue
-            role = data.get("rolle") or Role.UNKNOWN.value
+            role = canonical_role_value(data.get("rolle"), default=Role.UNKNOWN.value)
             if role == Role.SAMENSP.value and not steroid_active:
                 continue
             if role not in role_groups:
@@ -6292,9 +6530,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         return role_groups, role_order, role_labels
 
     def _is_steroid_role_value(self, role_value: str) -> bool:
+        role_value = canonical_role_value(role_value, default=Role.UNKNOWN.value)
         return role_value in (Role.SPENDER.value, Role.AMME.value, Role.SAMENSP.value)
 
     def _dialog_for_role_value(self, role_value: str):
+        role_value = canonical_role_value(role_value, default=Role.UNKNOWN.value)
         if role_value in (Role.SPENDER.value, Role.AMME.value):
             return lambda name, read_only=False: self._dlg_female_animal(
                 name,
@@ -6318,6 +6558,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
 
     def _category_tab_index_for_role(self, role_value: str) -> int:
+        role_value = canonical_role_value(role_value, default=Role.UNKNOWN.value)
         if role_value in (Role.SPENDER.value, Role.AMME.value):
             return 0
         if role_value == Role.SAMENSP.value:
@@ -6338,6 +6579,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         if not rolle:
             return m.get("role.unknown", "Unknown")
+        rolle = canonical_role_value(rolle, default=Role.UNKNOWN.value)
 
         registry = getattr(self, "animal_role_registry", None)
         if registry:
@@ -6346,13 +6588,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return label
 
         role_map = {
-            Role.SPENDER.value:   m.get("role.spenderin", "Spenderin"),
-            Role.AMME.value:      m.get("role.amme", "Amme"),
-            Role.SAMENSP.value:   m.get("role.samenspender", "Samenspender"),
+            Role.SPENDER.value:   m.get("role.egg_cell_donor", m.get("role.spenderin", "Egg cell donor")),
+            Role.AMME.value:      m.get("role.surrogate", m.get("role.amme", "Surrogate")),
+            Role.SAMENSP.value:   m.get("role.sperm_donor", m.get("role.samenspender", "Sperm donor")),
             Role.OFFSPRING.value: m.get("role.offspring", "Offspring"),
-            Role.PARTNER.value:      m.get("role.partnertier",  "Partnertier"),
-            Role.ZUCHTTIER.value:    m.get("role.zuchttier",    "Zuchttier"),
-            Role.EXPERIMENTAL.value: m.get("role.experimental", "Versuchstier"),
+            Role.PARTNER.value:      m.get("role.partner_animal", m.get("role.partnertier", "Partner animal")),
+            Role.ZUCHTTIER.value:    m.get("role.breeding_animal", m.get("role.zuchttier", "Breeding animal")),
+            Role.EXPERIMENTAL.value: m.get("role.experimental_animal", m.get("role.experimental", "Experimental animal")),
             Role.UNKNOWN.value:      m.get("role.unknown",      "Unknown"),
         }
         return role_map.get(rolle, rolle)
@@ -6429,7 +6671,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     
     def _export_report_pdf_current_animal(self) -> None:
         """Export a PDF report for the currently selected animal in the selected month/year."""
-        import calendar
         from datetime import date as _date
         animal_name = getattr(self, 'report_current_animal', None)
         if not animal_name or animal_name not in self.animals:
@@ -6536,7 +6777,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         month = self.report_month_combo.currentData()
         
         # Generate days for the month
-        import calendar
         num_days = calendar.monthrange(year, month)[1]
         
         self.report_table.setRowCount(num_days)
@@ -6683,7 +6923,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     else:
                         # No end date means still sick
                         date_is_sick = True
-                        logging.debug(f"[SICK CHECK] Sick with no end date: date_is_sick=True")
+                        logging.debug("[SICK CHECK] Sick with no end date: date_is_sick=True")
             except Exception as e:
                 logging.warning(f"Error parsing sick dates: {e}")
         
@@ -6701,8 +6941,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         if sick_dt.date() == date:
                             date_is_sick = True
                             break
-                    except:
-                        pass
+                    except (TypeError, ValueError):
+                        logging.debug("Skipping invalid legacy sick date: %r", sick_date)
         
         if date_is_sick:
             health_label = messages.get('daily.health_status', 'Health Status')
@@ -7079,7 +7319,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 animal_data['sick_end_date'] = yesterday.isoformat()
                 logging.debug(f"[SICK UPDATE] Animal recovered on {today.date()}, sick_end_date set to {animal_data['sick_end_date']} (last sick day)")
             else:
-                logging.debug(f"[SICK UPDATE] Animal already healthy, no changes")
+                logging.debug("[SICK UPDATE] Animal already healthy, no changes")
         
         # Update current sick status
         animal_data['sick'] = is_sick
@@ -8207,7 +8447,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _open_rich_text_editor(self, row: int, column: int, item: QTableWidgetItem) -> None:
         """Open a rich text editor dialog for the cell."""
         from PyQt6.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton, QHBoxLayout, QLabel, QToolBar
-        from PyQt6.QtGui import QTextCharFormat, QColor, QFont, QAction, QIcon
+        from PyQt6.QtGui import QTextCharFormat, QColor, QFont, QAction
         from PyQt6.QtCore import Qt
 
         previous_html = item.text()
@@ -8498,8 +8738,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             try:
                 birth_date = datetime.strptime(birth_date_str, DATE_FORMAT)
                 years.add(birth_date.year)
-            except:
-                pass
+            except (TypeError, ValueError):
+                logging.debug("Skipping invalid birth date while collecting report years: %r", birth_date_str)
         
         # Populate year combo
         self.report_year_combo.clear()
@@ -9016,6 +9256,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         self.selected_animals = selected_names
         logging.info(f"Selected animals: {self.selected_animals}")
+
+        if hasattr(self, 'category_tab') and hasattr(self, 'btn_load_sperm'):
+            self._apply_sidebar_button_visibility_for_category(self.category_tab.currentIndex())
 
         # Detect archived animal selections and update restore/delete button states
         archived_selected = []
@@ -10615,8 +10858,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 event.canvas.draw_idle()
             # remove any sperm overlay dots lingering from hover
             for dot in getattr(self, 'sperm_overlay_dots', []):
-                try: dot.remove()
-                except: pass
+                try:
+                    dot.remove()
+                except Exception as exc:
+                    logging.debug("Failed to remove sperm overlay dot: %s", exc)
             self.sperm_overlay_dots.clear()
 
             closest = None
@@ -11879,8 +12124,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _generate_pdf_reports(self, selected_animals: list, von_date: datetime.date, bis_date: datetime.date, output_dir: str, report_lang: str = None) -> None:
         """Generate PDF reports for selected animals with progress dialog."""
-        import calendar
-        from datetime import datetime, timedelta
         
         # Use provided language or fall back to current language
         if report_lang is None:
@@ -12831,16 +13074,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _setup_sidebar_texts(self):
         """Refresh labels/buttons in the sidebar after language change."""
         steroid_active = self._is_steroid_track_active()
-        # Update category tab tooltips and label for "All" tab (index 5)
+        # Update category tab tooltips and label for the "All" tab.
         if hasattr(self, 'category_tab') and self.category_tab is not None:
-            tooltips = [
-                self.messages.get("sidebar.category.tooltip.female",   "Egg donors & surrogates"),
-                self.messages.get("sidebar.category.tooltip.male",     "Sperm donors"),
-                self.messages.get("sidebar.category.tooltip.offspring","Offspring"),
-                self.messages.get("sidebar.category.tooltip.partners", "Partners"),
-                self.messages.get("sidebar.category.tooltip.breeders", "Breeding animals"),
-                self.messages.get("sidebar.category.tooltip.all",      "All animals"),
-            ]
+            tooltips = self._category_tab_tooltips()
             for idx, tip in enumerate(tooltips):
                 if idx < self.category_tab.count():
                     self.category_tab.setTabToolTip(idx, tip)
@@ -18593,6 +18829,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         data = self._read_json()
         self.animals = data.get('animals', {})
         self.archived = data.get('archived_animals', {})
+        migrated_active_roles = normalize_animal_record_roles(self.animals)
+        migrated_archived_roles = normalize_animal_record_roles(self.archived)
+        if migrated_active_roles or migrated_archived_roles:
+            logging.info(
+                "Normalized animal role IDs on load: active=%s archived=%s",
+                len(migrated_active_roles),
+                len(migrated_archived_roles),
+            )
         total_skipped = 0
         for d in (self.animals, self.archived):
             for animal_key, rec in d.items():

@@ -980,7 +980,7 @@ class MediTrackWidget(QWidget):
             return
         self.show_animal(self._current_animal)
 
-    def _get_signature(self) -> str:  # noqa: duplicate – plugin also needs one
+    def _get_signature(self) -> str:
         mt = getattr(self.app, 'master_track', None)
         if mt and getattr(mt, 'is_logged_in', False):
             dname = getattr(mt, 'current_display_name', None)

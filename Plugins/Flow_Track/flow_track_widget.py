@@ -6,13 +6,12 @@
 # Module: Flow Track embryo-flow visualization widget.
 
 import os
-import sys
 import json
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 
 from Plugins.core.animal_identity import animal_base_name
 
@@ -939,21 +938,39 @@ class FlowTrackWidget:
         
         # List available transfers (most recent first per spec 7.4)
         transfer_list = QtWidgets.QListWidget()
-        available_transfers = []
+        transfer_rows = []
+
+        def _transfer_sort_key(transfer_data):
+            raw_date = transfer_data.get('transfer_date')
+            if isinstance(raw_date, datetime):
+                return raw_date
+            if isinstance(raw_date, str) and raw_date.strip():
+                for parser in (
+                    lambda value: datetime.fromisoformat(value.replace('Z', '+00:00')),
+                    lambda value: datetime.strptime(value, DATE_FORMAT),
+                    lambda value: datetime.strptime(value, '%Y-%m-%d'),
+                ):
+                    try:
+                        parsed = parser(raw_date.strip())
+                        return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+                    except ValueError:
+                        continue
+            return datetime.min
         
         for transfer_id, transfer_data in self.manual_data.get('transfers_by_id', {}).items():
             if transfer_id == FREEZER_TRANSFER_ID:
                 continue  # Skip freezer itself
-            
+
             surrogate_name = transfer_data.get('surrogate_name', 'Unknown')
             transfer_date = transfer_data.get('transfer_date', 'Unknown')
             item_text = f"{self._animal_export_name(surrogate_name)} - {transfer_date}"
+            transfer_rows.append((_transfer_sort_key(transfer_data), item_text, transfer_id))
+
+        available_transfers = []
+        for _sort_key, item_text, transfer_id in sorted(transfer_rows, key=lambda row: row[0], reverse=True):
             transfer_list.addItem(item_text)
             available_transfers.append(transfer_id)
-        
-        # Sort by date (most recent first)
-        # TODO: implement sorting
-        
+
         t_layout.addWidget(transfer_list)
         
         button_layout = QtWidgets.QHBoxLayout()
@@ -2403,7 +2420,6 @@ class FlowTrackWidget:
         
         # Position and draw lifebars
         has_name = self.settings.get('show_animal_names', True)
-        base_y = node_y - 0.05 if has_name else node_y - 0.03
         
         # Initialize lifebar data for this animal if not exists
         if animal_name not in self.lifebar_data:
@@ -2428,8 +2444,6 @@ class FlowTrackWidget:
         self.lifebar_data[animal_name] = []
         
         # Draw each lifebar using annotations for proper positioning
-        LIFEBAR_WIDTH_PX = 60  # pixels (bar length - horizontal)
-        LIFEBAR_HEIGHT_PX = 3  # pixels (bar height)
         LIFEBAR_SPACING_PX = 4  # pixels between bars (3px bar + 1px gap)
         
         for i, bar_data in enumerate(lifebars_to_draw):
@@ -2593,10 +2607,6 @@ class FlowTrackWidget:
     def _on_pick(self, event):
         """Handle pick events (clicks and drag initiation)."""
         artist = event.artist
-        
-        # Handle click events with proper double/single click distinction
-        import time
-        current_time = time.time()
         
         # Double-click opens dialogs
         if event.mouseevent.dblclick:
@@ -2895,7 +2905,7 @@ class FlowTrackWidget:
             # Parse date from donation_id
             try:
                 donation_date = datetime.fromisoformat(donation_id)
-            except:
+            except (TypeError, ValueError):
                 donation_date = None
             
             per_donation.append({
@@ -3051,7 +3061,7 @@ class FlowTrackWidget:
             # Parse date from surgery_id
             try:
                 surgery_date = datetime.fromisoformat(surgery_id)
-            except:
+            except (TypeError, ValueError):
                 surgery_date = None
             
             per_surgery.append({
@@ -3181,7 +3191,7 @@ class FlowTrackWidget:
                         if isinstance(date_obj, str):
                             try:
                                 date_str = datetime.fromisoformat(date_obj).strftime('%d.%m.%Y')
-                            except:
+                            except (TypeError, ValueError):
                                 date_str = date_obj
                         else:
                             date_str = date_obj.strftime('%d.%m.%Y')
@@ -3826,7 +3836,7 @@ class FlowTrackWidget:
                         if isinstance(date_obj, str):
                             try:
                                 date_str = datetime.fromisoformat(date_obj).strftime('%d.%m.%Y')
-                            except:
+                            except (TypeError, ValueError):
                                 date_str = date_obj
                         else:
                             date_str = date_obj.strftime('%d.%m.%Y')
@@ -4370,7 +4380,7 @@ class FlowTrackWidget:
                         if isinstance(date_obj, str):
                             try:
                                 date_str = datetime.fromisoformat(date_obj).strftime('%d.%m.%Y')
-                            except:
+                            except (TypeError, ValueError):
                                 date_str = date_obj
                         else:
                             date_str = date_obj.strftime('%d.%m.%Y')
@@ -4638,7 +4648,6 @@ class FlowTrackWidget:
             self._deny()
             return
         QtWidgets = self.parent_app.QtWidgets
-        Qt = self.parent_app.QtCore.Qt
         
         # Get transfer and embryo data from v3.0 schema
         transfer_data = self.manual_data.get('transfers_by_id', {}).get(transfer_id, {})
@@ -4889,7 +4898,7 @@ class FlowTrackWidget:
                     freeze_date_obj = current_freeze_date
                 qt_date = self.parent_app.QtCore.QDate(freeze_date_obj.year, freeze_date_obj.month, freeze_date_obj.day)
                 freeze_date_edit.setDate(qt_date)
-            except:
+            except (AttributeError, TypeError, ValueError):
                 freeze_date_edit.setDate(self.parent_app.QtCore.QDate.currentDate())
         else:
             freeze_date_edit.setDate(self.parent_app.QtCore.QDate.currentDate())
@@ -5338,7 +5347,7 @@ class FlowTrackWidget:
                                 try:
                                     event_date = datetime.fromisoformat(event_date)
                                     date_str = event_date.strftime('%d.%m.%Y')
-                                except:
+                                except (TypeError, ValueError):
                                     date_str = event_date
                             else:
                                 date_str = event_date.strftime('%d.%m.%Y')
@@ -5524,7 +5533,6 @@ class FlowTrackWidget:
     def _open_settings_dialog(self):
         """Open settings dialog with all configuration options."""
         QtWidgets = self.parent_app.QtWidgets
-        Qt = self.parent_app.QtCore.Qt
         
         # Create dialog
         dialog = QtWidgets.QDialog(self.widget)
@@ -5953,8 +5961,6 @@ class FlowTrackWidget:
             
         try:
             from openpyxl import Workbook
-            from openpyxl.utils import get_column_letter
-            from openpyxl.styles import Font, Alignment, PatternFill
             
             wb = Workbook()
             wb.remove(wb.active)  # Remove default sheet
@@ -6066,7 +6072,7 @@ class FlowTrackWidget:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
@@ -6120,7 +6126,7 @@ class FlowTrackWidget:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
@@ -6171,7 +6177,7 @@ class FlowTrackWidget:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
@@ -6219,7 +6225,7 @@ class FlowTrackWidget:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
@@ -6299,7 +6305,7 @@ class FlowTrackWidget:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
@@ -6398,7 +6404,7 @@ class FlowTrackWidget:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
@@ -6490,7 +6496,7 @@ class FlowTrackWidget:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
@@ -6558,7 +6564,7 @@ class FlowTrackWidget:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
@@ -6599,7 +6605,7 @@ class FlowTrackWidget:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception:
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width

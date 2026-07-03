@@ -9,25 +9,19 @@ import os
 import sys
 import json
 import logging
-import traceback
-from typing import Dict, List, Optional, Any, Set, Union, Tuple
+from typing import Dict, Optional, Any
 from dataclasses import dataclass, field
-from datetime import datetime, date
-import copy
 
-from PyQt6 import QtGui
-from PyQt6.QtCore import Qt, QSize, pyqtSignal, QObject, QTimer, QEvent
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget,
-    QTableWidgetItem, QHeaderView, QMessageBox, QDialog,
-    QLineEdit, QComboBox, QDateEdit, QDialogButtonBox, QFormLayout,
-    QGroupBox, QCheckBox, QTextEdit, QToolBar, QStatusBar, QSplitter,
-    QFileDialog, QApplication, QMainWindow, QListWidget, QListWidgetItem, QCheckBox,
+    QTableWidgetItem, QHeaderView, QMessageBox,
+    QLineEdit, QComboBox, QFormLayout,
+    QGroupBox, QTextEdit,
+    QMainWindow, QListWidget, QListWidgetItem,
     QFrame
 )
-from PyQt6.QtCore import Qt, QSize, pyqtSignal, QObject, QTimer, QEvent
-from PyQt6.QtGui import QIcon, QAction, QKeySequence, QPixmap, QColor, QFont, QDoubleValidator
-from PyQt6.QtGui import QIcon, QAction, QKeySequence, QPixmap, QColor, QFont, QDoubleValidator
+from PyQt6.QtGui import QIcon, QAction, QKeySequence, QFont, QDoubleValidator
 
 try:
     from Plugins.core.animal_identity import animal_base_name
@@ -324,103 +318,6 @@ class AnimalReportsWidget(QMainWindow):
             if self._animal_key_from_item(item) == wanted or item.text().strip() == wanted:
                 return item
         return None
-
-    def _load_animal_list(self):
-        """
-        Load the list of animals from the data, handling both 'animals' and 'tiere' keys.
-        Returns True if successful, False otherwise.
-        """
-        # Early exit if widget is not valid
-        if not hasattr(self, 'animal_list') or not self._is_widget_valid(self.animal_list):
-            logger.warning("Animal list widget not available or deleted")
-            return False
-            
-        try:
-            logger.debug("Starting to load animal list")
-            
-            # Block signals during update
-            was_blocked = self.animal_list.signalsBlocked()
-            self.animal_list.blockSignals(True)
-            
-            try:
-                # Store current selection
-                current_items = self.animal_list.selectedItems()
-                current_selection = current_items[0].text() if current_items else None
-                
-                # Clear existing items
-                self.animal_list.clear()
-                
-                if not self.data:
-                    logger.warning("No data available to load animal list")
-                    return False
-                
-                # Get animals from data, handling both 'animals' and 'tiere' keys
-                animals_dict = self.data.get('animals', {}) or self.data.get('tiere', {})
-                
-                if not isinstance(animals_dict, dict):
-                    logger.warning(f"Unexpected animals_dict type: {type(animals_dict)}")
-                    return False
-                
-                if not animals_dict:
-                    logger.warning("No animal data found to load")
-                    return False
-                    
-                # Get sorted list of animal items
-                animal_items = sorted(
-                    animals_dict.items(),
-                    key=lambda item: self._display_animal_name(str(item[0]), item[1]).lower(),
-                )
-                logger.info("Loading %d animals into the list", len(animal_items))
-                
-                # Add animals to the list
-                added_count = 0
-                for animal_name, animal_data in animal_items:
-                    try:
-                        if not self._is_widget_valid(self.animal_list):
-                            logger.warning("Widget was deleted during list population")
-                            return False
-                        animal_name = str(animal_name)
-                        display_name = self._display_animal_name(animal_name, animal_data)
-                        item = QListWidgetItem(display_name)
-                        item.setData(Qt.ItemDataRole.UserRole, {
-                            'key': animal_name,
-                            'ipid': animal_name,
-                            'name': display_name,
-                            'data': animal_data,
-                        })
-                        self.animal_list.addItem(item)
-                        added_count += 1
-                    except Exception as e:
-                        logger.error(f"Error adding animal {animal_name}: {str(e)}")
-                        continue
-                
-                # Only try to restore selection if we still have a valid widget
-                if self._is_widget_valid(self.animal_list):
-                    if current_selection:
-                        item = self._find_animal_list_item_by_key(current_selection)
-                        if item:
-                            self.animal_list.setCurrentItem(item)
-                    elif self.animal_list.count() > 0:
-                        self.animal_list.setCurrentRow(0)
-                
-                logger.info("Successfully loaded %d/%d animals into the list", added_count, len(animal_items))
-                return added_count > 0
-                
-            finally:
-                # Always restore signal blocking state
-                if self._is_widget_valid(self.animal_list):
-                    self.animal_list.blockSignals(was_blocked)
-            
-        except RuntimeError as e:
-            if 'wrapped C/C++' in str(e):
-                logger.warning("Widget was deleted during operation")
-                return False
-            logger.error(f"Runtime error in _load_animal_list: {str(e)}", exc_info=True)
-            return False
-            
-        except Exception as e:
-            logger.error(f"Unexpected error in _load_animal_list: {str(e)}", exc_info=True)
-            return False
 
     def _is_valid_date(self, date_str):
         """Check if a date string is in a valid format."""
@@ -888,7 +785,6 @@ class AnimalReportsWidget(QMainWindow):
             
             # Set minimum height based on content
             doc_height = self._timeline_text_edit.document().size().height()
-            viewport_height = self.timeline_table.viewport().height()
             row_height = min(max(int(doc_height) + 20, 200), 800)  # Clamp between 200 and 800px
             self.timeline_table.setRowHeight(0, row_height)
             
@@ -938,7 +834,13 @@ class AnimalReportsWidget(QMainWindow):
             self._get_message('action.export', '&Export Report'),
             self
         )
-        export_action.triggered.connect(self._export_report)
+        export_action.setEnabled(False)
+        export_action.setToolTip(
+            self._get_message(
+                'action.export.use_main_reports',
+                'Use the main Reports tab PDF export.'
+            )
+        )
         toolbar.addAction(export_action)
         
         toolbar.addSeparator()
@@ -1011,7 +913,13 @@ class AnimalReportsWidget(QMainWindow):
         # Add buttons for adding/removing measurements
         btn_layout = QHBoxLayout()
         add_btn = QPushButton(self._get_message('button.add', 'Add'))
-        add_btn.clicked.connect(self._add_measurement)
+        add_btn.setEnabled(False)
+        add_btn.setToolTip(
+            self._get_message(
+                'animal_reports.measurements.add_disabled',
+                'Add measurements in the animal editor or import workflow.'
+            )
+        )
         remove_btn = QPushButton(self._get_message('button.remove', 'Remove'))
         remove_btn.clicked.connect(self._remove_measurement)
         
@@ -1044,7 +952,13 @@ class AnimalReportsWidget(QMainWindow):
         # Add buttons for adding/removing procedures
         btn_layout = QHBoxLayout()
         add_btn = QPushButton(self._get_message('button.add', 'Add'))
-        add_btn.clicked.connect(self._add_procedure)
+        add_btn.setEnabled(False)
+        add_btn.setToolTip(
+            self._get_message(
+                'animal_reports.procedures.add_disabled',
+                'Add procedures in the animal editor or surgery workflow.'
+            )
+        )
         remove_btn = QPushButton(self._get_message('button.remove', 'Remove'))
         remove_btn.clicked.connect(self._remove_procedure)
         
@@ -1449,8 +1363,6 @@ class AnimalReportsWidget(QMainWindow):
             error_msg = f"Critical error in _load_data: {str(e)}"
             logger.critical(error_msg, exc_info=True)
             
-            # Show user-friendly error message
-            error_details = f"{error_msg}\n\n{traceback.format_exc()}"
             QMessageBox.critical(
                 self,
                 self._get_message('error.title', 'Error'),
@@ -1602,49 +1514,6 @@ class AnimalReportsWidget(QMainWindow):
         except Exception as e:
             logger.error(f"Unexpected error in _load_animal_list: {str(e)}", exc_info=True)
             return False
-    
-    def _export_report(self):
-        """Export the current report to a file."""
-        if not self.current_animal_data:
-            return
-        
-        # Get the default file name
-        default_name = f"{self.animal_name}_report.pdf"
-        
-        # Show save file dialog
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            self._get_message('dialog.export.title', 'Export Report'),
-            default_name,
-            self._get_message('dialog.export.filter', 'PDF Files (*.pdf);;All Files (*)')
-        )
-        
-        if not file_path:
-            return  # User cancelled
-        
-        try:
-            # TODO: Implement actual PDF export
-            # For now, just save a simple text file
-            display_name = self._display_animal_name(self.animal_name, self.current_animal_data)
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(f"Animal Report: {display_name}\n")
-                f.write("=" * 50 + "\n\n")
-                f.write(f"Name: {display_name}\n")
-                f.write(f"Reference Weight: {self.current_animal_data.get('referenz_gewicht', '')} kg\n")
-                # Add more fields as needed
-            
-            self.statusBar().showMessage(
-                self._get_message('status.exported', 'Report exported to {path}').format(path=file_path),
-                5000
-            )
-            
-        except Exception as e:
-            logger.error(f"Error exporting report: {e}")
-            QMessageBox.critical(
-                self,
-                self._get_message('error.title', 'Error'),
-                self._get_message('error.export_failed', 'Failed to export report: {error}').format(error=str(e))
-            )
     
     def _on_animal_selected(self):
         """Handle selection of an animal from the list."""
@@ -1876,11 +1745,6 @@ class AnimalReportsWidget(QMainWindow):
             self.procedures_table.setItem(i, 2, QTableWidgetItem(p.get('details', '')))
             self.procedures_table.setItem(i, 3, QTableWidgetItem(p.get('tierarzt', '')))
     
-    def _add_measurement(self):
-        """Add a new measurement."""
-        # TODO: Implement measurement dialog
-        pass
-    
     def _remove_measurement(self):
         """Remove the selected measurement."""
         selected = self.prog_table.selectedItems()
@@ -1899,11 +1763,6 @@ class AnimalReportsWidget(QMainWindow):
         # Update UI
         self._update_measurements_table()
         self._on_data_changed()
-    
-    def _add_procedure(self):
-        """Add a new procedure."""
-        # TODO: Implement procedure dialog
-        pass
     
     def _remove_procedure(self):
         """Remove the selected procedure."""
@@ -2189,7 +2048,7 @@ def main():
     
     try:
         # Launch the plugin with the found data file
-        widget = launch_animal_reports(
+        launch_animal_reports(
             animal_name=sys.argv[1] if len(sys.argv) > 1 else None,
             messages=messages,
             data_file=data_file
@@ -2315,8 +2174,8 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
         from reportlab.lib.pagesizes import A4, landscape
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import cm
-        from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Table, TableStyle, Paragraph, Spacer, PageBreak
-        from reportlab.lib.enums import TA_LEFT, TA_CENTER
+        from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Table, TableStyle, Paragraph
+        from reportlab.lib.enums import TA_CENTER
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
         from datetime import datetime
@@ -2479,7 +2338,7 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
             else:
                 # Fall back to Helvetica (won't display Cyrillic properly)
                 logger.warning("No Unicode font found in standard paths, using Helvetica (Cyrillic may not display)")
-                print(f"[Animal Reports] WARNING: No Unicode font found! Cyrillic will not display correctly.")
+                print("[Animal Reports] WARNING: No Unicode font found! Cyrillic will not display correctly.")
         except Exception as e:
             logger.error(f"Could not register Unicode font: {e}, using Helvetica")
             import traceback
@@ -2637,8 +2496,6 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
             daily_text = day_entry['daily_data'] or ''
             scores = day_entry['scores'] or ''
             signatures = day_entry['signatures'] or ''
-            is_locked = day_entry.get('is_locked', False)
-            
             # Clean HTML: Convert inline styles to ReportLab format (includes curly brace escaping)
             daily_text = _clean_html_for_reportlab(daily_text)
             scores = _clean_html_for_reportlab(scores)

@@ -213,7 +213,6 @@ class PdGCapability:
         from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QTableWidget, 
                                      QTableWidgetItem, QLabel, QHeaderView, QPushButton)
         from PyQt6.QtCore import Qt
-        from datetime import datetime
         
         DATE_FORMAT = '%d.%m.%Y'
         

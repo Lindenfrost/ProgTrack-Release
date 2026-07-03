@@ -2,7 +2,7 @@
   "version": "4.0",
   "animals": {
     "Eluréd | Callitrix jacchus | 20.01.2007": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_14853236",
       "birth_date": "20.01.2007",
       "death_date": "",
@@ -103,7 +103,7 @@
       "display_name": "Eluréd"
     },
     "Elurín | Callitrix jacchus | 17.07.2007": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_71437348",
       "birth_date": "17.07.2007",
       "death_date": "",
@@ -204,7 +204,7 @@
       "display_name": "Elurín"
     },
     "Arwen | Callitrix jacchus | 23.02.2015": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_82259270",
       "birth_date": "23.02.2015",
       "death_date": "",
@@ -318,7 +318,7 @@
       "display_name": "Arwen"
     },
     "Isildur | Callitrix jacchus | 23.02.2015": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_38322688",
       "birth_date": "23.02.2015",
       "death_date": "",
@@ -432,7 +432,7 @@
       "display_name": "Isildur"
     },
     "Aragorn II | Callitrix jacchus | 11.02.2021": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_69002521",
       "birth_date": "11.02.2021",
       "death_date": "",
@@ -542,7 +542,7 @@
       "display_name": "Aragorn II"
     },
     "Eldarion | Callitrix jacchus | 01.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "sex": "Male",
       "genotype": "WT/H-",
       "max_special": 6,
@@ -611,7 +611,7 @@
       "display_name": "Eldarion"
     },
     "Oropher | Callitrix jacchus | 25.05.2015": {
-      "rolle": "Partnertier",
+      "rolle": "partner_animal",
       "id": "cj_09133717",
       "project": "OTOF-",
       "birth_date": "25.05.2015",
@@ -699,7 +699,7 @@
       "display_name": "Oropher"
     },
     "Ekaterina | Callitrix jacchus | 02.04.2016": {
-      "rolle": "Spenderin",
+      "rolle": "egg_cell_donor",
       "id": "cj_13817596",
       "birth_date": "02.04.2016",
       "death_date": "",
@@ -943,7 +943,7 @@
       "display_name": "Ekaterina"
     },
     "Thranduil | Callitrix jacchus | 11.02.2021": {
-      "rolle": "Samenspender",
+      "rolle": "sperm_donor",
       "id": "cj_18049553",
       "birth_date": "11.02.2021",
       "death_date": "",
@@ -1056,7 +1056,7 @@
       "display_name": "Thranduil"
     },
     "Olga | Callitrix jacchus | 20.06.2015": {
-      "rolle": "Amme",
+      "rolle": "surrogate",
       "ref_weight": 468.0,
       "max_messungen": 100,
       "max_pgf": 12,
@@ -1559,7 +1559,7 @@
       "display_name": "Olga"
     },
     "Anton | Callitrix jacchus | 25.05.2015": {
-      "rolle": "Partnertier",
+      "rolle": "partner_animal",
       "id": "cj_09717949",
       "project": "OTOF-",
       "birth_date": "25.05.2015",
@@ -1647,7 +1647,7 @@
       "display_name": "Anton"
     },
     "Svetlana | Callitrix jacchus | 03.05.2021": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_06103935",
       "birth_date": "03.05.2021",
       "death_date": "",
@@ -1741,7 +1741,7 @@
       "display_name": "Svetlana"
     },
     "Konstantin | Callitrix jacchus | 18.08.2020": {
-      "rolle": "Partnertier",
+      "rolle": "partner_animal",
       "id": "cj_13762689",
       "project": "OTOF-",
       "birth_date": "18.08.2020",
@@ -1829,7 +1829,7 @@
       "display_name": "Konstantin"
     },
     "Legolas | Callitrix jacchus | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "sex": "Male",
       "genotype": "OTOF-/WT",
       "max_special": 6,
@@ -1898,7 +1898,7 @@
       "display_name": "Legolas"
     },
     "Elladan | Callitrix jacchus | 23.07.2015": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_39696766",
       "birth_date": "23.07.2015",
       "death_date": "",
@@ -2012,7 +2012,7 @@
       "display_name": "Elladan"
     },
     "Elrohir | Callitrix jacchus | 21.01.2016": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_20928368",
       "birth_date": "21.01.2016",
       "death_date": "",
@@ -2126,7 +2126,7 @@
       "display_name": "Elrohir"
     },
     "Jessica | Callitrix jacchus | 06.07.2015": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_24485404",
       "birth_date": "06.07.2015",
       "death_date": "",
@@ -2240,7 +2240,7 @@
       "display_name": "Jessica"
     },
     "Aragorn I | Callitrix jacchus | 07.02.2018": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_51342521",
       "birth_date": "07.02.2018",
       "death_date": "",
@@ -2354,7 +2354,7 @@
       "display_name": "Aragorn I"
     },
     "Taylor | Callitrix jacchus | 14.06.2018": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_58571033",
       "birth_date": "14.06.2018",
       "death_date": "",
@@ -2468,7 +2468,7 @@
       "display_name": "Taylor"
     },
     "Gimli | Macaca mulatta | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_90515197",
       "chip_nr": "GI3EHS0X",
       "origin": "DPZ",
@@ -2509,7 +2509,7 @@
       "display_name": "Gimli"
     },
     "Thrór | Macaca mulatta | 04.03.2017": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_56156012",
       "chip_nr": "TMLFRK16",
       "origin": "DPZ",
@@ -2550,7 +2550,7 @@
       "display_name": "Thrór"
     },
     "Frór | Macaca mulatta | 04.03.2017": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_81666433",
       "chip_nr": "SS99NKTD",
       "origin": "DPZ",
@@ -2591,7 +2591,7 @@
       "display_name": "Frór"
     },
     "Grór | Macaca mulatta | 04.03.2017": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_02626111",
       "chip_nr": "NQLZ1TBB",
       "origin": "DPZ",
@@ -2632,7 +2632,7 @@
       "display_name": "Grór"
     },
     "Gerda | Macaca mulatta | 04.03.2017": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_30474999",
       "chip_nr": "VQGY89W3",
       "origin": "Aulë",
@@ -2673,7 +2673,7 @@
       "display_name": "Gerda"
     },
     "Gudrun II | Macaca mulatta | 04.03.2017": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_91464649",
       "chip_nr": "9JHG9XFK",
       "origin": "Aulë",
@@ -2714,7 +2714,7 @@
       "display_name": "Gudrun II"
     },
     "Thráin II | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_34464679",
       "chip_nr": "4U1APSGL",
       "origin": "DPZ",
@@ -2755,7 +2755,7 @@
       "display_name": "Thráin II"
     },
     "Hilda | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_88446857",
       "chip_nr": "76XDJXMJ",
       "origin": "Aulë",
@@ -2796,7 +2796,7 @@
       "display_name": "Hilda"
     },
     "Thorin II | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_63531546",
       "chip_nr": "TGXKF9B6",
       "origin": "DPZ",
@@ -2837,7 +2837,7 @@
       "display_name": "Thorin II"
     },
     "Frerin | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_83217464",
       "chip_nr": "POQ08KCK",
       "origin": "DPZ",
@@ -2878,7 +2878,7 @@
       "display_name": "Frerin"
     },
     "Dís | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_76572956",
       "chip_nr": "OI7CTQL9",
       "origin": "DPZ",
@@ -2919,7 +2919,7 @@
       "display_name": "Dís"
     },
     "Manfred | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_17083609",
       "chip_nr": "IIBF15WX",
       "origin": "Aulë",
@@ -2960,7 +2960,7 @@
       "display_name": "Manfred"
     },
     "Fíli | Macaca mulatta | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_51246641",
       "chip_nr": "AU12Y4AZ",
       "origin": "DPZ",
@@ -3001,7 +3001,7 @@
       "display_name": "Fíli"
     },
     "Kíli | Macaca mulatta | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_47612594",
       "chip_nr": "MCBH8D7P",
       "origin": "DPZ",
@@ -3042,7 +3042,7 @@
       "display_name": "Kíli"
     },
     "Náin III | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_22042722",
       "chip_nr": "CV13CXMD",
       "origin": "DPZ",
@@ -3083,7 +3083,7 @@
       "display_name": "Náin III"
     },
     "Dáin II | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_57047022",
       "chip_nr": "G788XDL9",
       "origin": "DPZ",
@@ -3124,7 +3124,7 @@
       "display_name": "Dáin II"
     },
     "Dorothea | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_38279897",
       "chip_nr": "HRED1USK",
       "origin": "Aulë",
@@ -3165,7 +3165,7 @@
       "display_name": "Dorothea"
     },
     "Thorin III | Macaca mulatta | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_85156353",
       "chip_nr": "P29UIK40",
       "origin": "DPZ",
@@ -3206,7 +3206,7 @@
       "display_name": "Thorin III"
     },
     "Claudia | Macaca mulatta | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_52782534",
       "chip_nr": "70NK3I9P",
       "origin": "Aulë",
@@ -3247,7 +3247,7 @@
       "display_name": "Claudia"
     },
     "Durin VII | Macaca mulatta | 04.03.2029": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_40966835",
       "chip_nr": "HX5PKW5Q",
       "origin": "DPZ",
@@ -3288,7 +3288,7 @@
       "display_name": "Durin VII"
     },
     "Farin | Macaca mulatta | 04.03.2017": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_85230822",
       "chip_nr": "RXODRKD2",
       "origin": "DPZ",
@@ -3329,7 +3329,7 @@
       "display_name": "Farin"
     },
     "Martina | Macaca mulatta | 04.03.2017": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_74661919",
       "chip_nr": "7B6KX3LZ",
       "origin": "Aulë",
@@ -3370,7 +3370,7 @@
       "display_name": "Martina"
     },
     "Fundin | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_45043586",
       "chip_nr": "QCL88HJ1",
       "origin": "DPZ",
@@ -3411,7 +3411,7 @@
       "display_name": "Fundin"
     },
     "Gróin | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_43429343",
       "chip_nr": "D0M9HGWP",
       "origin": "DPZ",
@@ -3452,7 +3452,7 @@
       "display_name": "Gróin"
     },
     "Marianne | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_02335583",
       "chip_nr": "IUSNKJDB",
       "origin": "Aulë",
@@ -3493,7 +3493,7 @@
       "display_name": "Marianne"
     },
     "Petra | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_13152116",
       "chip_nr": "3QEKFMOH",
       "origin": "Aulë",
@@ -3534,7 +3534,7 @@
       "display_name": "Petra"
     },
     "Balin | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_87674979",
       "chip_nr": "T7AB27OM",
       "origin": "DPZ",
@@ -3575,7 +3575,7 @@
       "display_name": "Balin"
     },
     "Dwalin | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_73551776",
       "chip_nr": "OM2DMZ7H",
       "origin": "DPZ",
@@ -3616,7 +3616,7 @@
       "display_name": "Dwalin"
     },
     "Óin II | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_27347127",
       "chip_nr": "XQQLMBUP",
       "origin": "DPZ",
@@ -3657,7 +3657,7 @@
       "display_name": "Óin II"
     },
     "Glóin II | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_26410525",
       "chip_nr": "96MT5Y3F",
       "origin": "DPZ",
@@ -3698,7 +3698,7 @@
       "display_name": "Glóin II"
     },
     "Simone | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_36237787",
       "chip_nr": "YQBDVSEI",
       "origin": "Aulë",
@@ -3739,7 +3739,7 @@
       "display_name": "Simone"
     },
     "Konrad II | Macaca mulatta | 04.03.2017": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_32026904",
       "chip_nr": "T7CK40QD",
       "origin": "DPZ",
@@ -3780,7 +3780,7 @@
       "display_name": "Konrad II"
     },
     "Heike | Macaca mulatta | 04.03.2017": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_21182393",
       "chip_nr": "G9XVXWBW",
       "origin": "Aulë",
@@ -3821,7 +3821,7 @@
       "display_name": "Heike"
     },
     "Karl | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_27422437",
       "chip_nr": "YHK9EQEM",
       "origin": "DPZ",
@@ -3862,7 +3862,7 @@
       "display_name": "Karl"
     },
     "Wilhelm | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_63395566",
       "chip_nr": "YYLVV0Z1",
       "origin": "DPZ",
@@ -3903,7 +3903,7 @@
       "display_name": "Wilhelm"
     },
     "Rita | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_45472630",
       "chip_nr": "MN6QUDTT",
       "origin": "Aulë",
@@ -3944,7 +3944,7 @@
       "display_name": "Rita"
     },
     "Erika II | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_28356937",
       "chip_nr": "BUDDWSNL",
       "origin": "Aulë",
@@ -3985,7 +3985,7 @@
       "display_name": "Erika II"
     },
     "Dori | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_06003439",
       "chip_nr": "0LTH2GV2",
       "origin": "DPZ",
@@ -4026,7 +4026,7 @@
       "display_name": "Dori"
     },
     "Nori | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_22758519",
       "chip_nr": "YRKW1U3Y",
       "origin": "DPZ",
@@ -4067,7 +4067,7 @@
       "display_name": "Nori"
     },
     "Ori | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_12605735",
       "chip_nr": "RKJTOYS4",
       "origin": "DPZ",
@@ -4108,7 +4108,7 @@
       "display_name": "Ori"
     },
     "Albrecht | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_71321469",
       "chip_nr": "14ZD8OG2",
       "origin": "Aulë",
@@ -4149,7 +4149,7 @@
       "display_name": "Albrecht"
     },
     "Kunigunde | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_36917511",
       "chip_nr": "UD8GEW83",
       "origin": "Aulë",
@@ -4190,7 +4190,7 @@
       "display_name": "Kunigunde"
     },
     "Joachim | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_26734248",
       "chip_nr": "Y85SNSIL",
       "origin": "DPZ",
@@ -4231,7 +4231,7 @@
       "display_name": "Joachim"
     },
     "Rudolf | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_45631187",
       "chip_nr": "9QZ55NM2",
       "origin": "DPZ",
@@ -4272,7 +4272,7 @@
       "display_name": "Rudolf"
     },
     "Beate II | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_84847468",
       "chip_nr": "45HGXODM",
       "origin": "Aulë",
@@ -4313,7 +4313,7 @@
       "display_name": "Beate II"
     },
     "Margarete | Macaca mulatta | 04.03.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_43998759",
       "chip_nr": "RJW85QWM",
       "origin": "Aulë",
@@ -4354,7 +4354,7 @@
       "display_name": "Margarete"
     },
     "Bifur | Macaca mulatta | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_03147565",
       "chip_nr": "33Y95MTQ",
       "origin": "DPZ",
@@ -4395,7 +4395,7 @@
       "display_name": "Bifur"
     },
     "Bofur | Macaca mulatta | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_93703178",
       "chip_nr": "5EG9NPHH",
       "origin": "DPZ",
@@ -4436,7 +4436,7 @@
       "display_name": "Bofur"
     },
     "Bombur | Macaca mulatta | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_96765292",
       "chip_nr": "36FQBY7K",
       "origin": "DPZ",
@@ -4477,7 +4477,7 @@
       "display_name": "Bombur"
     },
     "Beate I | Macaca mulatta | 04.03.2020": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_11482560",
       "chip_nr": "ED09V4AS",
       "origin": "Aulë",
@@ -4518,7 +4518,7 @@
       "display_name": "Beate I"
     },
     "Boldog | Papio hamadryas anubis | 04.03.2020": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_35111257",
       "chip_nr": "HXZQBBPD",
       "origin": "Morgoth",
@@ -4559,7 +4559,7 @@
       "display_name": "Boldog"
     },
     "Adèle | Papio hamadryas anubis | 04.03.2020": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_68831762",
       "chip_nr": "QE0H5TTE",
       "origin": "Morgoth",
@@ -4600,7 +4600,7 @@
       "display_name": "Adèle"
     },
     "Gorgol | Papio hamadryas anubis | 04.03.2021": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_11057581",
       "chip_nr": "W3NVEQJJ",
       "origin": "DPZ",
@@ -4641,7 +4641,7 @@
       "display_name": "Gorgol"
     },
     "Balcmeg | Papio hamadryas anubis | 04.06.2021": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_48358311",
       "chip_nr": "LOFY7YOZ",
       "origin": "DPZ",
@@ -4682,7 +4682,7 @@
       "display_name": "Balcmeg"
     },
     "Othrod | Papio hamadryas anubis | 04.09.2021": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_27899674",
       "chip_nr": "0J8TSASK",
       "origin": "DPZ",
@@ -4723,7 +4723,7 @@
       "display_name": "Othrod"
     },
     "Béatrice | Papio hamadryas anubis | 04.03.2021": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_15619892",
       "chip_nr": "EZKLBADW",
       "origin": "Morgoth",
@@ -4764,7 +4764,7 @@
       "display_name": "Béatrice"
     },
     "Grishnákh | Papio hamadryas anubis | 04.03.2022": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_78646258",
       "chip_nr": "NBXX3R5L",
       "origin": "DPZ",
@@ -4805,7 +4805,7 @@
       "display_name": "Grishnákh"
     },
     "Orcobal | Papio hamadryas anubis | 04.06.2022": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_99351077",
       "chip_nr": "TX6YJ8O8",
       "origin": "DPZ",
@@ -4846,7 +4846,7 @@
       "display_name": "Orcobal"
     },
     "Camille | Papio hamadryas anubis | 04.03.2022": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_84574058",
       "chip_nr": "H70NFHL3",
       "origin": "Morgoth",
@@ -4887,7 +4887,7 @@
       "display_name": "Camille"
     },
     "Shagrat | Papio hamadryas anubis | 04.03.2023": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_78404029",
       "chip_nr": "LDT9JHNY",
       "origin": "DPZ",
@@ -4928,7 +4928,7 @@
       "display_name": "Shagrat"
     },
     "Lugdush | Papio hamadryas anubis | 04.06.2023": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_90142018",
       "chip_nr": "FYU8097J",
       "origin": "DPZ",
@@ -4969,7 +4969,7 @@
       "display_name": "Lugdush"
     },
     "Gorbag | Papio hamadryas anubis | 04.09.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_88010849",
       "chip_nr": "YRGF1CI4",
       "origin": "DPZ",
@@ -5010,7 +5010,7 @@
       "display_name": "Gorbag"
     },
     "Orc-chieftain | Papio hamadryas anubis | 04.11.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_32546759",
       "chip_nr": "2O4GWB9W",
       "origin": "DPZ",
@@ -5051,7 +5051,7 @@
       "display_name": "Orc-chieftain"
     },
     "Delphine | Papio hamadryas anubis | 04.03.2023": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_49530904",
       "chip_nr": "9Q3CNS49",
       "origin": "Morgoth",
@@ -5092,7 +5092,7 @@
       "display_name": "Delphine"
     },
     "Hélène | Papio hamadryas anubis | 04.06.2023": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_89498421",
       "chip_nr": "X9KAMY6L",
       "origin": "Morgoth",
@@ -5133,7 +5133,7 @@
       "display_name": "Hélène"
     },
     "Aurore | Papio hamadryas anubis | 04.09.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_68646069",
       "chip_nr": "ESA62136",
       "origin": "Morgoth",
@@ -5174,7 +5174,7 @@
       "display_name": "Aurore"
     },
     "Lagduf | Papio hamadryas anubis | 04.03.2024": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_67623358",
       "chip_nr": "W35H2VPW",
       "origin": "DPZ",
@@ -5215,7 +5215,7 @@
       "display_name": "Lagduf"
     },
     "Snaga I | Papio hamadryas anubis | 04.06.2024": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_54063939",
       "chip_nr": "DI2EOQDL",
       "origin": "DPZ",
@@ -5256,7 +5256,7 @@
       "display_name": "Snaga I"
     },
     "Muzgash | Papio hamadryas anubis | 04.09.2024": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_69622256",
       "chip_nr": "5Q23EN6G",
       "origin": "DPZ",
@@ -5297,7 +5297,7 @@
       "display_name": "Muzgash"
     },
     "Uglúk | Papio hamadryas anubis | 04.06.2024": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_82149014",
       "chip_nr": "2RCE2K7T",
       "origin": "DPZ",
@@ -5338,7 +5338,7 @@
       "display_name": "Uglúk"
     },
     "Élodie | Papio hamadryas anubis | 04.03.2024": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_40397215",
       "chip_nr": "ZS292EX8",
       "origin": "Morgoth",
@@ -5379,7 +5379,7 @@
       "display_name": "Élodie"
     },
     "Josiane | Papio hamadryas anubis | 04.09.2024": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_34962057",
       "chip_nr": "X2C3MGVO",
       "origin": "Morgoth",
@@ -5420,7 +5420,7 @@
       "display_name": "Josiane"
     },
     "Isabelle | Papio hamadryas anubis | 04.06.2024": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_32691314",
       "chip_nr": "KZ9PS80T",
       "origin": "Morgoth",
@@ -5461,7 +5461,7 @@
       "display_name": "Isabelle"
     },
     "Ufthak | Papio hamadryas anubis | 04.03.2025": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_04622136",
       "chip_nr": "GGVXXFRH",
       "origin": "DPZ",
@@ -5502,7 +5502,7 @@
       "display_name": "Ufthak"
     },
     "Lug | Papio hamadryas anubis | 04.06.2025": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_62215591",
       "chip_nr": "015S6MQE",
       "origin": "DPZ",
@@ -5543,7 +5543,7 @@
       "display_name": "Lug"
     },
     "Naglur-Danlo | Papio hamadryas anubis | 04.09.2025": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_41774622",
       "chip_nr": "D5Z7RF37",
       "origin": "DPZ",
@@ -5584,7 +5584,7 @@
       "display_name": "Naglur-Danlo"
     },
     "Mauhúr | Papio hamadryas anubis | 04.06.2025": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_63222904",
       "chip_nr": "8MUGTIIX",
       "origin": "DPZ",
@@ -5625,7 +5625,7 @@
       "display_name": "Mauhúr"
     },
     "Snaga II | Papio hamadryas anubis | 04.09.2025": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_55706001",
       "chip_nr": "CESB81SG",
       "origin": "DPZ",
@@ -5666,7 +5666,7 @@
       "display_name": "Snaga II"
     },
     "Florence | Papio hamadryas anubis | 04.03.2025": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_68203422",
       "chip_nr": "0YKN6PZ3",
       "origin": "Morgoth",
@@ -5707,7 +5707,7 @@
       "display_name": "Florence"
     },
     "Gisèle | Papio hamadryas anubis | 04.09.2025": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_72688547",
       "chip_nr": "L11B4YA6",
       "origin": "Morgoth",
@@ -5748,7 +5748,7 @@
       "display_name": "Gisèle"
     },
     "Josette | Papio hamadryas anubis | 04.06.2025": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_50566446",
       "chip_nr": "S48F7W7E",
       "origin": "Morgoth",
@@ -5789,7 +5789,7 @@
       "display_name": "Josette"
     },
     "Gothmog | Papio hamadryas anubis | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_17669206",
       "chip_nr": "6OCA14G3",
       "origin": "DPZ",
@@ -5830,7 +5830,7 @@
       "display_name": "Gothmog"
     },
     "Lurz | Papio hamadryas anubis | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_13841563",
       "chip_nr": "33XWTQJS",
       "origin": "DPZ",
@@ -5871,7 +5871,7 @@
       "display_name": "Lurz"
     },
     "Golfimbul | Papio hamadryas anubis | 04.04.2020": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_89439677",
       "chip_nr": "97I1BXO4",
       "origin": "Morgoth",
@@ -5912,7 +5912,7 @@
       "display_name": "Golfimbul"
     },
     "Blanche | Papio hamadryas anubis | 04.04.2020": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_67469671",
       "chip_nr": "3A95O761",
       "origin": "Morgoth",
@@ -5953,7 +5953,7 @@
       "display_name": "Blanche"
     },
     "Greatgoblin | Papio hamadryas anubis | 04.04.2021": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_96697751",
       "chip_nr": "U50HFCCF",
       "origin": "DPZ",
@@ -5994,7 +5994,7 @@
       "display_name": "Greatgoblin"
     },
     "Cécile | Papio hamadryas anubis | 04.04.2021": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_30380653",
       "chip_nr": "0IWQ2A3S",
       "origin": "Morgoth",
@@ -6035,7 +6035,7 @@
       "display_name": "Cécile"
     },
     "Azog | Papio hamadryas anubis | 04.04.2022": {
-      "rolle": "Versuchstier",
+      "rolle": "experimental_animal",
       "id": "pha_46229302",
       "chip_nr": "9LWX3R1A",
       "origin": "DPZ",
@@ -6076,7 +6076,7 @@
       "display_name": "Azog"
     },
     "Diane | Papio hamadryas anubis | 04.04.2022": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_29281555",
       "chip_nr": "6TEYN9SM",
       "origin": "Morgoth",
@@ -6117,7 +6117,7 @@
       "display_name": "Diane"
     },
     "Bolg | Papio hamadryas anubis | 04.04.2023": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_61202180",
       "chip_nr": "ZRPBRNMM",
       "origin": "DPZ",
@@ -6158,7 +6158,7 @@
       "display_name": "Bolg"
     },
     "Estelle | Papio hamadryas anubis | 04.04.2023": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_62174474",
       "chip_nr": "T6YIFKAV",
       "origin": "Morgoth",
@@ -6199,7 +6199,7 @@
       "display_name": "Estelle"
     },
     "Bodyguard | Papio hamadryas anubis | 04.04.2024": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_06467948",
       "chip_nr": "J8D2BFK4",
       "origin": "DPZ",
@@ -6240,7 +6240,7 @@
       "display_name": "Bodyguard"
     },
     "Fabienne | Papio hamadryas anubis | 04.04.2024": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_49661724",
       "chip_nr": "PQRUDT8R",
       "origin": "Morgoth",
@@ -6281,7 +6281,7 @@
       "display_name": "Fabienne"
     },
     "Yellowfang | Papio hamadryas anubis | 04.04.2025": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_31103986",
       "chip_nr": "YSV9MJEH",
       "origin": "DPZ",
@@ -6322,7 +6322,7 @@
       "display_name": "Yellowfang"
     },
     "Gaëlle | Papio hamadryas anubis | 04.04.2025": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "pha_37740347",
       "chip_nr": "VEWR5NF5",
       "origin": "Morgoth",
@@ -6363,7 +6363,7 @@
       "display_name": "Gaëlle"
     },
     "Snot | Papio hamadryas anubis | 04.03.2026": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_81439507",
       "chip_nr": "HK9S2Z8Q",
       "origin": "DPZ",
@@ -6404,7 +6404,7 @@
       "display_name": "Snot"
     },
     "Gaston | Papio hamadryas anubis | 04.07.2021": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_81609158",
       "chip_nr": "IK631ZVF",
       "origin": "DPZ",
@@ -6445,7 +6445,7 @@
       "display_name": "Gaston"
     },
     "Honoré | Papio hamadryas anubis | 04.07.2022": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_79597848",
       "chip_nr": "7DCG3V45",
       "origin": "DPZ",
@@ -6486,7 +6486,7 @@
       "display_name": "Honoré"
     },
     "Marcel | Papio hamadryas anubis | 04.07.2023": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_28553263",
       "chip_nr": "SS1YLEM6",
       "origin": "DPZ",
@@ -6527,7 +6527,7 @@
       "display_name": "Marcel"
     },
     "Noémie | Papio hamadryas anubis | 04.07.2025": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "pha_52340970",
       "chip_nr": "T87ICZWA",
       "origin": "DPZ",
@@ -6568,7 +6568,7 @@
       "display_name": "Noémie"
     },
     "Elrond | Callitrix jacchus | 04.02.2012": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_99652953",
       "birth_date": "04.02.2012",
       "death_date": "04.02.2024",
@@ -6682,7 +6682,7 @@
       "display_name": "Elrond"
     },
     "Celebrían | Callitrix jacchus | 06.05.2007": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_81047252",
       "birth_date": "06.05.2007",
       "death_date": "05.05.2020",
@@ -6796,7 +6796,7 @@
       "display_name": "Celebrían"
     },
     "Andy | Unknown species | 01.01.1900": {
-      "rolle": "Samenspender",
+      "rolle": "sperm_donor",
       "id": "",
       "chip_nr": "",
       "origin": "",
@@ -6863,7 +6863,7 @@
       "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
     },
     "Bobby | Unknown species | 01.01.1900": {
-      "rolle": "Samenspender",
+      "rolle": "sperm_donor",
       "id": "",
       "chip_nr": "",
       "origin": "",
@@ -6916,7 +6916,7 @@
       "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
     },
     "Cindy | Unknown species | 01.01.1900": {
-      "rolle": "Samenspender",
+      "rolle": "sperm_donor",
       "id": "",
       "chip_nr": "",
       "origin": "",
@@ -6976,7 +6976,7 @@
       "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
     },
     "Dana | Unknown species | 01.01.1900": {
-      "rolle": "Samenspender",
+      "rolle": "sperm_donor",
       "id": "",
       "chip_nr": "",
       "origin": "",
@@ -7036,7 +7036,7 @@
       "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
     },
     "Echo | Unknown species | 01.01.1900": {
-      "rolle": "Samenspender",
+      "rolle": "sperm_donor",
       "id": "",
       "chip_nr": "",
       "origin": "",
@@ -7071,7 +7071,7 @@
       "identity_review_reason": "Migration placeholder for missing species, birth_date in progtrack animals data."
     },
     "Fredi | Unknown species | 01.01.1900": {
-      "rolle": "Samenspender",
+      "rolle": "sperm_donor",
       "id": "",
       "chip_nr": "",
       "origin": "",
@@ -7108,7 +7108,7 @@
   },
   "archived_animals": {
     "Míriel | Callitrix jacchus | 08.01.2000": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_57356675",
       "birth_date": "08.01.2000",
       "death_date": "08.01.2008",
@@ -7208,7 +7208,7 @@
       "display_name": "Míriel"
     },
     "Finwë | Callitrix jacchus | 15.05.2000": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_13098748",
       "birth_date": "15.05.2000",
       "death_date": "15.05.2007",
@@ -7308,7 +7308,7 @@
       "display_name": "Finwë"
     },
     "Indis | Callitrix jacchus | 05.03.2000": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_14697832",
       "birth_date": "05.03.2000",
       "death_date": "05.03.2008",
@@ -7408,7 +7408,7 @@
       "display_name": "Indis"
     },
     "Fëanor | Callitrix jacchus | 13.03.2002": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_74858635",
       "birth_date": "13.03.2002",
       "death_date": "13.03.2011",
@@ -7508,7 +7508,7 @@
       "display_name": "Fëanor"
     },
     "Findis | Callitrix jacchus | 02.05.2002": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_72397724",
       "birth_date": "02.05.2002",
       "death_date": "02.05.2011",
@@ -7608,7 +7608,7 @@
       "display_name": "Findis"
     },
     "Fingolfin | Callitrix jacchus | 01.08.2002": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_55140406",
       "birth_date": "01.08.2002",
       "death_date": "01.08.2011",
@@ -7708,7 +7708,7 @@
       "display_name": "Fingolfin"
     },
     "Írimë | Callitrix jacchus | 18.01.2003": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_47266899",
       "birth_date": "18.01.2003",
       "death_date": "17.01.2010",
@@ -7808,7 +7808,7 @@
       "display_name": "Írimë"
     },
     "Nerdanel | Callitrix jacchus | 08.09.2001": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_94000918",
       "birth_date": "08.09.2001",
       "death_date": "07.09.2008",
@@ -7908,7 +7908,7 @@
       "display_name": "Nerdanel"
     },
     "Eärwen | Callitrix jacchus | 03.08.2001": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_56864289",
       "birth_date": "03.08.2001",
       "death_date": "03.08.2015",
@@ -8008,7 +8008,7 @@
       "display_name": "Eärwen"
     },
     "Maedhros | Callitrix jacchus | 25.02.2004": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_67054765",
       "birth_date": "25.02.2004",
       "death_date": "24.02.2011",
@@ -8108,7 +8108,7 @@
       "display_name": "Maedhros"
     },
     "Maglor | Callitrix jacchus | 12.07.2004": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_72651194",
       "birth_date": "12.07.2004",
       "death_date": "12.07.2013",
@@ -8208,7 +8208,7 @@
       "display_name": "Maglor"
     },
     "Celegorm | Callitrix jacchus | 08.01.2005": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_48149965",
       "birth_date": "08.01.2005",
       "death_date": "08.01.2012",
@@ -8308,7 +8308,7 @@
       "display_name": "Celegorm"
     },
     "Caranthir | Callitrix jacchus | 23.06.2005": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_77655664",
       "birth_date": "23.06.2005",
       "death_date": "22.06.2012",
@@ -8408,7 +8408,7 @@
       "display_name": "Caranthir"
     },
     "Curufin | Callitrix jacchus | 10.12.2005": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_79148075",
       "birth_date": "10.12.2005",
       "death_date": "10.12.2013",
@@ -8508,7 +8508,7 @@
       "display_name": "Curufin"
     },
     "Ashley | Callitrix jacchus | 16.05.2004": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_27029921",
       "birth_date": "16.05.2004",
       "death_date": "16.05.2011",
@@ -8608,7 +8608,7 @@
       "display_name": "Ashley"
     },
     "Celebrimbor | Callitrix jacchus | 26.09.2007": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_10861288",
       "birth_date": "26.09.2007",
       "death_date": "25.09.2016",
@@ -8708,7 +8708,7 @@
       "display_name": "Celebrimbor"
     },
     "Fingon | Callitrix jacchus | 25.05.2004": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_06498369",
       "birth_date": "25.05.2004",
       "death_date": "25.05.2012",
@@ -8808,7 +8808,7 @@
       "display_name": "Fingon"
     },
     "Turgon | Callitrix jacchus | 03.08.2004": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_07737435",
       "birth_date": "03.08.2004",
       "death_date": "03.08.2013",
@@ -8908,7 +8908,7 @@
       "display_name": "Turgon"
     },
     "Aredhel | Callitrix jacchus | 22.01.2005": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_35634778",
       "birth_date": "22.01.2005",
       "death_date": "22.01.2012",
@@ -9008,7 +9008,7 @@
       "display_name": "Aredhel"
     },
     "Argon | Callitrix jacchus | 16.07.2005": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_14947554",
       "birth_date": "16.07.2005",
       "death_date": "16.07.2013",
@@ -9108,7 +9108,7 @@
       "display_name": "Argon"
     },
     "Elenwë | Callitrix jacchus | 19.12.2004": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_87375189",
       "birth_date": "19.12.2004",
       "death_date": "19.12.2013",
@@ -9208,7 +9208,7 @@
       "display_name": "Elenwë"
     },
     "Idril | Callitrix jacchus | 14.02.2007": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_77192709",
       "birth_date": "14.02.2007",
       "death_date": "14.02.2015",
@@ -9308,7 +9308,7 @@
       "display_name": "Idril"
     },
     "Eöl | Callitrix jacchus | 30.04.2004": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_31450011",
       "birth_date": "30.04.2004",
       "death_date": "30.04.2012",
@@ -9408,7 +9408,7 @@
       "display_name": "Eöl"
     },
     "Maeglin | Callitrix jacchus | 22.01.2007": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_21511823",
       "birth_date": "22.01.2007",
       "death_date": "22.01.2016",
@@ -9508,7 +9508,7 @@
       "display_name": "Maeglin"
     },
     "Finrod | Callitrix jacchus | 12.08.2005": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_31313408",
       "birth_date": "12.08.2005",
       "death_date": "12.08.2013",
@@ -9608,7 +9608,7 @@
       "display_name": "Finrod"
     },
     "Angrod | Callitrix jacchus | 26.07.2005": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_80616887",
       "birth_date": "26.07.2005",
       "death_date": "26.07.2013",
@@ -9708,7 +9708,7 @@
       "display_name": "Angrod"
     },
     "Galadriel | Callitrix jacchus | 17.06.2005": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_63474293",
       "birth_date": "17.06.2005",
       "death_date": "17.06.2018",
@@ -9808,7 +9808,7 @@
       "display_name": "Galadriel"
     },
     "Brittany | Callitrix jacchus | 14.08.2004": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_23032942",
       "birth_date": "14.08.2004",
       "death_date": "14.08.2011",
@@ -9908,7 +9908,7 @@
       "display_name": "Brittany"
     },
     "Orodreth | Callitrix jacchus | 07.08.2007": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_94970537",
       "birth_date": "07.08.2007",
       "death_date": "06.08.2014",
@@ -10008,7 +10008,7 @@
       "display_name": "Orodreth"
     },
     "Jennifer | Callitrix jacchus | 08.07.2007": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_60448624",
       "birth_date": "08.07.2007",
       "death_date": "07.07.2014",
@@ -10108,7 +10108,7 @@
       "display_name": "Jennifer"
     },
     "Finduilas | Callitrix jacchus | 23.01.2010": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_31858294",
       "birth_date": "23.01.2010",
       "death_date": "22.01.2017",
@@ -10208,7 +10208,7 @@
       "display_name": "Finduilas"
     },
     "Gil-galad | Callitrix jacchus | 06.07.2010": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_17987978",
       "birth_date": "06.07.2010",
       "death_date": "06.07.2018",
@@ -10308,7 +10308,7 @@
       "display_name": "Gil-galad"
     },
     "Celeborn | Callitrix jacchus | 29.08.2004": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_06589678",
       "birth_date": "29.08.2004",
       "death_date": "29.08.2018",
@@ -10408,7 +10408,7 @@
       "display_name": "Celeborn"
     },
     "Tuor | Callitrix jacchus | 17.10.2007": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_97513424",
       "birth_date": "17.10.2007",
       "death_date": "16.10.2016",
@@ -10508,7 +10508,7 @@
       "display_name": "Tuor"
     },
     "Eärendil | Callitrix jacchus | 14.02.2010": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_48493904",
       "birth_date": "14.02.2010",
       "death_date": "14.02.2024",
@@ -10608,7 +10608,7 @@
       "display_name": "Eärendil"
     },
     "Thingol | Callitrix jacchus | 17.08.2000": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_53570118",
       "birth_date": "17.08.2000",
       "death_date": "17.08.2013",
@@ -10708,7 +10708,7 @@
       "display_name": "Thingol"
     },
     "Melian | Callitrix jacchus | 29.06.2000": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_99477439",
       "birth_date": "29.06.2000",
       "death_date": "29.06.2012",
@@ -10808,7 +10808,7 @@
       "display_name": "Melian"
     },
     "Lúthien | Callitrix jacchus | 29.07.2002": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_11196732",
       "birth_date": "29.07.2002",
       "death_date": "29.07.2011",
@@ -10908,7 +10908,7 @@
       "display_name": "Lúthien"
     },
     "Beren | Callitrix jacchus | 25.08.2001": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_70049507",
       "birth_date": "25.08.2001",
       "death_date": "24.08.2008",
@@ -11008,7 +11008,7 @@
       "display_name": "Beren"
     },
     "Dior | Callitrix jacchus | 09.05.2004": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_71258546",
       "birth_date": "09.05.2004",
       "death_date": "09.05.2013",
@@ -11108,7 +11108,7 @@
       "display_name": "Dior"
     },
     "Nimloth | Callitrix jacchus | 06.09.2004": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_44953634",
       "birth_date": "06.09.2004",
       "death_date": "06.09.2013",
@@ -11208,7 +11208,7 @@
       "display_name": "Nimloth"
     },
     "Elwing | Callitrix jacchus | 08.01.2008": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_75409991",
       "birth_date": "08.01.2008",
       "death_date": "07.01.2015",
@@ -11308,7 +11308,7 @@
       "display_name": "Elwing"
     },
     "Elros | Callitrix jacchus | 24.07.2012": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_28334319",
       "birth_date": "24.07.2012",
       "death_date": "24.07.2025",
@@ -11408,7 +11408,7 @@
       "display_name": "Elros"
     },
     "Madison | Callitrix jacchus | 31.12.2012": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_20238025",
       "birth_date": "31.12.2012",
       "death_date": "31.12.2020",
@@ -11508,7 +11508,7 @@
       "display_name": "Madison"
     },
     "Durin I | Macaca mulatta | 04.03.1963": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_84905540",
       "chip_nr": "B8FYSLQ7",
       "origin": "Aulë",
@@ -11549,7 +11549,7 @@
       "display_name": "Durin I"
     },
     "Gertrud | Macaca mulatta | 04.03.1963": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_64283796",
       "chip_nr": "FA5Y48WM",
       "origin": "Aulë",
@@ -11590,7 +11590,7 @@
       "display_name": "Gertrud"
     },
     "Hartmut | Macaca mulatta | 04.03.1966": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_60596739",
       "chip_nr": "VSUOG813",
       "origin": "DPZ",
@@ -11631,7 +11631,7 @@
       "display_name": "Hartmut"
     },
     "Ingrid | Macaca mulatta | 04.03.1966": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_76680985",
       "chip_nr": "X3JKVJBK",
       "origin": "Aulë",
@@ -11672,7 +11672,7 @@
       "display_name": "Ingrid"
     },
     "Durin II | Macaca mulatta | 04.03.1969": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_58123963",
       "chip_nr": "MQ8QMRXU",
       "origin": "DPZ",
@@ -11713,7 +11713,7 @@
       "display_name": "Durin II"
     },
     "Irmgard I | Macaca mulatta | 04.03.1969": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_50747031",
       "chip_nr": "4BX39YI5",
       "origin": "Aulë",
@@ -11754,7 +11754,7 @@
       "display_name": "Irmgard I"
     },
     "Bernhard | Macaca mulatta | 04.03.1972": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_31964648",
       "chip_nr": "LOUCBXAX",
       "origin": "DPZ",
@@ -11795,7 +11795,7 @@
       "display_name": "Bernhard"
     },
     "Adelheid | Macaca mulatta | 04.03.1972": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_90763995",
       "chip_nr": "XH2DHSXR",
       "origin": "Aulë",
@@ -11836,7 +11836,7 @@
       "display_name": "Adelheid"
     },
     "Durin III | Macaca mulatta | 04.03.1975": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_13315935",
       "chip_nr": "EV8UR0BI",
       "origin": "DPZ",
@@ -11877,7 +11877,7 @@
       "display_name": "Durin III"
     },
     "Hildegard | Macaca mulatta | 04.03.1975": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_69885691",
       "chip_nr": "R0S63CPG",
       "origin": "Aulë",
@@ -11918,7 +11918,7 @@
       "display_name": "Hildegard"
     },
     "Konrad I | Macaca mulatta | 04.03.1978": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_89156244",
       "chip_nr": "JH1D8G37",
       "origin": "DPZ",
@@ -11959,7 +11959,7 @@
       "display_name": "Konrad I"
     },
     "Mathilde | Macaca mulatta | 04.03.1978": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_41655989",
       "chip_nr": "NPZHJP0O",
       "origin": "Aulë",
@@ -12000,7 +12000,7 @@
       "display_name": "Mathilde"
     },
     "Durin IV | Macaca mulatta | 04.03.1981": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_76247267",
       "chip_nr": "FMP65H2C",
       "origin": "DPZ",
@@ -12041,7 +12041,7 @@
       "display_name": "Durin IV"
     },
     "Gudrun I | Macaca mulatta | 04.03.1981": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_74171059",
       "chip_nr": "0VX5IW4B",
       "origin": "Aulë",
@@ -12082,7 +12082,7 @@
       "display_name": "Gudrun I"
     },
     "Eckhard | Macaca mulatta | 04.03.1984": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_74863250",
       "chip_nr": "86XXSGCB",
       "origin": "DPZ",
@@ -12123,7 +12123,7 @@
       "display_name": "Eckhard"
     },
     "Gerlinde | Macaca mulatta | 04.03.1984": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_17607762",
       "chip_nr": "IAITPWMI",
       "origin": "Aulë",
@@ -12164,7 +12164,7 @@
       "display_name": "Gerlinde"
     },
     "Durin V | Macaca mulatta | 04.03.1987": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_01390483",
       "chip_nr": "XOP4UISG",
       "origin": "DPZ",
@@ -12205,7 +12205,7 @@
       "display_name": "Durin V"
     },
     "Walburga | Macaca mulatta | 04.03.1987": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_64029655",
       "chip_nr": "JWOT19O5",
       "origin": "Aulë",
@@ -12246,7 +12246,7 @@
       "display_name": "Walburga"
     },
     "Rüdiger | Macaca mulatta | 04.03.1990": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_13939229",
       "chip_nr": "S1PGRYPW",
       "origin": "DPZ",
@@ -12287,7 +12287,7 @@
       "display_name": "Rüdiger"
     },
     "Brigitte | Macaca mulatta | 04.03.1990": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_12691284",
       "chip_nr": "1MFNUEOO",
       "origin": "Aulë",
@@ -12328,7 +12328,7 @@
       "display_name": "Brigitte"
     },
     "Durin VI | Macaca mulatta | 04.03.1993": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_35053974",
       "chip_nr": "SKJSKYS5",
       "origin": "DPZ",
@@ -12369,7 +12369,7 @@
       "display_name": "Durin VI"
     },
     "Hannelore | Macaca mulatta | 04.03.1993": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_21225870",
       "chip_nr": "OUOROG60",
       "origin": "Aulë",
@@ -12410,7 +12410,7 @@
       "display_name": "Hannelore"
     },
     "Náin I | Macaca mulatta | 04.03.1996": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_81715617",
       "chip_nr": "086DZQS3",
       "origin": "DPZ",
@@ -12451,7 +12451,7 @@
       "display_name": "Náin I"
     },
     "Ursula | Macaca mulatta | 04.03.1996": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_62582401",
       "chip_nr": "SRY1N3NY",
       "origin": "Aulë",
@@ -12492,7 +12492,7 @@
       "display_name": "Ursula"
     },
     "Thráin I | Macaca mulatta | 04.03.1999": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_60217355",
       "chip_nr": "3V06GI43",
       "origin": "DPZ",
@@ -12533,7 +12533,7 @@
       "display_name": "Thráin I"
     },
     "Renate | Macaca mulatta | 04.03.1999": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_44978248",
       "chip_nr": "J13FTXIY",
       "origin": "Aulë",
@@ -12574,7 +12574,7 @@
       "display_name": "Renate"
     },
     "Thorin I | Macaca mulatta | 04.03.2002": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_87732552",
       "chip_nr": "G9DUTP9J",
       "origin": "DPZ",
@@ -12615,7 +12615,7 @@
       "display_name": "Thorin I"
     },
     "Erika I | Macaca mulatta | 04.03.2002": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_25852047",
       "chip_nr": "K2JU8KQE",
       "origin": "Aulë",
@@ -12656,7 +12656,7 @@
       "display_name": "Erika I"
     },
     "Glóin I | Macaca mulatta | 04.03.2005": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_87128359",
       "chip_nr": "0T5NBRYO",
       "origin": "DPZ",
@@ -12697,7 +12697,7 @@
       "display_name": "Glóin I"
     },
     "Monika | Macaca mulatta | 04.03.2005": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_40753983",
       "chip_nr": "Q3XE5AQN",
       "origin": "Aulë",
@@ -12738,7 +12738,7 @@
       "display_name": "Monika"
     },
     "Óin I | Macaca mulatta | 04.03.2008": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_35092581",
       "chip_nr": "CWSE3NLP",
       "origin": "DPZ",
@@ -12779,7 +12779,7 @@
       "display_name": "Óin I"
     },
     "Sabine | Macaca mulatta | 04.03.2008": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_77967517",
       "chip_nr": "W2AORG3X",
       "origin": "Aulë",
@@ -12820,7 +12820,7 @@
       "display_name": "Sabine"
     },
     "Náin II | Macaca mulatta | 04.03.2011": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_02417079",
       "chip_nr": "89MHV6L1",
       "origin": "DPZ",
@@ -12861,7 +12861,7 @@
       "display_name": "Náin II"
     },
     "Helga | Macaca mulatta | 04.03.2011": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_35812766",
       "chip_nr": "C6NV1YEF",
       "origin": "Aulë",
@@ -12902,7 +12902,7 @@
       "display_name": "Helga"
     },
     "Dáin I | Macaca mulatta | 04.03.2014": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_55959480",
       "chip_nr": "9ECOE9PZ",
       "origin": "DPZ",
@@ -12943,7 +12943,7 @@
       "display_name": "Dáin I"
     },
     "Borin | Macaca mulatta | 04.03.2014": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_43350107",
       "chip_nr": "CF90ERJX",
       "origin": "DPZ",
@@ -12984,7 +12984,7 @@
       "display_name": "Borin"
     },
     "Dieter | Macaca mulatta | 04.03.2014": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_12199697",
       "chip_nr": "MF0L344Q",
       "origin": "DPZ",
@@ -13025,7 +13025,7 @@
       "display_name": "Dieter"
     },
     "Irmgard II | Macaca mulatta | 04.03.2014": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_93728518",
       "chip_nr": "7RCNYLN7",
       "origin": "Aulë",
@@ -13066,7 +13066,7 @@
       "display_name": "Irmgard II"
     },
     "Elke | Macaca mulatta | 04.03.2014": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_11421653",
       "chip_nr": "8HQY47MQ",
       "origin": "Aulë",
@@ -13107,7 +13107,7 @@
       "display_name": "Elke"
     },
     "Jutta | Macaca mulatta | 04.03.2014": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_86330635",
       "chip_nr": "GOXE5P9Z",
       "origin": "Aulë",
@@ -13148,7 +13148,7 @@
       "display_name": "Jutta"
     },
     "Dietmar | Macaca mulatta | 04.03.2014": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_41551882",
       "chip_nr": "Z558B5VW",
       "origin": "DPZ",
@@ -13189,7 +13189,7 @@
       "display_name": "Dietmar"
     },
     "Anneliese | Macaca mulatta | 04.03.2014": {
-      "rolle": "Nachkomme",
+      "rolle": "offspring",
       "id": "mm_53877671",
       "chip_nr": "S7OVLZ0U",
       "origin": "Aulë",
@@ -13230,7 +13230,7 @@
       "display_name": "Anneliese"
     },
     "Finarfin | Callitrix jacchus | 06.07.2003": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_07563349",
       "birth_date": "06.07.2003",
       "death_date": "05.07.2018",
@@ -13330,7 +13330,7 @@
       "display_name": "Finarfin"
     },
     "Aegnor | Callitrix jacchus | 17.04.2005": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_89406212",
       "birth_date": "17.04.2005",
       "death_date": "16.04.2012",
@@ -13431,7 +13431,7 @@
       "display_name": "Aegnor"
     },
     "Amras | Callitrix jacchus | 02.11.2006": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_81450790",
       "birth_date": "02.11.2006",
       "death_date": "02.11.2014",
@@ -13531,7 +13531,7 @@
       "display_name": "Amras"
     },
     "Amrod | Callitrix jacchus | 22.05.2006": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_19050119",
       "birth_date": "22.05.2006",
       "death_date": "21.05.2013",
@@ -13631,7 +13631,7 @@
       "display_name": "Amrod"
     },
     "Anairë | Callitrix jacchus | 20.08.2001": {
-      "rolle": "Zuchttier",
+      "rolle": "breeding_animal",
       "id": "cj_61553927",
       "birth_date": "20.08.2001",
       "death_date": "19.08.2008",
@@ -13731,7 +13731,7 @@
       "display_name": "Anairë"
     },
     "Betta | Unknown species | 01.01.1900": {
-      "rolle": "Spenderin",
+      "rolle": "egg_cell_donor",
       "ref_weight": 450.0,
       "max_messungen": 100,
       "max_pgf": 12,

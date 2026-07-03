@@ -20,25 +20,20 @@
   "tab.flow_track": "Flow Track",
   "flow_track.visualization.title": "Поток переноса эмбрионов",
   "flow_track.visualization.subtitle": "Визуализация связей донор-суррогат",
-  
   "flow_track.dialog.egg_donor.title": "Статистика донора яйцеклеток",
   "flow_track.dialog.egg_donor.label": "Донор яйцеклеток",
   "flow_track.dialog.egg_donor.surgeries": "Операции",
-  
   "flow_track.dialog.sperm_donor.title": "Статистика донора спермы",
   "flow_track.dialog.sperm_donor.label": "Донор спермы",
   "flow_track.dialog.sperm_donor.donations": "Донации спермы",
-  
   "flow_track.dialog.surrogate.title": "Статистика суррогата",
   "flow_track.dialog.surrogate.label": "Суррогат",
   "flow_track.dialog.surrogate.transfers": "Переносы эмбрионов",
   "flow_track.dialog.surrogate.no_transfers": "Переносы не зарегистрированы",
-  
   "flow_track.button.settings": "Настройки",
   "flow_track.button.refresh": "Обновить из ProgTrack",
   "flow_track.button.fit_auto": "Автоподгонка",
   "flow_track.button.freezer": "Показать/скрыть морозильник",
-  
   "flow_track.settings.title": "Настройки Flow Track",
   "flow_track.settings.display": "Параметры отображения",
   "flow_track.settings.show_names": "Показывать имена животных",
@@ -58,20 +53,16 @@
   "flow_track.settings.metric.fert_rate_in_vivo": "Эффективность оплодотворения (in vivo M2)",
   "flow_track.settings.metric.total_implantation": "Общая эффективность имплантации",
   "flow_track.settings.metric.transfer_success_rate": "Успешность переносов",
-  
   "flow_track.export.title": "Экспорт данных Flow Track",
   "flow_track.export.format": "Формат экспорта",
   "flow_track.export.json": "Резервная копия JSON",
   "flow_track.export.excel": "Excel (.xlsx)",
   "flow_track.export.pdf": "PDF-отчет",
-  
   "flow_track.confirm_save.title": "Подтверждение сохранения",
   "flow_track.confirm_save.message": "Сохранить изменения в данных {type} для {name}?",
-  
   "flow_track.error.save_failed.title": "Ошибка сохранения",
   "flow_track.error.save_failed.message": "Не удалось сохранить: {error}",
   "flow_track.animal_info.title": "Информация о животном",
-  
   "flow_track.edit_embryo.title": "Редактировать эмбрион",
   "flow_track.edit_embryo.embryo_label": "Эмбрион:",
   "flow_track.edit_embryo.egg_donor": "Донор яйцеклеток:",
@@ -83,7 +74,6 @@
   "flow_track.edit_embryo.none": "(Нет)",
   "flow_track.edit_embryo.implanted": "Имплантирован",
   "flow_track.edit_embryo.cryopreserved": "Криоконсервирован",
-  
   "flow_track.settings.lifebar_metrics": "МЕТРИКИ ЭФФЕКТИВНОСТИ LIFEBAR",
   "flow_track.settings.egg_donors": "Доноры Яйцеклеток:",
   "flow_track.settings.sperm_donors": "Доноры Спермы:",
@@ -101,7 +91,6 @@
   "flow_track.settings.aggregation.per_donation": "На Донацию",
   "flow_track.settings.aggregation.per_transfer": "На Перенос",
   "flow_track.settings.aggregation.total": "Всего",
-  
   "flow_track.metric.per_surgery_m1_embryo": "M1→Эмбрион",
   "flow_track.metric.per_surgery_m2_embryo": "M2→Эмбрион",
   "flow_track.metric.per_surgery_all_eggs_embryo": "Все Яйцеклетки→Эмбрион",
@@ -120,7 +109,6 @@
   "flow_track.metric.per_donation_pregnancy": "Оплодотворённые Яйцеклетки→Беременность",
   "flow_track.metric.total_embryo": "Оплодотворённые Яйцеклетки→Эмбрион (Всего)",
   "flow_track.metric.total_pregnancy": "Оплодотворённые Яйцеклетки→Беременность (Всего)",
-  
   "flow_track.efficiency.unknown_date": "Неизвестно",
   "flow_track.efficiency.m1_to_embryo": "M1→Эмбрион",
   "flow_track.efficiency.m2_to_embryo": "M2→Эмбрион",
@@ -139,7 +127,6 @@
   "flow_track.efficiency.embryos": "эмбрионов",
   "flow_track.efficiency.total_transferred": "Всего перенесено",
   "flow_track.efficiency.total_implanted": "Всего имплантировано",
-  
   "flow_track.dialog.per_surgery": "Эффективность на Операцию:",
   "flow_track.dialog.per_donation": "Эффективность на Донацию:",
   "flow_track.dialog.per_transfer": "Эффективность на Перенос:",
@@ -148,7 +135,6 @@
   "flow_track.dialog.sperm_donor.m1_fert": "M1 оплодотворено: ",
   "flow_track.dialog.sperm_donor.m2_fert": "M2 оплодотворено: ",
   "flow_track.dialog.sperm_donor.characteristics": "Характеристики",
-  
   "flow_track.export.save_json": "Сохранить резервную копию JSON",
   "flow_track.export.save_excel": "Сохранить Файл Excel",
   "flow_track.export.save_pdf": "Сохранить Отчёт PDF",
@@ -190,7 +176,6 @@
   "flow_track.export.col.pregnancies": "Беременности",
   "flow_track.export.col.fert_preg_pct": "Опл.→Бер. %",
   "flow_track.export.col.embryos_transferred": "Перенесено Эмбрионов",
-  
   "flow_track.tooltip.surgeries": "операции",
   "flow_track.tooltip.sperm_samples": "образцы спермы",
   "flow_track.tooltip.transfers": "переносы",
@@ -199,17 +184,14 @@
   "flow_track.tooltip.sperm": "Сперма:",
   "flow_track.tooltip.implanted": "Имплантирован:",
   "flow_track.tooltip.cryo": "Крио:",
-  
   "flow_track.stage.in_vivo_m2": "in vivo M2",
   "flow_track.stage.in_vitro_m2": "IVM M2",
   "flow_track.freezer_label": "МОРОЗИЛЬНИК",
   "flow_track.freezer.frozen_prefix": "Заморожен:",
   "flow_track.unknown": "Неизвестно",
-  
   "flow_track.dialog.no_donation": "-- Донация не выбрана --",
   "flow_track.confirm_change.title": "Подтвердить изменение",
   "flow_track.confirm_change.message": "Хотите изменить эти данные?",
-  
   "flow_track.dialog.egg_donor.date_label": "Дата:",
   "flow_track.dialog.egg_donor.gv_label": "GV изолировано:",
   "flow_track.dialog.egg_donor.m2_label": "M2 изолировано:",
@@ -242,7 +224,6 @@
   "flow_track.dialog.egg_donor.usable_per_gv_desc": "Количество пригодных эмбрионов на полученный GV-ооцит",
   "flow_track.dialog.egg_donor.fert_per_gv": "Оплодотворенных на GV (ранний KPI)",
   "flow_track.dialog.egg_donor.fert_per_gv_desc": "Количество успешно оплодотворенных IVM-производных ооцитов на полученный GV-ооцит",
-  
   "flow_track.dialog.sperm_donor.date_label": "Дата:",
   "flow_track.dialog.sperm_donor.ivm_m2_applied_label": "IVM M2 применено:",
   "flow_track.dialog.sperm_donor.ivm_m2_fert_label": "IVM M2 оплодотворено:",
@@ -275,20 +256,16 @@
   "flow_track.dialog.sperm_donor.implantation_rate_desc": "Доля перенесенных, имплантированных",
   "flow_track.dialog.sperm_donor.fert_rate_in_vivo": "Эффективность оплодотворения (in vivo M2)",
   "flow_track.dialog.sperm_donor.fert_rate_in_vivo_desc": "Доля in vivo M2, оплодотворенных (опционально)",
-  
   "flow_track.dialog.surrogate.proportion_transferred": "Доля перенесенных эмбрионов, приведших к имплантации",
   "flow_track.dialog.surrogate.proportion_transfers": "Доля переносов, приведших к имплантации",
   "flow_track.dialog.total_implantation_rate": "Общая эффективность имплантации:",
   "flow_track.dialog.transfer_success_rate": "Успешность переносов:",
   "flow_track.confirm_delete.title": "Подтвердить удаление",
   "flow_track.confirm_delete.embryo_message": "Удалить эмбрион {embryo_id}?",
-  
   "flow_track.no_data": "Нет данных",
-  
   "button.create": "Создать",
   "button.close": "Закрыть",
   "button.export": "Экспорт",
-  
   "embryo_track.window_title": "Embryo Track – прогноз срока беременности у мармозеток",
   "embryo_track.group.measurements": "УЗИ‑измерения",
   "embryo_track.label.col": "Кранио-окципитальная длина (COL):",
@@ -374,18 +351,17 @@
   "sidebar.filter.all": "Все",
   "sidebar.filter.follicle_phase": "Фолликулярная фаза",
   "sidebar.filter.luteal_phase": "Лютеиновая фаза",
-  "sidebar.category.tooltip.female":    "Доноры яйцеклеток и суррогатные матери",
-  "sidebar.category.tooltip.male":      "Доноры спермы",
+  "sidebar.category.tooltip.female": "Доноры яйцеклеток и суррогатные матери",
+  "sidebar.category.tooltip.male": "Доноры спермы",
   "sidebar.category.tooltip.offspring": "Потомство",
-  "sidebar.category.tooltip.partners":  "Партнеры",
-  "sidebar.category.tooltip.breeders":  "Племенные животные",
-  "sidebar.category.tooltip.all":       "Все животные",
-
+  "sidebar.category.tooltip.partners": "Партнеры",
+  "sidebar.category.tooltip.breeders": "Племенные животные",
+  "sidebar.category.tooltip.all": "Все животные",
   "style.dialog.title": "Настройки стиля",
   "settings.tab.visual_style": "Визуальный стиль",
   "settings.tab.role_setup": "Настройка ролей",
-  "settings.role_setup.notice": "Роли животных являются глобальными. Новые пользовательские роли пока используют emoji-метку; позже они будут заменены графикой интерфейса.",
-  "settings.role_setup.locked": "Только пользователи Lord или Master могут изменять настройку ролей животных.",
+  "settings.role_setup.notice": "",
+  "settings.role_setup.locked": "?????? ???????????? Lord, Master ??? Manager ????? ???????? ????????? ????? ????????.",
   "settings.role_setup.col.active": "Активна",
   "settings.role_setup.col.order": "Порядок",
   "settings.role_setup.col.icon": "Emoji",
@@ -438,7 +414,6 @@
   "style.sperm_progressive_marker": "Маркер прогрессивных сперматозоидов:",
   "style.line_style": "Стиль линии:",
   "style.reset_defaults": "Сбросить по умолчанию",
-
   "tab.plots": "Графики",
   "tab.reports": "Отчеты",
   "button.sidebar.new_animal": "➕    Новое животное",
@@ -473,7 +448,6 @@
   "dialog.delete_archived.title": "Удалено",
   "dialog.delete_archived.message": "Животное '{name}' успешно удалено.",
   "deletion.delete_archived.success": "Животное '{name}' успешно удалено.",
-
   "dialog.confirm_delete.title": "Подтверждение удаления",
   "dialog.confirm_delete.message": "Вы действительно хотите удалить эту запись?",
   "dialog.unlock_date.title": "Разблокировать дату",
@@ -505,12 +479,10 @@
   "form.label.formula": "Формула:",
   "form.field.max_prog": "Макс. Прог.:",
   "form.field.max_pgf": "Макс. PGF:",
-  
   "dialog.field.id": "ID:",
   "dialog.field.chip_nr": "Номер чипа:",
   "dialog.field.origin": "Происхождение:",
   "dialog.field.project": "Проект:",
-  
   "group.visibility.title": "Отображение",
   "group.line_style.title": "Стиль линии",
   "checkbox.progesterone": "Прогестерон",
@@ -695,7 +667,6 @@
   "network_track.error.load_chat": "Не удалось загрузить чат: {error}",
   "network_track.info.settings_saved": "Настройки успешно сохранены",
   "tooltip.color_picker": "Выбрать цвет",
-  
   "op_planner.window_title": "Планировщик операций",
   "op_planner.block_day_name": "Выходной",
   "op_planner.button.block_unblock_date": "Заблокировать/разблокировать дату",
@@ -723,7 +694,6 @@
   "op_planner.weekday.friday": "Пятница",
   "op_planner.weekday.saturday": "Суббота",
   "op_planner.weekday.sunday": "Воскресенье",
-  
   "dialog.animal_label": "Животное: {name}",
   "dialog.category.spenderin": "Донор яйцеклеток",
   "dialog.category.surrogate": "Суррогатная мать",
@@ -731,7 +701,6 @@
   "dialog.category.offspring": "Потомство",
   "dialog.category.partner": "Партнер",
   "dialog.category.zuchttier": "Племенное животное",
-  
   "dialog.zuchttier.title_new": "Новое племенное животное",
   "dialog.zuchttier.title_edit": "Редактировать племенное животное: {name}",
   "dialog.zuchttier.sex": "Пол:",
@@ -757,7 +726,6 @@
   "dialog.zuchttier.event.pregnant": "Беременна",
   "dialog.zuchttier.event.abort": "Выкидыш",
   "dialog.zuchttier.event.birth": "Роды",
-  
   "op_planner.error.invalid_date_range": "Неверный диапазон дат. Дата начала должна быть раньше даты окончания.",
   "op_planner.error.no_animals": "Нет доступных животных для планирования.",
   "op_planner.error.no_weekdays_selected": "Пожалуйста, выберите хотя бы один день недели для {type}.",
@@ -802,7 +770,6 @@
   "op_planner.checkbox.ignore_blocked": "Игнорировать Все Ограничения Даты",
   "op_planner.checkbox.fix_event": "Зафиксировать событие",
   "error.title": "Ошибка",
-  
   "dialog.female_animal.title": "Самка",
   "dialog.female_animal.title_new": "Новая самка",
   "dialog.female_animal.title_edit": "Редактировать самку: {name}",
@@ -830,7 +797,6 @@
   "dialog.female_animal.column.comment": "Комментарий",
   "dialog.female_animal.button.add": "Добавить",
   "dialog.female_animal.button.delete": "Удалить",
-  
   "dialog.sperm_donor.title": "Донор спермы",
   "dialog.sperm_donor.label.name": "Имя:",
   "dialog.sperm_donor.label.role": "Роль:",
@@ -853,7 +819,6 @@
   "dialog.sperm_donor.column.volume": "Объем (мл)",
   "dialog.sperm_donor.column.total": "Всего (М)",
   "dialog.sperm_donor.column.weight": "Вес (г)",
-  
   "dialog.offspring.title": "Потомство",
   "dialog.offspring.sex": "Пол:",
   "dialog.offspring.sex.male": "Самец",
@@ -892,7 +857,6 @@
   "dialog.offspring.button.new_event": "Добавить События",
   "dialog.offspring.button.save": "Сохранить",
   "dialog.offspring.error.invalid_name": "Неверное имя или имя уже существует.",
-  
   "dialog.partner.title": "Партнер",
   "dialog.partner.title_new": "Новый партнер",
   "dialog.partner.title_edit": "Редактировать партнера: {name}",
@@ -919,7 +883,6 @@
   "op_planner.label.date": "Дата",
   "op_planner.event.surgery": "Операция",
   "op_planner.event.transfer": "Перенос эмбриона",
-
   "surgery_planner.group.date_range": "Диапазон дат",
   "surgery_planner.label.start_date": "Дата начала:",
   "surgery_planner.label.end_date": "Дата окончания:",
@@ -931,7 +894,6 @@
   "surgery_planner.label.select_transfer_days": "Выберите дни, когда можно планировать перенос эмбрионов:",
   "surgery_planner.msg.day_unblocked": "День разблокирован: {date}",
   "surgery_planner.msg.day_blocked": "День заблокирован: {date}",
-
   "general.weekday.monday": "Понедельник",
   "general.weekday.tuesday": "Вторник",
   "general.weekday.wednesday": "Среда",
@@ -939,7 +901,6 @@
   "general.weekday.friday": "Пятница",
   "general.weekday.saturday": "Суббота",
   "general.weekday.sunday": "Воскресенье",
-
   "surgery_planner.default_holiday_name": "Выходной",
   "surgery_planner.block_day_name": "Выходной",
   "surgery_planner.button.block_unblock_date": "Заблокировать/разблокировать дату",
@@ -950,14 +911,12 @@
   "surgery_planner.label.transfer_offset_days": "Смещение переноса (дни):",
   "surgery_planner.label.operations_short": "Операции",
   "surgery_planner.label.embryo_transfers_short": "Переносы эмбрионов",
-
   "menu.file.save_database": "Сохранить базу данных",
   "file_dialog.save_database.title": "Сохранить базу данных",
   "file_dialog.save_database.filter": "Файлы JSON (*.json)",
   "info.save_database.success": "База данных успешно сохранена в: {path}",
   "error.save_database.file_not_found": "Файл базы данных не найден. Пожалуйста, убедитесь, что данные приложения правильно инициализированы.",
   "error.save_database.failed": "Ошибка при сохранении базы данных: {error}",
-  
   "dialog.export_pdf.title": "Экспорт PDF-отчетов",
   "button.export_pdf": "Экспорт PDF",
   "dialog.select_output_directory": "Выберите выходную директорию",
@@ -970,9 +929,7 @@
   "info.pdf_export.location": "Расположение: {0}",
   "button.open_folder": "Открыть папку",
   "error.pdf_export.failed": "Ошибка экспорта PDF-отчетов: {error}",
-  
   "dialog.export_pdf.language": "Язык отчета",
-  
   "month.1": "Январь",
   "month.2": "Февраль",
   "month.3": "Март",
@@ -985,13 +942,11 @@
   "month.10": "Октябрь",
   "month.11": "Ноябрь",
   "month.12": "Декабрь",
-  
   "report.column.date": "Дата",
   "report.column.daily_data": "Ежедневные данные",
   "report.column.scores": "Оценки",
   "report.column.signatures": "Подписи",
   "report.column.pi": "PI",
-  
   "report.title": "Отчет по животному",
   "report.name_with_species": "{name} ({species})",
   "report.id_with_species": "{id} {species}",
@@ -1004,7 +959,6 @@
   "report.header.birth_date": "Дата рождения",
   "report.header.genotype": "Генотип",
   "report.header.statistics": "Статистика",
-  
   "stats.sperm": "Сперма",
   "stats.special": "Измерение слуха",
   "stats.surgery": "Операция",
@@ -1015,14 +969,12 @@
   "stats.embryo": "Эмбрион",
   "stats.pregnancy": "Беременность",
   "stats.birth": "Рождение",
-  
   "status.recent_birth": "Недавние роды",
   "status.paired_with": "Спарен с",
   "status.no_animals_in_category": "Нет животных в этой категории.",
   "status.no_animals_found": "Животные не найдены.",
   "status.recovery_break": "Перерыв на восстановление",
   "status.recovery_time": "Время восстановления",
-  
   "table.header.motility_percent": "% Подвижные",
   "table.header.progressive_percent": "% Прогрессивные",
   "table.header.sperm_per_ml": "Сперма/мл",
@@ -1031,7 +983,6 @@
   "table.header.event_type": "Тип события",
   "sex.male": "Мужской",
   "sex.female": "Женский",
-  
   "daily.status": "Статус",
   "daily.health_status": "Состояние здоровья",
   "daily.abnormal_status": "Аномальное состояние",
@@ -1040,7 +991,6 @@
   "daily.surgery": "Операция",
   "daily.blood_sample": "Образец крови",
   "daily.reproduction_status": "Репродуктивный статус",
-  
   "reports.header.title": "Информация о животном",
   "reports.header.name": "Имя:",
   "reports.header.id": "ID:",
@@ -1058,7 +1008,6 @@
   "reports.column.daily_data": "Ежедневные данные",
   "reports.column.scores": "Оценки",
   "reports.column.signatures": "Подписи",
-  
   "table.header.date": "Дата",
   "table.header.pdg": "PdG (мкг/мг Кр)",
   "table.header.progesterone": "Прогестерон (нг/мл)",
@@ -1129,13 +1078,11 @@
   "archived.no_animals": "Нет архивированных животных",
   "warning.read_only_mode": "ProgTrack запущен в режиме ТОЛЬКО ДЛЯ ЧТЕНИЯ.\n\nДругая копия ProgTrack в данный момент изменяет файлы данных.\nВы можете просматривать все данные, но изменения НЕ будут сохранены.\n\nЧтобы редактировать данные, сначала закройте другую копию программы.",
   "app.window_title.animals_loaded": "{app_title} - загружено животных: {count}",
-  
   "age.year_abbrev": "л.",
   "age.month_abbrev": "м.",
   "age.day_abbrev": "д.",
   "age.at_death": "при смерти",
   "age.unknown": "(возраст неизвестен)",
-  
   "flow_track.edit_embryo.implanted_blocked_freezer": "Статус имплантации не может быть установлен для эмбрионов в морозильной камере",
   "flow_track.error.freezer_embryo_implanted": "Эмбрионы в морозильной камере не могут быть отмечены как имплантированные",
   "flow_track.settings.show_timeline": "Показать Временную Шкалу Переносов",
@@ -1149,7 +1096,6 @@
   "flow_track.export.pdf.title": "Экспорт как PDF",
   "flow_track.export.pdf.success": "Flow Track и временная шкала успешно экспортированы в PDF",
   "flow_track.export.pdf.error": "Экспорт PDF не удался:\n{error}",
-
   "surgery_planner.group.animal_numbers": "Количество Животных",
   "surgery_planner.label.donors_per_surgery": "Доноров на Операцию:",
   "surgery_planner.label.surrogates_per_transfer": "Суррогатов на Перенос:",
@@ -1207,9 +1153,8 @@
   "surgery_planner.warning.missing_animals_title": "Отсутствующие Животные",
   "surgery_planner.warning.missing_animals": "Следующие животные были ранее выбраны, но больше не доступны (удалены или архивированы): {animals}",
   "surgery_planner.tooltip.auto_excluded": "Автоматически исключено: {status}",
-  "surgery_planner.role.donor": "Донор",
+  "surgery_planner.role.donor": "????? ??????????",
   "surgery_planner.role.surrogate": "Суррогат",
-
   "pdg_converter.dialog.title": "Конвертер PdG → Прогестерон",
   "pdg_converter.label.animal": "Животное:",
   "pdg_converter.select.animal": "-- Выберите животное --",
@@ -1253,7 +1198,6 @@
   "pdg_converter.confirm.title": "Подтверждение",
   "pdg_converter.confirm.clear_model": "Очистить подогнанную модель? Это действие необратимо.",
   "pdg_converter.model.info": "Модель: {model_type} | Пары: {n_pairs} | MSE: {mse:.4f}",
-
   "projects.label": "Проект:",
   "projects.tooltip.all": "Показать всех животных",
   "projects.tooltip.project": "Показать животных проекта",
@@ -1263,7 +1207,6 @@
   "menu.tools.projects_track": "Project Track",
   "error.projects_track_not_available": "Плагин ProjectsTrack не установлен.",
   "projects.refreshed": "Список проектов обновлен.",
-  
   "menu.tools.heritage_track": "Heritage Track",
   "tab.heritage_track": "Heritage Track",
   "error.heritage_track_not_available": "Плагин Heritage_Track не установлен.",
@@ -1337,7 +1280,6 @@
   "heritage_track.node.inbreeding_f_approx": "F: ~{value}",
   "heritage_track.node.coefficient_f_exact": "F: {value}",
   "heritage_track.node.coefficient_f_approx": "F: ~{value}",
-
   "tab.medi_track": "Medi Track",
   "menu.tools.medi_track": "Medi Track",
   "tab.cage_track": "Cage Track",
@@ -1417,7 +1359,6 @@
   "cage_track.history.export_pdf": "Экспорт PDF",
   "cage_track.history.close": "Закрыть",
   "cage_track.history.export_success": "История перемещений успешно экспортирована",
-
   "cage_track.unassigned": "Не назначено",
   "cage_track.toolbar.inspection": "Инспекция",
   "cage_track.inspection.title": "Журнал инспекций",
@@ -1435,7 +1376,6 @@
   "cage_track.inspection.no_records": "Нет записей, соответствующих выбранным фильтрам.",
   "cage_track.inspection.report_title": "Отчёт инспекции клеток",
   "cage_track.inspection.export_success": "Отчёт инспекции успешно экспортирован.",
-
   "menu.tools.master_track": "Master Track",
   "master_track.menu.manage": "Управление пользователями",
   "master_track.menu.logs": "Журналы",
@@ -1548,7 +1488,6 @@
   "master_track.toggle.disable_msg": "Master Track будет отключён глобально для всех пользователей. Все проверки прав и требования входа будут приостановлены.\n\nОтключить Master Track?",
   "master_track.toggle.enable_title": "Включить Master Track",
   "master_track.toggle.enable_msg": "Master Track будет включён глобально для всех пользователей. Проверки прав и требования входа будут снова применяться.\n\nВключить Master Track?",
-
   "dialog.field.severity": "Серьёзность:",
   "dialog.severity.tooltip": "Уровень серьёзности проекта",
   "dialog.severity.please_select": "(Пожалуйста, выберите)",
@@ -1592,8 +1531,8 @@
   "status.in_experiment": "В эксперименте",
   "medi_track.entry.experiment_started": "Эксперимент начат",
   "medi_track.entry.experiment_ended": "Эксперимент завершён",
-  "medi_track.report.event.experiment_started": "Эксперимент \u2014 начат",
-  "medi_track.report.event.experiment_ended": "Эксперимент \u2014 завершён",
+  "medi_track.report.event.experiment_started": "Эксперимент — начат",
+  "medi_track.report.event.experiment_ended": "Эксперимент — завершён",
   "project.animals.no_legal_overflow_warn": "Значение превышает расчётное количество 'Выбыли с тяжестью'. Данные будут сохранены как введены.",
   "project.tab.list_header": "Проекты",
   "project.tab.show_archived": "Показать архивные",
@@ -1655,13 +1594,13 @@
   "project.animals.alive_not_in_exp": "Живы, но не в эксперименте:",
   "project.animals.no_prev_history": "Из них без предыдущей экспериментальной истории:",
   "project.animals.with_prev_history": "Из них с предыдущей экспериментальной историей:",
-  "project.animals.show_names": "\u25b6 Показать имена",
-  "project.animals.hide_names": "\u25bc Скрыть имена",
+  "project.animals.show_names": "▶ Показать имена",
+  "project.animals.hide_names": "▼ Скрыть имена",
   "project.docs.upload": "Загрузить документ",
   "project.docs.delete": "Удалить выбранные",
   "project.docs.upload_dialog": "Выберите документы",
   "project.docs.delete_confirm": "Удалить '{name}'?",
-  "project.user_field.placeholder": "Поиск пользователя\u2026",
+  "project.user_field.placeholder": "Поиск пользователя…",
   "project.user_info.title": "Информация о пользователе",
   "project.user_info.remove": "Удалить из протокола",
   "project.user_info.remove_confirm": "Удалить этого пользователя из протокола?",
@@ -1686,12 +1625,10 @@
   "project.animals.archived_or_missing": "Животное было заархивировано или отсутствует.",
   "project.animals.role_unknown": "Неизвестная роль",
   "project.tab.delete_confirm": "Безвозвратно удалить проект '{name}'?",
-
   "menu.tools.sample_track": "Sample Track",
   "sample_track.window_title": "Sample Track",
   "sample_track.tab.organ_samples": "Образцы органов",
   "sample_track.tab.other_samples": "Образцы временного ряда",
-
   "sample_track.header.name": "Имя",
   "sample_track.header.species": "Вид",
   "sample_track.header.id": "ID",
@@ -1707,27 +1644,22 @@
   "sample_track.header.collection_date_to": "Взятие до",
   "sample_track.header.filter_types": "Показать:",
   "sample_track.header.sample_number": "№ образца",
-
   "sample_track.button.add_sample": "Добавить образец",
   "sample_track.button.export_pdf": "Экспорт PDF",
   "sample_track.button.save": "Сохранить",
   "sample_track.button.cancel": "Отмена",
-
   "sample_track.header.filter_by": "Фильтр по:",
   "sample_track.header.filter_by_age": "Фильтр по возрасту:",
   "sample_track.header.age_separator": "Возраст",
   "sample_track.header.filter_by_date": "Фильтр по дате забора:",
   "sample_track.header.date_separator": "Дата",
-
   "sample_track.row.action.edit_entry": "Редактировать запись",
   "sample_track.row.action.edit_location": "Изменить место хранения",
   "sample_track.row.action.delete_all_samples": "Очистить все образцы",
   "sample_track.row.action.delete": "Удалить",
-
   "sample_track.field.birth": "Рождение:",
   "sample_track.field.death": "Гибель:",
   "sample_track.field.collection_date": "Взятие:",
-
   "sample_track.sample_dialog.section.location": "Место хранения",
   "sample_track.sample_dialog.field.unit": "Подразделение:",
   "sample_track.sample_dialog.field.storage": "Место хранения:",
@@ -1737,13 +1669,11 @@
   "sample_track.sample_dialog.button.ok": "OK",
   "sample_track.sample_dialog.field.num_aliquots": "Количество аликвот:",
   "sample_track.sample_dialog.section.aliquot": "Аликвота {n}",
-
   "sample_track.confirm.delete_all_samples": "Очистить все образцы?",
   "sample_track.confirm.delete_sample": "Удалить образец?",
   "sample_track.confirm.delete_sample_entry": "Удалить эту запись образца?",
   "sample_track.confirm.save_changes": "Сохранить изменения?",
   "sample_track.confirm.edit_location_multi": "Это перезапишет назначение подразделения для всех выбранных образцов. Существующие назначения будут потеряны. Продолжить?",
-
   "sample_track.error.no_login.title": "Требуется вход",
   "sample_track.error.no_login": "Войдите в систему для использования Sample Track.",
   "sample_track.error.duplicate_animal": "Запись для этого животного уже существует.",
@@ -1751,13 +1681,11 @@
   "sample_track.info.pdf_saved": "PDF сохранён в: {path}",
   "sample_track.pdf.export_title": "Сохранить PDF",
   "sample_track.pdf.export_filter": "Файлы PDF (*.pdf)",
-
-  "sample_track.pdf.title": "Sample Track \u2014 {tab}",
+  "sample_track.pdf.title": "Sample Track — {tab}",
   "sample_track.pdf.exported_by": "Экспортировано:",
   "sample_track.pdf.export_date": "Дата:",
   "sample_track.pdf.filter_header": "Активные фильтры",
   "sample_track.pdf.no_data": "Нет образцов для отображения.",
-
   "project.section.arrive": "Протокол ARRIVE",
   "project.arrive.study_design": "Дизайн исследования:",
   "project.arrive.sample_size": "Размер выборки:",
@@ -1779,9 +1707,7 @@
   "project.arrive.protocol_registration": "Регистрация протокола:",
   "project.arrive.data_access": "Доступ к данным:",
   "project.arrive.declaration_interests": "Декларация интересов:",
-
   "master_track.warn.no_permission": "У вас нет разрешения на доступ к этой функции.",
-
   "medi_track.entry_type.note": "Заметка",
   "medi_track.entry_type.observation": "Наблюдение",
   "medi_track.entry_type.treatment": "Лечение",
@@ -1789,7 +1715,6 @@
   "medi_track.entry_type.other": "Другое",
   "medi_track.entry_type.unknown": "Неизвестно",
   "medi_track.condition.search_placeholder": "Поиск состояний…",
-
   "medi_track.dialog.status_manage.title": "Управление статусом — {animal}",
   "medi_track.dialog.label.date": "Дата:",
   "medi_track.dialog.label.note": "Примечание:",
@@ -1798,5 +1723,23 @@
   "medi_track.dialog.mode.add": "Добавить новую проблему",
   "medi_track.dialog.mode.resolve": "Решить проблему",
   "medi_track.dialog.label.active_issue": "Активные проблемы для решения:",
-  "medi_track.dialog.label.condition_free": "Состояние"
+  "medi_track.dialog.label.condition_free": "Состояние",
+  "role.egg_cell_donor": "????? ??????????",
+  "role.surrogate": "????????",
+  "role.sperm_donor": "????? ??????",
+  "role.partner_animal": "???????",
+  "role.breeding_animal": "????????? ????????",
+  "role.experimental_animal": "????????????????? ????????",
+  "settings.role_setup.preset.basic": "??????? ????????",
+  "settings.role_setup.preset.egg_cell_donor": "????? ??????????",
+  "settings.role_setup.preset.surrogate": "????????",
+  "settings.role_setup.preset.sperm_donor": "????? ??????",
+  "settings.role_setup.preset.offspring": "?????????",
+  "settings.role_setup.preset.partner": "???????",
+  "settings.role_setup.preset.breeding": "????????? ????????",
+  "settings.role_setup.preset.experimental": "????????????????? ????????",
+  "settings.role_setup.preset.custom": "????????????????",
+  "settings.role_setup.custom_blocks.title": "???????????????? ????? ??????",
+  "settings.role_setup.custom_blocks.name": "???????? ??????:",
+  "settings.role_setup.custom_blocks.name_placeholder": "???????? ??????"
 }

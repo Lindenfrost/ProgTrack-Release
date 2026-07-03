@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from Plugins.core.animal_identity import animal_base_name
+from Plugins.core.animal_roles import ROLE_VALUE_AMME, ROLE_VALUE_SAMENSP, ROLE_VALUE_SPENDER, canonical_role_value
 
 PARENT_KEYS = ("egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father")
 
@@ -923,11 +924,11 @@ class HeritageStore:
         # Sync sex from core record (e.g., Male/Female/Unknown)
         # Also set sex deterministically based on role: female animals always female,
         # samenspender always male
-        role = self._normalize_text(record.get("rolle", ""))
+        role = canonical_role_value(record.get("rolle", ""))
         role_determined_sex = ""
-        if role in ("Spenderin", "Amme"):
+        if role in (ROLE_VALUE_SPENDER, ROLE_VALUE_AMME):
             role_determined_sex = "female"
-        elif role == "Samenspender":
+        elif role == ROLE_VALUE_SAMENSP:
             role_determined_sex = "male"
 
         if role_determined_sex:

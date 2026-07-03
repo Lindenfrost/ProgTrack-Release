@@ -59,7 +59,6 @@ from .permissions import (
     get_permission_label,
     get_permission_namespace,
     resolve_effective_permissions,
-    ROLE_BASELINES,
     ROLE_GUEST,
     ROLE_LORD,
     ROLE_MASTER,
@@ -1001,8 +1000,6 @@ class EditJobsDialog(QDialog):
                 w.setParent(None)  # type: ignore[arg-type]
         self._perm_checks = {}
         job_perms = JOB_BUNDLES.get(job_name, set())
-        user_baseline = ROLE_BASELINES.get(ROLE_USER, set())
-        display_perms = job_perms | user_baseline
         current_ns = None
         _JOB_EXCLUDED = set()
         for perm in ALL_PERMISSIONS:
@@ -1014,7 +1011,7 @@ class EditJobsDialog(QDialog):
                 lbl = QLabel(f"<b>{_NAMESPACE_LABELS.get(ns, ns.replace('_', ' ').title())}</b>")
                 self._scroll_vbox.addWidget(lbl)
             cb = QCheckBox(get_permission_label(perm, self.plugin.app.lang))
-            cb.setChecked(perm in display_perms)
+            cb.setChecked(perm in job_perms)
             self._perm_checks[perm] = cb
             self._scroll_vbox.addWidget(cb)
         self._scroll_vbox.addStretch()

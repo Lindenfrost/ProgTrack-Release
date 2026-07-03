@@ -756,7 +756,7 @@ class NetworkTrackWidget(QMainWindow):
                         self.activateWindow()
                         self.raise_()
 
-                self.statusBar().showMessage(f"New message(s) received", 3000)
+                self.statusBar().showMessage("New message(s) received", 3000)
                 
         except Exception as e:
             logger.error(f"Error checking for updates: {e}")

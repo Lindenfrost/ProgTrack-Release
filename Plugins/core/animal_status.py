@@ -8,6 +8,11 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 
+PREGNANT_STATUS_SYMBOL = "☉"
+POSSIBLY_PREGNANT_STATUS_SYMBOL = "☉?"
+OFFSPRING_STATUS_SYMBOL = "Oo"
+SICK_STATUS_SYMBOL = "+"
+ABNORMAL_STATUS_SYMBOL = "!"
 DECEASED_STATUS_SYMBOL = "✝"
 
 

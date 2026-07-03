@@ -10,11 +10,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from PyQt6.QtCore import Qt, QDate, QPointF, QTimer
-from PyQt6.QtGui import QColor, QAction
+from PyQt6.QtCore import Qt, QDate, QTimer
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -24,8 +24,6 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
-    QFrame,
-    QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -45,12 +43,22 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 from matplotlib.patches import FancyBboxPatch, Rectangle
-from matplotlib.text import Text
 import matplotlib.colors as mcolors
 
 from .cage_store import CageStore, UNASSIGNED_CAGE_ID
 from .cage_engine import CageEngine
 from Plugins.core.animal_identity import animal_base_name
+from Plugins.core.animal_roles import (
+    ROLE_VALUE_AMME,
+    ROLE_VALUE_EXPERIMENTAL,
+    ROLE_VALUE_OFFSPRING,
+    ROLE_VALUE_PARTNER,
+    ROLE_VALUE_SAMENSP,
+    ROLE_VALUE_SPENDER,
+    ROLE_VALUE_UNKNOWN,
+    ROLE_VALUE_ZUCHTTIER,
+    canonical_role_value,
+)
 from Plugins.core.platform_helpers import default_save_path
 
 logger = logging.getLogger(__name__)
@@ -943,7 +951,7 @@ class CageTrackWidget(QWidget):
         self._current_xlim: Optional[Tuple[float, float]] = None
         self._current_ylim: Optional[Tuple[float, float]] = None
 
-        # Legend placeholder
+        # Optional legend slot; the current view renders project/type cues directly.
         self.legend_widget: Optional[QWidget] = None
 
     # ------------------------------------------------------------------
@@ -1169,35 +1177,35 @@ class CageTrackWidget(QWidget):
         rec = animals_dict.get(animal_name, {})
         if not isinstance(rec, dict):
             return "#000000"
-        role = rec.get("rolle", "")
+        role = canonical_role_value(rec.get("rolle", ""), default=ROLE_VALUE_UNKNOWN)
         sex = (rec.get("sex", "") or "").lower()
 
         is_female = ("female" in sex or "weiblich" in sex or "жен" in sex)
         is_male = ("male" in sex or "männlich" in sex or "муж" in sex)
 
-        if not role or role == "Unbekannt":
+        if not role or role == ROLE_VALUE_UNKNOWN:
             return "#D3D3D3"  # lightgray
-        if role == "Spenderin":
+        if role == ROLE_VALUE_SPENDER:
             return "#FF1493"  # deeppink
-        if role == "Amme":
+        if role == ROLE_VALUE_AMME:
             return "#9370DB"  # mediumpurple
-        if role == "Samenspender":
+        if role == ROLE_VALUE_SAMENSP:
             return "#000000"  # black
-        if role == "Nachkomme":
+        if role == ROLE_VALUE_OFFSPRING:
             if is_female:
                 return "#FF69B4"  # hotpink
             if is_male:
                 return "#0000FF"  # blue
             return "#808080"  # gray
-        if role == "Partnertier":
+        if role == ROLE_VALUE_PARTNER:
             return "#FF8C00"  # darkorange
-        if role == "Zuchttier":
+        if role == ROLE_VALUE_ZUCHTTIER:
             if is_female:
                 return "#C71585"  # mediumvioletred
             if is_male:
                 return "#00008B"  # darkblue
             return "#808080"  # gray
-        if role == "Versuchstier":
+        if role == ROLE_VALUE_EXPERIMENTAL:
             if is_female:
                 return "#FF7788"
             if is_male:
@@ -1698,7 +1706,6 @@ class CageTrackWidget(QWidget):
         if bbox.width <= 0 or bbox.height <= 0:
             return
 
-        fig_w = self.figure.get_figwidth() * self.figure.dpi
         xlim = self.ax.get_xlim()
         data_width = xlim[1] - xlim[0]
         if data_width <= 0:
