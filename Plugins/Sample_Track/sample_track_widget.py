@@ -35,6 +35,18 @@ logger = logging.getLogger(__name__)
 PLUGIN_DIR = Path(__file__).parent
 DATE_FORMAT = "%d.%m.%Y"
 
+
+def _record_sex_value(record: Optional[Dict[str, Any]]) -> str:
+    raw = str((record or {}).get("sex", "")).strip()
+    lowered = raw.lower()
+    if lowered in ("male", "männlich", "maennlich"):
+        return "Male"
+    if lowered in ("female", "weiblich"):
+        return "Female"
+    if raw in ("Male", "Female", "Undefined"):
+        return raw
+    return ""
+
 # ---------------------------------------------------------------------------
 # Column-width constants shared by row widgets AND headers (px)
 # Changing a value here aligns both header and data rows automatically.
@@ -948,7 +960,7 @@ class SampleRowWidget(QFrame):
         self._name_le.setToolTip(animal_identity_label(key_used, rec))
         self._species_le.setText(rec.get('species', ''))
         self._id_le.setText(rec.get('id', ''))
-        _sv = rec.get('rolle', '')
+        _sv = _record_sex_value(rec)
         self._sex_cb.setCurrentText(_sv if _sv in ('Male', 'Female', 'Undefined') else 'Undefined')
         self._birth_le.setText(rec.get('birth_date', ''))
         self._death_le.setText(rec.get('death_date', ''))
@@ -974,7 +986,7 @@ class SampleRowWidget(QFrame):
         self._data["animal_name"] = name
         self._data["species"] = (rec.get("species") if rec else "") or self._species_le.text().strip()
         self._data["id"] = (rec.get("id") if rec else "") or self._id_le.text().strip()
-        sex_value = (rec.get("rolle") if rec else "") or self._sex_cb.currentText()
+        sex_value = _record_sex_value(rec) or self._sex_cb.currentText()
         self._data["sex"] = sex_value if sex_value in ("Male", "Female", "Undefined") else self._sex_cb.currentText()
         self._data["birth_date"] = (rec.get("birth_date") if rec else "") or self._birth_le.text().strip()
         self._data["death_date"] = (rec.get("death_date") if rec else "") or self._death_le.text().strip()
@@ -1538,7 +1550,7 @@ class OtherSampleRowWidget(QFrame):
         self._name_le.setToolTip(animal_identity_label(key_used, rec))
         self._species_le.setText(rec.get('species', ''))
         self._id_le.setText(rec.get('id', ''))
-        _sv2 = rec.get('rolle', '')
+        _sv2 = _record_sex_value(rec)
         self._sex_cb.setCurrentText(_sv2 if _sv2 in ('Male', 'Female', 'Undefined') else 'Undefined')
 
     def _on_save(self):
@@ -1565,7 +1577,7 @@ class OtherSampleRowWidget(QFrame):
         self._data["animal_name"] = name
         self._data["species"] = (rec.get("species") if rec else "") or self._species_le.text().strip()
         self._data["id"] = (rec.get("id") if rec else "") or self._id_le.text().strip()
-        sex_value = (rec.get("rolle") if rec else "") or self._sex_cb.currentText()
+        sex_value = _record_sex_value(rec) or self._sex_cb.currentText()
         self._data["sex"] = sex_value if sex_value in ("Male", "Female", "Undefined") else self._sex_cb.currentText()
         self._data["collection_date"] = self._date_le.text().strip()
         self._saved = True
@@ -3041,7 +3053,7 @@ class OtherSamplesTab(QWidget):
             rec = (getattr(app, 'animals', {}).get(animal_name)
                    or getattr(app, 'archived', {}).get(animal_name, {}))
             # Progesterone (plasma) and urine samples always come from females
-            sex_value = "Female" if type_key in ("plasma", "urin") else rec.get("rolle", "")
+            sex_value = "Female" if type_key in ("plasma", "urin") else _record_sex_value(rec)
             new_row: Dict[str, Any] = {
                 "sample_number": "",
                 "animal_name": animal_name,
@@ -3475,7 +3487,7 @@ class SampleTrackPlugin:
             rec = (getattr(self.app, 'animals', {}).get(animal_name)
                    or getattr(self.app, 'archived', {}).get(animal_name, {}))
             # Progesterone (plasma) and urine samples always come from females
-            sex_value = "Female" if type_key in ("plasma", "urin") else rec.get("rolle", "")
+            sex_value = "Female" if type_key in ("plasma", "urin") else _record_sex_value(rec)
             new_row: Dict[str, Any] = {
                 "sample_number": sample_number,
                 "animal_name": animal_name,

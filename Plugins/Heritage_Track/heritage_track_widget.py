@@ -2852,7 +2852,7 @@ class HeritageTrackWidget(QWidget):
             is_ghost = node in getattr(self, '_ghost_nodes', set())
             record = self._get_node_record(node)
             display_label = self._get_node_display_label(node, record)
-            role = str(record.get("rolle", ""))
+            role = canonical_role_value(record.get("rolle", ""))
             sex = self.plugin.get_effective_sex(node, record)
 
             visual = self.plugin.store.get_node_visual(node, fallback_genotype=str(record.get("genotype", "")))
@@ -2865,7 +2865,7 @@ class HeritageTrackWidget(QWidget):
                 shape = "^"
             elif s == "female":
                 shape = "o"
-            elif role == getattr(getattr(self.app, 'Role', None), 'SAMENSP', None):
+            elif role == ROLE_VALUE_SAMENSP:
                 shape = "^"
             else:
                 shape = "o"

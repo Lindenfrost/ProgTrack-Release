@@ -108,12 +108,47 @@ class RoleSetupContractTest(unittest.TestCase):
             ROOT / "Plugins" / "Heritage_Track" / "heritage_track_widget.py",
             ROOT / "Plugins" / "Heritage_Track" / "heritage_store.py",
             ROOT / "Plugins" / "Cage__Track" / "cage_track_widget.py",
+            ROOT / "Plugins" / "Flow_Track" / "flow_track_widget.py",
         ]
 
         for path in files:
             with self.subTest(path=path.name):
                 source = path.read_text(encoding="utf-8")
                 self.assertIn("canonical_role_value", source)
+
+    def test_main_and_flow_track_do_not_branch_on_raw_role_values(self):
+        files = [
+            ROOT / "ProgTrack.v.0.1.1.py",
+            ROOT / "Plugins" / "Flow_Track" / "flow_track_widget.py",
+        ]
+        forbidden_patterns = [
+            "get('rolle') == Role.",
+            'get("rolle") == Role.',
+            "get('rolle') != Role.",
+            'get("rolle") != Role.',
+            "get('rolle') in (Role.",
+            'get("rolle") in (Role.',
+            "get('rolle') not in (Role.",
+            'get("rolle") not in (Role.',
+        ]
+
+        for path in files:
+            with self.subTest(path=path.name):
+                source = path.read_text(encoding="utf-8")
+                self.assertIn("def _animal_role_value", source)
+                for pattern in forbidden_patterns:
+                    self.assertNotIn(pattern, source)
+
+    def test_sample_track_uses_sex_field_instead_of_role_id_for_sample_sex(self):
+        source = (ROOT / "Plugins" / "Sample_Track" / "sample_track_widget.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("def _record_sex_value", source)
+        self.assertIn("sex_value = _record_sex_value(rec) or self._sex_cb.currentText()", source)
+        self.assertIn('else _record_sex_value(rec)', source)
+        self.assertNotIn('else rec.get("rolle", "")', source)
+        self.assertNotIn("rec.get('rolle', '')", source)
 
     def test_sample_progtrack_data_uses_internal_role_ids(self):
         data = json.loads((ROOT / "progtrack_daten.json").read_text(encoding="utf-8"))

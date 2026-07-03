@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from Plugins.core.animal_identity import animal_base_name
+from Plugins.core.animal_roles import canonical_role_value
 
 # Set up paths
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -36,6 +37,11 @@ VALID_STAGES = {STAGE_IN_VIVO_M2, STAGE_IN_VITRO_M2}
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('FlowTrack')
+
+
+def _animal_role_value(animal_data: Optional[Dict[str, Any]]) -> str:
+    """Return the stable internal role ID for a ProgTrack animal record."""
+    return canonical_role_value((animal_data or {}).get('rolle'))
 
 
 class FlowTrackWidget:
@@ -1284,7 +1290,7 @@ class FlowTrackWidget:
         
         # Scan animals
         for name, rec in self.parent_app.animals.items():
-            rolle = rec.get('rolle')
+            rolle = _animal_role_value(rec)
             
             # Egg donation surgeries (SPENDER role)
             if rolle == Role.SPENDER.value:
@@ -1615,7 +1621,7 @@ class FlowTrackWidget:
         
         for animal_name in animals_to_show:
             animal_data = self.parent_app.animals.get(animal_name, {})
-            role = animal_data.get('rolle')
+            role = _animal_role_value(animal_data)
             
             if role == Role.SPENDER.value:
                 egg_donors.append(animal_name)
@@ -1661,7 +1667,7 @@ class FlowTrackWidget:
                 color = 'cyan'
                 role = None
             else:
-                role = self.parent_app.animals.get(animal_name, {}).get('rolle')
+                role = _animal_role_value(self.parent_app.animals.get(animal_name, {}))
                 
                 # Color by role - matching ProgTrack sidebar colors
                 if role == Role.SPENDER.value:
@@ -2111,7 +2117,7 @@ class FlowTrackWidget:
         
         for animal_name in animals_to_show:
             animal_data = self.parent_app.animals.get(animal_name, {})
-            role = animal_data.get('rolle')
+            role = _animal_role_value(animal_data)
             
             if role == Role.SPENDER.value:
                 egg_donors.append(animal_name)
@@ -3131,7 +3137,7 @@ class FlowTrackWidget:
         Role = self.parent_app.Role
         
         animal_data = self.parent_app.animals.get(animal_name, {})
-        role = animal_data.get('rolle', 'Unknown')
+        role = _animal_role_value(animal_data) or 'Unknown'
         
         # Show role-specific dialog
         if role == Role.SPENDER.value:
@@ -4685,7 +4691,7 @@ class FlowTrackWidget:
         egg_combo.addItem(self.messages.get('flow_track.edit_embryo.none', '(None)'), None)
         
         for name, data in self.parent_app.animals.items():
-            if data.get('rolle') == Role.SPENDER.value:
+            if _animal_role_value(data) == Role.SPENDER.value:
                 egg_combo.addItem(name, name)
         
         # Set current selection
@@ -4771,7 +4777,7 @@ class FlowTrackWidget:
         sperm_combo.addItem(self.messages.get('flow_track.edit_embryo.none', '(None)'), None)
         
         for name, data in self.parent_app.animals.items():
-            if data.get('rolle') == Role.SAMENSP.value:
+            if _animal_role_value(data) == Role.SAMENSP.value:
                 sperm_combo.addItem(name, name)
         
         # Set current selection
@@ -5390,7 +5396,7 @@ class FlowTrackWidget:
         for artist, animal_name in self.node_artists.items():
             if artist.contains(event)[0]:
                 animal_data = self.parent_app.animals.get(animal_name, {})
-                role = animal_data.get('rolle')
+                role = _animal_role_value(animal_data)
                 
                 # Get node position
                 node_x, node_y = artist.get_data()
@@ -5978,17 +5984,17 @@ class FlowTrackWidget:
             # === 3. INDIVIDUAL ANIMAL SHEETS ===
             # Egg Donors
             for animal_name, animal_data in sorted(self.parent_app.animals.items()):
-                if animal_data.get('rolle') == Role.SPENDER.value:
+                if _animal_role_value(animal_data) == Role.SPENDER.value:
                     self._create_egg_donor_sheet(wb, animal_name)
             
             # Sperm Donors
             for animal_name, animal_data in sorted(self.parent_app.animals.items()):
-                if animal_data.get('rolle') == Role.SAMENSP.value:
+                if _animal_role_value(animal_data) == Role.SAMENSP.value:
                     self._create_sperm_donor_sheet(wb, animal_name)
             
             # Surrogates
             for animal_name, animal_data in sorted(self.parent_app.animals.items()):
-                if animal_data.get('rolle') == Role.AMME.value:
+                if _animal_role_value(animal_data) == Role.AMME.value:
                     self._create_surrogate_sheet(wb, animal_name)
             
             # === 4. ALL EMBRYOS SHEET ===
@@ -6031,7 +6037,7 @@ class FlowTrackWidget:
         
         for animal_name in sorted(self.parent_app.animals.keys()):
             animal_data = self.parent_app.animals[animal_name]
-            role = animal_data.get('rolle')
+            role = _animal_role_value(animal_data)
             
             if role == Role.SPENDER.value:
                 role_name = "Egg Donor"
@@ -6095,7 +6101,7 @@ class FlowTrackWidget:
         
         row = 2
         for animal_name in sorted(self.parent_app.animals.keys()):
-            if self.parent_app.animals[animal_name].get('rolle') != Role.SPENDER.value:
+            if _animal_role_value(self.parent_app.animals[animal_name]) != Role.SPENDER.value:
                 continue
             
             efficiency = self._calculate_egg_donor_efficiency(animal_name)
@@ -6149,7 +6155,7 @@ class FlowTrackWidget:
         
         row = 2
         for animal_name in sorted(self.parent_app.animals.keys()):
-            if self.parent_app.animals[animal_name].get('rolle') != Role.SAMENSP.value:
+            if _animal_role_value(self.parent_app.animals[animal_name]) != Role.SAMENSP.value:
                 continue
             
             efficiency = self._calculate_sperm_donor_efficiency(animal_name)
@@ -6200,7 +6206,7 @@ class FlowTrackWidget:
         
         row = 2
         for animal_name in sorted(self.parent_app.animals.keys()):
-            if self.parent_app.animals[animal_name].get('rolle') != Role.AMME.value:
+            if _animal_role_value(self.parent_app.animals[animal_name]) != Role.AMME.value:
                 continue
             
             efficiency = self._calculate_surrogate_efficiency(animal_name)

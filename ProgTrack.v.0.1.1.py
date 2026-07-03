@@ -1921,7 +1921,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if spec:
                     vis = vis and (rec.get('species', '') == spec)
                 cb.setVisible(vis)
-                rv = rec.get('rolle')
+                rv = self._animal_role_value(rec)
                 if vis and rv in role_has_visible:
                     role_has_visible[rv] = True
             for role_val, widgets in role_header_widgets.items():
@@ -2762,7 +2762,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Weight measurements
         if dtype == 'weight':
             rec = self.animals.get(animal_name, {})
-            rolle = rec.get('rolle')
+            rolle = self._animal_role_value(rec)
             # Normalize date for comparison
             dt_date = date.date() if isinstance(date, datetime) else date
             # allow "missing" weight entries to display a tooltip
@@ -5121,7 +5121,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         }
 
         for rec in self.animals.values():
-            role = rec.get('rolle')
+            role = self._animal_role_value(rec)
             if role in (Role.SPENDER.value, Role.AMME.value):
                 counts[0] += 1
             elif role == Role.SAMENSP.value:
@@ -5170,7 +5170,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not self.selected_animals:
             return
         name = self.selected_animals[0]
-        role = self.animals.get(name, {}).get('rolle', '')
+        role = self._animal_role_value(self.animals.get(name, {}), default='')
         self._dialog_for_role_value(role)(name)
 
     def _on_edit_in_all_tab(self):
@@ -5207,7 +5207,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if not self._is_steroid_role_value(role_code)
             ]
 
-        current_role = a.get("rolle")
+        current_role = self._animal_role_value(a, default="")
         if current_role and current_role not in role_order:
             # Keep currently assigned hidden roles selectable as current value so
             # opening the dialog while Steroid_track is inactive does not force
@@ -5244,7 +5244,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._write_json({"animals": self.animals, "archived": self.archived})
         
         # Jump to the appropriate tab based on rolle
-        rolle = a.get("rolle")
+        rolle = self._animal_role_value(a)
         tab_idx = self._category_tab_index_for_role(rolle)
         self.category_tab.setCurrentIndex(tab_idx)
         self._refresh_list()
@@ -6419,6 +6419,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return {}
         return registry.get_by_value(role_value) or {}
 
+    def _animal_role_value(
+        self,
+        record: Optional[Dict[str, Any]],
+        default: Optional[str] = None,
+    ) -> str:
+        fallback = Role.UNKNOWN.value if default is None else default
+        return canonical_role_value((record or {}).get("rolle"), default=fallback)
+
     def _role_dialog_blocks(self, role_value: str, mode: str = "edit") -> List[str]:
         registry = getattr(self, "animal_role_registry", None)
         if registry is None:
@@ -6448,7 +6456,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _role_values_for_category_tab(self, idx: int) -> List[str]:
         if idx == 6:
             return [
-                self.animals.get(name, {}).get("rolle") or Role.UNKNOWN.value
+                self._animal_role_value(self.animals.get(name, {}))
                 for name in getattr(self, "selected_animals", [])
                 if name in self.animals
             ]
@@ -6751,8 +6759,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.report_chip_nr_label.setText(animal_data.get('chip_nr', '') or '-')
         if hasattr(self, 'report_origin_label'):
             self.report_origin_label.setText(animal_data.get('origin', '') or '-')
-        rolle = animal_data.get('rolle')
-        self.report_role_label.setText(self._get_localized_role(rolle) if rolle is not None else '-')
+        rolle = self._animal_role_value(animal_data, default='')
+        self.report_role_label.setText(self._get_localized_role(rolle) if rolle else '-')
         
         self.report_status_label.setText(
             status_summary_with_death_priority(
@@ -6845,7 +6853,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     
     def _is_in_recovery_period(self, animal_data: Dict[str, Any], date: datetime.date) -> bool:
         """Check if a specific date falls within an animal's recovery period."""
-        role = animal_data.get('rolle')
+        role = self._animal_role_value(animal_data)
         
         # For Spenderin and Samenspender: check recovery after OP or sperm samples
         if role in (Role.SPENDER.value, Role.SAMENSP.value):
@@ -7010,7 +7018,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     lines.append(f"{pdg_label}: {value} µg/mg Cr" + (f" ({sample_id_label}: {probe})" if probe else ""))
         
         # Check for weight measurements
-        role = animal_data.get('rolle')
+        role = self._animal_role_value(animal_data)
         for weight in animal_data.get('gewicht', []):
             if isinstance(weight.get('datum'), datetime):
                 w_date = weight['datum'].date()
@@ -7827,7 +7835,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     
     def _get_reproduction_status(self, animal_data: Dict[str, Any], date: datetime.date) -> str:
         """Get reproduction status symbols for a specific date."""
-        role = animal_data.get('rolle')
+        role = self._animal_role_value(animal_data)
         if role not in [Role.AMME.value, Role.ZUCHTTIER.value]:
             return ''
         
@@ -7864,7 +7872,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     
     def _get_event_statistics(self, animal_data: Dict[str, Any]) -> str:
         """Get event statistics showing all items with defined maximums for the role."""
-        role = animal_data.get('rolle')
+        role = self._animal_role_value(animal_data)
         steroid_active = self._is_steroid_track_active()
         stats = []
         
@@ -7987,7 +7995,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     
     def _get_event_statistics_localized(self, animal_data: Dict[str, Any], messages: dict) -> str:
         """Get event statistics with localized labels."""
-        role = animal_data.get('rolle')
+        role = self._animal_role_value(animal_data)
         steroid_active = self._is_steroid_track_active()
         stats = []
         
@@ -8101,7 +8109,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         a = self.animals.get(animal_name, {})
         if has_death_date(a):
             return messages.get('status.deceased', 'Deceased')
-        role = a.get('rolle')
+        role = self._animal_role_value(a)
         now = datetime.now()
         
         # Offspring: only show sick status
@@ -8802,19 +8810,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             phase_filter_val = next((phase_val for phase_val, btn in self.phase_buttons.items() if btn.isChecked()), None)
         # Filter by rolle only
         if cat == "♀":
-            cat_pred = lambda d: d.get("rolle") in (Role.SPENDER.value, Role.AMME.value)
+            cat_pred = lambda d: self._animal_role_value(d) in (Role.SPENDER.value, Role.AMME.value)
         elif cat == "♂":
-            cat_pred = lambda d: d.get("rolle") == Role.SAMENSP.value
+            cat_pred = lambda d: self._animal_role_value(d) == Role.SAMENSP.value
         elif cat == "👶":
-            cat_pred = lambda d: d.get("rolle") == Role.OFFSPRING.value
+            cat_pred = lambda d: self._animal_role_value(d) == Role.OFFSPRING.value
         elif cat == "🐾":
-            cat_pred = lambda d: d.get("rolle") == Role.PARTNER.value
+            cat_pred = lambda d: self._animal_role_value(d) == Role.PARTNER.value
         elif cat == "⚤":
-            cat_pred = lambda d: d.get("rolle") == Role.ZUCHTTIER.value
+            cat_pred = lambda d: self._animal_role_value(d) == Role.ZUCHTTIER.value
         elif cat == "💡":
-            cat_pred = lambda d: d.get("rolle") == Role.EXPERIMENTAL.value
+            cat_pred = lambda d: self._animal_role_value(d) == Role.EXPERIMENTAL.value
         elif cat == self.messages["sidebar.filter.all"]:
-            cat_pred = (lambda d: True) if steroid_active else (lambda d: d.get("rolle") != Role.SAMENSP.value)
+            cat_pred = (lambda d: True) if steroid_active else (lambda d: self._animal_role_value(d) != Role.SAMENSP.value)
         else:
             cat_pred = lambda d: True
 
@@ -8911,7 +8919,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             row_widget.setLayout(h)
             
             # Set text color based on rolle only
-            role = data.get('rolle')
+            role = self._animal_role_value(data)
             text_color = QColor('black')  # default color
             
             if role is None or role == Role.UNKNOWN.value:
@@ -9364,7 +9372,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         a = self.animals.get(name, {})
         if has_death_date(a):
             return compact_status_with_death_priority(a)
-        role = a.get('rolle')
+        role = self._animal_role_value(a)
         
         # Convert date to datetime for comparison
         check_datetime = datetime.combine(at_date, datetime.min.time())
@@ -9479,7 +9487,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         Animals with other or unspecified roles return an empty status.
         """
         a = self.animals.get(name, {})
-        role = a.get('rolle')
+        role = self._animal_role_value(a)
         # define now early so partners can also use the injection-tag block later
         now = datetime.now()
 
@@ -9794,7 +9802,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ——— Sperm line-style radios ———
         # Only Samenspender can have sperm data; check if any selected Samenspender have entries
         has_sperm = steroid_active and any(
-            self.animals.get(name, {}).get('rolle') == Role.SAMENSP.value and
+            self._animal_role_value(self.animals.get(name, {})) == Role.SAMENSP.value and
             bool(self.animals.get(name, {}).get('sperm'))
             for name in self.selected_animals
         )
@@ -9926,7 +9934,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             a = self.animals[name]
             _dname = self._display_name(name)
             # Determine role label based on rolle
-            rolle = a.get('rolle')
+            rolle = self._animal_role_value(a)
             if rolle == Role.OFFSPRING.value:
                 # show genotype as "role" for offspring, fallback to localized role name
                 role_label = a.get('genotype', '') or self._get_localized_role(rolle)
@@ -11101,7 +11109,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             plot_animals = [n for n in self.selected_animals if n in self.animals]
             for name in plot_animals:
                 a = self.animals[name]
-                rolle = a.get('rolle')
+                rolle = self._animal_role_value(a)
                 
                 # Skip statistics for partner animals
                 if rolle == Role.PARTNER.value:
@@ -11602,7 +11610,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     for name in selected_animals:
                         animal = self.animals[name]
                         animal_display = self._display_name(name)
-                        role = animal.get('rolle')
+                        role = self._animal_role_value(animal)
                         is_sperm_role = steroid_active and role == Role.SAMENSP.value
                         if role == Role.SAMENSP.value and not steroid_active:
                             continue
@@ -11931,7 +11939,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if not steroid_active:
                 selected_animals = [
                     name for name in selected_animals
-                    if self.animals.get(name, {}).get('rolle') != Role.SAMENSP.value
+                    if self._animal_role_value(self.animals.get(name, {})) != Role.SAMENSP.value
                 ]
             if not selected_animals:
                 self._show_message("error.print.no_selection")
@@ -12277,7 +12285,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Generate localized statistics
             localized_stats = self._get_event_statistics_localized(animal_data, report_messages)
             
-            rolle = animal_data.get('rolle')
+            rolle = self._animal_role_value(animal_data, default='')
             
             # Calculate age as of last day of report month
             import calendar
@@ -12311,7 +12319,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 'Origin': animal_data.get('origin', '') or '-',
                 'Title Subject': report_title_subject,
                 'Project': self._format_project_severity(animal_data) or '-',
-                'Role': self._get_localized_role(rolle, report_messages) if rolle is not None else '-',
+                'Role': self._get_localized_role(rolle, report_messages) if rolle else '-',
                 'Status': status_summary_with_death_priority(
                     animal_data,
                     report_messages,
@@ -13764,7 +13772,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             try:
                 for name, rec in self.animals.items():
                     # Role-based inclusion: only female roles are schedulable here
-                    if rec.get('rolle') not in (Role.SPENDER.value, Role.AMME.value):
+                    role = self._animal_role_value(rec)
+                    if role not in (Role.SPENDER.value, Role.AMME.value):
                         continue
                     # Compute current status to pass to planner for auto-exclusion
                     status = self._get_status(name)
@@ -13775,7 +13784,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     
                     new_rec = {
                         'name': name,
-                        'rolle': rec.get('rolle'),
+                        'rolle': role,
                         # Normalise maximum values; default to zero if missing
                         'OP_max':         rec.get('max_op',     rec.get('OP_max',     0)),
                         'FSH_max':        rec.get('max_fsh',    rec.get('FSH_max',    0)),
@@ -16571,7 +16580,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
                 try:
                     self._save_trace("zuchttier.save.heritage.before", new_name=new_name)
-                    # Zuchttier is in main animals list, so in_main_animals=True
+                    # Breeding animals are in the main animals list.
                     self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
                     # Save parentage to heritage store
                     parent_values = {
@@ -17244,8 +17253,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return
 
         rec: Dict[str, Any] = {} if creating else dict(self.animals.get(name, {}))
-        role_value = role_value or rec.get("rolle") or Role.UNKNOWN.value
-        rec.setdefault("rolle", role_value)
+        role_value = canonical_role_value(role_value or rec.get("rolle"), default=Role.UNKNOWN.value)
+        rec["rolle"] = role_value
         rec.setdefault("daten", [])
         rec.setdefault("pdg", [])
         rec.setdefault("gewicht", [])
@@ -17561,7 +17570,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         creating = (name is None)
         rec: Dict[str, Any] = {} if creating else dict(self.animals.get(name, {}))
         # Normalize/seed fields
-        role_now = rec.get('rolle', default_role or Role.SPENDER.value)
+        role_now = self._animal_role_value(rec, default=default_role or Role.SPENDER.value)
         if creating and default_role in (Role.SPENDER.value, Role.AMME.value):
             role_now = default_role
         if not creating and role_now not in (Role.SPENDER.value, Role.AMME.value):
@@ -17967,7 +17976,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         _events_tab = None
         events_w = []
         if steroid_active:
-            if rec.get('rolle') == Role.SPENDER.value:
+            if self._animal_role_value(rec) == Role.SPENDER.value:
                 ev_items = (
                     [{'typ': LEGACY_EVENT_MAP.get('op', 'surgery'),  'datum': dt} for dt in rec.get('op', [])] +
                     [{'typ': 'pgf', 'datum': dt} for dt in rec.get('pgf', [])] +
@@ -18070,7 +18079,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             role_code = role_cb.currentData() or Role.SPENDER.value
             self._save_trace("female_like.save.role_read", new_name=new_name, role_code=role_code)
             # role change cleanups
-            if not creating and rec.get('rolle') != role_code:
+            if not creating and self._animal_role_value(rec) != role_code:
                 if role_code == Role.AMME.value and rec.get('op'):
                     self._show_message(
                         self.messages.get('warning.title', 'Warning'),
@@ -19003,7 +19012,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 # assign sensible defaults. Donors, surrogates, and sperm donors get
                 # the default recovery period; others get 0. All animals start
                 # without a manual plus flag.
-                role = rec.get('rolle', Role.SPENDER.value)
+                role = self._animal_role_value(rec, default=Role.SPENDER.value)
                 if 'recovery_time' not in rec:
                     rec['recovery_time'] = DEFAULT_RECOVERY_TIME if role in (Role.SPENDER.value, Role.AMME.value, Role.SAMENSP.value) else 0
                 # Migrate manual_plus to sick for backward compatibility
@@ -19532,7 +19541,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             ax = ctx.get('ax')
             pdg_ax = ctx.get('pdg_ax')
             animal = self.animals.get(name, {})
-            rolle = animal.get('rolle')
+            rolle = self._animal_role_value(animal)
             hide_label = rolle in [Role.OFFSPRING.value, Role.PARTNER.value]
             
             if ax:
@@ -19634,7 +19643,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if hasattr(self, 'current_figure') and self.current_figure:
             for ax in self.current_figure.axes:
                 name = getattr(ax, '_animal_name', None)
-                if name and self.animals.get(name, {}).get('rolle') == Role.SAMENSP.value:
+                if name and self._animal_role_value(self.animals.get(name, {})) == Role.SAMENSP.value:
                     ax.set_ylabel("Spermien/ml")
                     counts = [s.get('count', 0) or 0 for s in self.animals[name].get('sperm', [])]
                     maxc = max(counts) if counts else 1
