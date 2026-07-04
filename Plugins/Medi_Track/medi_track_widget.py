@@ -15,7 +15,7 @@ import tempfile
 import uuid
 from datetime import datetime, date
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from PyQt6.QtCore import Qt, QDate, QSize, QStandardPaths, QTimer
 from PyQt6.QtGui import QIcon, QPixmap
@@ -76,6 +76,81 @@ def _safe_name(name: str) -> str:
     for ch in r'/\:*?"<>|':
         safe = safe.replace(ch, '_')
     return safe or 'unknown'
+
+
+def _path_identity(path: Path) -> str:
+    return os.path.normcase(os.path.abspath(str(path)))
+
+
+def _document_paths_for_animal(
+    animal_name: str,
+    store: "MediStore",
+    docs_root: Optional[Path] = None,
+) -> List[Path]:
+    """Return all filesystem documents known for an animal."""
+    root = Path(docs_root) if docs_root is not None else PLUGIN_DIR / MEDI_DOCS_SUBDIR
+    seen = set()
+    paths: List[Path] = []
+
+    def add(path_like: object) -> None:
+        if not path_like:
+            return
+        path = Path(str(path_like))
+        try:
+            if not path.is_file() or path.name.startswith(".") or path.name.lower() == "thumbs.db":
+                return
+        except OSError:
+            return
+        ident = _path_identity(path)
+        if ident in seen:
+            return
+        seen.add(ident)
+        paths.append(path)
+
+    folder = root / _safe_name(animal_name)
+    if folder.exists():
+        try:
+            for path in folder.iterdir():
+                add(path)
+        except OSError:
+            pass
+
+    try:
+        json_docs = store.get_documents(animal_name)
+    except Exception:
+        json_docs = []
+    for doc in json_docs:
+        if isinstance(doc, dict):
+            add(doc.get("path"))
+
+    return sorted(paths, key=lambda p: p.name.lower())
+
+
+def _unique_export_destination(destination_dir: Path, source: Path) -> Path:
+    candidate = destination_dir / source.name
+    counter = 1
+    while candidate.exists() and _path_identity(candidate) != _path_identity(source):
+        candidate = destination_dir / f"{source.stem}_{counter}{source.suffix}"
+        counter += 1
+    return candidate
+
+
+def _copy_document_files_to_directory(
+    sources: Iterable[Path],
+    destination_dir: Path,
+) -> int:
+    """Copy document files to a directory without overwriting existing files."""
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for source in sources:
+        if not source.is_file():
+            continue
+        dest = _unique_export_destination(destination_dir, source)
+        if _path_identity(dest) == _path_identity(source):
+            continue
+        shutil.copy2(str(source), str(dest))
+        copied += 1
+    return copied
 
 
 def _display_animal_name(animal_key: str, record: Optional[Dict[str, Any]] = None) -> str:
@@ -1085,7 +1160,6 @@ class MediTrackWidget(QWidget):
         _em   = '\u2014'
         _h_history  = _msg(_messages, 'medi_track.section.history', 'Medical History')
         _h_name     = _msg(_messages, 'report.header.name', 'Name')
-        _h_ipid     = _msg(_messages, 'report.header.ipid', 'IPID')
         _h_id       = _msg(_messages, 'report.header.id', 'ID')
         _h_genotype = _msg(_messages, 'reports.header.genotype', 'Genotype')
         _h_project  = _msg(_messages, 'report.header.project', 'Project')
@@ -1099,7 +1173,6 @@ class MediTrackWidget(QWidget):
         _h_det_col  = _msg(_messages, 'medi_track.table.details', 'Details')
         _h_sig_col  = _msg(_messages, 'medi_track.table.signature', 'Signature')
         _v_name     = _esc(_display_animal_name(animal_name, rec))
-        _v_ipid     = _esc(animal_name)
         _v_genotype = _esc(rec.get('genotype') or _dash)
         _proj_sev_fn = getattr(self.app, '_format_project_severity', None)
         _cur_proj = _proj_sev_fn(rec) if callable(_proj_sev_fn) else (rec.get('project') or '')
@@ -1143,7 +1216,6 @@ class MediTrackWidget(QWidget):
         <h2>{_h_history} {_em} {_v_name}</h2>
         <table class='it'>
           <tr><td class='lbl'>{_h_name}</td><td>{_v_name}</td></tr>
-          <tr><td class='lbl'>{_h_ipid}</td><td>{_v_ipid}</td></tr>
           <tr><td class='lbl'>{_h_id}</td><td>{id_display}</td></tr>
           <tr><td class='lbl'>{_h_genotype}</td><td>{_v_genotype}</td></tr>
           <tr><td class='lbl'>{_h_project}</td><td>{_v_project}</td></tr>
@@ -1170,6 +1242,19 @@ class MediTrackWidget(QWidget):
         doc.setHtml(html)
         doc.print(printer)
 
+    def _copy_documents_for_export(self, animal_name: str, output_path: str) -> int:
+        docs = _document_paths_for_animal(animal_name, self.store)
+        return _copy_document_files_to_directory(docs, Path(output_path).parent)
+
+    def _export_animal_history_package(
+        self,
+        animal_name: str,
+        output_path: str,
+        lang: Optional[str] = None,
+    ) -> int:
+        self._export_animal_to_pdf(animal_name, output_path, lang=lang)
+        return self._copy_documents_for_export(animal_name, output_path)
+
     def _on_export_clicked(self) -> None:
         """Export medical history of current animal as PDF (interactive save dialog)."""
         if not self._current_animal:
@@ -1193,8 +1278,11 @@ class MediTrackWidget(QWidget):
         if not path.lower().endswith('.pdf'):
             path += '.pdf'
         try:
-            self._export_animal_to_pdf(self._current_animal, path, lang=self._lang)
+            self._export_animal_history_package(self._current_animal, path, lang=self._lang)
         except RuntimeError as exc:
+            QMessageBox.warning(self, _msg(self.messages, 'error.title', 'Error'), str(exc))
+            return
+        except Exception as exc:
             QMessageBox.warning(self, _msg(self.messages, 'error.title', 'Error'), str(exc))
             return
         QMessageBox.information(

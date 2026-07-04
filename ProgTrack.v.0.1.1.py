@@ -12112,7 +12112,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     out_path = _os.path.join(
                         output_dir, f"{safe}_medical_history.pdf")
                     try:
-                        medi_widget._export_animal_to_pdf(
+                        medi_widget._export_animal_history_package(
                             animal_name, out_path, lang=selected_lang)
                     except Exception as exc:
                         errors.append(f"{animal_name}: {exc}")
