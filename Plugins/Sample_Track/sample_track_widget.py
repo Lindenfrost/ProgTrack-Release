@@ -47,6 +47,15 @@ def _record_sex_value(record: Optional[Dict[str, Any]]) -> str:
         return raw
     return ""
 
+
+def _species_abbreviation(species: str) -> str:
+    words = [part for part in str(species or "").strip().split() if part]
+    if len(words) >= 2:
+        return "".join(word[0].lower() for word in words if word[0].isalnum())
+    if words:
+        return words[0][:2].lower()
+    return ""
+
 # ---------------------------------------------------------------------------
 # Column-width constants shared by row widgets AND headers (px)
 # Changing a value here aligns both header and data rows automatically.
@@ -984,7 +993,9 @@ class SampleRowWidget(QFrame):
                      "An entry for this animal already exists."))
             return  # Keep row open for editing
         self._data["animal_name"] = name
-        self._data["species"] = (rec.get("species") if rec else "") or self._species_le.text().strip()
+        self._data["species"] = _species_abbreviation(
+            (rec.get("species") if rec else "") or self._species_le.text().strip()
+        )
         self._data["id"] = (rec.get("id") if rec else "") or self._id_le.text().strip()
         sex_value = _record_sex_value(rec) or self._sex_cb.currentText()
         self._data["sex"] = sex_value if sex_value in ("Male", "Female", "Undefined") else self._sex_cb.currentText()
@@ -1575,7 +1586,9 @@ class OtherSampleRowWidget(QFrame):
                         return  # Keep row open for editing
         self._data["sample_number"] = sn
         self._data["animal_name"] = name
-        self._data["species"] = (rec.get("species") if rec else "") or self._species_le.text().strip()
+        self._data["species"] = _species_abbreviation(
+            (rec.get("species") if rec else "") or self._species_le.text().strip()
+        )
         self._data["id"] = (rec.get("id") if rec else "") or self._id_le.text().strip()
         sex_value = _record_sex_value(rec) or self._sex_cb.currentText()
         self._data["sex"] = sex_value if sex_value in ("Male", "Female", "Undefined") else self._sex_cb.currentText()
@@ -3057,7 +3070,7 @@ class OtherSamplesTab(QWidget):
             new_row: Dict[str, Any] = {
                 "sample_number": "",
                 "animal_name": animal_name,
-                "species": rec.get("species", ""),
+                    "species": _species_abbreviation(rec.get("species", "")),
                 "id": rec.get("id", ""),
                 "sex": sex_value,
                 "collection_date": collection_date,
@@ -3152,7 +3165,7 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
             # Build full data with all columns first
             if tab_key == "organ_samples":
                 # Static headers for animal identity and sample metadata.
-                static_headers = ["IPID", "Name", "Species", "ID", "Sex", "Birth", "Death", "Unit"]
+                static_headers = ["IPID", "Species", "ID", "Sex", "Birth", "Death", "Unit"]
                 # Use plain abbreviations for organ headers
                 organ_labels = [_organ_display(o["key"])[1] for o in ORGANS]
                 all_headers = static_headers + organ_labels
@@ -3177,7 +3190,6 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
                     unit_str = ", ".join(sorted(all_units)) if all_units else ""
                     row_cells = [
                         d.get("animal_name", ""),
-                        animal_base_name(d.get("animal_name", "")),
                         d.get("species", ""),
                         d.get("id", ""), d.get("sex", ""),
                         d.get("birth_date", ""), d.get("death_date", ""),
@@ -3199,7 +3211,7 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
                     full_data_rows.append(row_cells)
             else:
                 # Static headers for animal identity and sample metadata.
-                static_headers = ["No.", "IPID", "Name", "Species", "ID", "Sex", "Date", "Unit"]
+                static_headers = ["No.", "IPID", "Species", "ID", "Sex", "Date", "Unit"]
                 # Use plain abbreviations for sample type headers
                 type_labels = [_type_display(t["key"])[0] for t in OTHER_TYPES]
                 all_headers = static_headers + type_labels
@@ -3225,7 +3237,6 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
                     row_cells = [
                         d.get("sample_number", ""),
                         d.get("animal_name", ""),
-                        animal_base_name(d.get("animal_name", "")),
                         d.get("species", ""), d.get("id", ""),
                         d.get("sex", ""), d.get("collection_date", ""),
                         unit_str,
@@ -3307,8 +3318,11 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
         if visible_rows:
             max_id_len = max(len(str(d.get("id", ""))) for w in visible_rows for d in [w.get_data()])
             id_col_width = max(10*mm, min(25*mm, (max_id_len * 2.5 + 5)*mm))
+            max_ipid_len = max(len(str(d.get("animal_name", ""))) for w in visible_rows for d in [w.get_data()])
+            ipid_col_width = max(45*mm, min(85*mm, (max_ipid_len * 1.7 + 8)*mm))
         else:
             id_col_width = 15*mm
+            ipid_col_width = 45*mm
 
         if not visible_rows:
             story.append(Spacer(1, 20))
@@ -3316,23 +3330,38 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
                 _msg(m, "sample_track.pdf.no_data", "No samples to display."),
                 styles["Normal"]))
         else:
-            # Calculate column widths to fit within page
-            # Fixed widths for first 7 columns (animal info + Unit) - ID column uses calculated width
+            # Calculate column widths to fit within page. Header mapping keeps
+            # widths correct when empty static columns are filtered out.
             if tab_key == "organ_samples":
-                # IPID, Name, Species, ID (auto), Sex, Birth, Death, Unit
-                fixed_widths = [38*mm, 22*mm, 18*mm, id_col_width, 12*mm, 18*mm, 18*mm, 22*mm]
+                fixed_width_by_header = {
+                    "IPID": ipid_col_width,
+                    "Species": 10*mm,
+                    "ID": id_col_width,
+                    "Sex": 12*mm,
+                    "Birth": 18*mm,
+                    "Death": 18*mm,
+                    "Unit": 22*mm,
+                }
             else:
-                # No., IPID, Name, Species, ID (auto), Sex, Date, Unit
-                fixed_widths = [10*mm, 38*mm, 22*mm, 18*mm, id_col_width, 12*mm, 18*mm, 22*mm]
+                fixed_width_by_header = {
+                    "No.": 10*mm,
+                    "IPID": ipid_col_width,
+                    "Species": 10*mm,
+                    "ID": id_col_width,
+                    "Sex": 12*mm,
+                    "Date": 18*mm,
+                    "Unit": 22*mm,
+                }
 
-            # Calculate column widths based on actual number of columns with data
             num_cols = len(data_rows[0]) if data_rows else 0
-            num_static = len(fixed_widths)
-            num_tissue = num_cols - num_static
-            
+            fixed_widths = [
+                fixed_width_by_header[header]
+                for header in data_rows[0]
+                if header in fixed_width_by_header
+            ]
+            num_tissue = sum(1 for header in data_rows[0] if header not in fixed_width_by_header)
             fixed_total = sum(fixed_widths)
-            
-            # Calculate width for tissue columns
+
             if num_tissue > 0:
                 min_tissue_width = 10 * mm  # Minimum 10mm to fit abbreviations
                 available_for_tissue = usable_width - fixed_total
@@ -3340,11 +3369,11 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
                 tissue_width = min(tissue_width, 15 * mm)  # Cap at 15mm to keep table compact
             else:
                 tissue_width = 0
-            
-            # Build column widths: fixed columns + tissue columns
-            col_widths = fixed_widths + [max(tissue_width, 8*mm)] * max(num_tissue, 0)
-            
-            # Ensure all widths are positive
+
+            col_widths = [
+                fixed_width_by_header.get(header, max(tissue_width, 8*mm))
+                for header in data_rows[0]
+            ]
             col_widths = [max(w, 5*mm) for w in col_widths]
 
             tbl = Table(data_rows, colWidths=col_widths, repeatRows=1)
@@ -3491,7 +3520,7 @@ class SampleTrackPlugin:
             new_row: Dict[str, Any] = {
                 "sample_number": sample_number,
                 "animal_name": animal_name,
-                "species": rec.get("species", ""),
+                "species": _species_abbreviation(rec.get("species", "")),
                 "id": rec.get("id", ""),
                 "sex": sex_value,
                 "collection_date": collection_date,

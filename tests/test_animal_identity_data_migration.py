@@ -87,7 +87,7 @@ class AnimalIdentityDataMigrationTest(unittest.TestCase):
                 assert_ipid_name_pair(self, entry.get("ipid"), entry)
                 self.assertEqual(entry.get("animal"), entry.get("ipid"))
 
-    def test_animal_name_filter_matches_short_name_and_ipid(self):
+    def test_animal_name_filter_matches_short_name_prefix_only(self):
         key = "Luna | Macaca mulatta | 01.01.2020"
         record = {
             "ipid": key,
@@ -98,9 +98,12 @@ class AnimalIdentityDataMigrationTest(unittest.TestCase):
             "birth_date": "01.01.2020",
         }
 
-        for query in ("Luna", "Macaca", "01.01.2020", "Luna | Macaca", key):
+        for query in ("Luna", "lun"):
             with self.subTest(query=query):
                 self.assertTrue(animal_matches_name_filter(key, record, query))
+        for query in ("una", "Macaca", "01.01.2020", "Luna | Macaca", key):
+            with self.subTest(query=query):
+                self.assertFalse(animal_matches_name_filter(key, record, query))
         self.assertFalse(animal_matches_name_filter(key, record, "Momo"))
 
     def test_project_history_short_name_derives_from_ipid(self):

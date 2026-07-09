@@ -118,7 +118,9 @@ class MovementHistoryDialog(QDialog):
         self.messages = messages
         self.occupant_id = occupant_id
         self.setWindowTitle(
-            messages.get("cage_track.history.title", "Movement History: {occupant}").replace("{occupant}", occupant_id)
+            messages.get("cage_track.history.title", "Movement History: {occupant}").replace(
+                "{occupant}", animal_base_name(occupant_id)
+            )
         )
         self.setModal(True)
         self.resize(620, 400)
@@ -127,8 +129,9 @@ class MovementHistoryDialog(QDialog):
 
         occ = store.get_occupant(occupant_id)
         occupant_label = (occ or {}).get("name") or animal_base_name(occupant_id)
-        layout.addWidget(QLabel(f"<b>{occupant_label}</b>"))
-        layout.addWidget(QLabel(f"IPID: {occupant_id}"))
+        occupant_widget = QLabel(f"<b>{occupant_label}</b>")
+        occupant_widget.setToolTip(occupant_id)
+        layout.addWidget(occupant_widget)
 
         current_cage_id = occ.get("cage_id", UNASSIGNED_CAGE_ID) if occ else UNASSIGNED_CAGE_ID
         ua_label = messages.get("cage_track.unassigned", "Unassigned")
@@ -177,11 +180,13 @@ class MovementHistoryDialog(QDialog):
                 item3.setFlags(no_edit)
                 table.setItem(row, 3, item3)
 
-                mates = ", ".join(
-                    f"{animal_base_name(mate)} ({mate})"
-                    for mate in entry.get("cage_mates_snapshot", [])
-                )
+                mate_ids = [str(mate) for mate in entry.get("cage_mates_snapshot", [])]
+                mates = ", ".join(animal_base_name(mate) for mate in mate_ids)
                 item4 = QTableWidgetItem(mates)
+                if mate_ids:
+                    item4.setToolTip("\n".join(
+                        f"{animal_base_name(mate)}: {mate}" for mate in mate_ids
+                    ))
                 item4.setFlags(no_edit)
                 table.setItem(row, 4, item4)
 
@@ -225,7 +230,7 @@ class MovementHistoryDialog(QDialog):
             ax.axis("off")
             ax.set_title(
                 self.messages.get("cage_track.history.title", "Movement History: {occupant}").replace(
-                    "{occupant}", f"{animal_base_name(self.occupant_id)} ({self.occupant_id})"),
+                    "{occupant}", animal_base_name(self.occupant_id)),
                 fontsize=12, fontweight="bold", loc="left",
             )
             cols = self._table.columnCount()
@@ -432,6 +437,9 @@ class AddStructureDialog(QDialog):
 
         self.name_edit = QLineEdit()
         layout.addRow(messages.get("cage_track.add.name", "Name:"), self.name_edit)
+        self.virtual_check = QCheckBox(
+            messages.get("cage_track.structure.virtual", "Virtual"))
+        layout.addRow("", self.virtual_check)
 
         self.building_combo = QComboBox()
         self.building_combo.setEditable(False)
@@ -484,21 +492,21 @@ class AddStructureDialog(QDialog):
             return
 
         if t == "building":
-            self.store.create_building(name)
+            self.store.create_building(name, self.virtual_check.isChecked())
         elif t == "room":
             bid = self.building_combo.currentData()
             if not bid:
                 QMessageBox.warning(self, self.messages.get("error.title", "Error"),
                                     self.messages.get("cage_track.error.no_building", "Please select a building"))
                 return
-            self.store.create_room(bid, name)
+            self.store.create_room(bid, name, self.virtual_check.isChecked())
         elif t == "cage":
             rid = self.room_combo.currentData()
             if not rid:
                 QMessageBox.warning(self, self.messages.get("error.title", "Error"),
                                     self.messages.get("cage_track.error.no_room", "Please select a room"))
                 return
-            self.store.create_cage(rid, name)
+            self.store.create_cage(rid, name, self.virtual_check.isChecked())
         self.accept()
 
 
@@ -604,7 +612,7 @@ class InspectionDialog(QDialog):
     """Non-editable viewer for cage inspection records."""
 
     def __init__(self, parent, messages: Dict[str, Any],
-                 records: List[Dict[str, Any]], on_export):
+                 records: List[Dict[str, Any]], on_export, on_inspect=None):
         super().__init__(parent)
         self.messages = messages
         self.setWindowTitle(messages.get(
@@ -646,6 +654,12 @@ class InspectionDialog(QDialog):
         layout.addWidget(self._table)
 
         btn_row = QHBoxLayout()
+        if callable(on_inspect):
+            inspect_btn = QPushButton(messages.get(
+                "cage_track.inspection.inspect_now", "Inspect now"))
+            inspect_btn.clicked.connect(
+                lambda: (on_inspect(), self.accept()))
+            btn_row.addWidget(inspect_btn)
         btn_row.addStretch()
         export_btn = QPushButton(messages.get(
             "cage_track.inspection.export_pdf", "Export PDF"))
@@ -1406,7 +1420,12 @@ class CageTrackWidget(QWidget):
         border = SELECTED_BORDER if self.selected_cage_id == bld_id else BLD_BORDER
         lw = 2.5 if self.selected_cage_id == bld_id else 1.0
 
-        self._draw_rect(x, y, w, h, BLD_BG, border, linewidth=lw, zorder=1)
+        building_bg = (
+            "#B3E5FC" if self.store.is_effectively_virtual(bld_id)
+            else "#FFCDD2" if self._structure_overdue(bld_id)
+            else BLD_BG
+        )
+        self._draw_rect(x, y, w, h, building_bg, border, linewidth=lw, zorder=1)
         # Title bar
         self._draw_flat_rect(x + 1, y + 1, w - 2, TITLE_H - 2, BLD_TITLE_BG, "none", zorder=2)
         arrow = "▼" if expanded else "▶"
@@ -1447,7 +1466,12 @@ class CageTrackWidget(QWidget):
         border = SELECTED_BORDER if self.selected_cage_id == room_id else ROOM_BORDER
         lw = 2.5 if self.selected_cage_id == room_id else 1.0
 
-        self._draw_rect(x, y, w, h, ROOM_BG, border, linewidth=lw, zorder=2)
+        room_bg = (
+            "#B3E5FC" if self.store.is_effectively_virtual(room_id)
+            else "#FFCDD2" if self._structure_overdue(room_id)
+            else ROOM_BG
+        )
+        self._draw_rect(x, y, w, h, room_bg, border, linewidth=lw, zorder=2)
         self._draw_flat_rect(x + 1, y + 1, w - 2, TITLE_H - 2, ROOM_TITLE_BG, "none", zorder=3)
         arrow = "▼" if expanded else "▶"
         self.ax.text(x + 6, y + TITLE_H * 0.65, f"{arrow} {room.get('display_name', room_id)}",
@@ -1483,7 +1507,12 @@ class CageTrackWidget(QWidget):
         lw = 2.5 if self.selected_cage_id == cage_id else 1.0
 
         # Plain cage background
-        self._draw_flat_rect(x, y, w, h, CAGE_BG, border, linewidth=lw, zorder=3)
+        cage_bg = (
+            "#B3E5FC" if self.store.is_effectively_virtual(cage_id)
+            else "#FFCDD2" if self._structure_overdue(cage_id)
+            else CAGE_BG
+        )
+        self._draw_flat_rect(x, y, w, h, cage_bg, border, linewidth=lw, zorder=3)
 
         self._draw_flat_rect(x, y, w, TITLE_H, CAGE_TITLE_BG, "none", zorder=4)
         self.ax.text(x + 4, y + TITLE_H * 0.65, cage.get("display_name", cage_id),
@@ -1523,6 +1552,38 @@ class CageTrackWidget(QWidget):
                             linewidths=0.8, zorder=6, clip_on=True)
         for tx, ty, occ_id, project_color in text_rows:
             self._draw_animal_name(tx, ty, occ_id, project_color, zorder=5)
+
+    def _inspected_cages_today(self) -> Set[str]:
+        today = datetime.now().strftime("%Y-%m-%d")
+        result: Set[str] = set()
+        for record in self._load_inspections():
+            if record.get("date_sort") == today:
+                result.update(str(item) for item in record.get("cage_ids", []) if item)
+        return result
+
+    def _structure_overdue(self, structure_id: str) -> bool:
+        eligible = set(self.store.eligible_inspection_cages())
+        overdue = eligible - self._inspected_cages_today()
+        if structure_id in overdue:
+            return True
+        data = self.store.load_data()["structures"]
+        if structure_id in data["rooms"]:
+            return any(
+                cage_id in overdue
+                for cage_id, cage in data["cages"].items()
+                if cage.get("parent_room_id") == structure_id
+            )
+        if structure_id in data["buildings"]:
+            room_ids = {
+                room_id for room_id, room in data["rooms"].items()
+                if room.get("parent_building_id") == structure_id
+            }
+            return any(
+                cage_id in overdue
+                for cage_id, cage in data["cages"].items()
+                if cage.get("parent_room_id") in room_ids
+            )
+        return False
 
     def _draw_legend(self, project_colors: Dict[str, str], total_w: float,
                      total_h: float, stored_pos: Optional[List[float]] = None) -> None:
@@ -1832,6 +1893,10 @@ class CageTrackWidget(QWidget):
 
         name_edit = QLineEdit(old_name)
         layout.addRow(self.messages.get("cage_track.add.name", "Name:"), name_edit)
+        virtual_check = QCheckBox(
+            self.messages.get("cage_track.structure.virtual", "Virtual"))
+        virtual_check.setChecked(bool(current.get("virtual", False)))
+        layout.addRow("", virtual_check)
 
         from PyQt6.QtWidgets import QSpinBox
         count_spin = None
@@ -1876,6 +1941,8 @@ class CageTrackWidget(QWidget):
             new_name = name_edit.text().strip()
             if new_name and new_name != old_name:
                 self.store.rename_structure(struct_id, struct_type, new_name)
+            self.store.set_structure_virtual(
+                struct_id, struct_type, virtual_check.isChecked())
 
             if max_per_row_spin is not None:
                 self._set_structure_max_per_row(struct_id, struct_type, max_per_row_spin.value())
@@ -1934,6 +2001,9 @@ class CageTrackWidget(QWidget):
         layout = QFormLayout(dlg)
         name_edit = QLineEdit()
         layout.addRow(self.messages.get("cage_track.add.name", "Name:"), name_edit)
+        virtual_check = QCheckBox(
+            self.messages.get("cage_track.structure.virtual", "Virtual"))
+        layout.addRow("", virtual_check)
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         btn_box.accepted.connect(dlg.accept)
         btn_box.rejected.connect(dlg.reject)
@@ -1943,9 +2013,9 @@ class CageTrackWidget(QWidget):
             name = name_edit.text().strip()
             if name:
                 if child_type == "room":
-                    self.store.create_room(parent_id, name)
+                    self.store.create_room(parent_id, name, virtual_check.isChecked())
                 elif child_type == "cage":
-                    self.store.create_cage(parent_id, name)
+                    self.store.create_cage(parent_id, name, virtual_check.isChecked())
                 self.refresh_view()
 
     # ------------------------------------------------------------------
@@ -2018,6 +2088,7 @@ class CageTrackWidget(QWidget):
                  if r.get("parent_building_id") == bld_id],
                 key=lambda r: r.get("order", 0))
             cage_names: List[str] = []
+            cage_ids: List[str] = []
             for room in rooms:
                 r_name = room.get("display_name", room["id"])
                 cages = sorted(
@@ -2027,6 +2098,7 @@ class CageTrackWidget(QWidget):
                     key=lambda c: c.get("order", 0))
                 cage_names.extend(
                     f"{r_name}/{c.get('display_name', c['id'])}" for c in cages)
+                cage_ids.extend(str(c["id"]) for c in cages)
 
         elif etype == "room":
             room = s["rooms"][eid]
@@ -2043,6 +2115,7 @@ class CageTrackWidget(QWidget):
             r_name = room.get("display_name", eid)
             cage_names = [
                 f"{r_name}/{c.get('display_name', c['id'])}" for c in cages]
+            cage_ids = [str(c["id"]) for c in cages]
 
         elif etype == "cage":
             cage = s["cages"][eid]
@@ -2057,6 +2130,7 @@ class CageTrackWidget(QWidget):
             bld_name = bld.get("display_name", bld_id)
             r_name = room.get("display_name", room_id) if room else ""
             cage_names = [f"{r_name}/{cage.get('display_name', eid)}"]
+            cage_ids = [str(eid)]
         else:
             return None
 
@@ -2067,13 +2141,16 @@ class CageTrackWidget(QWidget):
             "unit_id": bld_id if etype != "building" else eid,
             "unit_name": bld_name,
             "cages": ", ".join(cage_names),
+            "cage_ids": cage_ids,
         }
 
     def _on_inspection(self) -> None:
-        """Record inspection for current selection and show inspection log."""
+        """Show inspection history; recording requires explicit Inspect now."""
         inspection_data = self._resolve_inspection_data()
 
-        if inspection_data and self._can('cage.record_inspection'):
+        def record_now() -> None:
+            if not inspection_data or not self._can('cage.record_inspection'):
+                return
             today = datetime.now().strftime("%d/%m/%Y")
             today_sort = datetime.now().strftime("%Y-%m-%d")
             user = self._get_current_username()
@@ -2090,18 +2167,24 @@ class CageTrackWidget(QWidget):
                 "date": today,
                 "date_sort": today_sort,
                 "cages": inspection_data["cages"],
+                "cage_ids": inspection_data["cage_ids"],
                 "user": user,
             })
             self._save_inspections(records)
-
-        all_records = self._load_inspections()
+            self.refresh_view()
 
         def on_export():
             export_dlg = InspectionPDFExportDialog(
                 self, self.messages, self._load_inspections())
             export_dlg.exec()
 
-        dlg = InspectionDialog(self, self.messages, all_records, on_export)
+        dlg = InspectionDialog(
+            self,
+            self.messages,
+            self._load_inspections(),
+            on_export,
+            record_now if inspection_data and self._can('cage.record_inspection') else None,
+        )
         dlg.exec()
 
     # ------------------------------------------------------------------

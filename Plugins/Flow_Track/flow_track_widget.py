@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Any
 
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_roles import canonical_role_value
+from Plugins.core.platform_helpers import default_save_path
 
 # Set up paths
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -430,6 +431,28 @@ class FlowTrackWidget:
             logger.info("Settings saved to flowtrack_config.json")
         except Exception as e:
             logger.error(f"Failed to save settings: {e}")
+
+    def _set_scrollable_dialog_layout(self, dialog, content_layout):
+        """Attach a layout through a scroll area and keep tall dialogs on screen."""
+        QtWidgets = self.parent_app.QtWidgets
+        scroll = QtWidgets.QScrollArea(dialog)
+        scroll.setWidgetResizable(True)
+        content = QtWidgets.QWidget(scroll)
+        content.setLayout(content_layout)
+        scroll.setWidget(content)
+
+        outer_layout = QtWidgets.QVBoxLayout(dialog)
+        outer_layout.addWidget(scroll)
+        dialog.setSizeGripEnabled(True)
+
+        screen = QtWidgets.QApplication.primaryScreen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            max_width = max(360, int(available.width() * 0.9))
+            max_height = max(320, int(available.height() * 0.9))
+            dialog.setMaximumSize(max_width, max_height)
+            if dialog.width() > max_width or dialog.height() > max_height:
+                dialog.resize(min(dialog.width(), max_width), min(dialog.height(), max_height))
     
     def _load_flow_track_data(self):
         """Load flowtrack_daten.json (Flow_Track 3.0 schema)."""
@@ -899,7 +922,7 @@ class FlowTrackWidget:
         button_layout.addWidget(close_btn)
         
         layout.addLayout(button_layout)
-        dialog.setLayout(layout)
+        self._set_scrollable_dialog_layout(dialog, layout)
         dialog.exec()
     
     def _open_freezer_embryo_details(self, list_widget, embryos, parent_dialog):
@@ -1102,7 +1125,7 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
-        dialog.setLayout(layout)
+        self._set_scrollable_dialog_layout(dialog, layout)
         
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             embryo_id = embryo_id_edit.text().strip()
@@ -1217,7 +1240,7 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
-        dialog.setLayout(layout)
+        self._set_scrollable_dialog_layout(dialog, layout)
         
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             embryo_id = embryo_id_edit.text().strip()
@@ -3759,7 +3782,7 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
-        dialog.setLayout(layout)
+        self._set_scrollable_dialog_layout(dialog, layout)
         
         # Show dialog and save data
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
@@ -4307,7 +4330,7 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
-        dialog.setLayout(layout)
+        self._set_scrollable_dialog_layout(dialog, layout)
         
         # Show dialog and save data
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
@@ -4614,7 +4637,7 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
-        dialog.setLayout(layout)
+        self._set_scrollable_dialog_layout(dialog, layout)
         
         # Show dialog and save data
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
@@ -4971,7 +4994,7 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
-        dialog.setLayout(layout)
+        self._set_scrollable_dialog_layout(dialog, layout)
         
         # Show dialog
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
@@ -5790,7 +5813,7 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
-        dialog.setLayout(layout)
+        self._set_scrollable_dialog_layout(dialog, layout)
         
         # Show dialog
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
@@ -5868,7 +5891,7 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
-        dialog.setLayout(layout)
+        self._set_scrollable_dialog_layout(dialog, layout)
         
         # Show dialog and export
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
@@ -5886,7 +5909,7 @@ class FlowTrackWidget:
         filename, _ = QtWidgets.QFileDialog.getSaveFileName(
             self.widget,
             self.messages.get("flow_track.export.save_json", "Save JSON Backup"),
-            f"flow_track_backup_{datetime.now().strftime('%Y%m%d')}.json",
+            str(default_save_path(f"flow_track_backup_{datetime.now().strftime('%Y%m%d')}.json")),
             self.messages.get("flow_track.export.json_filter", "JSON files (*.json)")
         )
         
@@ -5958,7 +5981,7 @@ class FlowTrackWidget:
         filename, _ = QtWidgets.QFileDialog.getSaveFileName(
             self.widget,
             self.messages.get("flow_track.export.save_excel", "Save Excel File"),
-            f"flow_track_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            str(default_save_path(f"flow_track_{datetime.now().strftime('%Y%m%d')}.xlsx")),
             self.messages.get("flow_track.export.excel_filter", "Excel files (*.xlsx)")
         )
         
@@ -6020,14 +6043,35 @@ class FlowTrackWidget:
                 self.messages.get("flow_track.export.error.excel", "Excel export failed:\n{error}").format(error=str(e))
             )
     
+    def _flow_tracked_animals(self) -> set[str]:
+        """Return animal IDs directly referenced by Flow Track transfer data."""
+        tracked: set[str] = set()
+        for transfer_id, transfer_data in self.manual_data.get('transfers_by_id', {}).items():
+            surrogate_name = transfer_data.get('surrogate_name')
+            if surrogate_name:
+                tracked.add(surrogate_name)
+            for embryo in transfer_data.get('embryos', []):
+                for key in ('egg_donor_name', 'sperm_donor_name'):
+                    animal_name = embryo.get(key)
+                    if animal_name:
+                        tracked.add(animal_name)
+        return tracked
+
+    def _export_animal_records(self) -> Dict[str, Any]:
+        records = dict(getattr(self.parent_app, 'animals', {}) or {})
+        archived = getattr(self.parent_app, 'archived', {}) or {}
+        if isinstance(archived, dict):
+            records.update(archived)
+        return records
+
     def _create_all_animals_overview(self, wb):
-        """Create overview sheet with all animals and their embryo counts."""
+        """Create overview sheet with animals referenced by Flow Track data."""
         from openpyxl.styles import Font, Alignment, PatternFill
         
         ws = wb.create_sheet("All Animals Overview", 0)
         Role = self.parent_app.Role
         
-        headers = ['IPID', 'Animal', 'Role', 'Embryos Donated', 'Embryos Received', 'Transferred', 'Frozen', 'Implanted']
+        headers = ['IPID', 'Animal', 'Role', 'Embryos created', 'Transferred', 'Implanted', 'Cryopreserved']
         ws.append(headers)
         
         for cell in ws[1]:
@@ -6035,8 +6079,27 @@ class FlowTrackWidget:
             cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
             cell.alignment = Alignment(horizontal='center')
         
-        for animal_name in sorted(self.parent_app.animals.keys()):
-            animal_data = self.parent_app.animals[animal_name]
+        records = self._export_animal_records()
+        role_order = {
+            Role.SPENDER.value: 0,
+            Role.SAMENSP.value: 1,
+            Role.AMME.value: 2,
+        }
+        flow_animals = [
+            animal_name
+            for animal_name in self._flow_tracked_animals()
+            if animal_name in records
+        ]
+        flow_animals.sort(
+            key=lambda name: (
+                role_order.get(_animal_role_value(records.get(name, {})), 99),
+                self._animal_export_name(name).casefold(),
+                name.casefold(),
+            )
+        )
+
+        for animal_name in flow_animals:
+            animal_data = records.get(animal_name, {})
             role = _animal_role_value(animal_data)
             
             if role == Role.SPENDER.value:
@@ -6048,28 +6111,34 @@ class FlowTrackWidget:
             else:
                 role_name = "Other"
             
-            donated = 0
-            received = 0
+            embryos_created = 0
             transferred = 0
-            frozen = 0
             implanted = 0
+            cryopreserved = 0
             
             for transfer_id, transfer_data in self.manual_data.get('transfers_by_id', {}).items():
                 for embryo in transfer_data.get('embryos', []):
                     if embryo.get('egg_donor_name') == animal_name or embryo.get('sperm_donor_name') == animal_name:
-                        donated += 1
+                        embryos_created += 1
                     
                     if transfer_data.get('surrogate_name') == animal_name and transfer_id != FREEZER_TRANSFER_ID:
-                        received += 1
                         transferred += 1
                         if embryo.get('implanted', False):
                             implanted += 1
                     
                     if transfer_id == FREEZER_TRANSFER_ID:
                         if embryo.get('egg_donor_name') == animal_name or embryo.get('sperm_donor_name') == animal_name:
-                            frozen += 1
+                            cryopreserved += 1
             
-            ws.append([animal_name, self._animal_export_name(animal_name), role_name, donated, received, transferred, frozen, implanted])
+            ws.append([
+                animal_name,
+                self._animal_export_name(animal_name),
+                role_name,
+                embryos_created,
+                transferred,
+                implanted,
+                cryopreserved,
+            ])
         
         for column in ws.columns:
             max_length = 0
@@ -6630,7 +6699,7 @@ class FlowTrackWidget:
             filename, _ = QtWidgets.QFileDialog.getSaveFileName(
                 self.widget,
                 self.messages.get("flow_track.export.save_pdf", "Save PDF Report"),
-                f"flow_track_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                str(default_save_path(f"flow_track_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")),
                 self.messages.get("flow_track.export.pdf_filter", "PDF files (*.pdf)")
             )
             
@@ -6661,7 +6730,7 @@ class FlowTrackWidget:
             filename, _ = QtWidgets.QFileDialog.getSaveFileName(
                 self.widget,
                 self.messages.get("flow_track.export.save_pdf", "Save PDF Report"),
-                f"flow_track_{datetime.now().strftime('%Y%m%d')}.pdf",
+                str(default_save_path(f"flow_track_{datetime.now().strftime('%Y%m%d')}.pdf")),
                 self.messages.get("flow_track.export.pdf_filter", "PDF files (*.pdf)")
             )
             

@@ -63,6 +63,7 @@ PERM_CORE_EDIT_ANIMAL_HOUSING       = "core.edit_animal_housing"     # address +
 PERM_CORE_EDIT_ANIMAL_MEASUREMENTS  = "core.edit_animal_measurements"  # weight values + events
 PERM_CORE_EDIT_ANIMAL_RESEARCH_DATA = "core.edit_animal_research_data"  # pdg/prog/sperm + max/recovery fields
 PERM_CORE_STYLE_SETTINGS = "core.style_settings"  # access Settings - Style menu
+PERM_CORE_MANAGE_ANIMAL_ROLES = "core.manage_animal_roles"
 # core.project_assign moved to project namespace – see PERM_PROJECT_ASSIGN below
 
 # master — User and permission administration
@@ -166,7 +167,7 @@ ALL_PERMISSIONS: List[str] = [
     PERM_CORE_ARCHIVE_ANIMALS, PERM_CORE_DELETE_ANIMALS,
     PERM_CORE_EDIT_ANIMAL_IDENTITY, PERM_CORE_EDIT_ANIMAL_IMMUTABLE, PERM_CORE_EDIT_ANIMAL_HOUSING,
     PERM_CORE_EDIT_ANIMAL_MEASUREMENTS, PERM_CORE_EDIT_ANIMAL_RESEARCH_DATA,
-    PERM_CORE_STYLE_SETTINGS,
+    PERM_CORE_STYLE_SETTINGS, PERM_CORE_MANAGE_ANIMAL_ROLES,
     PERM_MASTER_VIEW_USERS, PERM_MASTER_CREATE_USERS, PERM_MASTER_EDIT_USERS,
     PERM_MASTER_ASSIGN_PRIMARY_ROLE, PERM_MASTER_ASSIGN_JOBS,
     PERM_MASTER_MANAGE_ROLE_BASELINES, PERM_MASTER_MANAGE_JOB_BUNDLES,
@@ -227,13 +228,14 @@ DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
         PERM_CORE_EDIT_ANIMAL_IDENTITY,
         PERM_CORE_EDIT_ANIMAL_IMMUTABLE,
         PERM_CORE_EDIT_ANIMAL_HOUSING,
+        PERM_CORE_MANAGE_ANIMAL_ROLES,
         PERM_CORE_ARCHIVE_ANIMALS,
         PERM_CORE_DELETE_ANIMALS,
         PERM_CAGE_ASSIGN_LOCATIONS,
         PERM_CAGE_VIEW, PERM_CAGE_RECORD_INSPECTION, PERM_CAGE_EDIT,
         PERM_CAGE_MANAGE_ROOMS_BUILDINGS,
         PERM_CAGE_EXPORT_PDF,
-        PERM_PROJECT_ASSIGN, PERM_PROJECT_CREATE,
+        PERM_PROJECT_VIEW_ALL, PERM_PROJECT_ASSIGN, PERM_PROJECT_CREATE,
         PERM_PROJECT_MANAGE_SEVERITY, PERM_PROJECT_MANAGE_SPECIES_SCOPE,
         PERM_PROJECT_SET_IN_EXPERIMENT, PERM_PROJECT_UNSET_IN_EXPERIMENT,
         PERM_PROJECT_MANAGE, PERM_PROJECT_ARCHIVE,
@@ -275,7 +277,6 @@ _USER_BASELINE: Set[str] = {
     PERM_CORE_STYLE_SETTINGS,
     PERM_REPORTS_VIEW,
     PERM_MEDI_VIEW, PERM_MEDI_FILTER_USE,
-    PERM_MEDI_STATUS_ENABLE,
     PERM_NETWORK_VIEW, PERM_NETWORK_CREATE_ENTRY, PERM_NETWORK_EDIT_ENTRY,
     PERM_HERITAGE_VIEW, PERM_HERITAGE_EXPORT,
     PERM_CAGE_VIEW,
@@ -292,9 +293,7 @@ _GUEST_BASELINE: Set[str] = {
     PERM_PROJECT_VIEW,
 }
 
-_ANIMAL_WELFARE_BASELINE: Set[str] = set(_USER_BASELINE) | {
-    PERM_PROJECT_VIEW_ALL,
-}
+_ANIMAL_WELFARE_BASELINE: Set[str] = set(_USER_BASELINE)
 
 ROLE_BASELINES: Dict[str, Set[str]] = {
     ROLE_LORD: {"*"},      # wildcard — all permissions always granted
@@ -362,6 +361,16 @@ def can(
         return permission_name not in _MASTER_EXCLUDED
     effective = resolve_effective_permissions(role, jobs, granted, revoked)
     return "*" in effective or permission_name in effective
+
+
+def can_manage_health_status(
+    role: Optional[str],
+    jobs: Iterable[str],
+) -> bool:
+    """Clinical sick/abnormal mutation is Vet-only, except Lord/Master."""
+    if role in {ROLE_LORD, ROLE_MASTER}:
+        return True
+    return "vet" in {str(job).strip().casefold() for job in jobs}
 
 
 def get_permission_label(permission_name: str, lang: Optional[str] = None) -> str:

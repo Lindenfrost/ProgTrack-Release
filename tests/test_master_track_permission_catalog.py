@@ -51,6 +51,13 @@ class MasterTrackPermissionCatalogTest(unittest.TestCase):
         }
         self.assertEqual(set(), unknown)
 
+    def test_manager_job_has_phase1_visibility_and_role_setup_permissions(self):
+        jobs = json.loads((ROOT / "Plugins/Master_Track/jobs.json").read_text(encoding="utf-8"))
+        manager_permissions = set(jobs.get("manager", []))
+
+        self.assertIn("project.view_all", manager_permissions)
+        self.assertIn("core.manage_animal_roles", manager_permissions)
+
     def test_checked_permission_strings_are_in_catalog(self):
         catalog = set(ALL_PERMISSIONS)
         source_paths = [ROOT / "ProgTrack.v.0.1.1.py", *list((ROOT / "Plugins").rglob("*.py"))]
@@ -82,6 +89,17 @@ class MasterTrackPermissionCatalogTest(unittest.TestCase):
         self.assertIn("getattr(self._app, '_master_can', None)", projects)
         self.assertIn("getattr(parent, '_master_can', None)", surgery)
         self.assertIn('if "master_track" in disabled:', sample)
+
+    def test_edit_user_dialog_is_scrollable_and_direct_overrides_collapsed(self):
+        dialogs = (ROOT / "Plugins" / "Master_Track" / "dialogs.py").read_text(encoding="utf-8")
+
+        self.assertIn("scroll = QScrollArea(self)", dialogs)
+        self.assertIn("outer_layout.addWidget(scroll, 1)", dialogs)
+        self.assertIn("outer_layout.addWidget(buttons)", dialogs)
+        self.assertIn("override_group = _CollapsibleSection(", dialogs)
+        self.assertIn("collapsed=True", dialogs)
+        self.assertIn('f"master_track.job.{job_name}"', dialogs)
+        self.assertIn('job_name.replace("_", " ").title()', dialogs)
 
 
 if __name__ == "__main__":

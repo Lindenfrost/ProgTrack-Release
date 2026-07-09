@@ -42,6 +42,7 @@ from PyQt6.QtWidgets import (
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
+import matplotlib.patheffects as path_effects
 
 from Plugins.core.animal_identity import (
     animal_base_name,
@@ -2477,6 +2478,7 @@ class HeritageTrackWidget(QWidget):
                 fontstyle="italic" if is_heritage_only else "normal",
                 fontweight="normal" if (is_dead or is_ghost) else "bold",
                 zorder=4,
+                path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
             )
 
             if show_f:
@@ -2496,7 +2498,7 @@ class HeritageTrackWidget(QWidget):
                     _f_text = _f_tmpl.replace("{value}", _f_str)
                     self.ax.text(
                         x,
-                        y - 0.55,
+                        y - 0.62,
                         _f_text,
                         ha="center",
                         va="top",
@@ -2909,6 +2911,7 @@ class HeritageTrackWidget(QWidget):
                 fontstyle="italic" if is_heritage_only else "normal",
                 fontweight="normal" if (is_dead or is_ghost) else "bold",
                 zorder=11,
+                path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
             )
             t.draw(self.canvas.renderer)
 

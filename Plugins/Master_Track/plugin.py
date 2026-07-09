@@ -49,11 +49,14 @@ class MasterTrackPlugin:
         # Settings (timeout etc.)
         self._settings = self._load_settings()
         self._timeout_minutes: int = self._settings.get("timeout_minutes", 30)
+        self._effective_timeout_minutes: int = self._timeout_minutes
 
         # Inactivity timeout timer
         self._idle_timer: Optional[Any] = None
         self._warning_timer: Optional[Any] = None
         self._idle_warned = False
+        self._idle_warning_dialog: Optional[Any] = None
+        self._idle_warning_countdown: Optional[Any] = None
 
         # Load job bundle overrides from jobs.json (if a Lord has edited them)
         self._load_job_bundles()
@@ -159,6 +162,21 @@ class MasterTrackPlugin:
         if not user:
             return []
         return list(user.get("jobs", []))
+
+    def get_job_timeout(self, job_name: str) -> int:
+        values = self._settings.get("job_timeouts", {})
+        if not isinstance(values, dict):
+            return max(1, int(self._timeout_minutes))
+        return max(1, int(values.get(job_name, self._timeout_minutes)))
+
+    def set_job_timeout(self, job_name: str, minutes: int) -> None:
+        values = self._settings.setdefault("job_timeouts", {})
+        values[str(job_name)] = max(1, int(minutes))
+        self._save_settings()
+
+    def _resolve_effective_timeout(self, jobs: Any) -> int:
+        configured = [self.get_job_timeout(str(job)) for job in (jobs or [])]
+        return max(configured, default=max(1, int(self._timeout_minutes)))
 
     def get_direct_permission_grants(self):
         """Return directly granted permissions for the current user."""
@@ -315,6 +333,7 @@ class MasterTrackPlugin:
             return
         self._current_username = username
         self._current_role = user["role"]
+        self._effective_timeout_minutes = self._resolve_effective_timeout(user.get("jobs", []))
         logger.info("Logged in as %s (role=%s)", username, self._current_role)
 
         # forced password change
@@ -359,17 +378,17 @@ class MasterTrackPlugin:
 
     def _start_idle_timer(self) -> None:
         """Start (or restart) the inactivity timeout timer."""
-        if self._timeout_minutes <= 0 or not self.is_logged_in:
+        if self._effective_timeout_minutes <= 0 or not self.is_logged_in:
             return
         from PyQt6.QtCore import QTimer
 
         self._stop_idle_timer()
         self._idle_warned = False
 
-        timeout_ms = self._timeout_minutes * 60 * 1000
-        warning_ms = max(0, timeout_ms - 2 * 60 * 1000)  # warn 2 min before
+        timeout_ms = self._effective_timeout_minutes * 60 * 1000
+        warning_ms = max(0, timeout_ms - 15 * 1000)
 
-        # Warning timer (fires 2 min before logout)
+        # Warning timer (fires 15 seconds before logout)
         if warning_ms > 0 and warning_ms < timeout_ms:
             self._warning_timer = QTimer(self.app)
             self._warning_timer.setSingleShot(True)
@@ -390,21 +409,55 @@ class MasterTrackPlugin:
             self._warning_timer.stop()
             self._warning_timer = None
         self._idle_warned = False
+        if self._idle_warning_countdown is not None:
+            self._idle_warning_countdown.stop()
+            self._idle_warning_countdown = None
+        if self._idle_warning_dialog is not None:
+            self._idle_warning_dialog.close()
+            self._idle_warning_dialog = None
 
     def reset_idle_timer(self) -> None:
         """Call on user interaction to reset the inactivity countdown."""
-        if self.is_logged_in and self._timeout_minutes > 0:
+        if self.is_logged_in and self._effective_timeout_minutes > 0:
             self._start_idle_timer()
 
     def _on_idle_warning(self) -> None:
-        """Show a status bar warning 2 minutes before auto-logout."""
+        """Show a visible 15-second keep-alive dialog before auto-logout."""
         self._idle_warned = True
-        sb = self.app.statusBar()
-        if sb:
-            msg = self.app.messages.get(
+        from PyQt6.QtCore import QTimer
+        from PyQt6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout
+
+        dlg = QDialog(self.app)
+        dlg.setModal(True)
+        dlg.setWindowTitle(self.app.messages.get(
+            "master_track.timeout.warning_title", "Session expiring"))
+        layout = QVBoxLayout(dlg)
+        label = QLabel()
+        layout.addWidget(label)
+        keep = QPushButton(self.app.messages.get(
+            "master_track.timeout.keep_logged_in", "Keep me logged in"))
+        layout.addWidget(keep)
+        remaining = {"seconds": 15}
+
+        def update_label() -> None:
+            label.setText(self.app.messages.get(
                 "master_track.timeout.warning",
-                "Session expires in 2 minutes — interact to stay logged in.")
-            sb.showMessage(msg, 120_000)
+                "Session expires in {seconds} seconds.").replace(
+                    "{seconds}", str(remaining["seconds"])))
+            remaining["seconds"] -= 1
+
+        def keep_logged_in() -> None:
+            dlg.accept()
+            self.reset_idle_timer()
+
+        keep.clicked.connect(keep_logged_in)
+        countdown = QTimer(dlg)
+        countdown.timeout.connect(update_label)
+        countdown.start(1000)
+        self._idle_warning_dialog = dlg
+        self._idle_warning_countdown = countdown
+        update_label()
+        dlg.show()
 
     def _on_idle_timeout(self) -> None:
         """Auto-logout after inactivity period."""

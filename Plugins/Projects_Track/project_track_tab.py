@@ -30,6 +30,7 @@ from Plugins.core.animal_roles import (
     canonical_role_value,
 )
 from Plugins.core.project_visibility import diff_project_associated_users
+from Plugins.core.project_species import remove_mismatched_assignments
 from Plugins.core.platform_helpers import open_local_path
 logger = logging.getLogger(__name__)
 _DOCS_SUBDIR   = "documents"
@@ -151,9 +152,10 @@ class _UserInfoDialog(QDialog):
     def was_removed(self): return self._removed
 
 class UserSearchField(QWidget):
-    def __init__(self, messages, app, can_edit=True, parent=None):
+    def __init__(self, messages, app, can_edit=True, parent=None, role_filter: Optional[str] = None):
         super().__init__(parent)
         self._messages=messages; self._app=app; self._can_edit=can_edit
+        self._role_filter = role_filter
         self._login=None; self._user_data={}
         self._combo=QComboBox(); self._combo.setEditable(True)
         self._combo.setEnabled(can_edit)
@@ -188,6 +190,8 @@ class UserSearchField(QWidget):
         mt=getattr(self._app,'master_track',None)
         if mt and hasattr(mt,'user_db'):
             for ud in (mt.user_db.users or []):
+                if self._role_filter and ud.get('role') != self._role_filter:
+                    continue
                 login=ud.get('username','')
                 if login:
                     self._combo.addItem(str(ud.get('display_name') or login), login)
@@ -379,7 +383,16 @@ class ProjectTrackTab(QWidget):
         hdr.setStyleSheet("font-weight:bold;"); left_v.addWidget(hdr)
         self._new_project_btn = QPushButton(_m(self._messages, "project.tab.new_btn", "\u2795  New Project"))
         self._new_project_btn.setEnabled(self._can('project.create'))
-        self._new_project_btn.clicked.connect(self._on_new_project); left_v.addWidget(self._new_project_btn)
+        self._new_project_btn.clicked.connect(self._on_new_project)
+        top_btn_row = QHBoxLayout()
+        top_btn_row.setContentsMargins(0, 0, 0, 0)
+        top_btn_row.setSpacing(4)
+        self._refresh_project_btn = QPushButton('\U0001f504')
+        self._refresh_project_btn.setToolTip(_m(self._messages, "projects.tooltip.refresh", "Refresh project list"))
+        self._refresh_project_btn.clicked.connect(self._on_refresh_clicked)
+        top_btn_row.addWidget(self._new_project_btn, 5)
+        top_btn_row.addWidget(self._refresh_project_btn, 1)
+        left_v.addLayout(top_btn_row)
         self._list=QListWidget(); self._list.currentRowChanged.connect(self._on_list_selection)
         left_v.addWidget(self._list,1)
         left_v.addSpacing(2)
@@ -637,7 +650,12 @@ class ProjectTrackTab(QWidget):
         self._iacuc_di = UserSearchField(self._messages, self._app, can_edit=can_manage)
         self._iacuc_di.set_login(iacuc.get('di_login', '') or '')
         form_i2.addRow(_m(self._messages, "project.iacuc.di", "DI:"), self._iacuc_di)
-        self._iacuc_welfare = UserSearchField(self._messages, self._app, can_edit=can_manage)
+        self._iacuc_welfare = UserSearchField(
+            self._messages,
+            self._app,
+            can_edit=can_manage,
+            role_filter='animal_welfare_officer',
+        )
         self._iacuc_welfare.set_login(iacuc.get('welfare_login', '') or '')
         form_i2.addRow(_m(self._messages, "project.iacuc.welfare_officer", "Welfare Officer:"), self._iacuc_welfare)
         le_unit = QLineEdit(iacuc.get('unit', '') or ''); le_unit.setEnabled(can_manage)
@@ -1164,6 +1182,7 @@ class ProjectTrackTab(QWidget):
     def _save_detail(self, name):
         rec = self._project_record(name); sig = self._current_sig()
         before_rec = json.loads(json.dumps(rec))
+        old_species = str((rec.get("summary") or {}).get("species") or "")
         now_str = datetime.now().strftime('%d.%m.%Y %H:%M')
         if not rec.get('created_by'): rec['created_by'] = sig; rec['created_at'] = now_str
         rec['modified_by'] = sig; rec['modified_at'] = now_str
@@ -1175,6 +1194,21 @@ class ProjectTrackTab(QWidget):
             'species': self._s_species.currentText().strip(),
             'comment': self._s_comment.toPlainText().strip(),
         }
+        new_species = rec["summary"]["species"]
+        removed_animals: List[str] = []
+        if new_species != old_species:
+            animals = getattr(self._app, "animals", {})
+            if isinstance(animals, dict):
+                removed_animals = remove_mismatched_assignments(
+                    animals, name, new_species)
+                for animal_id in removed_animals:
+                    animal = animals.get(animal_id, {})
+                    animal.setdefault("project_history", []).append({
+                        "project": name,
+                        "leave_date": datetime.now().strftime("%d.%m.%Y"),
+                        "reason": "project_species_changed",
+                        "actor": sig,
+                    })
         iacuc_d = {k: v.text().strip() for k, v in self._iacuc_fields.items()}
         iacuc_d['pi_login']      = self._iacuc_pi.get_login() or ''
         iacuc_d['di_login']      = self._iacuc_di.get_login() or ''
@@ -1196,12 +1230,32 @@ class ProjectTrackTab(QWidget):
         }
         rec['arrive'] = {k: v.toPlainText().strip() for k, v in self._arrive_fields.items()}
         self._save_data()
+        if removed_animals:
+            save_app = getattr(self._app, "_save_persistence", None)
+            if callable(save_app):
+                save_app()
+            QMessageBox.warning(
+                self,
+                _m(self._messages, "title.warning", "Warning"),
+                _m(
+                    self._messages,
+                    "project.species_changed_removed",
+                    "{count} mismatched animal assignment(s) were removed after "
+                    "the project species changed.",
+                ).replace("{count}", str(len(removed_animals))),
+            )
         changed_users = diff_project_associated_users(before_rec, rec)
         mt_dirty = getattr(self._app, 'master_track', None)
         if changed_users and mt_dirty and hasattr(mt_dirty, 'mark_project_visibility_dirty'):
             mt_dirty.mark_project_visibility_dirty(sorted(changed_users))
         self._audit_project_action('edit_project', name)
         self._refresh_animals_section(name)
+        self._refresh_project_list()
+        QMessageBox.information(
+            self,
+            "",
+            _m(self._messages, "project.info.saved", "Project changes saved!"),
+        )
 
     def select_project(self, name):
         for i in range(self._list.count()):
@@ -1210,6 +1264,8 @@ class ProjectTrackTab(QWidget):
 
     def update_language(self, messages):
         self._messages=messages
+        if hasattr(self, '_refresh_project_btn'):
+            self._refresh_project_btn.setToolTip(_m(self._messages, "projects.tooltip.refresh", "Refresh project list"))
         self._refresh_project_list()
         if self._current_project: self._build_detail(self._current_project)
 
@@ -1217,6 +1273,7 @@ class ProjectTrackTab(QWidget):
         """Refresh UI permissions when user logs in or out."""
         # Update button states based on current permissions
         self._new_project_btn.setEnabled(self._can('project.create'))
+        self._refresh_project_list()
         if self._current_project:
             is_arch = self._history.is_archived(self._current_project)
             can_arch = self._can('project.archive_project')
@@ -1226,3 +1283,9 @@ class ProjectTrackTab(QWidget):
             self._delete_btn.setEnabled(can_manage and is_arch)
             # Rebuild detail view to refresh field enable/disable states
             self._build_detail(self._current_project)
+
+    def _on_refresh_clicked(self):
+        pt_plugin = getattr(self._app, 'projects_track_plugin', None)
+        if pt_plugin and hasattr(pt_plugin, '_on_refresh_clicked'):
+            pt_plugin._on_refresh_clicked()
+        self._refresh_project_list()

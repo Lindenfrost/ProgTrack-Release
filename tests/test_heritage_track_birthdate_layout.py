@@ -148,6 +148,15 @@ class HeritageTrackBirthdateLayoutTest(unittest.TestCase):
             self.assertFalse(updated["birthdate_height_layout"])
             self.assertTrue(updated["exclude_archived"])
 
+    def test_rendered_animal_labels_have_white_outline_and_f_label_offset(self):
+        source = (REPO_ROOT / "Plugins" / "Heritage_Track" / "heritage_track_widget.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("import matplotlib.patheffects as path_effects", source)
+        self.assertIn('path_effects=[path_effects.withStroke(linewidth=1, foreground="white")]', source)
+        self.assertIn("y - 0.62", source)
+
     def test_birthdate_layout_language_keys_exist(self):
         for path in (REPO_ROOT / "lang").glob("messages_*.json"):
             with self.subTest(path=path.name):

@@ -119,6 +119,9 @@ class CageStore:
         structures.setdefault("buildings", {})
         structures.setdefault("rooms", {})
         cages = structures.setdefault("cages", {})
+        for container_name in ("buildings", "rooms", "cages"):
+            for entry in structures[container_name].values():
+                entry.setdefault("virtual", False)
 
         # Ensure virtual unassigned cage always exists
         if UNASSIGNED_CAGE_ID not in cages:
@@ -177,17 +180,22 @@ class CageStore:
     # Structure CRUD
     # ------------------------------------------------------------------
 
-    def create_building(self, name: str) -> Dict[str, Any]:
+    def create_building(self, name: str, virtual: bool = False) -> Dict[str, Any]:
         data = self.load_data()
         buildings = data["structures"]["buildings"]
         max_order = max((b.get("order", 0) for b in buildings.values()), default=-1)
         bid = self.generate_unique_id("bld")
-        entry = {"id": bid, "display_name": name.strip(), "order": max_order + 1}
+        entry = {
+            "id": bid, "display_name": name.strip(),
+            "order": max_order + 1, "virtual": bool(virtual),
+        }
         buildings[bid] = entry
         self.save_data()
         return entry
 
-    def create_room(self, parent_building_id: str, name: str) -> Dict[str, Any]:
+    def create_room(
+        self, parent_building_id: str, name: str, virtual: bool = False
+    ) -> Dict[str, Any]:
         data = self.load_data()
         rooms = data["structures"]["rooms"]
         siblings = [r for r in rooms.values() if r.get("parent_building_id") == parent_building_id]
@@ -198,12 +206,15 @@ class CageStore:
             "parent_building_id": parent_building_id,
             "display_name": name.strip(),
             "order": max_order + 1,
+            "virtual": bool(virtual),
         }
         rooms[rid] = entry
         self.save_data()
         return entry
 
-    def create_cage(self, parent_room_id: str, name: str) -> Dict[str, Any]:
+    def create_cage(
+        self, parent_room_id: str, name: str, virtual: bool = False
+    ) -> Dict[str, Any]:
         data = self.load_data()
         cages = data["structures"]["cages"]
         siblings = [c for c in cages.values() if c.get("parent_room_id") == parent_room_id]
@@ -214,6 +225,7 @@ class CageStore:
             "parent_room_id": parent_room_id,
             "display_name": name.strip(),
             "order": max_order + 1,
+            "virtual": bool(virtual),
         }
         cages[cid] = entry
         self.save_data()
@@ -282,6 +294,53 @@ class CageStore:
         container[struct_id]["display_name"] = new_name.strip()
         self.save_data()
         return True
+
+    def set_structure_virtual(
+        self, struct_id: str, struct_type: str, virtual: bool
+    ) -> bool:
+        data = self.load_data()
+        type_map = {"building": "buildings", "room": "rooms", "cage": "cages"}
+        container = data["structures"].get(type_map.get(struct_type, ""), {})
+        if struct_id not in container:
+            return False
+        container[struct_id]["virtual"] = bool(virtual)
+        self.save_data()
+        return True
+
+    def is_effectively_virtual(self, struct_id: str) -> bool:
+        data = self.load_data()
+        structures = data["structures"]
+        if struct_id in structures["buildings"]:
+            return bool(structures["buildings"][struct_id].get("virtual"))
+        if struct_id in structures["rooms"]:
+            room = structures["rooms"][struct_id]
+            building = structures["buildings"].get(
+                room.get("parent_building_id"), {})
+            return bool(room.get("virtual") or building.get("virtual"))
+        if struct_id in structures["cages"]:
+            cage = structures["cages"][struct_id]
+            room = structures["rooms"].get(cage.get("parent_room_id"), {})
+            building = structures["buildings"].get(
+                room.get("parent_building_id"), {})
+            return bool(
+                cage.get("virtual") or room.get("virtual") or building.get("virtual")
+            )
+        return False
+
+    def eligible_inspection_cages(self) -> List[str]:
+        data = self.load_data()
+        occupied = {
+            str(item.get("cage_id") or "")
+            for item in data.get("occupants", {}).values()
+            if item.get("cage_id") and not item.get("archived")
+        }
+        return sorted(
+            cage_id
+            for cage_id in occupied
+            if cage_id != UNASSIGNED_CAGE_ID
+            and cage_id in data["structures"]["cages"]
+            and not self.is_effectively_virtual(cage_id)
+        )
 
     def move_structure(self, struct_id: str, new_parent_id: str, new_order: int) -> bool:
         data = self.load_data()

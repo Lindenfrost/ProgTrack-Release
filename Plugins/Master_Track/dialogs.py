@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
     QRadioButton,
     QScrollArea,
     QSizePolicy,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -704,7 +705,13 @@ class _EditUserDialog(QDialog):
         self.setModal(True)
         self.resize(560, 640)
 
-        layout = QVBoxLayout(self)
+        outer_layout = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        content = QWidget(scroll)
+        layout = QVBoxLayout(content)
+        scroll.setWidget(content)
+        outer_layout.addWidget(scroll, 1)
 
         info_label = QLabel(f"<b>{username}</b>  ({user.get('display_name', '')})")
         layout.addWidget(info_label)
@@ -773,7 +780,12 @@ class _EditUserDialog(QDialog):
         self._job_checks: Dict[str, QCheckBox] = {}
         current_jobs = set(user.get("jobs", []))
         for job_name in sorted(JOB_BUNDLES.keys()):
-            cb = QCheckBox(job_name)
+            job_label = _msg(
+                messages,
+                f"master_track.job.{job_name}",
+                job_name.replace("_", " ").title(),
+            )
+            cb = QCheckBox(job_label)
             cb.setChecked(job_name in current_jobs)
             cb.setEnabled(not is_lord_or_master)
             cb.stateChanged.connect(self._on_job_changed)
@@ -782,9 +794,11 @@ class _EditUserDialog(QDialog):
         layout.addWidget(jobs_group)
 
         # --- Direct permission overrides ---
-        override_group = QGroupBox(
-            _msg(messages, "master_track.label.direct_permissions", "Direct Permission Overrides"))
-        override_inner = QVBoxLayout(override_group)
+        override_group = _CollapsibleSection(
+            _msg(messages, "master_track.label.direct_permissions", "Direct Permission Overrides"),
+            collapsed=True,
+        )
+        override_inner = override_group.content_layout()
 
         if is_lord_or_master:
             override_inner.addWidget(QLabel(
@@ -823,7 +837,7 @@ class _EditUserDialog(QDialog):
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        outer_layout.addWidget(buttons)
 
     def _on_role_changed(self, *_) -> None:
         new_role = self._get_selected_role()
@@ -967,6 +981,15 @@ class EditJobsDialog(QDialog):
         top.addWidget(add_btn)
         layout.addLayout(top)
 
+        timeout_row = QHBoxLayout()
+        timeout_row.addWidget(QLabel(_msg(
+            messages, "master_track.manage.job_timeout", "Idle timeout (minutes):")))
+        self.timeout_spin = QSpinBox()
+        self.timeout_spin.setRange(1, 1440)
+        timeout_row.addWidget(self.timeout_spin)
+        timeout_row.addStretch()
+        layout.addLayout(timeout_row)
+
         self._perm_checks: Dict[str, QCheckBox] = {}
         self._scroll_container = QWidget()
         self._scroll_vbox = QVBoxLayout(self._scroll_container)
@@ -1000,6 +1023,7 @@ class EditJobsDialog(QDialog):
                 w.setParent(None)  # type: ignore[arg-type]
         self._perm_checks = {}
         job_perms = JOB_BUNDLES.get(job_name, set())
+        self.timeout_spin.setValue(self.plugin.get_job_timeout(job_name))
         current_ns = None
         _JOB_EXCLUDED = set()
         for perm in ALL_PERMISSIONS:
@@ -1032,6 +1056,7 @@ class EditJobsDialog(QDialog):
             return
         new_perms = {p for p, cb in self._perm_checks.items() if cb.isChecked()}
         JOB_BUNDLES[job_name] = new_perms
+        self.plugin.set_job_timeout(job_name, self.timeout_spin.value())
         self.plugin.save_job_bundles()
         affected = self.plugin.user_db.reset_permissions_for_job(job_name)
         msg = _msg(self.messages, "master_track.manage.job_saved", "Job saved.")

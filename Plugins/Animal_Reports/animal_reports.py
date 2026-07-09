@@ -2401,6 +2401,8 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
         # Create header function that will be called on each page
         def header(canvas, doc):
             canvas.saveState()
+            page_width, page_height = doc.pagesize
+            header_top = page_height - 0.6*cm
             # Title subject can be passed explicitly (e.g. "Name (ID + Species)").
             # Fallback to Name and optionally append ID.
             title_subject = header_info.get('Title Subject')
@@ -2413,10 +2415,10 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
             title = Paragraph(f"<b>{report_title}: {title_subject}</b>", title_style)
             subtitle = Paragraph(date_range_str, subtitle_style)
             w, h = title.wrap(doc.width, doc.topMargin)
-            title.drawOn(canvas, doc.leftMargin, doc.height + doc.topMargin - h - 0.3*cm)
+            title.drawOn(canvas, doc.leftMargin, header_top - h)
             
             w2, h2 = subtitle.wrap(doc.width, doc.topMargin)
-            subtitle.drawOn(canvas, doc.leftMargin, doc.height + doc.topMargin - h - h2 - 0.4*cm)
+            subtitle.drawOn(canvas, doc.leftMargin, header_top - h - h2 - 0.1*cm)
             
             # Animal information table
             # Wrap all values in Paragraph objects and escape curly braces to prevent format string issues
@@ -2463,14 +2465,14 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
             w3, h3 = header_table.wrap(doc.width, doc.topMargin)
             # Center the table horizontally
             table_x = doc.leftMargin + (doc.width - w3) / 2
-            header_table.drawOn(canvas, table_x, doc.height + doc.topMargin - h - h2 - h3 - 0.4*cm)
+            header_table.drawOn(canvas, table_x, header_top - h - h2 - h3 - 0.15*cm)
             
             canvas.restoreState()
         
         # Create PDF document with custom page template - minimal margins for wider table
         doc = BaseDocTemplate(output_path, pagesize=landscape(A4),
                              leftMargin=0.5*cm, rightMargin=0.5*cm,
-                             topMargin=5.4*cm, bottomMargin=1*cm)
+                             topMargin=6.8*cm, bottomMargin=1*cm)
         
         # Define frame for content (below header)
         frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='normal')

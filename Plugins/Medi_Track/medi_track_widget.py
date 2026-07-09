@@ -54,6 +54,7 @@ from PyQt6.QtWidgets import (
 )
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_status import status_summary_with_death_priority
+from Plugins.core.lifecycle_events import ever_in_experiment
 from Plugins.core.platform_helpers import open_local_path
 
 logger = logging.getLogger(__name__)
@@ -738,6 +739,8 @@ class MediTrackWidget(QWidget):
     FILTER_EVER_SICK = "ever_sick"
     FILTER_ABNORMAL = "abnormal"
     FILTER_EVER_ABNORMAL = "ever_abnormal"
+    FILTER_IN_EXPERIMENT = "in_experiment"
+    FILTER_EVER_EXPERIMENT = "ever_experiment"
 
     def __init__(
         self,
@@ -775,10 +778,14 @@ class MediTrackWidget(QWidget):
             (self.FILTER_EVER_SICK,     "medi_track.filter.ever_sick",     "Ever Sick"),
             (self.FILTER_ABNORMAL,      "medi_track.filter.current_abnormal", "Currently Abnormal"),
             (self.FILTER_EVER_ABNORMAL, "medi_track.filter.ever_abnormal", "Ever Abnormal"),
+            (self.FILTER_IN_EXPERIMENT, "medi_track.filter.current_experiment", "💡"),
+            (self.FILTER_EVER_EXPERIMENT, "medi_track.filter.ever_experiment", "💬"),
         ]
         for fkey, msg_key, fallback in _filters:
             btn = QPushButton(_msg(self.messages, msg_key, fallback))
             btn.setCheckable(True)
+            if fkey in (self.FILTER_IN_EXPERIMENT, self.FILTER_EVER_EXPERIMENT):
+                btn.setToolTip(_msg(self.messages, msg_key, fallback))
             btn.setChecked(fkey == self.FILTER_ALL)
             btn.clicked.connect(lambda checked, k=fkey: self._on_filter_clicked(k))
             self._filter_btns[fkey] = btn
@@ -959,11 +966,20 @@ class MediTrackWidget(QWidget):
             self.FILTER_EVER_SICK:     ("medi_track.filter.ever_sick",        "Ever Sick"),
             self.FILTER_ABNORMAL:      ("medi_track.filter.current_abnormal", "Currently Abnormal"),
             self.FILTER_EVER_ABNORMAL: ("medi_track.filter.ever_abnormal",    "Ever Abnormal"),
+            self.FILTER_IN_EXPERIMENT: ("medi_track.filter.current_experiment", "💡"),
+            self.FILTER_EVER_EXPERIMENT: ("medi_track.filter.ever_experiment", "💬"),
         }
         for fkey, btn in self._filter_btns.items():
             if fkey in _filter_map:
                 k, fb = _filter_map[fkey]
-                btn.setText(_msg(messages, k, fb))
+                if fkey == self.FILTER_IN_EXPERIMENT:
+                    btn.setText("💡")
+                    btn.setToolTip(_msg(messages, k, "Currently in experiment"))
+                elif fkey == self.FILTER_EVER_EXPERIMENT:
+                    btn.setText("💬")
+                    btn.setToolTip(_msg(messages, k, "Ever in experiment"))
+                else:
+                    btn.setText(_msg(messages, k, fb))
         # Group box titles
         self._header_group.setTitle(_msg(messages, "medi_track.section.animal_info", "Animal Information"))
         self._hist_group.setTitle(_msg(messages, "medi_track.section.history", "Medical History"))
@@ -1063,8 +1079,13 @@ class MediTrackWidget(QWidget):
                 self.messages, 'medi_track.value.guest', '(guest)')
         return _msg(self.messages, 'medi_track.value.guest', '(guest)')
 
-    def _export_animal_to_pdf(self, animal_name: str, output_path: str,
-                               lang: Optional[str] = None) -> None:
+    def _export_animal_to_pdf(
+        self,
+        animal_name: str,
+        output_path: str,
+        lang: Optional[str] = None,
+        include_signature: bool = True,
+    ) -> None:
         """Build and write a Medi Track PDF for *animal_name* to *output_path*.
 
         *lang* selects the report language (e.g. 'en', 'de').  When omitted
@@ -1145,13 +1166,17 @@ class MediTrackWidget(QWidget):
                 ConditionLoader.compact_hierarchy_label(ckey, _lang)
                 if ckey else str(entry.get('condition_label_snapshot', '')))
             type_display = _esc(self._entry_type_label(etype, stype))
+            signature_cell = (
+                f'<td>{_esc(entry.get("signature", ""))}</td>'
+                if include_signature else ""
+            )
             rows += (
                 f'<tr>'
                 f'<td>{_esc(entry.get("date", ""))}</td>'
                 f'<td>{type_display}</td>'
                 f'<td>{condition}</td>'
                 f'<td>{_esc(entry.get("note", ""))}</td>'
-                f'<td>{_esc(entry.get("signature", ""))}</td>'
+                f'{signature_cell}'
                 f'</tr>'
             )
 
@@ -1200,6 +1225,10 @@ class MediTrackWidget(QWidget):
         _v_birth    = _esc(rec.get('birth_date') or _dash)
         _v_death    = _esc(rec.get('sterbedatum') or rec.get('death_date') or _dash)
 
+        signature_header = (
+            f"<th>{_msg(self.messages, 'medi_track.table.signature', 'Signature')}</th>"
+            if include_signature else ""
+        )
         html = f"""<html><head><style>
             body {{ font-family: Arial, sans-serif; font-size: 10pt; margin: 20px; }}
             h2 {{ color: #2c3e6b; font-size: 14pt; margin-bottom: 8px;
@@ -1230,7 +1259,7 @@ class MediTrackWidget(QWidget):
             <th>{_msg(self.messages, 'medi_track.table.type', 'Type')}</th>
             <th>{_msg(self.messages, 'medi_track.table.condition', 'Condition')}</th>
             <th>{_msg(self.messages, 'medi_track.table.details', 'Details')}</th>
-            <th>{_msg(self.messages, 'medi_track.table.signature', 'Signature')}</th>
+            {signature_header}
         </tr>
         {rows}
         </table></body></html>"""
@@ -1255,8 +1284,83 @@ class MediTrackWidget(QWidget):
         self._export_animal_to_pdf(animal_name, output_path, lang=lang)
         return self._copy_documents_for_export(animal_name, output_path)
 
+    def _export_animal_to_xlsx(
+        self,
+        animal_name: str,
+        output_path: str,
+        *,
+        include_signature: bool = True,
+    ) -> int:
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Medical history"
+        headers = ["Date", "Type", "Condition", "Details"]
+        if include_signature:
+            headers.append("Signature")
+        headers.append("Document")
+        sheet.append(headers)
+
+        document_dir = Path(output_path).with_suffix("")
+        document_dir = document_dir.parent / f"{document_dir.name}_documents"
+        document_dir.mkdir(parents=True, exist_ok=True)
+        copied = {}
+        for source in _document_paths_for_animal(animal_name, self.store):
+            src = Path(source)
+            if not src.is_file():
+                continue
+            destination = document_dir / src.name
+            counter = 1
+            while destination.exists():
+                destination = document_dir / f"{src.stem}_{counter}{src.suffix}"
+                counter += 1
+            shutil.copy2(src, destination)
+            copied[str(src)] = destination
+
+        entries = sorted(
+            self.store.get_entries(animal_name),
+            key=lambda entry: str(entry.get("date", "")),
+        )
+        for entry in entries:
+            row = [
+                entry.get("date", ""),
+                self._entry_type_label(
+                    str(entry.get("entry_type", "")),
+                    str(entry.get("status_type", "")),
+                ),
+                entry.get("condition_label_snapshot", ""),
+                entry.get("note", ""),
+            ]
+            if include_signature:
+                row.append(entry.get("signature", ""))
+            linked = ""
+            for source in entry.get("document_paths", []) or []:
+                destination = copied.get(str(source))
+                if destination:
+                    linked = os.path.relpath(destination, Path(output_path).parent)
+                    break
+            row.append(linked)
+            sheet.append(row)
+            if linked:
+                cell = sheet.cell(sheet.max_row, len(row))
+                cell.hyperlink = linked
+                cell.style = "Hyperlink"
+        for destination in copied.values():
+            linked = os.path.relpath(destination, Path(output_path).parent)
+            row = ["", "Document", "", destination.name]
+            if include_signature:
+                row.append("")
+            row.append(linked)
+            sheet.append(row)
+            cell = sheet.cell(sheet.max_row, len(row))
+            cell.hyperlink = linked
+            cell.style = "Hyperlink"
+        workbook.save(output_path)
+        return len(copied)
+
     def _on_export_clicked(self) -> None:
-        """Export medical history of current animal as PDF (interactive save dialog)."""
+        """Open the unified PDF/XLSX multi-animal export dialog."""
         if not self._current_animal:
             return
         if not self._can_docs():
@@ -1265,20 +1369,83 @@ class MediTrackWidget(QWidget):
                 _msg(self.messages, 'medi_track.dialog.permission_denied.docs',
                      'You do not have permission to export medical history.'))
             return
-        default_path = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DesktopLocation)
-        default_file = os.path.join(default_path, f"{_safe_name(self._current_animal)}_medical_history.pdf")
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            _msg(self.messages, 'medi_track.dialog.export.title', 'Export Medical History'),
-            default_file,
-            'PDF files (*.pdf)',
-        )
-        if not path:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(_msg(
+            self.messages, "medi_track.dialog.export.title", "Export Medical History"))
+        layout = QVBoxLayout(dialog)
+        format_combo = QComboBox()
+        format_combo.addItems(["PDF", "XLSX"])
+        layout.addWidget(format_combo)
+        include_signature = QCheckBox(_msg(
+            self.messages, "medi_track.export.include_signatures", "Include signatures"))
+        include_signature.setChecked(True)
+        layout.addWidget(include_signature)
+        search = QLineEdit()
+        search.setPlaceholderText(_msg(
+            self.messages, "medi_track.export.search", "Search animals by name prefix"))
+        layout.addWidget(search)
+        animal_list = QListWidget()
+        animal_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        app_animals = getattr(self.app, "animals", {}) or {}
+        visible_fn = getattr(self.app, "_animal_visible_to_current_user", None)
+        for animal_id, record in sorted(app_animals.items()):
+            if callable(visible_fn) and not visible_fn(record):
+                continue
+            display = _display_animal_name(animal_id, record)
+            public_id = str(record.get("id") or "")
+            item = QListWidgetItem(
+                f"{display} ({public_id})" if public_id else display)
+            item.setData(Qt.ItemDataRole.UserRole, animal_id)
+            animal_list.addItem(item)
+            if animal_id == self._current_animal:
+                item.setSelected(True)
+        search.textChanged.connect(
+            lambda text: [
+                animal_list.item(i).setHidden(
+                    not animal_list.item(i).text().casefold().startswith(
+                        text.strip().casefold()))
+                for i in range(animal_list.count())
+            ])
+        layout.addWidget(animal_list)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        if not path.lower().endswith('.pdf'):
-            path += '.pdf'
+        selected = [
+            item.data(Qt.ItemDataRole.UserRole)
+            for item in animal_list.selectedItems()
+        ]
+        if not selected:
+            return
+        output_dir = QFileDialog.getExistingDirectory(
+            self,
+            _msg(self.messages, "medi_track.dialog.export.title", "Export Medical History"),
+            QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DesktopLocation),
+        )
+        if not output_dir:
+            return
         try:
-            self._export_animal_history_package(self._current_animal, path, lang=self._lang)
+            for animal_id in selected:
+                suffix = format_combo.currentText().lower()
+                path = os.path.join(
+                    output_dir, f"{_safe_name(animal_id)}_medical_history.{suffix}")
+                if suffix == "xlsx":
+                    self._export_animal_to_xlsx(
+                        animal_id,
+                        path,
+                        include_signature=include_signature.isChecked(),
+                    )
+                else:
+                    self._export_animal_to_pdf(
+                        animal_id,
+                        path,
+                        lang=self._lang,
+                        include_signature=include_signature.isChecked(),
+                    )
+                    self._copy_documents_for_export(animal_id, path)
         except RuntimeError as exc:
             QMessageBox.warning(self, _msg(self.messages, 'error.title', 'Error'), str(exc))
             return
@@ -1289,7 +1456,7 @@ class MediTrackWidget(QWidget):
             self,
             _msg(self.messages, 'title.info', 'Info'),
             _msg(self.messages, 'medi_track.export.success',
-                 'Medical history exported to PDF.'))
+                 'Medical history exported.'))
 
     # ── add-document helpers ──
 
@@ -2113,4 +2280,8 @@ class MediTrackPlugin:
         if filter_key == MediTrackWidget.FILTER_EVER_ABNORMAL:
             return bool(rec.get("abnormal_ever", False)) or self.store.has_any_of_type(
                 animal_name, "abnormal")
+        if filter_key == MediTrackWidget.FILTER_IN_EXPERIMENT:
+            return bool(rec.get("in_experiment", False))
+        if filter_key == MediTrackWidget.FILTER_EVER_EXPERIMENT:
+            return ever_in_experiment(rec)
         return True

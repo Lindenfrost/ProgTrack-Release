@@ -1436,7 +1436,7 @@ class GanttWidget(QDialog):
         # Set y-ticks and labels
         if names:  # Only set ticks if we have names to display
             self.ax.set_yticks([y_positions[n] for n in names])
-            self.ax.set_yticklabels(names)
+            self.ax.set_yticklabels([animal_base_name(n) for n in names])
         
         # Force a full redraw of the canvas
         try:

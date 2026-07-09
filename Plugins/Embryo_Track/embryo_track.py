@@ -9,12 +9,8 @@ import os
 import sys
 import json
 import logging
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
-from scipy import interpolate
-from scipy.optimize import curve_fit
 
 # PyQt6 imports
 from PyQt6 import QtWidgets
@@ -39,6 +35,30 @@ ICON_DIR = os.path.join(ROOT_DIR, 'icons')
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('EmbryoTracker')
+
+pd = None
+np = None
+curve_fit = None
+
+
+def _ensure_numeric_deps():
+    """Load numeric/modeling dependencies only when Embryo Track is used."""
+    global np, curve_fit
+    if np is None:
+        import numpy as _np
+        np = _np
+    if curve_fit is None:
+        from scipy.optimize import curve_fit as _curve_fit
+        curve_fit = _curve_fit
+
+
+def _ensure_pandas():
+    """Load pandas only for reference-data imports."""
+    global pd
+    if pd is None:
+        import pandas as _pd
+        pd = _pd
+    return pd
 
 # Icon helper functions (same as main ProgTrack)
 def _set_shared_icon(box: QMessageBox, mtype: str):
@@ -219,6 +239,7 @@ class EmbryoTrackerWidget(QDialog):
                 
     def _build_prediction_models(self):
         """Build interpolation models from reference data."""
+        _ensure_numeric_deps()
         self.prediction_models = {}
         
         for embryo_count in [1, 2, 3]:
@@ -340,6 +361,7 @@ class EmbryoTrackerWidget(QDialog):
     def _predict_gestation(self):
         """Predict gestation day from input measurements."""
         try:
+            _ensure_numeric_deps()
             embryo_count = int(self.embryo_count.currentText())
             col_text = self.col_input.text().strip()
             ttl_text = self.ttl_input.text().strip()
@@ -544,6 +566,7 @@ class EmbryoTrackerWidget(QDialog):
             
     def _load_excel_data(self):
         """Load reference data from Excel or CSV file."""
+        _ensure_pandas()
         file_path, _ = QFileDialog.getOpenFileName(
             self, self.messages.get("embryo_track.dialog.load_reference_title", "Load Reference Data"), "",
             self.messages.get("embryo_track.dialog.load_reference_filter", "Excel and CSV files (*.xlsx *.xls *.csv)")
@@ -687,6 +710,7 @@ class EmbryoTrackerWidget(QDialog):
     def _show_model_diagnostics(self):
         """Display diagnostic information about prediction models."""
         try:
+            _ensure_numeric_deps()
             # Create diagnostic dialog
             diag_dialog = QDialog(self)
             diag_dialog.setWindowTitle(self.messages.get("embryo_track.diagnostics.title", "Model Diagnostics"))

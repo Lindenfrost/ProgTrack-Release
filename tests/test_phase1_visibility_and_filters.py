@@ -66,10 +66,12 @@ class Phase1VisibilityAndFiltersTest(unittest.TestCase):
         self.assertTrue(unrestricted)
         self.assertEqual(projects, {"Alpha", "Beta"})
         self.assertTrue(can(ANIMAL_WELFARE_ROLE, [], [], [], "project.view"))
-        self.assertTrue(can(ANIMAL_WELFARE_ROLE, [], [], [], "project.view_all"))
+        self.assertFalse(can(ANIMAL_WELFARE_ROLE, [], [], [], "project.view_all"))
         self.assertTrue(can(ANIMAL_WELFARE_ROLE, [], [], [], "reports.view"))
         self.assertFalse(can(ANIMAL_WELFARE_ROLE, [], [], [], "master.create_users"))
         self.assertFalse(can(ANIMAL_WELFARE_ROLE, [], [], [], "master.view_audit"))
+        self.assertTrue(can("user", ["manager"], [], [], "project.view_all"))
+        self.assertTrue(can("user", ["manager"], [], [], "core.manage_animal_roles"))
 
     def test_animal_scope_hides_unassociated_or_projectless_animals(self):
         self.assertTrue(animal_visible_by_project_scope({"project": "Alpha"}, False, {"Alpha"}))
@@ -80,7 +82,7 @@ class Phase1VisibilityAndFiltersTest(unittest.TestCase):
     def test_main_all_animals_tab_bypasses_project_scope_in_sidebar(self):
         source = (REPO_ROOT / "ProgTrack.v.0.1.1.py").read_text(encoding="utf-8")
 
-        self.assertIn("show_all_animals_tab = cat == self.messages[\"sidebar.filter.all\"]", source)
+        self.assertIn("show_all_animals_tab = idx == all_idx", source)
         self.assertIn("def _visible_in_animal_sidebar", source)
         self.assertIn("if show_all_animals_tab:", source)
         self.assertIn("return animal_visible_by_project_scope(data, unrestricted_projects, visible_projects)", source)
@@ -94,11 +96,43 @@ class Phase1VisibilityAndFiltersTest(unittest.TestCase):
         self.assertIn("animal_name = getattr(self, 'report_current_animal', None)", source)
         self.assertIn("# Use the report's tracked animal as source of truth.", source)
 
-    def test_name_filter_matches_key_base_and_display_names_case_insensitively(self):
+    def test_reports_guard_logout_and_file_exports_by_report_view_permission(self):
+        source = (REPO_ROOT / "ProgTrack.v.0.1.1.py").read_text(encoding="utf-8")
+
+        self.assertIn("def _prepare_reports_for_user_context_change", source)
+        self.assertIn("self._prepare_reports_for_user_context_change()", source)
+        self.assertIn("self.report_year_combo.blockSignals(True)", source)
+        self.assertIn("self.report_month_combo.blockSignals(True)", source)
+        self.assertIn("can_reports_export = self._master_can('reports.view')", source)
+        self.assertNotIn("print_action.setEnabled(can_reports_export)", source)
+        self.assertIn("pdf_export_action.setEnabled(can_reports_export)", source)
+        self.assertEqual(
+            source.count('pdf_export_action = QAction(self.messages.get("menu.file.export_pdf"'),
+            2,
+        )
+        self.assertIn("if not self._master_can('reports.view'):", source)
+        self.assertIn("if date > death_date:", source)
+        self.assertIn("return \"\"", source)
+
+        animal_reports = (REPO_ROOT / "Plugins" / "Animal_Reports" / "animal_reports.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("header_top = page_height - 0.6*cm", animal_reports)
+        self.assertIn("topMargin=6.8*cm", animal_reports)
+
+    def test_startup_menu_and_heritage_archived_marker_contracts(self):
+        source = (REPO_ROOT / "ProgTrack.v.0.1.1.py").read_text(encoding="utf-8")
+
+        self.assertIn("menubar.setVisible(False)", source)
+        self.assertIn("self.menuBar().setVisible(True)", source)
+        self.assertIn("and name not in self.archived", source)
+
+    def test_name_filter_matches_visible_names_by_prefix_only(self):
         animal = {"name": "Mila-01", "_base_name": "Mila", "display_name": "Mila ♀"}
 
         self.assertTrue(animal_matches_name_filter("Mila|Macaca", animal, "mil"))
-        self.assertTrue(animal_matches_name_filter("Mila|Macaca", animal, "MACACA"))
+        self.assertFalse(animal_matches_name_filter("Mila|Macaca", animal, "ila"))
+        self.assertFalse(animal_matches_name_filter("Mila|Macaca", animal, "MACACA"))
         self.assertFalse(animal_matches_name_filter("Mila|Macaca", animal, "rhesus"))
         self.assertTrue(animal_matches_name_filter("Mila|Macaca", animal, ""))
 
@@ -107,6 +141,26 @@ class Phase1VisibilityAndFiltersTest(unittest.TestCase):
         after = {"assoc_users": {"staff_logins": ["bob", "charlie"]}}
 
         self.assertEqual(diff_project_associated_users(before, after), {"alice", "charlie"})
+
+    def test_project_track_refresh_save_feedback_and_welfare_role_filter(self):
+        source = (REPO_ROOT / "Plugins" / "Projects_Track" / "project_track_tab.py").read_text(
+            encoding="utf-8"
+        )
+        plugin_source = (REPO_ROOT / "Plugins" / "Projects_Track" / "ProjectsTrack_plugin.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("self._refresh_project_btn = QPushButton", source)
+        self.assertIn("top_btn_row.addWidget(self._new_project_btn, 5)", source)
+        self.assertIn("top_btn_row.addWidget(self._refresh_project_btn, 1)", source)
+        self.assertIn("def _on_refresh_clicked(self):", source)
+        self.assertIn("role_filter='animal_welfare_officer'", source)
+        self.assertIn("if self._role_filter and ud.get('role') != self._role_filter:", source)
+        self.assertIn('"project.info.saved"', source)
+        self.assertIn("def _cache_file_for_current_user", plugin_source)
+        self.assertIn("'project_assignment_cache'", plugin_source)
+        self.assertIn("'project.view_all'", plugin_source)
+        self.assertIn("self.cache_file = self._cache_file_for_current_user()", plugin_source)
 
 
 if __name__ == "__main__":

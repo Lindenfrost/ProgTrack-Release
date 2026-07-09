@@ -316,10 +316,9 @@ class ProjectsTrackPlugin:
             app: The main ProgTrackApp instance
         """
         self.app = app
-        self.cache_file = os.path.join(
-            os.path.dirname(__file__), 
-            'projects_cache.json'
-        )
+        self.plugin_dir = os.path.dirname(__file__)
+        self.global_cache_file = os.path.join(self.plugin_dir, 'projects_cache.json')
+        self.cache_file = self._cache_file_for_current_user()
         
         # UI references (set by create_sidebar_tabs)
         self.tabs_container = None          # The scroll area containing tabs
@@ -353,6 +352,26 @@ class ProjectsTrackPlugin:
         # Load cached projects, species, and last session state
         self._load_projects()
         self._discover_species()
+
+    def _uses_global_project_cache(self) -> bool:
+        mt = getattr(self.app, 'master_track', None)
+        if mt is None or "master_track" in getattr(self.app, '_disabled_plugins', set()):
+            return True
+        if not getattr(mt, 'is_logged_in', False):
+            return True
+        if getattr(mt, 'current_role', '') in {'lord', 'master'}:
+            return True
+        return bool(getattr(mt, 'can', lambda _perm: False)('project.view_all'))
+
+    def _cache_file_for_current_user(self) -> str:
+        if self._uses_global_project_cache():
+            return self.global_cache_file
+        mt = getattr(self.app, 'master_track', None)
+        username = str(getattr(mt, 'current_username', '') or 'guest').strip() or 'guest'
+        safe_username = ''.join(ch if ch.isalnum() or ch in ('-', '_') else '_' for ch in username)
+        cache_dir = os.path.join(self.plugin_dir, 'project_assignment_cache', safe_username)
+        os.makedirs(cache_dir, exist_ok=True)
+        return os.path.join(cache_dir, 'projects_cache.json')
     
     def _load_projects(self):
         """Load projects from cache or discover from animals, and restore session state."""
@@ -625,6 +644,9 @@ class ProjectsTrackPlugin:
 
     def on_user_login(self) -> None:
         """Reload per-user sidebar toggle state after login/logout."""
+        self.cache_file = self._cache_file_for_current_user()
+        self._load_projects()
+        self._discover_species()
         self._sidebar_visible = self._load_sidebar_visibility()
         if self._proj_content_w:
             self._proj_content_w.setVisible(self._sidebar_visible)
@@ -635,6 +657,8 @@ class ProjectsTrackPlugin:
             self._sidebar_toggle_btn.setChecked(self._sidebar_visible)
             self._sidebar_toggle_btn.blockSignals(False)
         self._update_container_width()
+        self._rebuild_tabs()
+        self._rebuild_species_tabs()
 
     def update_language(self, messages):
         """Update UI texts when language changes.

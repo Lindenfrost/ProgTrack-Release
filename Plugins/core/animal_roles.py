@@ -302,6 +302,7 @@ DEFAULT_ROLE_DEFINITIONS: List[Dict[str, Any]] = [
         "built_in": True,
         "base_editor": "offspring",
         "field_preset": "offspring",
+        "show_new_animal_button": True,
     },
     {
         "role_id": ROLE_VALUE_PARTNER,
@@ -477,6 +478,10 @@ def normalize_role_definition(raw: Dict[str, Any], *, default_order: int = 1000)
         "event_recipe": normalized_event_recipe,
         "eligibility": raw.get("eligibility") if isinstance(raw.get("eligibility"), dict) else {},
         "status_display": raw.get("status_display") if isinstance(raw.get("status_display"), dict) else {},
+        "show_new_animal_button": _coerce_bool(
+            raw.get("show_new_animal_button"),
+            value == ROLE_VALUE_OFFSPRING,
+        ),
         "imported": _coerce_bool(raw.get("imported"), False),
         "review_state": str(raw.get("review_state") or "").strip(),
         "original_label": str(raw.get("original_label") or "").strip(),
