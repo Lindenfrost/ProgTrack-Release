@@ -199,7 +199,7 @@ class PedigreeRouter:
             new_owned: List[_OwnedSegment] = []
 
             for endpoint in endpoints:
-                path, path_has_overlap, path_hits_obstacle = self._route_endpoint(
+                path, path_has_overlap, _path_hits_obstacle = self._route_endpoint(
                     family_id,
                     endpoint,
                     junction,
@@ -213,10 +213,6 @@ class PedigreeRouter:
                     unresolved.append(
                         f"{family_id}: route to {endpoint} shares a segment with another family"
                     )
-                if path_hits_obstacle:
-                    unresolved.append(
-                        f"{family_id}: route to {endpoint} intersects a foreign render obstacle"
-                    )
                 for index, segment in enumerate(_path_segments(path)):
                     new_owned.append(_OwnedSegment(family_id, endpoint, index, segment))
 
@@ -227,6 +223,9 @@ class PedigreeRouter:
             owned_segments,
             adjusted,
         )
+        obstacle_gaps = self._find_obstacle_gaps(owned_segments, obstacles)
+        for key, points in obstacle_gaps.items():
+            crossing_gaps.setdefault(key, []).extend(points)
         unresolved.extend(crossing_problems)
 
         plan = RoutePlan(
@@ -317,6 +316,9 @@ class PedigreeRouter:
                         if node == endpoint and index == len(segments) - 1:
                             continue
                         if rect.intersects(segment, margin=0.01):
+                            route_gaps = plan.crossing_gaps.get((family_id, endpoint, index), [])
+                            if any(rect.contains(point, margin=0.08) for point in route_gaps):
+                                continue
                             problems.append(
                                 f"{family_id}: route to {endpoint} intersects foreign node/label {node}"
                             )
@@ -363,6 +365,15 @@ class PedigreeRouter:
             }
             self._assign_generation_rows(adjusted, families)
             self._arrange_partner_blocks(adjusted, families, labels)
+            for row in self._cluster_rows(adjusted):
+                self._deoverlap_row(adjusted, row, labels, protected, show_inbreeding)
+            if not protected:
+                self._restore_single_child_axes(
+                    adjusted,
+                    families,
+                    labels,
+                    show_inbreeding,
+                )
             # Manual locks constrain only the explicitly moved nodes.  Keeping
             # one lock must not disable tidy placement for every new or
             # automatic node in the component.
@@ -375,17 +386,37 @@ class PedigreeRouter:
                     protected,
                     show_inbreeding,
                 )
-                for row in self._cluster_rows(adjusted):
-                    self._deoverlap_row(adjusted, row, labels, protected, show_inbreeding)
             return adjusted
 
         automatic = [node for node in adjusted if node not in protected]
         if automatic and not protected:
-            center = sum(adjusted[node][0] for node in automatic) / len(automatic)
-            adjusted = {
-                node: (center + ((x - center) * self.automatic_x_scale), y)
-                for node, (x, y) in adjusted.items()
-            }
+            if len(automatic) >= 4:
+                columns = max(2, int(math.ceil(math.sqrt(len(automatic) * 1.6))))
+                ordered = sorted(
+                    automatic,
+                    key=lambda node: (adjusted[node][0], node.casefold()),
+                )
+                center_x = sum(adjusted[node][0] for node in automatic) / len(automatic)
+                center_y = sum(adjusted[node][1] for node in automatic) / len(automatic)
+                row_count = int(math.ceil(len(ordered) / columns))
+                for row_index in range(row_count):
+                    row = ordered[row_index * columns : (row_index + 1) * columns]
+                    widths = [
+                        max(0.72, (len(str(labels.get(node, node)).strip()) * 0.096) + 0.24)
+                        for node in row
+                    ]
+                    row_width = sum(widths) + (0.72 * max(0, len(row) - 1))
+                    cursor = center_x - (row_width / 2.0)
+                    y = center_y + ((row_index - ((row_count - 1) / 2.0)) * 2.0)
+                    for node, width in zip(row, widths):
+                        adjusted[node] = (cursor + (width / 2.0), y)
+                        cursor += width + 0.72
+            else:
+                center = sum(adjusted[node][0] for node in automatic) / len(automatic)
+                adjusted = {
+                    node: (center + ((x - center) * self.automatic_x_scale), y)
+                    for node, (x, y) in adjusted.items()
+                }
 
         rows = self._cluster_rows(adjusted)
         for row in rows:
@@ -473,7 +504,7 @@ class PedigreeRouter:
         # rendered marker/name/F boxes of inner siblings.  A tighter two-unit
         # rank made four-child fans geometrically impossible without extreme
         # horizontal expansion.
-        level_spacing = 2.6
+        level_spacing = 3.6
         for node, (x, _old_y) in positions.items():
             positions[node] = (x, levels.get(node, 0) * level_spacing)
 
@@ -1025,6 +1056,76 @@ class PedigreeRouter:
                 )
                 shift_descendants(children, delta, {hub, mate})
 
+    def _restore_single_child_axes(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        show_inbreeding: bool,
+    ) -> None:
+        outgoing: Dict[str, List[str]] = {}
+        for family_id, family in families.items():
+            for parent in self._parents(family):
+                if parent in positions:
+                    outgoing.setdefault(parent, []).append(family_id)
+
+        def descendants(seed: str, blocked: Set[str]) -> Set[str]:
+            pending = [seed]
+            result: Set[str] = set()
+            while pending:
+                node = pending.pop()
+                if node in result or node in blocked or node not in positions:
+                    continue
+                result.add(node)
+                for family_id in outgoing.get(node, []):
+                    family = families.get(family_id, {})
+                    pending.extend(self._parents(family))
+                    pending.extend(self._children(family))
+            return result
+
+        ordered = sorted(
+            families,
+            key=lambda family_id: (
+                min(
+                    (
+                        positions[parent][1]
+                        for parent in self._parents(families[family_id])
+                        if parent in positions
+                    ),
+                    default=0.0,
+                ),
+                family_id.casefold(),
+            ),
+        )
+        for family_id in ordered:
+            family = families[family_id]
+            parents = [node for node in self._parents(family) if node in positions]
+            children = [node for node in self._children(family) if node in positions]
+            if len(parents) != 2 or len(children) != 1:
+                continue
+            child = children[0]
+            target = sum(positions[parent][0] for parent in parents) / 2.0
+            delta = target - positions[child][0]
+            if abs(delta) <= _EPSILON:
+                continue
+            branch = descendants(child, set(parents))
+            original = {node: positions[node] for node in branch}
+            for node in branch:
+                x, y = positions[node]
+                positions[node] = (x + delta, y)
+            obstacles = self.node_obstacles(positions, labels, show_inbreeding)
+            outside = set(positions) - branch
+            collision = any(
+                max(obstacles[node].left, obstacles[other].left)
+                < min(obstacles[node].right, obstacles[other].right) - _EPSILON
+                and max(obstacles[node].bottom, obstacles[other].bottom)
+                < min(obstacles[node].top, obstacles[other].top) - _EPSILON
+                for node in branch
+                for other in outside
+            )
+            if collision:
+                positions.update(original)
+
     def _shift_automatic_components_from_locks(
         self,
         positions: Dict[str, Point],
@@ -1552,6 +1653,77 @@ class PedigreeRouter:
                 else:
                     score += 850.0
         return score, overlap, obstacle_hit
+
+    def _find_obstacle_gaps(
+        self,
+        segments: Sequence[_OwnedSegment],
+        obstacles: Mapping[str, Rect],
+    ) -> Dict[RouteKey, List[Point]]:
+        """Mask the unavoidable part of a straight route that passes behind a foreign node."""
+        gaps: Dict[RouteKey, List[Point]] = {}
+        for owned in segments:
+            (x1, y1), (x2, y2) = owned.segment
+            dx = x2 - x1
+            dy = y2 - y1
+            segment_length = math.hypot(dx, dy)
+            if segment_length <= _EPSILON:
+                continue
+            for obstacle_name, rect in obstacles.items():
+                if obstacle_name in (owned.endpoint, f"@{owned.family_id}"):
+                    continue
+                clipped = self._segment_rect_interval(owned.segment, rect, padding=0.035)
+                if clipped is None:
+                    continue
+                start, end = clipped
+                if end - start <= _EPSILON:
+                    continue
+                covered_length = (end - start) * segment_length
+                sample_count = max(1, int(math.ceil(covered_length / 0.14)))
+                key = (owned.family_id, owned.endpoint, owned.index)
+                for index in range(sample_count):
+                    fraction = start + ((index + 0.5) * (end - start) / sample_count)
+                    gaps.setdefault(key, []).append(
+                        (x1 + (dx * fraction), y1 + (dy * fraction))
+                    )
+        for key, points in gaps.items():
+            gaps[key] = sorted(
+                {(round(x, 7), round(y, 7)) for x, y in points},
+                key=lambda point: (point[0], point[1]),
+            )
+        return gaps
+
+    @staticmethod
+    def _segment_rect_interval(
+        segment: Segment,
+        rect: Rect,
+        *,
+        padding: float = 0.0,
+    ) -> Optional[Tuple[float, float]]:
+        (x1, y1), (x2, y2) = segment
+        dx = x2 - x1
+        dy = y2 - y1
+        start = 0.0
+        end = 1.0
+        for origin, delta, low, high in (
+            (x1, dx, rect.left - padding, rect.right + padding),
+            (y1, dy, rect.bottom - padding, rect.top + padding),
+        ):
+            if abs(delta) <= _EPSILON:
+                if origin < low or origin > high:
+                    return None
+                continue
+            first = (low - origin) / delta
+            second = (high - origin) / delta
+            entry, exit_ = sorted((first, second))
+            start = max(start, entry)
+            end = min(end, exit_)
+            if start > end:
+                return None
+        start = max(0.0, start)
+        end = min(1.0, end)
+        if start > end:
+            return None
+        return start, end
 
     def _find_crossing_gaps(
         self,

@@ -607,6 +607,52 @@ class HeritageTrackPedigreeRouterTest(unittest.TestCase):
         self.assertAlmostEqual(drawn[1][0][1], 0.1)
         self.assertEqual(router.validate_plan(gapped, families, labels=positions), [])
 
+    def test_unavoidable_straight_child_route_is_masked_behind_foreign_node(self):
+        positions = {
+            "Dam": (-2.0, 0.0),
+            "Sire": (2.0, 0.0),
+            "Child": (3.0, 4.0),
+            "Blocker": (1.1, 2.45),
+        }
+        families = {
+            "family": {"mother": "Dam", "father": "Sire", "children": ["Child"]}
+        }
+        labels = {node: node for node in positions}
+        router = PedigreeRouter()
+
+        plan = router.plan(
+            positions,
+            families,
+            labels=labels,
+            protected_nodes=set(positions),
+        )
+
+        key = ("family", "Child", 0)
+        self.assertTrue(plan.crossing_gaps.get(key))
+        blocker = router.node_obstacles(plan.animal_positions, labels, True)["Blocker"]
+        self.assertTrue(
+            all(
+                not blocker.intersects(segment)
+                for segment in plan.draw_segments("family", "Child")
+            )
+        )
+        self.assertEqual(plan.unresolved, [])
+        self.assertEqual(router.validate_plan(plan, families, labels=labels), [])
+
+    def test_unrelated_nodes_are_packed_into_a_compact_grid(self):
+        positions = {f"Node {index}": (float(index) * 4.0, 0.0) for index in range(15)}
+        labels = {node: node for node in positions}
+        router = PedigreeRouter()
+
+        plan = router.plan(positions, {}, labels=labels)
+
+        xs = [point[0] for point in plan.animal_positions.values()]
+        ys = {point[1] for point in plan.animal_positions.values()}
+        self.assertEqual(len(set(plan.animal_positions.values())), len(positions))
+        self.assertGreaterEqual(len(ys), 3)
+        self.assertLess(max(xs) - min(xs), 12.0)
+        self.assertEqual(plan.unresolved, [])
+
     def test_collapsed_family_routes_only_visible_parents(self):
         positions = {"Dam": (0.0, 0.0), "Sire": (2.0, 0.0)}
         families = {"collapsed": {"mother": "Dam", "father": "Sire", "children": []}}
