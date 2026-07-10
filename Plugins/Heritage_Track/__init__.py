@@ -26,6 +26,7 @@ from .ghost_strategies import (
 )
 from .heritage_track_widget import HeritageTrackPlugin
 from .layout_pipeline import LayoutPipeline
+from .pedigree_router import PedigreeRouter, RoutePlan
 from .scope_provider import (
     ExplicitScopeProvider,
     NullScopeProvider,
@@ -60,6 +61,8 @@ __all__ = [
     "ScopeFilter",
     # Layout
     "LayoutPipeline",
+    "PedigreeRouter",
+    "RoutePlan",
     # Performance & Layout Improvements
     "PedigreeEngineCache",
     "ForceDirectedLayout",

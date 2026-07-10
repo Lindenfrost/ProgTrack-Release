@@ -1223,6 +1223,7 @@
   "heritage_track.status.mode_selected": "Selection mode (selected animals + connected relatives)",
   "heritage_track.status.mode_all": "All animals mode",
   "heritage_track.status.selected": "Selected in graph: {count}",
+  "heritage_track.status.routing_warning": "Warning: {count} pedigree route conflicts remain",
   "heritage_track.parents.group": "Parents",
   "heritage_track.field.egg_donor": "Egg Donor:",
   "heritage_track.field.sperm_donor": "Sperm Donor:",

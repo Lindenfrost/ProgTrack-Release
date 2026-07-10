@@ -65,10 +65,10 @@ from .heritage_store import HeritageStore
 from .inbreeding import InbreedingCalculator
 from .layout_pipeline import (
     LayoutPipeline,
-    nudge_nodes_off_child_line_segments,
     parse_complete_birth_date_ordinal,
 )
 from .pedigree_engine import PedigreeEngine
+from .pedigree_router import PedigreeRouter, RoutePlan
 from .scope_provider import ProjectsTrackScopeProvider
 from .ui_parent_fields import build_parent_group, extract_parent_values
 
@@ -355,7 +355,10 @@ class HeritageTrackWidget(QWidget):
         self.node_positions: Dict[str, Tuple[float, float]] = {}
         self.family_positions: Dict[str, Tuple[float, float]] = {}
         self.family_members: Dict[str, Set[str]] = {}
+        self.family_routes: Dict[str, Dict[str, List[Tuple[float, float]]]] = {}
         self.node_meta: Dict[str, Dict[str, Any]] = {}
+        self._pedigree_router = PedigreeRouter()
+        self._route_plan: Optional[RoutePlan] = None
         self.coeff_dialog: Optional[CoefficientDialog] = None
         self._coeff_dialog_pos = None  # type: Optional[Any]  # QPoint
         self._ghost_nodes: Set[str] = set()
@@ -1962,55 +1965,40 @@ class HeritageTrackWidget(QWidget):
 
         full_path = path_up_a + path_down_b[1:]  # join at LCA (avoid duplicate)
 
-        # Build drawable segments.  Elbows mirror the actual edge drawing code:
-        #   parent → family : vertical@parent_x  then horiz@family_y
-        #   family → child  : vertical@family_x  then horiz@child_y
+        # Build drawable segments from the same semantic routes used by the
+        # normal renderer. Highlights must never invent a direct shortcut.
         all_positions: Dict[str, Tuple[float, float]] = {**animal_positions, **family_positions}
         segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
         for i in range(len(full_path) - 1):
             n1, n2 = full_path[i], full_path[i + 1]
-            p1 = all_positions.get(n1)
-            p2 = all_positions.get(n2)
-            if p1 is None or p2 is None:
+            route_segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
+            if self._route_plan is not None:
+                if n1 in animal_positions and n2 in family_positions:
+                    drawn = self._route_plan.draw_segments(n2, n1)
+                    route_segments = [(second, first) for first, second in reversed(drawn)]
+                elif n1 in family_positions and n2 in animal_positions:
+                    route_segments = self._route_plan.draw_segments(n1, n2)
+            if route_segments:
+                segments.extend(route_segments)
                 continue
 
-            if n1 in animal_positions and n2 in family_positions:
-                fdata = families.get(n2, {})
-                fp = {str(fdata.get("mother", "")).strip(), str(fdata.get("father", "")).strip()} - {""}
-                px, py = p1
-                fx, fy = p2
-                if n1 in fp:
-                    # n1 is a parent of this family → going down
-                    segments.append(((px, py), (px, fy)))
-                    segments.append(((px, fy), (fx, fy)))
-                else:
-                    # n1 is a child → going up
-                    segments.append(((px, py), (fx, py)))
-                    segments.append(((fx, py), (fx, fy)))
-
-            elif n1 in family_positions and n2 in animal_positions:
-                fdata = families.get(n1, {})
-                fp = {str(fdata.get("mother", "")).strip(), str(fdata.get("father", "")).strip()} - {""}
-                fx, fy = p1
-                cx, cy = p2
-                if n2 in fp:
-                    # n2 is a parent → going up
-                    segments.append(((fx, fy), (cx, fy)))
-                    segments.append(((cx, fy), (cx, cy)))
-                else:
-                    # n2 is a child → going down
-                    segments.append(((fx, fy), (fx, cy)))
-                    segments.append(((fx, cy), (cx, cy)))
-            else:
+            p1 = all_positions.get(n1)
+            p2 = all_positions.get(n2)
+            if p1 is not None and p2 is not None:
                 segments.append((p1, p2))
         return segments
 
-    def _compute_view_bounds(self, positions: Dict[str, Tuple[float, float]]) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-        if not positions:
+    def _compute_view_bounds(
+        self,
+        positions: Dict[str, Tuple[float, float]],
+        extra_points: Optional[List[Tuple[float, float]]] = None,
+    ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+        points = list(positions.values()) + list(extra_points or [])
+        if not points:
             return (-2.0, 2.0), (-2.0, 2.0)
 
-        xs = [p[0] for p in positions.values()]
-        ys = [p[1] for p in positions.values()]
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
         margin_x = 2.0
         margin_y = 1.5
         return (min(xs) - margin_x, max(xs) + margin_x), (min(ys) - margin_y, max(ys) + margin_y)
@@ -2262,28 +2250,22 @@ class HeritageTrackWidget(QWidget):
                     # New node: use computed position
                     animal_positions[node] = pos
 
-        family_positions, family_members = self._compute_family_positions(families, animal_positions)
-        collapsed_positions, collapsed_members = self._compute_collapsed_family_positions(
-            collapsed_family_nodes,
-            animal_positions,
-        )
-        family_positions.update(collapsed_positions)
-        family_members.update(collapsed_members)
-        nudged_positions = nudge_nodes_off_child_line_segments(
+        display_labels = {
+            node: self._get_node_display_label(node, self._get_node_record(node))
+            for node in animal_positions
+        }
+        route_plan = self._pedigree_router.plan(
             animal_positions,
             families,
-            family_positions,
+            labels=display_labels,
             protected_nodes=protected_nodes,
+            show_inbreeding=self.settings.get("show_inbreeding_f", True),
         )
-        if nudged_positions != animal_positions:
-            animal_positions = nudged_positions
-            family_positions, family_members = self._compute_family_positions(families, animal_positions)
-            collapsed_positions, collapsed_members = self._compute_collapsed_family_positions(
-                collapsed_family_nodes,
-                animal_positions,
-            )
-            family_positions.update(collapsed_positions)
-            family_members.update(collapsed_members)
+        animal_positions = route_plan.animal_positions
+        family_positions = route_plan.family_positions
+        family_members = route_plan.family_members
+        self._route_plan = route_plan
+        self.family_routes = route_plan.routes
 
         positions: Dict[str, Tuple[float, float]] = dict(animal_positions)
         positions.update(family_positions)
@@ -2292,7 +2274,7 @@ class HeritageTrackWidget(QWidget):
 
         prev_xlim = self.current_xlim
         prev_ylim = self.current_ylim
-        fit_xlim, fit_ylim = self._compute_view_bounds(positions)
+        fit_xlim, fit_ylim = self._compute_view_bounds(positions, route_plan.all_points())
 
         if keep_view and prev_xlim is not None and prev_ylim is not None:
             view_xlim = prev_xlim
@@ -2321,24 +2303,22 @@ class HeritageTrackWidget(QWidget):
             if family_pos is None:
                 continue
 
-            fx, fy = family_pos
             mother = str(family.get("mother", "")).strip()
             father = str(family.get("father", "")).strip()
 
             for parent in (mother, father):
                 if parent not in animal_positions:
                     continue
-                px, py = animal_positions[parent]
                 _lc = "#cccccc" if parent in ghost_nodes else "#666666"
-                self.ax.plot([px, px], [py, fy], color=_lc, linewidth=0.9, zorder=1.1)
-                self.ax.plot([px, fx], [fy, fy], color=_lc, linewidth=0.9, zorder=1.1)
+                for (x1, y1), (x2, y2) in route_plan.draw_segments(family_id, parent):
+                    self.ax.plot([x1, x2], [y1, y2], color=_lc, linewidth=0.9, zorder=1.1)
 
             for child in family.get("children", []):
                 if child not in animal_positions:
                     continue
-                cx, cy = animal_positions[child]
-                self.ax.plot([fx, fx], [fy, cy], color="black", linewidth=1.0, zorder=1.0)
-                self.ax.plot([fx, cx], [cy, cy], color="black", linewidth=1.0, zorder=1.0)
+                _lc = "#cccccc" if child in ghost_nodes else "black"
+                for (x1, y1), (x2, y2) in route_plan.draw_segments(family_id, child):
+                    self.ax.plot([x1, x2], [y1, y2], color=_lc, linewidth=1.0, zorder=1.0)
 
         # --- Relationship path highlight (exactly 2 selected) ---
         # Only draw the orange path when the two animals share common descent
@@ -2575,7 +2555,17 @@ class HeritageTrackWidget(QWidget):
         selected_text = self.messages.get("heritage_track.status.selected", "Selected in graph: {count}").format(
             count=len(self.selected_nodes)
         )
-        self.status_label.setText(f"{mode_text} | {selected_text}")
+        status_text = f"{mode_text} | {selected_text}"
+        if route_plan.unresolved:
+            routing_warning = self.messages.get(
+                "heritage_track.status.routing_warning",
+                "Warning: {count} pedigree route conflicts remain",
+            ).format(count=len(route_plan.unresolved))
+            status_text = f"{status_text} | {routing_warning}"
+            self.status_label.setToolTip("\n".join(route_plan.unresolved))
+        else:
+            self.status_label.setToolTip("")
+        self.status_label.setText(status_text)
 
         # DEFERRED PERSISTENCE: Save collapsed families and temp positions once at the end
         if stale_collapsed:
@@ -2598,6 +2588,8 @@ class HeritageTrackWidget(QWidget):
 
         self.node_positions = {}
         self.family_positions = {}
+        self.family_routes = {}
+        self._route_plan = None
         self.node_meta.clear()
         self._ghost_nodes = set()
         self.selected_nodes.clear()

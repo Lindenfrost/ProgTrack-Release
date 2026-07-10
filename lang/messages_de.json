@@ -1227,6 +1227,7 @@
   "heritage_track.status.mode_selected": "Auswahlmodus (gewählte Tiere + verbundene Verwandte)",
   "heritage_track.status.mode_all": "Alle-Tiere-Modus",
   "heritage_track.status.selected": "Im Graph ausgewählt: {count}",
+  "heritage_track.status.routing_warning": "Warnung: {count} Konflikte in den Stammbaumlinien verbleiben",
   "heritage_track.parents.group": "Eltern",
   "heritage_track.field.egg_donor": "Eizellspenderin:",
   "heritage_track.field.sperm_donor": "Samenspender:",
