@@ -40,6 +40,7 @@ from PyQt6.QtWidgets import (
 )
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 import matplotlib.patheffects as path_effects
@@ -380,7 +381,7 @@ class HeritageTrackWidget(QWidget):
         self.is_dragging = False
         self.drag_threshold = 0.05
         self._drag_background: Optional[Any] = None
-        self._drag_artist_map: Dict[str, Any] = {}
+        self._drag_artist_map: Dict[str, Tuple[Any, Any, Optional[Any]]] = {}
         self.all_animals_mode = True
         self._force_relayout = False
 
@@ -1385,7 +1386,15 @@ class HeritageTrackWidget(QWidget):
 
         return components
 
-    def _resolve_shape(self, node: str, role: str, sex: str, engine: PedigreeEngine, is_heritage_only: bool = False) -> str:
+    def _resolve_shape(
+        self,
+        node: str,
+        role: str,
+        sex: str,
+        engine: PedigreeEngine,
+        is_heritage_only: bool = False,
+        pending_sex_updates: Optional[Dict[str, str]] = None,
+    ) -> str:
         s = (sex or "").strip().lower()
         r = (role or "").strip()
 
@@ -1413,7 +1422,10 @@ class HeritageTrackWidget(QWidget):
         # Save resolved sex to heritage store for all animals if not already set
         current_manual_sex = self.plugin.get_manual_sex(node)
         if not current_manual_sex:
-            self.plugin.set_manual_sex(node, resolved_sex)
+            if pending_sex_updates is None:
+                self.plugin.set_manual_sex(node, resolved_sex)
+            else:
+                pending_sex_updates[node] = resolved_sex
 
         # Return shape based on resolved sex
         if resolved_sex == "male":
@@ -2100,6 +2112,14 @@ class HeritageTrackWidget(QWidget):
         if selected_heritage_only:
             selected_animals = selected_animals + selected_heritage_only
         self.all_animals_mode = len(selected_animals) == 0
+
+        # No-selection mode only shows the splash screen.  Avoid building the
+        # complete pedigree, level map, families, layout, and routes merely to
+        # discard them a few lines later.
+        if self.all_animals_mode:
+            self._show_splash_screen()
+            return
+
         all_graph_nodes = engine.get_display_nodes([])
         all_graph_levels = engine.compute_levels(all_graph_nodes)
         all_graph_families = self._build_family_units(all_graph_nodes, all_graph_levels, engine)
@@ -2113,12 +2133,6 @@ class HeritageTrackWidget(QWidget):
         pre_collapse_levels = context.levels
         ghost_nodes = context.ghost_nodes
         self._ghost_nodes = ghost_nodes
-
-        # Show splash screen if no animals are actively selected
-        # Do not plot all animals by filter - require explicit selection
-        if self.all_animals_mode:
-            self._show_splash_screen()
-            return
 
         # Force relayout if display nodes have changed (new selection)
         # This ensures proper placement algorithms run on first selection
@@ -2298,6 +2312,10 @@ class HeritageTrackWidget(QWidget):
         self.node_positions = positions
         self.node_meta.clear()
 
+        route_batches: Dict[
+            Tuple[str, float, float],
+            List[List[Tuple[float, float]]],
+        ] = defaultdict(list)
         for family_id, family in families.items():
             family_pos = family_positions.get(family_id)
             if family_pos is None:
@@ -2311,14 +2329,24 @@ class HeritageTrackWidget(QWidget):
                     continue
                 _lc = "#cccccc" if parent in ghost_nodes else "#666666"
                 for (x1, y1), (x2, y2) in route_plan.draw_segments(family_id, parent):
-                    self.ax.plot([x1, x2], [y1, y2], color=_lc, linewidth=0.9, zorder=1.1)
+                    route_batches[(_lc, 0.9, 1.1)].append([(x1, y1), (x2, y2)])
 
             for child in family.get("children", []):
                 if child not in animal_positions:
                     continue
                 _lc = "#cccccc" if child in ghost_nodes else "black"
                 for (x1, y1), (x2, y2) in route_plan.draw_segments(family_id, child):
-                    self.ax.plot([x1, x2], [y1, y2], color=_lc, linewidth=1.0, zorder=1.0)
+                    route_batches[(_lc, 1.0, 1.0)].append([(x1, y1), (x2, y2)])
+
+        for (color, linewidth, zorder), segments in route_batches.items():
+            self.ax.add_collection(
+                LineCollection(
+                    segments,
+                    colors=[color],
+                    linewidths=[linewidth],
+                    zorder=zorder,
+                )
+            )
 
         # --- Relationship path highlight (exactly 2 selected) ---
         # Only draw the orange path when the two animals share common descent
@@ -2363,10 +2391,13 @@ class HeritageTrackWidget(QWidget):
         # Sync heritage_only flags: any node not in app.animals gets marked
         _app_animals = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
         _store_animals = self.plugin.store.load().get("animals", {})
+        heritage_only_updates: List[str] = []
         for _node in display_nodes:
             if _node not in _app_animals and _node in _store_animals:
                 if not _store_animals.get(_node, {}).get("heritage_only", False):
-                    self.plugin.store.set_heritage_only(_node, True)
+                    heritage_only_updates.append(_node)
+        if heritage_only_updates:
+            self.plugin.store.set_heritage_only_batch(heritage_only_updates, True)
 
         # Compute and cache inbreeding coefficients (F) for displayed nodes
         show_f = self.settings.get("show_inbreeding_f", True)
@@ -2393,6 +2424,7 @@ class HeritageTrackWidget(QWidget):
             if _f_to_save:
                 self.plugin.store.set_inbreeding_f_batch(_f_to_save)
 
+        pending_sex_updates: Dict[str, str] = {}
         for node in sorted(display_nodes, key=str.lower):
             x, y = animal_positions.get(node, (0.0, 0.0))
             is_ghost = node in ghost_nodes
@@ -2421,7 +2453,14 @@ class HeritageTrackWidget(QWidget):
             fill_color_raw = visual.get("node_fill_color", "")
             fill_color = self._valid_fill(fill_color_raw)
             # _resolve_shape now handles saving resolved sex for heritage-only animals
-            shape = self._resolve_shape(node, role, sex, engine, is_heritage_only=is_heritage_only)
+            shape = self._resolve_shape(
+                node,
+                role,
+                sex,
+                engine,
+                is_heritage_only=is_heritage_only,
+                pending_sex_updates=pending_sex_updates,
+            )
             is_dead = bool(
                 record.get("death_date") or record.get("sterbedatum") or record.get("archived")
             )
@@ -2437,7 +2476,7 @@ class HeritageTrackWidget(QWidget):
                 text_color = "black"
                 lw = 3.0 if node in self.selected_nodes else 1.5
 
-            self.ax.scatter(
+            marker_artist = self.ax.scatter(
                 [x],
                 [y],
                 s=280,
@@ -2447,7 +2486,7 @@ class HeritageTrackWidget(QWidget):
                 linewidths=lw,
                 zorder=3,
             )
-            self.ax.text(
+            label_artist = self.ax.text(
                 x,
                 y - 0.38,
                 display_label,
@@ -2461,6 +2500,7 @@ class HeritageTrackWidget(QWidget):
                 path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
             )
 
+            f_artist = None
             if show_f:
                 _f = f_values.get(node)
                 if _f is not None:
@@ -2476,7 +2516,7 @@ class HeritageTrackWidget(QWidget):
                             "heritage_track.node.inbreeding_f_exact", "F: {value}"
                         )
                     _f_text = _f_tmpl.replace("{value}", _f_str)
-                    self.ax.text(
+                    f_artist = self.ax.text(
                         x,
                         y - 0.62,
                         _f_text,
@@ -2509,7 +2549,13 @@ class HeritageTrackWidget(QWidget):
                 "display_label": display_label,
                 "ipid": node,
                 "birth_date": str(record.get("birth_date", "") or record.get("geburtsdatum", "")).strip(),
+                "marker_artist": marker_artist,
+                "label_artist": label_artist,
+                "f_artist": f_artist,
             }
+
+        if pending_sex_updates:
+            self.plugin.store.set_manual_sex_batch(pending_sex_updates)
 
         self.ax.axis("off")
 
@@ -2717,9 +2763,8 @@ class HeritageTrackWidget(QWidget):
             self.drag_offset = (node_x - event.xdata, node_y - event.ydata)
             self.click_start_pos = (event.xdata, event.ydata)
             self.is_dragging = False
-            # Cache background for fast drag rendering
-            self.canvas.draw()
-            self._drag_background = self.canvas.copy_from_bbox(self.ax.bbox)
+            self._drag_background = None
+            self._drag_artist_map.clear()
 
     def _on_mouse_move(self, event) -> None:
         # Pan with middle button held.
@@ -2756,6 +2801,7 @@ class HeritageTrackWidget(QWidget):
                 distance = (dx * dx + dy * dy) ** 0.5
                 if distance > self.drag_threshold:
                     self.is_dragging = True
+                    self._begin_drag_blit()
                     # Cancel pending selection when drag starts (this is a drag, not a click)
                     if self._pending_selection_timer:
                         self._pending_selection_timer.stop()
@@ -2821,94 +2867,72 @@ class HeritageTrackWidget(QWidget):
         self._hover_annotation.set_visible(True)
         self.canvas.draw_idle()
 
-    def _redraw_dragged_nodes(self) -> None:
-        """Fast redraw of dragged nodes using blitting."""
-        if self._drag_background is None:
-            self.refresh_graph(keep_view=True)
-            return
-
-        # Restore background
-        self.canvas.restore_region(self._drag_background)
-
-        # Get nodes to redraw (dragged node + family group members)
+    def _dragged_animal_nodes(self) -> Set[str]:
         nodes_to_draw: Set[str] = set()
         if self.drag_node and not self._is_family_node(self.drag_node):
             nodes_to_draw.add(self.drag_node)
         if self.drag_group_nodes:
             nodes_to_draw.update(self.drag_group_nodes)
+        return nodes_to_draw
 
-        # Redraw each dragged node directly
-        for node in nodes_to_draw:
-            if node not in self.temp_positions:
+    def _begin_drag_blit(self) -> None:
+        """Prepare reusable animated artists and a background without dragged nodes."""
+        self._drag_artist_map.clear()
+        for node in self._dragged_animal_nodes():
+            meta = self.node_meta.get(node, {})
+            marker = meta.get("marker_artist")
+            label = meta.get("label_artist")
+            f_artist = meta.get("f_artist")
+            if marker is None or label is None:
                 continue
-            x, y = self.temp_positions[node]
+            artists = (marker, label, f_artist)
+            for artist in artists:
+                if artist is not None:
+                    artist.set_animated(True)
+            self._drag_artist_map[node] = artists
 
-            is_ghost = node in getattr(self, '_ghost_nodes', set())
-            record = self._get_node_record(node)
-            display_label = self._get_node_display_label(node, record)
-            role = canonical_role_value(record.get("rolle", ""))
-            sex = self.plugin.get_effective_sex(node, record)
+        if not self._drag_artist_map:
+            self._drag_background = None
+            return
 
-            visual = self.plugin.store.get_node_visual(node, fallback_genotype=str(record.get("genotype", "")))
-            fill_color_raw = visual.get("node_fill_color", "")
-            fill_color = self._valid_fill(fill_color_raw)
+        self.canvas.draw()
+        self._drag_background = self.canvas.copy_from_bbox(self.ax.bbox)
+        self._redraw_dragged_nodes()
 
-            # Get shape - need engine for this, use cached logic simplified
-            s = (sex or "").strip().lower()
-            if s == "male":
-                shape = "^"
-            elif s == "female":
-                shape = "o"
-            elif role == ROLE_VALUE_SAMENSP:
-                shape = "^"
-            else:
-                shape = "o"
+    @staticmethod
+    def _position_drag_artists(
+        artists: Tuple[Any, Any, Optional[Any]],
+        x: float,
+        y: float,
+    ) -> None:
+        marker, label, f_artist = artists
+        marker.set_offsets([[x, y]])
+        label.set_position((x, y - 0.38))
+        if f_artist is not None:
+            f_artist.set_position((x, y - 0.62))
 
-            is_heritage_only = self.plugin.is_heritage_only(node)
-            is_dead = bool(record.get("death_date") or record.get("sterbedatum") or record.get("archived"))
+    def _redraw_dragged_nodes(self) -> None:
+        """Move existing node artists and blit without allocating new artists."""
+        if self._drag_background is None or not self._drag_artist_map:
+            return
 
-            if is_ghost:
-                node_edge_color = "#aaaaaa"
-                node_face_color = "#e8e8e8"
-                text_color = "#999999"
-                lw = 1.0
-            else:
-                node_edge_color = "black"
-                node_face_color = fill_color
-                text_color = "black"
-                lw = 3.0 if node in self.selected_nodes else 1.5
+        self.canvas.restore_region(self._drag_background)
 
-            # Draw marker using scatter
-            sc = self.ax.scatter(
-                [x],
-                [y],
-                s=280,
-                marker=shape,
-                edgecolors=node_edge_color,
-                facecolors=node_face_color,
-                linewidths=lw,
-                zorder=10,  # High zorder to appear above background
-            )
-            sc.draw(self.canvas.renderer)
-
-            # Draw label
-            t = self.ax.text(
-                x,
-                y - 0.38,
-                display_label,
-                ha="center",
-                va="top",
-                fontsize=9,
-                color=text_color,
-                fontstyle="italic" if is_heritage_only else "normal",
-                fontweight="normal" if (is_dead or is_ghost) else "bold",
-                zorder=11,
-                path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
-            )
-            t.draw(self.canvas.renderer)
-
-        # Blit the updated region
+        for node, artists in self._drag_artist_map.items():
+            x, y = self.temp_positions.get(node, self.node_positions.get(node, (0.0, 0.0)))
+            self._position_drag_artists(artists, x, y)
+            for artist in artists:
+                if artist is not None:
+                    self.ax.draw_artist(artist)
         self.canvas.blit(self.ax.bbox)
+
+    def _finish_drag_blit(self) -> None:
+        for artists in self._drag_artist_map.values():
+            for artist in artists:
+                if artist is not None:
+                    artist.set_animated(False)
+        self._drag_background = None
+        self._drag_artist_map.clear()
 
     def _on_mouse_release(self, event) -> None:
         if event.button == 2:
@@ -2926,12 +2950,15 @@ class HeritageTrackWidget(QWidget):
             if self.drag_active and self.drag_node is not None:
                 if self.is_dragging:
                     if self.drag_group_nodes:
+                        positions_to_save: Dict[str, Tuple[float, float]] = {}
                         for member in sorted(self.drag_group_nodes, key=str.lower):
                             x, y = self.temp_positions.get(member, self.node_positions.get(member, (0.0, 0.0)))
                             sx, sy = self._snap_to_grid(x, y)
                             self.temp_positions[member] = (sx, sy)
                             if self.all_animals_mode:
-                                self.plugin.store.set_node_position(member, (sx, sy))
+                                positions_to_save[member] = (sx, sy)
+                        if positions_to_save:
+                            self.plugin.store.set_node_positions_batch(positions_to_save)
                     elif not self._is_family_node(self.drag_node):
                         x, y = self.temp_positions.get(self.drag_node, self.node_positions.get(self.drag_node, (0.0, 0.0)))
                         sx, sy = self._snap_to_grid(x, y)
@@ -2939,6 +2966,7 @@ class HeritageTrackWidget(QWidget):
                         # Save the position to heritage_store for persistence
                         if self.all_animals_mode:
                             self.plugin.store.set_node_position(self.drag_node, (sx, sy))
+                    self._finish_drag_blit()
                     self.refresh_graph(keep_view=True)
                 elif self._is_family_node(self.drag_node):
                     self._toggle_family_collapsed(self.drag_node)
@@ -2953,8 +2981,7 @@ class HeritageTrackWidget(QWidget):
                     self.drag_offset = (0.0, 0.0)
                     self.click_start_pos = None
                     self.is_dragging = False
-                    self._drag_background = None
-                    self._drag_artist_map.clear()
+                    self._finish_drag_blit()
                     # Now setup pending selection
                     self._pending_selection = pending_node
                     self._pending_selection_timer = QTimer(self)
@@ -2970,8 +2997,7 @@ class HeritageTrackWidget(QWidget):
             self.drag_offset = (0.0, 0.0)
             self.click_start_pos = None
             self.is_dragging = False
-            self._drag_background = None
-            self._drag_artist_map.clear()
+            self._finish_drag_blit()
 
     def _commit_pending_selection(self) -> None:
         """Commit pending selection after double-click threshold passes (single click case)."""

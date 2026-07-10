@@ -369,27 +369,50 @@ class HeritageStore:
                 except Exception:
                     pass
 
-    def save(self) -> None:
+    def _save_sections(self, *, animals: bool, settings: bool) -> None:
+        """Persist the requested split-store sections with one timestamp."""
+        if not animals and not settings:
+            return
+
         data = self.load()
         now = datetime.utcnow().isoformat() + "Z"
         data["updated_at"] = now
 
-        animals_payload = {
-            "version": data.get("version", "1.0.0"),
-            "updated_at": now,
-            "animals": data.get("animals", {}),
-            "genotype_colors": data.get("genotype_colors", {}),
-        }
-        settings_payload = {
-            "version": data.get("version", "1.0.0"),
-            "updated_at": now,
-            "settings": data.get("settings", self._default_settings()),
-            "node_positions": data.get("node_positions", {}),
-            "collapsed_families": data.get("collapsed_families", []),
-        }
+        if animals:
+            animals_payload = {
+                "version": data.get("version", "1.0.0"),
+                "updated_at": now,
+                "animals": data.get("animals", {}),
+                "genotype_colors": data.get("genotype_colors", {}),
+            }
+            self._atomic_write(self.file_path, animals_payload, self.plugin_dir)
 
-        self._atomic_write(self.file_path, animals_payload, self.plugin_dir)
-        self._atomic_write(self.settings_path, settings_payload, self.plugin_dir)
+        if settings:
+            settings_payload = {
+                "version": data.get("version", "1.0.0"),
+                "updated_at": now,
+                "settings": data.get("settings", self._default_settings()),
+                "node_positions": data.get("node_positions", {}),
+                "collapsed_families": data.get("collapsed_families", []),
+            }
+            self._atomic_write(self.settings_path, settings_payload, self.plugin_dir)
+
+    def _save_animals(self) -> None:
+        """Persist only animal records and genotype colours."""
+        self._save_sections(animals=True, settings=False)
+
+    def _save_settings(self) -> None:
+        """Persist only UI settings, node positions, and collapsed families."""
+        self._save_sections(animals=False, settings=True)
+
+    def save(self) -> None:
+        """Persist the complete combined store.
+
+        Public callers retain the historical full-save behaviour. Internal
+        setters use the section-specific helpers when only one split file
+        changed.
+        """
+        self._save_sections(animals=True, settings=True)
 
     def _entry(self, animal_name: str) -> Dict[str, Any]:
         data = self.load()
@@ -439,7 +462,7 @@ class HeritageStore:
                 current[key] = bool(settings.get(key))
 
         data["settings"] = current
-        self.save()
+        self._save_settings()
 
     def get_all_entries(self) -> Dict[str, Dict[str, Any]]:
         data = self.load()
@@ -507,7 +530,7 @@ class HeritageStore:
             changed = True
 
         if changed and persist:
-            self.save()
+            self._save_animals()
         return changed
 
     def get_node_positions(self) -> Dict[str, Tuple[float, float]]:
@@ -540,7 +563,7 @@ class HeritageStore:
             data["node_positions"] = node_positions
 
         node_positions[key] = {"x": normalized[0], "y": normalized[1]}
-        self.save()
+        self._save_settings()
 
     def set_node_positions_batch(
         self, positions: Dict[str, Tuple[float, float]]
@@ -562,7 +585,7 @@ class HeritageStore:
             normalized = self._normalize_position(position)
             if key and normalized is not None:
                 node_positions[key] = {"x": normalized[0], "y": normalized[1]}
-        self.save()
+        self._save_settings()
 
     def remove_node_position(self, animal_name: str) -> None:
         key = self._normalize_text(animal_name)
@@ -577,7 +600,7 @@ class HeritageStore:
             return
 
         del node_positions[key]
-        self.save()
+        self._save_settings()
 
     def get_collapsed_families(self) -> Set[str]:
         data = self.load()
@@ -604,7 +627,7 @@ class HeritageStore:
             seen.add(key)
 
         data["collapsed_families"] = sorted(normalized, key=str.lower)
-        self.save()
+        self._save_settings()
 
     def set_family_collapsed(self, family_id: str, collapsed: bool) -> None:
         key = self._normalize_text(family_id)
@@ -661,7 +684,7 @@ class HeritageStore:
         entry["source"] = self._normalize_text(source) or "plugin"
         entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
         entry["inbreeding_f"] = None
-        self.save()
+        self._save_animals()
 
     def set_heritage_only(self, animal_name: str, heritage_only: bool) -> None:
         key = self._normalize_text(animal_name)
@@ -671,7 +694,24 @@ class HeritageStore:
         entry = self._entry(key)
         entry["heritage_only"] = bool(heritage_only)
         entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
-        self.save()
+        self._save_animals()
+
+    def set_heritage_only_batch(self, animal_names: Iterable[str], heritage_only: bool) -> None:
+        changed = False
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        target = bool(heritage_only)
+        for animal_name in animal_names:
+            key = self._normalize_text(animal_name)
+            if not key:
+                continue
+            entry = self._entry(key)
+            if bool(entry.get("heritage_only", False)) == target:
+                continue
+            entry["heritage_only"] = target
+            entry["updated_at"] = timestamp
+            changed = True
+        if changed:
+            self._save_animals()
 
     def delete_animal(self, animal_name: str) -> bool:
         key = self._normalize_text(animal_name)
@@ -719,7 +759,7 @@ class HeritageStore:
         entry = self._entry(key)
         entry["species"] = self._normalize_text(species)
         entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
-        self.save()
+        self._save_animals()
 
     def set_identity_fields(
         self,
@@ -751,7 +791,7 @@ class HeritageStore:
             entry.pop("identity_review_required", None)
             entry.pop("identity_review_reason", None)
         entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
-        self.save()
+        self._save_animals()
 
     def get_species(self, animal_name: str) -> str:
         key = self._normalize_text(animal_name)
@@ -770,7 +810,24 @@ class HeritageStore:
         entry = self._entry(key)
         entry["sex"] = self._normalize_sex(sex)
         entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
-        self.save()
+        self._save_animals()
+
+    def set_manual_sex_batch(self, updates: Dict[str, str]) -> None:
+        changed = False
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        for animal_name, sex in updates.items():
+            key = self._normalize_text(animal_name)
+            if not key:
+                continue
+            normalized = self._normalize_sex(sex)
+            entry = self._entry(key)
+            if self._normalize_sex(entry.get("sex", "")) == normalized:
+                continue
+            entry["sex"] = normalized
+            entry["updated_at"] = timestamp
+            changed = True
+        if changed:
+            self._save_animals()
 
     def get_manual_sex(self, animal_name: str) -> str:
         key = self._normalize_text(animal_name)
@@ -836,7 +893,7 @@ class HeritageStore:
 
         if changed:
             entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
-            self.save()
+            self._save_animals()
 
     def get_node_visual(self, animal_name: str, fallback_genotype: str = "") -> Dict[str, str]:
         key = self._normalize_text(animal_name)
@@ -985,7 +1042,7 @@ class HeritageStore:
         if changed:
             entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
             if persist:
-                self.save()
+                self._save_animals()
 
         return changed
 
@@ -1016,7 +1073,7 @@ class HeritageStore:
             entry = self._entry(key)
             entry["inbreeding_f"] = float(f_value)
             entry["updated_at"] = now_iso
-        self.save()
+        self._save_animals()
 
     def sync_from_animals(self, animals: Any) -> None:
         if not isinstance(animals, dict):
@@ -1040,4 +1097,4 @@ class HeritageStore:
                 changed = True
 
         if changed:
-            self.save()
+            self._save_animals()
