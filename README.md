@@ -57,7 +57,7 @@ In practical terms, ProgTrack is meant to provide:
 | ⚖️ Measurements | Weight, sperm values, time-stamped events, Excel import/export. |
 | 🧫 Samples | Biological and tissue sample tracking through Sample Track. |
 | 🩺 Medical history | Diagnoses, notes, treatments, documents, and abnormal/sick status. |
-| 🏠 Housing | Building, room, cage, animal placement, and movement history. |
+| 🏠 Housing | Building, unit, room, cage, animal placement, inspections, and movement history. |
 | 🌳 Pedigree | Parent relationships, kinship, inbreeding, genotype annotations. |
 | 📋 Projects | Project filters, assignment history, and project management support. |
 | 🔐 Users | Login, guest mode, roles, jobs, permissions, sessions, and audit logs. |
@@ -218,6 +218,20 @@ shown.
 | ⤴️ `Restore` | Restore archived animals. |
 | 🗑️ `Delete` | Permanently delete archived animals. |
 
+### 🧱 Role Setup And Contextual Actions
+
+`Settings -> Style -> Role setup` is the central editor for animal workflow
+roles. Lord, Master, and Manager users can activate, order, add, or remove
+roles; choose localized labels and icons; configure whether `New Animal`
+appears for each role tab; and assign separate block recipes to the compact
+New and Edit dialogs. Shared custom block presets can be reused by several
+roles. Required identity, housing, weight, and parent blocks remain protected.
+
+The sidebar follows this configuration. Import buttons are shown only for role
+tabs whose configured blocks support that data type, while the `All` tab keeps
+general animal editing and role correction without displaying all four
+measurement-import buttons.
+
 ## 📊 Measurements And Plots
 
 ProgTrack supports manual entry and Excel import for several data streams.
@@ -237,13 +251,18 @@ Excel imports expect exact column names.
 
 | Import Button | Required Columns |
 | --- | --- |
-| 📈 `Load Blood Values` | `Name`, `Datum`, `Progesteron (ng/ml)`, `F` |
-| 📉 `Load Urine Values` | `Name`, `Datum`, `PdG (ug/mg Cr)` |
-| ⚖️ `Load Weights` | `Name`, `Datum`, `Gewicht` |
-| 🎈 `Load Sperm Values` | `Datum`, `Name`, `% Motility`, `% Progressive`, `Sperms/ml` |
+| 📈 `Load Blood Values` | `Name`, `Animal ID`, `Datum`, `Progesteron (ng/ml)`, `F` |
+| 📉 `Load Urine Values` | `Name`, `Animal ID`, `Datum`, `PdG (µg/mg Cr)` |
+| ⚖️ `Load Weights` | `Name`, `Animal ID`, `Datum`, `Gewicht` |
+| 🎈 `Load Sperm Values` | `Datum`, `Name`, `Animal ID`, `% Motility`, `% Progressive`, `Sperms/ml` |
 
-Optional sample identifiers are recognized from common columns such as
-`Probennummer`, `Sample ID`, `Sample`, `Probe`, `ID`, `sample_id`, or `probe`.
+The supplied templates also keep a separate `Sample ID` column. `Animal ID`
+matches measurements to an existing animal; `Sample ID` identifies the
+individual sample and remains optional where no sample number exists. If an
+unknown Animal ID is detected, ProgTrack opens an additional identity dialog
+and requires the animal's species and full birth date before any rows are
+imported. Species and birth date therefore do not belong in the standard
+measurement templates.
 
 ### 🔎 Plot Exploration
 
@@ -267,16 +286,16 @@ windows, and some act as feature gates inside the core interface.
 | --- | --- | --- |
 | 🧪 `Steroid Track` | Feature gate | Enables steroid roles, hormone imports, sperm imports, reproductive event controls, phase filters, and PdG converter integration. |
 | 🔐 `Master Track` | Administration | Login, guest mode, users, jobs, permissions, sessions, and audit logs. |
-| 📄 `Animal Reports` | Main tab | Per-animal reports, timelines, statistics, locked entries, and PDF-style exports. |
-| 🩺 `Medi Track` | Main tab | Medical history, abnormal/sick status, diagnoses, treatments, observations, documents, and medical reports. |
+| 📄 `Animal Reports` | Main tab | Per-animal monthly reports, editable/locked lines, signatures, and PDF/XLSX exports. Unlocking preserves the visible text for immediate editing; automatic content is regenerated only after leaving and reopening the tab. |
+| 🩺 `Medi Track` | Main tab | Medical history, abnormal/sick status, diagnoses, treatments, observations, experiment/lifecycle events, uploaded documents, and PDF/XLSX exports with optional signatures; XLSX can package linked files in a sibling document folder. |
 | 🗓️ `Surgery Planner` | Dialog | Surgery and embryo-transfer planning with recovery rules, blocked days, Gantt-style planning, and export. |
 | 🧠 `Embryo Tracker` | Dialog | Gestation-day prediction from cranial ultrasound measurements. |
 | 🔁 `PdG to Progesterone Converter` | Dialog | Per-animal PdG-to-progesterone model fitting. |
 | 🧬 `Flow Track` | Main tab | Embryo-flow visualization between egg donors, sperm donors, surrogates, and freezer inventory. |
 | 🌳 `Heritage Track` | Main tab | Pedigree graphs, parent editing, kinship, inbreeding, genotype annotations, and large-pedigree rendering. |
-| 🏠 `Cage Track` | Main tab | Building, room, cage, animal placement, movement history, inspections, and PDF export. |
+| 🏠 `Cage Track` | Main tab | Four-level Building → Unit → Room → Cage structure, animal placement, movement history, inspections at every hierarchy level, and PDF export. |
 | 🧫 `Sample Track` | Window | Organ and biological sample tracking with aliquots, filters, auto-created blood/urine samples, and PDF export. |
-| 📋 `Projects Track` | Sidebar and tab | Project/species filters, project assignment cache, project history, and project management. |
+| 📋 `Projects Track` | Sidebar and tab | Association-scoped project/species visibility, project history, IACUC/AWO assignment, animal experiment state, documents/SOPs, and project management. |
 | 💬 `Network Track` | Window | Local file-based team chat with polling and optional notification sounds. |
 
 ## 🔐 Users Jobs And Permissions
@@ -297,6 +316,7 @@ normal `user` account, but still receive the `vet`, `keeper`, `manager`, or
 | --- | --- | --- |
 | ![Lord](icons/job_lord.png) | `lord` | Highest authority. Lord has the wildcard permission and can perform all actions, including lord-exclusive actions such as creating users and controlling Master Track itself. |
 | ![Master](icons/job_master.png) | `master` | Administrative account with almost all known permissions. Master can manage most users, jobs, permissions, audits, and application workflows, but deliberately lacks the lord-exclusive permissions to create new user accounts and to disable user permission management plugin. |
+| ![AWO](icons/job_AWO.png) | `AWO` (`animal_welfare_officer` internally) | Dedicated Animal Welfare Officer account role used for IACUC/project welfare assignments. It starts from the normal user permission baseline; institution-wide animal/project visibility or veterinary capabilities must be granted explicitly or through an assigned job and do not imply Master privileges. The Manage Users overview shows the compact label `AWO`. |
 | ![User](icons/information.png) | `user` | Standard logged-in account. Effective permissions come from the user baseline, assigned jobs, direct grants, and revoked permissions. |
 | ![Guest](icons/question.png) | `guest` | Read-oriented fallback account. Guest uses a fixed guest permission baseline; direct grants and revocations are ignored. |
 
@@ -349,7 +369,7 @@ Use `Settings -> Style` to configure:
 
 ## 💾 Data And Backups
 
-ProgTrack 0.1.0 stores data locally in JSON files.
+ProgTrack 0.1.2 stores data locally in JSON files.
 
 Important files include:
 

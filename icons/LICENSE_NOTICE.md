@@ -30,6 +30,7 @@ rights to use, modify, and redistribute these assets under its terms.
 - `job_researcher.png`
 - `job_tester.png`
 - `job_vet.png`
+- `job_AWO.png`
 - `progtrack_icon.ico`
 - `question.png`
 - `warning.png`

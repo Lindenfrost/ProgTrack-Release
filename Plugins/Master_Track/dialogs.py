@@ -419,6 +419,11 @@ def _jobs_label(user: Dict[str, Any]) -> str:
     return "/".join(f"[{j}]{suffix}" for j in jobs)
 
 
+def _user_overview_role_label(role: str) -> str:
+    """Return the compact role label used by the Manage Users table."""
+    return "AWO" if role == ROLE_ANIMAL_WELFARE else role
+
+
 class ManageUsersDialog(QDialog):
     """Full user management table for Lord / Master accounts."""
 
@@ -489,7 +494,7 @@ class ManageUsersDialog(QDialog):
             u = self.user_db._ensure_user_defaults(dict(u))
             jobs_str = _jobs_label(u)
             perms = u.get("permissions", {})
-            effective_label = u["role"]
+            effective_label = _user_overview_role_label(u["role"])
             if u["role"] not in (ROLE_LORD, ROLE_GUEST) and u.get("jobs"):
                 has_override = bool(perms.get("granted") or perms.get("revoked"))
                 effective_label = jobs_str if not has_override else jobs_str
@@ -503,7 +508,7 @@ class ManageUsersDialog(QDialog):
             for col, val in enumerate([
                 u["username"],
                 u.get("display_name", ""),
-                u["role"],
+                _user_overview_role_label(u["role"]),
                 jobs_str,
                 effective_label,
                 u.get("last_login", "\u2014") or "\u2014",

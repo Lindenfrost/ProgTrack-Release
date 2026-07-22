@@ -233,11 +233,13 @@
 
   <h3>2.3 File Excel di esempio</h3>
   <p>
-    La cartella ProgTrack può contenere file Excel di esempio
-    (<code>Real_Blut.xlsx</code>, <code>Real_Urine.xlsx</code>,
-    <code>Real_Sperma.xlsx</code>, <code>Real_Gewichtel.xlsx</code>), che
-    mostrano la struttura prevista per l'importazione delle
-    misurazioni.
+    I modelli di importazione attuali si trovano in
+    <code>Resources/ExampleFiles</code>:
+    <code>ProgTrack_example_blood_progesterone_import.xlsx</code>,
+    <code>ProgTrack_example_urine_pdg_import.xlsx</code>,
+    <code>ProgTrack_example_sperm_import.xlsx</code> e
+    <code>ProgTrack_example_weight_import.xlsx</code>. Contengono colonne
+    separate <code>Animal ID</code> e <code>Sample ID</code>.
   </p>
 
   <h2 id="ui-overview">3. Panoramica dell'interfaccia utente</h2>
@@ -248,10 +250,10 @@
     <li><strong>Pannello sinistro</strong> – elenca animali disponibili
       e archiviati, offre filtri per fase del ciclo e azioni rapide
       (nuovo, modifica, importa, archivia, ripristina, elimina).</li>
-    <li><strong>Area principale</strong> – di solito due schede di primo
-      livello: <em>Grafici</em> (grafici delle serie temporali) e, se il
-      plugin Animal Reports è installato, <em>Report</em> (riepiloghi
-      tipo PDF per animale).</li>
+    <li><strong>Area principale</strong> – contiene <em>Grafici</em> e le schede
+      fornite dai plugin attivi, tra cui Report, Flow Track, Heritage Track,
+      Gestione Gabbie, Medi Track e Project Track quando installati e
+      consentiti.</li>
     <li><strong>Barra di stato</strong> – messaggi su importazioni,
       errori e passaggi di elaborazione. Quando il plugin Master Track è
       installato, la barra di stato mostra anche l'utente corrente e lo
@@ -274,6 +276,7 @@
 
   <h3>3.2 Azioni del pannello laterale</h3>
   <p>I pulsanti sono contestuali: quelli di importazione appaiono solo quando ruolo e plugin installati li possono usare. Le etichette sotto provengono dal file lingua attivo.</p>
+  <p>Lord, Master e Manager configurano ordine, etichette/icone, blocchi delle finestre Nuovo/Modifica e visibilità di <strong>Nuovo animale</strong> per ogni scheda ruolo in <strong>Impostazioni → Stile → Configurazione ruoli</strong>. <strong>Tutti</strong> mantiene modifica generale e correzione del ruolo, ma non mostra automaticamente tutti e quattro i pulsanti di importazione.</p>
   <table class="basic"><tr><th>Pulsante</th><th>Uso</th></tr>
   <tr><td><strong>➕ Nuovo animale</strong></td><td>Crea una nuova scheda.</td></tr>
   <tr><td><strong>✏️ Modifica</strong></td><td>Apre l’editor completo dell’animale selezionato.</td></tr>
@@ -297,7 +300,19 @@
     <strong>Identità animale:</strong> ProgTrack identifica ogni animale tramite IPID nel formato <code>Name | Species | DD.MM.YYYY</code>. Il pannello laterale mostra ancora il nome breve, mentre tooltip, dati JSON, importazioni ed esportazioni conservano l'IPID completo. Le modifiche successive a nome, specie o data di nascita richiedono permessi manager.
   </div>
 
-  <h3>4.2 Ruoli animali ed editor specifici</h3>
+  <h3>4.2 Configurazione delle convenzioni Animal ID</h3>
+  <p>L'IPID descritto sopra è la chiave d'identità interna di ProgTrack. Il distinto <strong>Animal ID</strong> pubblico può seguire una convenzione dell'istituto. Lord, Master o Manager lo configurano in <strong>Impostazioni → Stile → Convenzioni di identità e ciclo di vita</strong>.</p>
+  <p>Comporre l'Animal ID con un massimo di cinque componenti ordinati. Ogni componente può essere inutilizzato oppure contenere Specie, Anno di nascita (AA), Anno di nascita (AAAA), Conteggio annuale, Conteggio assoluto, Sesso o Nome. ProgTrack unisce i componenti scelti con trattini bassi.</p>
+  <table class="basic"><tr><th>Componente</th><th>Valore generato</th></tr>
+    <tr><td><strong>Specie</strong></td><td>Iniziali minuscole delle prime tre parole al massimo della specie registrata.</td></tr>
+    <tr><td><strong>Anno di nascita</strong></td><td>Anno a due o quattro cifre ricavato dalla data di nascita completa.</td></tr>
+    <tr><td><strong>Conteggio</strong></td><td>Sequenza univoca a quattro cifre, riavviata per anno di nascita oppure continuata tra tutti gli anni.</td></tr>
+    <tr><td><strong>Sesso</strong></td><td><code>M</code>, <code>F</code> o <code>U</code>.</td></tr>
+    <tr><td><strong>Nome</strong></td><td>Nome dell'animale convertito in un elemento sicuro per l'ID.</td></tr>
+  </table>
+  <p>Durante la creazione di un animale, il campo ID mostra un'anteprima mentre si inseriscono Nome, Specie, Data di nascita e Sesso. I componenti mancanti appaiono come <code>XX</code> o <code>XXXX</code>. Al salvataggio ProgTrack assegna la successiva sequenza libera. Gli ID generati dalla convenzione vengono ricalcolati dopo una modifica autorizzata dell'identità conservando la sequenza originale; gli ID sovrascritti manualmente restano invariati.</p>
+
+  <h3>4.3 Ruoli animali ed editor specifici</h3>
   <p>Il ruolo determina quale editor e quali schede dati vengono mostrati. Ruoli e controlli steroidei sono disponibili solo quando Steroid Track è attivo.</p>
   <table class="basic"><tr><th>Etichetta ruolo</th><th>Ruolo operativo</th></tr>
   <tr><td><strong>Donatrice di ovociti</strong></td><td>Donatrice di ovociti / femmina donatrice</td></tr>
@@ -309,7 +324,7 @@
   <tr><td><strong>Animale sperimentale</strong></td><td>Animale sperimentale</td></tr>
   </table>
 
-  <h3>4.3 Modifica dei dati</h3>
+  <h3>4.4 Modifica dei dati</h3>
   <p>Selezionare un animale e usare l’azione di modifica. Nella categoria Tutti, Modifica ruolo cambia solo ruolo/categoria; l’azione Modifica separata apre l’editor completo specifico per ruolo.</p>
   <p><strong>✏️ Modifica</strong> · <strong>🫥 Modifica ruolo</strong></p>
   <table class="basic"><tr><th>Scheda editor</th><th>Uso</th></tr>
@@ -322,7 +337,7 @@
   <tr><td><strong>PGF</strong></td><td>Mostrata quando rilevante per ruolo e moduli installati.</td></tr>
   </table>
 
-  <h3>4.4 Archiviazione, ripristino ed eliminazione</h3>
+  <h3>4.5 Archiviazione, ripristino ed eliminazione</h3>
   <p>Archivia conserva i dati ma rimuove l’animale dalle viste attive di routine. Ripristina riporta un animale archiviato tra gli attivi. Elimina è disponibile per animali archiviati e rimuove definitivamente la scheda dal database.</p>
   <p><strong>📦 Archivia</strong> · <strong>⤴️ Ripristina</strong> · <strong>🗑️ Elimina</strong></p>
 
@@ -337,9 +352,11 @@
 
   <h3>5.3 Importazione da Excel</h3>
   <p>Le importazioni Excel si basano su nomi colonna esatti. Usare il pulsante di importazione corrispondente al tipo di dato e correggere date non valide, nomi vuoti o valori non numerici prima dell’importazione.</p>
-  <table class="basic"><tr><th>Pulsante</th><th>Colonne richieste</th></tr><tr><td><strong>📈 Carica valori sangue</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Carica valori urina</strong></td><td><code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Carica pesi</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Carica valori sperma</strong></td><td><code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
-  <p>Quando un'importazione di sangue, urina, peso o sperma crea un nuovo animale e mancano specie o data di nascita, ProgTrack le richiede all'utente. I file possono contenere colonne identità come <code>Species</code>/<code>Art</code> e <code>Birth Date</code>/<code>Geburtsdatum</code>. I nomi brevi ripetuti devono essere risolti tramite IPID o con informazioni complete di nome/specie/data di nascita.</p>
-  <p>Gli identificativi campione opzionali sono riconosciuti da colonne comuni come Probennummer, Sample ID, Sample, Probe, ID, sample_id o probe.</p>
+  <table class="basic"><tr><th>Pulsante</th><th>Colonne richieste</th></tr><tr><td><strong>📈 Carica valori sangue</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Carica valori urina</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Carica pesi</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Carica valori sperma</strong></td><td><code>Animal ID</code>, <code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
+  <p>Dopo aver scelto un file valido, ProgTrack apre un'anteprima di sola lettura <strong>prima di scrivere animali o misurazioni</strong>. Mostra il numero totale di righe, tutte le colonne importate e fino alle prime 200 righe. La colonna aggiuntiva Stato animale indica per ogni riga Animale esistente o Nuovo animale; i nuovi animali sono evidenziati.</p>
+  <p>Controllare Animal ID, Nome, date, Sample ID e valori di misura nell'anteprima. Scegliere <strong>Annulla</strong> per lasciare invariato il database oppure <strong>Importa</strong> per proseguire. Le finestre d'identità per animali sconosciuti appaiono soltanto dopo aver accettato l'anteprima.</p>
+  <p><code>Animal ID</code> associa ogni riga a un animale esistente. I modelli standard omettono volutamente specie e data di nascita. Se l'ID animale non è ancora noto, prima dell'importazione una finestra aggiuntiva richiede specie e data di nascita completa per creare l'animale in modo univoco.</p>
+  <p><code>Sample ID</code> è una colonna separata e facoltativa per identificare il campione. Non sostituisce mai <code>Animal ID</code>.</p>
 
   
   <h3>5.4 PdG &rarr; Progesterone Converter</h3>
@@ -519,10 +536,10 @@
   <table class="basic"><tr><th>Voce menu</th><th>Tipo</th><th>Comportamento attuale e uso</th></tr>
   <tr><td><strong>Steroid Track</strong></td><td>Abilitazione</td><td>Steroid Track è un vero plugin senza finestra propria. Abilita filtri di fase femminili, import del progesterone ematico, import PdG urinario, import sperma, controlli grafico ormoni/eventi, controlli sperma e convertitore PdG.</td></tr>
   <tr><td><strong>Convertitore PdG→Progesterone</strong></td><td>Dialogo</td><td>Adatta modelli PdG→progesterone specifici per animale da misure appaiate nello stesso giorno; i modelli abilitano Prog. unificato e grafici combinati.</td></tr>
-  <tr><td><strong>Master Track</strong></td><td>Amministrazione</td><td>Fornisce accesso, modalità ospite, utenti, lavori, permessi, sessioni e audit log. I ruoli attuali sono lord, master, user e guest; pacchetti come vet, keeper, manager e researcher rifiniscono i permessi.</td></tr>
-  <tr><td><strong>Project Track</strong></td><td>Pannello + scheda opzionale</td><td>Aggiunge filtri progetto e specie accanto all’elenco animali. L’azione di menu aggiorna i progetti; la scheda di gestione Project Track appare solo con Master Track attivo.</td></tr>
-  <tr><td><strong>Medi Track</strong></td><td>Scheda principale</td><td>Mostra storia medica, diagnosi attive, note, trattamenti, osservazioni, documenti, apertura/risoluzione stati ed esportazione PDF dell’animale selezionato.</td></tr>
-  <tr><td><strong>Report animali</strong></td><td>Scheda principale</td><td>Commuta Report. I report sono basati su animale/mese selezionato e contengono Data, Dati giornalieri, Punteggi animale e Firme; è disponibile export PDF.</td></tr>
+  <tr><td><strong>Master Track</strong></td><td>Amministrazione</td><td>Fornisce accesso, modalità ospite, utenti, lavori, permessi, sessioni e audit log. I ruoli account sono lord, master, AWO, user e guest; i pacchetti lavoro rifiniscono i permessi pratici.</td></tr>
+  <tr><td><strong>Project Track</strong></td><td>Pannello + scheda opzionale</td><td>Offre filtri progetto/specie limitati alle associazioni, cronologia progetti, assegnazioni IACUC/AWO, stato sperimentale degli animali, documenti/SOP e gestione progetti.</td></tr>
+  <tr><td><strong>Medi Track</strong></td><td>Scheda principale</td><td>Mostra storia medica, diagnosi attive, note, trattamenti, osservazioni, eventi sperimentali/del ciclo di vita e documenti; esporta PDF o XLSX con firme opzionali. XLSX può copiare i file collegati in una cartella documenti affiancata.</td></tr>
+  <tr><td><strong>Report animali</strong></td><td>Scheda principale</td><td>Crea report mensili modificabili. Le righe bloccate restano manuali; lo sblocco conserva il testo fino a quando si lascia e riapre la scheda. PDF/XLSX possono escludere l'intera colonna Firme e XLSX esporta testo semplice senza tag di formattazione.</td></tr>
   <tr><td><strong>Flow Track</strong></td><td>Scheda principale</td><td>Visualizza il flusso degli embrioni tra donatrici, donatori di sperma, surrogate e freezer, con metriche, modifiche manuali, impostazioni, aggiornamento da ProgTrack ed export.</td></tr>
   <tr><td><strong>Heritage Track</strong></td><td>Scheda principale</td><td>Mostra pedigree e relazioni, modifica genitori, placeholder Heritage-only, annotazioni genotipo/colore, legenda, griglia e impostazioni. Il posizionamento verticale usa per impostazione predefinita il pedigree compatto normalizzato per partner oppure un asse cronologico opzionale basato sul mese di nascita. Un gruppo radio separato mostra niente, consanguineità F (predefinita), data di nascita oppure ID pubblico dell'animale sotto il nome.</td></tr>
 <tr><td><strong>Gestione Gabbie</strong></td><td>Scheda principale</td><td>Gestisce la gerarchia a quattro livelli Edificio → Unità → Stanza → Gabbia, animali reali e fittizi, occupanti non assegnati, cronologia spostamenti, colori ed export PDF. Edifici, unità, stanze e singole gabbie possono essere selezionati come ambito d'ispezione; un ambito superiore include le sottostrutture occupate idonee.</td></tr>
@@ -531,6 +548,26 @@
   <tr><td><strong>Pianificatore operazioni</strong></td><td>Dialogo</td><td>Pianifica interventi e trasferimenti embrionali usando animali donatori/surrogati correnti, regole date, recupero, eventi manuali, date bloccate ed export piano.</td></tr>
   <tr><td><strong>Network Track</strong></td><td>Finestra</td><td>Fornisce chat locale basata su file con polling, possibile primo piano e suono di notifica quando Qt Multimedia è disponibile.</td></tr>
   </table>
+
+  <h3>9.1 Ruoli account e permessi di lavoro</h3>
+  <p>Aprire <strong>Gestisci utenti</strong> in Master Track per verificare ruolo account, lavori assegnati e permessi effettivi. Il ruolo account definisce il livello amministrativo; pacchetti lavoro e concessioni o revoche dirette adattano l'account alle attività quotidiane.</p>
+  <table class="basic"><tr><th>Ruolo</th><th>Uso</th></tr>
+    <tr><td><strong>lord</strong></td><td>Amministrazione proprietario con tutti i permessi.</td></tr>
+    <tr><td><strong>master</strong></td><td>Gestione quotidiana di utenti e permessi senza i controlli riservati a lord.</td></tr>
+    <tr><td><strong>AWO</strong></td><td>Account Animal Welfare Officer per assegnazioni IACUC e benessere animale.</td></tr>
+    <tr><td><strong>user</strong></td><td>Account standard connesso, il cui accesso pratico dipende da lavori e permessi.</td></tr>
+    <tr><td><strong>guest</strong></td><td>Account di ripiego orientato alla lettura con profilo limitato fisso.</td></tr>
+  </table>
+
+  <h3>9.2 Lavorare tra più moduli</h3>
+  <p>Usare la stessa identità animale controllata in tutti i moduli ProgTrack. La sequenza seguente mantiene coerenti schede ruolo, progetti, storia medica, report e alloggiamento:</p>
+  <ol>
+    <li><strong>Configurare i ruoli animali:</strong> Lord, Master o Manager aprono <strong>Impostazioni → Stile → Configurazione ruoli</strong> per scegliere schede attive, ordine, etichette/icone, blocchi Nuovo/Modifica e visibilità di Nuovo animale per ruolo. Identità, alloggiamento, peso e genitori restano blocchi obbligatori.</li>
+    <li><strong>Assegnare l'ambito progetto:</strong> In Project Track associare utenti e animali al progetto e registrare assegnazioni IACUC/AWO, documenti, SOP e stato sperimentale. Le schede ruolo mostrano agli utenti ordinari gli animali associati; la scheda <strong>Tutti</strong> resta la panoramica completa.</li>
+    <li><strong>Mantenere identità e cronologia:</strong> Usare l'editor animale per modifiche controllate a identità, genitori, origine, alloggiamento e ciclo di vita. Gli eventi sperimentali e medici correlati restano quindi disponibili, quando pertinente, in Medi Track e nei report animali.</li>
+    <li><strong>Ispezionare l'alloggiamento:</strong> In Gestione Gabbie selezionare Edificio, Unità, Stanza o Gabbia e aprire Ispezione. Un'ispezione di livello superiore comprende le strutture figlie occupate idonee e registra la persona responsabile.</li>
+  </ol>
+  <div class="hint"><strong>Nota:</strong> Schede, animali o azioni mancanti indicano normalmente l'ambito progetto o i permessi dell'account corrente. Lord o Master possono controllare la colonna Effettivo in Gestisci utenti.</div>
 
   <h2 id="troubleshooting">10. Risoluzione dei problemi e consigli</h2>
 

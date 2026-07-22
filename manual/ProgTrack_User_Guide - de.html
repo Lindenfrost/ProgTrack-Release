@@ -230,10 +230,12 @@
 
   <h3>2.3 Beispiel-Excel-Dateien</h3>
   <p>
-    Der ProgTrack-Ordner kann Beispiel-Excel-Dateien enthalten
-    (<code>Real_Blut.xlsx</code>, <code>Real_Urine.xlsx</code>,
-    <code>Real_Sperma.xlsx</code>, <code>Real_Gewichtel.xlsx</code>).
-    Diese zeigen den erwarteten Aufbau für den Import von Messungen.
+    Die aktuellen Importvorlagen liegen unter <code>Resources/ExampleFiles</code>:
+    <code>ProgTrack_example_blood_progesterone_import.xlsx</code>,
+    <code>ProgTrack_example_urine_pdg_import.xlsx</code>,
+    <code>ProgTrack_example_sperm_import.xlsx</code> und
+    <code>ProgTrack_example_weight_import.xlsx</code>. Sie enthalten getrennte
+    Spalten für <code>Animal ID</code> und <code>Sample ID</code>.
   </p>
 
   <h2 id="ui-overview">3. Überblick Benutzeroberfläche</h2>
@@ -244,10 +246,10 @@
     <li><strong>Linke Seitenleiste</strong> – listet verfügbare und
       archivierte Tiere, bietet Filter nach Zyklusphase sowie Schnellaktionen
       (Neu, Bearbeiten, Import, Archivieren, Wiederherstellen, Löschen).</li>
-    <li><strong>Hauptbereich</strong> – meist zwei Reiter auf oberster
-      Ebene: <em>Diagramme</em> (Zeitreihengrafiken) und – falls das Animal
-      Reports-Plugin installiert ist – <em>Berichte</em> (tierweise
-      PDF-ähnliche Zusammenfassungen).</li>
+    <li><strong>Hauptbereich</strong> – enthält <em>Diagramme</em> sowie die
+      Tabs aktivierter Plugins, darunter – sofern installiert und erlaubt –
+      Berichte, Flow Track, Heritage Track, Käfig-Übersicht, Medi Track und
+      Projekt Track.</li>
     <li><strong>Statusleiste</strong> – Meldungen zu Importen, Fehlern und
       Verarbeitungsschritten. Wenn das Master Track-Plugin installiert ist,
       zeigt die Statusleiste außerdem den aktuellen Benutzer und Anmeldestatus
@@ -270,6 +272,7 @@
 
   <h3>3.2 Aktionen der Seitenleiste</h3>
   <p>Die Schaltflächen sind kontextabhängig: Import-Schaltflächen erscheinen nur, wenn Rolle und installierte Plugins sie verwenden können. Die folgenden Bezeichnungen stammen aus der aktiven Sprachdatei.</p>
+  <p>Lord, Master und Manager konfigurieren unter <strong>Einstellungen → Stil → Rollenkonfiguration</strong> Reihenfolge, Bezeichnungen/Symbole, Blöcke der Neu-/Bearbeiten-Dialoge und die Sichtbarkeit von <strong>Neues Tier</strong> je Rollen-Tab. Alle behält allgemeines Bearbeiten und die Rollenkorrektur, zeigt aber nicht pauschal alle vier Messwert-Importe.</p>
   <table class="basic"><tr><th>Schaltfläche</th><th>Nutzung</th></tr>
   <tr><td><strong>➕ Neues Tier</strong></td><td>Neuen Datensatz anlegen.</td></tr>
   <tr><td><strong>✏️ Bearbeiten</strong></td><td>Vollständigen Editor für das ausgewählte Tier öffnen.</td></tr>
@@ -293,7 +296,19 @@
     <strong>Tieridentität:</strong> ProgTrack identifiziert jedes Tier über die IPID im Format <code>Name | Spezies | TT.MM.JJJJ</code>. Die Seitenleiste zeigt weiterhin den kurzen Namen, aber Tooltips, gespeicherte JSON-Daten, Importe und Exporte behalten die vollständige IPID. Nachträgliche Änderungen an Name, Spezies oder Geburtsdatum dürfen nur Manager durchführen.
   </div>
 
-  <h3>4.2 Tierrollen und rollenspezifische Editoren</h3>
+  <h3>4.2 Konventionen für Tier-IDs konfigurieren</h3>
+  <p>Die oben beschriebene IPID ist der interne Identitätsschlüssel von ProgTrack. Die getrennte öffentliche <strong>Animal ID</strong> kann einer einrichtungsspezifischen Konvention folgen. Lord, Master oder Manager konfigurieren sie unter <strong>Einstellungen → Stil → Identitäts- und Lebenszykluskonventionen</strong>.</p>
+  <p>Stellen Sie die Animal ID aus bis zu fünf geordneten Bestandteilen zusammen. Jeder Bestandteil kann unbenutzt bleiben oder Spezies, Geburtsjahr (JJ), Geburtsjahr (JJJJ), Zähler pro Jahr, absoluter Zähler, Geschlecht oder Name enthalten. ProgTrack verbindet die gewählten Bestandteile mit Unterstrichen.</p>
+  <table class="basic"><tr><th>Bestandteil</th><th>Erzeugter Wert</th></tr>
+    <tr><td><strong>Spezies</strong></td><td>Kleingeschriebene Anfangsbuchstaben der ersten bis zu drei Wörter der registrierten Spezies.</td></tr>
+    <tr><td><strong>Geburtsjahr</strong></td><td>Zwei- oder vierstelliges Jahr aus dem vollständigen Geburtsdatum.</td></tr>
+    <tr><td><strong>Zähler</strong></td><td>Vierstellige eindeutige Folge, die je Geburtsjahr neu beginnt oder über alle Jahre fortgesetzt wird.</td></tr>
+    <tr><td><strong>Geschlecht</strong></td><td><code>M</code>, <code>F</code> oder <code>U</code>.</td></tr>
+    <tr><td><strong>Name</strong></td><td>Der Tiername als ID-sicherer Textbaustein.</td></tr>
+  </table>
+  <p>Beim Anlegen eines Tiers zeigt das ID-Feld während der Eingabe von Name, Spezies, Geburtsdatum und Geschlecht eine Vorschau. Fehlende Bestandteile erscheinen als <code>XX</code> oder <code>XXXX</code>. Beim Speichern vergibt ProgTrack die nächste freie Sequenz. Konventionsgenerierte IDs werden nach einer berechtigten Identitätsänderung unter Beibehaltung ihrer ursprünglichen Sequenz neu berechnet; manuell überschriebene IDs bleiben unverändert.</p>
+
+  <h3>4.3 Tierrollen und rollenspezifische Editoren</h3>
   <p>Die Rolle bestimmt, welcher Editor und welche Datentabs angezeigt werden. Steroidbezogene Rollen und Steuerungen sind nur verfügbar, wenn Steroid Track aktiv ist.</p>
   <table class="basic"><tr><th>Rollenbezeichnung</th><th>Workflow-Rolle</th></tr>
   <tr><td><strong>Spenderin</strong></td><td>Eizellspenderin / weibliche Spenderin</td></tr>
@@ -305,7 +320,7 @@
   <tr><td><strong>Versuchstier</strong></td><td>Versuchstier</td></tr>
   </table>
 
-  <h3>4.3 Daten bearbeiten</h3>
+  <h3>4.4 Daten bearbeiten</h3>
   <p>Wählen Sie ein Tier aus und verwenden Sie die Bearbeiten-Aktion. In der Kategorie Alle ändert Rolle bearbeiten nur die Rolle/Kategorie; die separate Bearbeiten-Aktion öffnet den vollständigen rollenspezifischen Editor.</p>
   <p><strong>✏️ Bearbeiten</strong> · <strong>🫥 Rolle bearbeiten</strong></p>
   <table class="basic"><tr><th>Editor-Tab</th><th>Nutzung</th></tr>
@@ -318,7 +333,7 @@
   <tr><td><strong>PGF</strong></td><td>Wird angezeigt, wenn es für Rolle und installierte Module relevant ist.</td></tr>
   </table>
 
-  <h3>4.4 Archivieren, Wiederherstellen und Löschen</h3>
+  <h3>4.5 Archivieren, Wiederherstellen und Löschen</h3>
   <p>Archivieren erhält die Daten, entfernt das Tier aber aus den aktiven Routineansichten. Wiederherstellen verschiebt ein archiviertes Tier zurück. Löschen ist für archivierte Tiere verfügbar und entfernt den Datensatz dauerhaft aus der Datenbank.</p>
   <p><strong>📦 Archivieren</strong> · <strong>⤴️ Wiederherstellen</strong> · <strong>🗑️ Löschen</strong></p>
 
@@ -333,9 +348,11 @@
 
   <h3>5.3 Import aus Excel</h3>
   <p>Excel-Importe basieren auf exakten Spaltennamen. Verwenden Sie die zum Datentyp passende Import-Schaltfläche und bereinigen Sie ungültige Datumswerte, leere Namen oder nicht-numerische Werte vor dem Import.</p>
-  <table class="basic"><tr><th>Schaltfläche</th><th>Erforderliche Spalten</th></tr><tr><td><strong>📈 Blutwerte laden</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Urinwerte laden</strong></td><td><code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Gewichte laden</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Spermawerte laden</strong></td><td><code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
-  <p>Wenn beim Import von Blut-, Urin-, Gewichts- oder Spermadaten ein neues Tier entsteht und Spezies oder Geburtsdatum fehlen, fragt ProgTrack diese Angaben nach. Importdateien können Identitätsspalten wie <code>Species</code>/<code>Art</code> und <code>Birth Date</code>/<code>Geburtsdatum</code> enthalten. Wiederholte Kurznamen sollten über IPID oder vollständige Name/Spezies/Geburtsdatum-Information eindeutig gemacht werden.</p>
-  <p>Optionale Probennummern werden aus üblichen Spalten wie Probennummer, Sample ID, Sample, Probe, ID, sample_id oder probe erkannt.</p>
+  <table class="basic"><tr><th>Schaltfläche</th><th>Erforderliche Spalten</th></tr><tr><td><strong>📈 Blutwerte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Urinwerte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Gewichte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Spermawerte laden</strong></td><td><code>Datum</code>, <code>Name</code>, <code>Animal ID</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
+  <p>Nach Auswahl einer gültigen Datei öffnet ProgTrack eine schreibgeschützte Vorschau, <strong>bevor Tiere oder Messwerte geschrieben werden</strong>. Sie zeigt die Gesamtzahl der Zeilen, alle importierten Spalten und bis zu 200 erste Zeilen. Die zusätzliche Spalte Tierstatus kennzeichnet jede Vorschauzeile als bestehendes oder neues Tier; neue Tiere sind hervorgehoben.</p>
+  <p>Prüfen Sie Animal ID, Name, Datumsangaben, Sample ID und Messwerte in dieser Vorschau. <strong>Abbrechen</strong> lässt die Datenbank unverändert; <strong>Importieren</strong> setzt den Vorgang fort. Identitätsdialoge für unbekannte Tiere erscheinen erst nach Bestätigung der Vorschau.</p>
+  <p><code>Animal ID</code> ordnet Messwerte bestehenden Tieren zu. Spezies und Geburtsdatum stehen bewusst nicht in den Standardvorlagen. Erkennt ProgTrack eine unbekannte Animal ID, müssen Spezies und vollständiges Geburtsdatum in einem Zusatzdialog angegeben werden, bevor Daten importiert werden.</p>
+  <p><code>Sample ID</code> ist eine getrennte Vorlagenspalte für die einzelne Probe und darf leer bleiben, wenn keine Probennummer existiert. Sie ersetzt niemals die <code>Animal ID</code>.</p>
 
   
   <h3>5.4 PdG &rarr; Progesteron-Konverter</h3>
@@ -515,10 +532,10 @@
   <table class="basic"><tr><th>Menüeintrag</th><th>Art</th><th>Aktuelles Verhalten und Nutzung</th></tr>
   <tr><td><strong>Steroid Track</strong></td><td>Feature-Gate</td><td>Steroid Track ist ein echtes Plugin ohne eigenes Fenster. Es aktiviert Phasenfilter für weibliche Tiere, Blut-Progesteronimport, Urin-PdG-Import, Spermaimport, Hormon-/Ereignissteuerungen, Sperma-Plotsteuerungen und den PdG-Konverter.</td></tr>
   <tr><td><strong>PdG→Progesteron Converter</strong></td><td>Dialog</td><td>Erstellt tierbezogene PdG-zu-Progesteron-Modelle aus gepaarten PdG- und Blut-Progesteronmessungen am selben Tag; gespeicherte Modelle aktivieren Vereinheitl. Prog. und kombinierte Diagramme.</td></tr>
-  <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Bietet Anmeldung, Gastmodus, Benutzer, Jobs, Berechtigungen, Sitzungen und Audit-Protokolle. Aktuelle Zugriffsrollen sind lord, master, user und guest; Job-Bündel wie vet, keeper, manager und researcher verfeinern Benutzerrechte.</td></tr>
-  <tr><td><strong>Projekt Track</strong></td><td>Seitenleiste + optionaler Tab</td><td>Fügt Projekt- und Speziesfilter neben der Tierliste hinzu. Die Menüaktion aktualisiert Projekte; der Projektverwaltungs-Tab erscheint nur bei aktivem Master Track.</td></tr>
-  <tr><td><strong>Medi Track</strong></td><td>Haupttab</td><td>Zeigt Krankengeschichte, aktive Diagnosen, Notizen, Behandlungen, Beobachtungen, Dokumente, Statusbeginn/-auflösung und PDF-Export für das ausgewählte Tier.</td></tr>
-  <tr><td><strong>Tierberichte</strong></td><td>Haupttab</td><td>Schaltet Berichte um. Berichte sind nach ausgewähltem Tier/Monat organisiert und enthalten Datum, Tagesdaten, Tierscores und Signaturen; PDF-Export ist verfügbar.</td></tr>
+  <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Bietet Anmeldung, Gastmodus, Benutzer, Jobs, Berechtigungen, Sitzungen und Audit-Protokolle. Kontorollen sind lord, master, AWO, user und guest; Job-Bündel verfeinern die praktischen Rechte.</td></tr>
+  <tr><td><strong>Projekt Track</strong></td><td>Seitenleiste + optionaler Tab</td><td>Bietet zuordnungsabhängige Projekt-/Speziesfilter, Projekthistorie, IACUC-/AWO-Zuordnung, Versuchsstatus, Dokumente/SOPs und Projektverwaltung.</td></tr>
+  <tr><td><strong>Medi Track</strong></td><td>Haupttab</td><td>Zeigt Krankengeschichte, Diagnosen, Notizen, Behandlungen, Beobachtungen, Versuchs-/Lebenszyklusereignisse und Dokumente; PDF/XLSX-Export unterstützt optionale Signaturen. XLSX kann verknüpfte Dateien in einen benachbarten Dokumentenordner kopieren.</td></tr>
+  <tr><td><strong>Tierberichte</strong></td><td>Haupttab</td><td>Bietet monatliche bearbeitbare/sperrbare Berichtszeilen. Entsperren erhält den Text bis zum Verlassen und erneuten Öffnen des Tabs. PDF/XLSX kann die gesamte Signaturspalte auslassen; XLSX enthält Klartext ohne Format-Tags.</td></tr>
   <tr><td><strong>Flow Track</strong></td><td>Haupttab</td><td>Visualisiert den Embryofluss zwischen Eizellspenderinnen, Samenspendern, Ammen und Gefrierschrank mit Kennzahlen, manueller Bearbeitung, Einstellungen, Aktualisierung aus ProgTrack und Export.</td></tr>
   <tr><td><strong>Heritage Track</strong></td><td>Haupttab</td><td>Zeigt Stammbaum- und Verwandtschaftsgraphen, Elternbearbeitung, Heritage-Platzhalter, Genotyp-/Farbmarkierungen, Legende, Raster und Einstellungen. Die vertikale Anordnung verwendet standardmäßig den kompakten partner-normalisierten Stammbaum oder optional eine chronologische Geburtsmonatsachse mit adaptiven Monatsticks. Eine getrennte Radio-Gruppe zeigt unter dem Tiernamen nichts, Inzucht F (Standard), Geburtsdatum oder die öffentliche Tier-ID.</td></tr>
 <tr><td><strong>Käfig-Übersicht</strong></td><td>Haupttab</td><td>Verwaltet die vierstufige Hierarchie Gebäude → Einheit → Raum → Käfig, echte Tiere, Platzhalter-Tiere, nicht zugewiesene Bewohner, Umzugsverlauf, Farben und PDF-Export. Gebäude, Einheiten, Räume und einzelne Käfige sind jeweils als Inspektionsbereich auswählbar; ein übergeordneter Bereich umfasst seine belegten, inspektionspflichtigen Unterstrukturen.</td></tr>
@@ -527,6 +544,26 @@
   <tr><td><strong>OP-Planner</strong></td><td>Dialog</td><td>Plant Operationen und Embryotransfers mit aktuellen Spenderinnen/Ammen, Datumsregeln, Erholungseinstellungen, manuellen Ereignissen, gesperrten Daten und Planexport.</td></tr>
   <tr><td><strong>Network Track</strong></td><td>Fenster</td><td>Bietet lokalen dateibasierten Team-Chat mit Abfrageintervall, optionalem In-den-Vordergrund-Holen und Benachrichtigungston bei verfügbarem Qt Multimedia.</td></tr>
   </table>
+
+  <h3>9.1 Kontorollen und Job-Berechtigungen</h3>
+  <p>Öffnen Sie in Master Track <strong>Benutzer verwalten</strong>, um Kontorolle, zugewiesene Jobs und effektive Berechtigungen zu prüfen. Die Kontorolle legt die administrative Ebene fest; Job-Bündel sowie direkte Vergaben oder Entzüge passen das Konto an die tägliche Arbeit an.</p>
+  <table class="basic"><tr><th>Rolle</th><th>Nutzung</th></tr>
+    <tr><td><strong>lord</strong></td><td>Administration auf Eigentümerebene mit allen Berechtigungen.</td></tr>
+    <tr><td><strong>master</strong></td><td>Tägliche Benutzer- und Berechtigungsverwaltung ohne die lord-exklusiven Funktionen.</td></tr>
+    <tr><td><strong>AWO</strong></td><td>Konto für Tierschutzbeauftragte für IACUC- und Tierschutz-Zuordnungen.</td></tr>
+    <tr><td><strong>user</strong></td><td>Normales angemeldetes Konto, dessen praktische Zugriffe durch Jobs und Berechtigungen bestimmt werden.</td></tr>
+    <tr><td><strong>guest</strong></td><td>Leseorientiertes Ersatzkonto mit festem eingeschränktem Grundprofil.</td></tr>
+  </table>
+
+  <h3>9.2 Modulübergreifend arbeiten</h3>
+  <p>Verwenden Sie in allen ProgTrack-Modulen dieselbe kontrollierte Tieridentität. Der folgende Ablauf hält Rollen-Tabs, Projekte, Krankengeschichte, Berichte und Haltung konsistent:</p>
+  <ol>
+    <li><strong>Tierrollen konfigurieren:</strong> Lord, Master oder Manager öffnen <strong>Einstellungen → Stil → Rollenkonfiguration</strong> und wählen aktive Tabs, Reihenfolge, Bezeichnungen/Symbole, Neu-/Bearbeiten-Blöcke sowie die Sichtbarkeit von Neues Tier je Rolle. Identität, Haltung, Gewicht und Eltern bleiben Pflichtblöcke.</li>
+    <li><strong>Projektumfang zuweisen:</strong> Ordnen Sie in Projekt Track Benutzer und Tiere dem Projekt zu und erfassen Sie IACUC-/AWO-Zuordnung, Dokumente, SOPs und Versuchsstatus. Rollen-Tabs zeigen normalen Benutzern die zugeordneten Tiere; der Tier-Tab <strong>Alle</strong> bleibt die vollständige Übersicht.</li>
+    <li><strong>Identität und Historie pflegen:</strong> Verwenden Sie den Tiereditor für kontrollierte Änderungen an Identität, Eltern, Herkunft, Haltung und Lebenszyklus. Zugehörige Versuchs- und medizinische Ereignisse stehen anschließend, soweit zutreffend, in Medi Track und Tierberichten zur Verfügung.</li>
+    <li><strong>Haltung inspizieren:</strong> Wählen Sie in der Käfig-Übersicht Gebäude, Einheit, Raum oder Käfig und öffnen Sie Inspektion. Eine Inspektion auf höherer Ebene umfasst geeignete belegte Unterstrukturen und speichert die verantwortliche Person.</li>
+  </ol>
+  <div class="hint"><strong>Hinweis:</strong> Fehlende Tabs, Tiere oder Aktionen weisen meist auf Projektumfang oder Berechtigungen des aktuellen Kontos hin. Lord oder Master können die Spalte Effektiv in Benutzer verwalten prüfen.</div>
 
   <h2 id="troubleshooting">10. Fehlersuche &amp; Tipps</h2>
 

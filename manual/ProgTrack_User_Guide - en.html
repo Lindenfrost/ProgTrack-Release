@@ -223,10 +223,12 @@
 
   <h3>2.3 Sample Excel files</h3>
   <p>
-    The ProgTrack folder may contain example Excel files
-    (<code>Real_Blut.xlsx</code>, <code>Real_Urine.xlsx</code>,
-    <code>Real_Sperma.xlsx</code>, <code>Real_Gewichtel.xlsx</code>).
-    These show the expected structure for importing measurements.
+    Current import templates are stored in <code>Resources/ExampleFiles</code>:
+    <code>ProgTrack_example_blood_progesterone_import.xlsx</code>,
+    <code>ProgTrack_example_urine_pdg_import.xlsx</code>,
+    <code>ProgTrack_example_sperm_import.xlsx</code>, and
+    <code>ProgTrack_example_weight_import.xlsx</code>. They contain separate
+    <code>Animal ID</code> and <code>Sample ID</code> columns.
   </p>
 
   <h2 id="ui-overview">3. User interface overview</h2>
@@ -237,9 +239,9 @@
     <li><strong>Left sidebar</strong> – lists available and archived animals,
       provides filters by cycle phase and quick actions (new, edit, import,
       archive, restore, delete).</li>
-    <li><strong>Main area</strong> – usually two top-level tabs:
-      <em>Plots</em> (time-series graphics) and, if the Animal Reports plugin is
-      installed, <em>Reports</em> (per-animal PDF-style summaries).</li>
+    <li><strong>Main area</strong> – contains <em>Plots</em> and the tabs supplied
+      by enabled plugins, including Reports, Flow Track, Heritage Track, Cage
+      Track, Medi Track, and Project Track where installed and permitted.</li>
     <li><strong>Status bar</strong> – messages about imports, errors and
       processing steps. When the Master Track plugin is installed, the status
       bar also shows the current user and login state (or &ldquo;Guest&rdquo;
@@ -261,6 +263,7 @@
 
   <h3>3.2 Sidebar actions</h3>
   <p>Buttons are context-sensitive: import buttons appear only where the active role and installed plugins can use them. The labels below are the labels from the active language file.</p>
+  <p>Lord, Master, and Manager users configure role order, labels/icons, New/Edit dialog blocks, and per-role <strong>New Animal</strong> visibility under <strong>Settings → Style → Role setup</strong>. The All tab keeps general editing and role correction; it does not show all measurement-import buttons.</p>
   <table class="basic"><tr><th>Button</th><th>Use</th></tr>
   <tr><td><strong>➕ New Animal</strong></td><td>Create a new record.</td></tr>
   <tr><td><strong>✏️ Edit</strong></td><td>Open the full editor for the selected animal.</td></tr>
@@ -284,7 +287,19 @@
     <strong>Animal identity:</strong> ProgTrack identifies each animal by its IPID, built from <code>Name | Species | DD.MM.YYYY</code>. The sidebar still shows the short name for readability, but tooltips, stored JSON data, imports, and exports keep the full IPID. Later changes to name, species, or birth date require manager permission.
   </div>
 
-  <h3>4.2 Animal roles and category-specific editors</h3>
+  <h3>4.2 Configuring Animal ID conventions</h3>
+  <p>The IPID described above is ProgTrack's internal identity key. The separate public <strong>Animal ID</strong> can follow an institution-specific convention. Lord, Master or Manager users configure it under <strong>Settings → Style → Identity and lifecycle conventions</strong>.</p>
+  <p>Build the Animal ID from as many as five ordered components. Each component may be unused or contain Species, Birth year (YY), Birth year (YYYY), Count per year, Count absolute, Sex or Name. ProgTrack joins the selected components with underscores.</p>
+  <table class="basic"><tr><th>Component</th><th>Generated value</th></tr>
+    <tr><td><strong>Species</strong></td><td>Lower-case initials from up to the first three words of the registered species.</td></tr>
+    <tr><td><strong>Birth year</strong></td><td>Two- or four-digit year taken from the complete birth date.</td></tr>
+    <tr><td><strong>Count</strong></td><td>A four-digit unique sequence, either restarted per birth year or continued across all years.</td></tr>
+    <tr><td><strong>Sex</strong></td><td><code>M</code>, <code>F</code> or <code>U</code>.</td></tr>
+    <tr><td><strong>Name</strong></td><td>The animal name converted to an ID-safe token.</td></tr>
+  </table>
+  <p>When creating an animal, the ID field previews the result while Name, Species, Birth Date and Sex are entered. Missing preview components appear as <code>XX</code> or <code>XXXX</code>. On Save, ProgTrack assigns the next unused sequence. Convention-generated IDs are recalculated after an authorized identity change while retaining their original sequence; manually overridden IDs remain unchanged.</p>
+
+  <h3>4.3 Animal roles and category-specific editors</h3>
   <p>The role determines which editor and data tabs are shown. Steroid-specific roles and controls are available only while Steroid Track is enabled.</p>
   <table class="basic"><tr><th>Role label</th><th>Workflow role</th></tr>
   <tr><td><strong>Egg Donor</strong></td><td>Egg donor / female donor</td></tr>
@@ -296,7 +311,7 @@
   <tr><td><strong>Experimental Animal</strong></td><td>Experimental animal</td></tr>
   </table>
 
-  <h3>4.3 Editing data</h3>
+  <h3>4.4 Editing data</h3>
   <p>Select an animal and use the edit action. In the All category, Edit Role changes only the role/category; the separate Edit action opens the full role-specific editor.</p>
   <p><strong>✏️ Edit</strong> · <strong>🫥 Edit Role</strong></p>
   <table class="basic"><tr><th>Editor tab</th><th>Use</th></tr>
@@ -309,7 +324,7 @@
   <tr><td><strong>PGF</strong></td><td>Shown when relevant for the selected role and installed modules.</td></tr>
   </table>
 
-  <h3>4.4 Archiving, restoring, and deleting</h3>
+  <h3>4.5 Archiving, restoring, and deleting</h3>
   <p>Archive keeps data but removes the animal from routine active views. Restore moves an archived animal back. Delete is available for archived animals and permanently removes that record from the database.</p>
   <p><strong>📦 Archive</strong> · <strong>⤴️ Restore</strong> · <strong>🗑️ Delete</strong></p>
 
@@ -324,9 +339,11 @@
 
   <h3>5.3 Importing from Excel</h3>
   <p>Excel imports are based on exact column names. Use the import button that matches the data type and clean invalid dates, empty names, or non-numeric values before importing.</p>
-  <table class="basic"><tr><th>Button</th><th>Required columns</th></tr><tr><td><strong>📈 Load Blood Values</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Load Urine Values</strong></td><td><code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Load Weights</strong></td><td><code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Load Sperm Values</strong></td><td><code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
-  <p>For new animals created during blood, urine, weight, or sperm imports, ProgTrack asks for species and birth date when the import file does not provide them. Import files may include identity columns such as <code>Species</code>/<code>Art</code> and <code>Birth Date</code>/<code>Geburtsdatum</code>. Existing repeated short names should be resolved by IPID or by complete name/species/birth-date information.</p>
-  <p>Optional sample identifiers are recognized from common columns such as Probennummer, Sample ID, Sample, Probe, ID, sample_id, or probe.</p>
+  <table class="basic"><tr><th>Button</th><th>Required columns</th></tr><tr><td><strong>📈 Load Blood Values</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Load Urine Values</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Load Weights</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Load Sperm Values</strong></td><td><code>Datum</code>, <code>Name</code>, <code>Animal ID</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
+  <p>After selecting a valid file, ProgTrack opens a read-only preview <strong>before writing any animals or measurements</strong>. It shows the total number of rows, all imported columns and up to the first 200 rows. The additional Animal status column marks each preview row as Existing animal or New animal; new animals are highlighted.</p>
+  <p>Check Animal ID, Name, dates, Sample ID and measurement values in this preview. Choose <strong>Cancel</strong> to leave the database unchanged, or <strong>Import</strong> to continue. Identity dialogs for unknown animals appear only after the preview has been accepted.</p>
+  <p><code>Animal ID</code> is used to match existing animals. The standard templates deliberately omit species and birth date. If an unknown Animal ID is detected, an additional dialog requires the animal's species and complete birth date before any data can be imported.</p>
+  <p><code>Sample ID</code> is a separate template column for the individual sample and may remain empty when no sample number exists. It is never a replacement for <code>Animal ID</code>.</p>
 
   
   <h3>5.4 PdG &rarr; Progesterone Converter</h3>
@@ -485,10 +502,10 @@
   <table class="basic"><tr><th>Menu item</th><th>Kind</th><th>Current behavior and use</th></tr>
   <tr><td><strong>Steroid Track</strong></td><td>Feature gate</td><td>Steroid Track is a real plugin without its own window. It enables female phase filters, blood progesterone import, urine PdG import, sperm import, hormone/event plot controls, sperm plot controls, and the PdG converter entry.</td></tr>
   <tr><td><strong>PdG→Progesterone Converter</strong></td><td>Dialog</td><td>Fits animal-specific PdG to progesterone models from paired same-day PdG and blood progesterone measurements; fitted models enable Unified Prog. and combined plots.</td></tr>
-  <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Provides login, guest mode, users, jobs, permissions, sessions, and audit logs. Current access roles are lord, master, user, and guest; job bundles such as vet, keeper, manager, and researcher refine user permissions.</td></tr>
-  <tr><td><strong>Project Track</strong></td><td>Sidebar + optional tab</td><td>Adds project and species filters beside the animal list. The menu action refreshes projects; the Project Track management tab appears only when Master Track is active.</td></tr>
-  <tr><td><strong>Medi Track</strong></td><td>Main tab</td><td>Shows selected-animal medical history, active diagnoses, notes, treatments, observations, documents, status start/resolution, and PDF export.</td></tr>
-  <tr><td><strong>Animal Reports</strong></td><td>Main tab</td><td>Toggles Reports. Reports are selected-animal/month based and contain Date, Daily Data, Animal Scores, and Signatures; PDF export is available.</td></tr>
+  <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Provides login, guest mode, users, jobs, permissions, sessions, and audit logs. Account roles are lord, master, AWO, user, and guest; job bundles refine practical permissions.</td></tr>
+  <tr><td><strong>Project Track</strong></td><td>Sidebar + optional tab</td><td>Adds association-scoped project/species filters, project history, IACUC/AWO assignment, experiment state, documents/SOPs, and project management.</td></tr>
+  <tr><td><strong>Medi Track</strong></td><td>Main tab</td><td>Shows medical history, active diagnoses, notes, treatments, observations, experiment/lifecycle events and documents; exports PDF or XLSX with optional signatures. XLSX can copy linked files into a sibling document folder.</td></tr>
+  <tr><td><strong>Animal Reports</strong></td><td>Main tab</td><td>Provides monthly editable/lockable report lines. Unlocking preserves text until the tab is left and reopened. PDF/XLSX export can omit the entire Signatures column; XLSX stores plain text without rich-text tags.</td></tr>
   <tr><td><strong>Flow Track</strong></td><td>Main tab</td><td>Visualizes embryo flow between egg donors, sperm donors, surrogates, and freezer, with metrics, manual edits, settings, refresh from ProgTrack, and export.</td></tr>
   <tr><td><strong>Heritage Track</strong></td><td>Main tab</td><td>Shows pedigree and relationship graphs, parent editing, Heritage-only placeholders, genotype/fill-color annotations, legend, grid, and settings. Vertical placement can use the default compact partner-normalized pedigree or an optional chronological birth-month axis with adaptive month ticks. A separate label-detail radio group shows nothing, inbreeding F (default), birth date, or the public animal ID below each name.</td></tr>
 <tr><td><strong>Cage Track</strong></td><td>Main tab</td><td>Manages the four-level Building → Unit → Room → Cage hierarchy, real and dummy animals, unassigned occupants, movement history, colors, and PDF export. Buildings, units, rooms, and individual cages can each be selected as an inspection scope; a parent scope includes its eligible occupied descendants.</td></tr>
@@ -497,6 +514,26 @@
   <tr><td><strong>OP-Scheduler</strong></td><td>Dialog</td><td>Schedules surgeries and embryo transfers using current donor/surrogate animals, date rules, recovery settings, manual events, blocked dates, and schedule export.</td></tr>
   <tr><td><strong>Network Track</strong></td><td>Window</td><td>Provides local file-based team chat with polling, optional bring-to-front behavior, and notification sound when Qt Multimedia is available.</td></tr>
   </table>
+
+  <h3>9.1 Account roles and job permissions</h3>
+  <p>Open <strong>Manage Users</strong> in Master Track to review an account's role, assigned jobs and effective permissions. The account role sets the administrative level; job bundles and direct grants or revocations adapt the account to its daily work.</p>
+  <table class="basic"><tr><th>Role</th><th>Use</th></tr>
+    <tr><td><strong>lord</strong></td><td>Owner-level administration with all permissions.</td></tr>
+    <tr><td><strong>master</strong></td><td>Daily user and permission administration without the lord-only controls.</td></tr>
+    <tr><td><strong>AWO</strong></td><td>Animal Welfare Officer account for IACUC and welfare assignments.</td></tr>
+    <tr><td><strong>user</strong></td><td>Standard signed-in account whose practical access is defined by jobs and permissions.</td></tr>
+    <tr><td><strong>guest</strong></td><td>Read-oriented fallback account with a fixed restricted baseline.</td></tr>
+  </table>
+
+  <h3>9.2 Working across modules</h3>
+  <p>Use the same controlled animal identity throughout ProgTrack. The following sequence keeps role tabs, projects, medical records, reports and housing information consistent:</p>
+  <ol>
+    <li><strong>Configure animal roles:</strong> Lord, Master or Manager users open <strong>Settings → Style → Role setup</strong> to choose active tabs, order, labels/icons, New/Edit blocks and per-role New Animal visibility. Identity, housing, weight and parent blocks remain required.</li>
+    <li><strong>Assign project scope:</strong> In Project Track, associate users and animals with the project and record IACUC/AWO assignments, documents, SOPs and experiment state. Project-role tabs show associated animals for ordinary users; the <strong>All</strong> animal tab remains the complete overview.</li>
+    <li><strong>Maintain identity and history:</strong> Use the animal editor for controlled identity, parent, origin, housing and lifecycle changes. Related experiment and medical events then remain available to Medi Track and Animal Reports where applicable.</li>
+    <li><strong>Inspect housing:</strong> In Cage Track select a Building, Unit, Room or Cage and open Inspection. A higher-level inspection includes its eligible occupied child structures and records the responsible inspector.</li>
+  </ol>
+  <div class="hint"><strong>Note:</strong> Missing tabs, animals or actions usually indicate the current account's project scope or permissions. A Lord or Master can review the Effective column in Manage Users.</div>
 
   <h2 id="troubleshooting">10. Troubleshooting &amp; tips</h2>
 
