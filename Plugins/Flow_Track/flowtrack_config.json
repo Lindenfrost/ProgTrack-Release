@@ -1,0 +1,49 @@
+{
+  "settings": {
+    "egg_lifebar": {
+      "metric": "fertilized_to_implantation",
+      "stage": "in_vitro_m2",
+      "aggregation": "total"
+    },
+    "sperm_lifebar": {
+      "metric": "transferred_to_implantation",
+      "stage": "in_vitro_m2",
+      "aggregation": "total"
+    },
+    "freezer_visible": true,
+    "show_timeline": false,
+    "max_suggestions_per_transfer": 3,
+    "suggestion_tolerance_days": 7,
+    "show_egg_donors": true,
+    "show_sperm_donors": true,
+    "show_surrogates": true,
+    "render_full_graph": true,
+    "show_animal_names": true,
+    "show_lifebars": true,
+    "surrogate_transfer_visibility": {
+      "Lindir | Callitrix jacchus | 03.02.2026": {}
+    },
+    "egg_donor_surgery_visibility": {
+      "Lindir | Callitrix jacchus | 01.02.2024": {}
+    },
+    "show_grid": false,
+    "snap_to_grid": false,
+    "egg_donor_metric": "usable_per_gv",
+    "egg_donor_aggregation": "total",
+    "sperm_donor_metric": "usable_per_ivm",
+    "sperm_donor_aggregation": "total",
+    "surrogate_metric": "total_implantation",
+    "surrogate_aggregation": "total",
+    "sperm_donor_donation_visibility": {
+      "Lindir | Papio hamadryas anubis | 02.02.2024": {},
+      "Lindir | Callitrix jacchus | 02.02.2024": {}
+    },
+    "sperm_donor_metric_visibility": {
+      "fert_rate_ivm": false,
+      "usable_per_ivm": false,
+      "implantation_rate": false,
+      "fert_rate_in_vivo": false
+    }
+  },
+  "ui_preferences": {}
+}

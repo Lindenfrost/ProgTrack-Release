@@ -1,0 +1,6 @@
+# Species	Genotype
+Callitrix jacchus	WT/WT
+Callitrix jacchus	WT/H-
+Callitrix jacchus	H-/H-
+Callitrix jacchus	OTOF-/WT
+Callitrix jacchus	OTOF-/OTOF-

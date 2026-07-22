@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.1
+# Part of: ProgTrack 0.1.2
 # Module: shared helpers for rewriting persisted animal references.
 
 from __future__ import annotations

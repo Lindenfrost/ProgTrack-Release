@@ -1,0 +1,488 @@
+{
+  "schema_version": 1,
+  "deleted_builtin_values": [],
+  "roles": [
+    {
+      "role_id": "egg_cell_donor",
+      "value": "egg_cell_donor",
+      "label": "Egg cell donor",
+      "label_key": "role.egg_cell_donor",
+      "icon": "♀",
+      "order": 10,
+      "active": true,
+      "built_in": true,
+      "base_editor": "female",
+      "field_preset": "egg_cell_donor",
+      "dialog_blocks": {
+        "new": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "limits_reproductive",
+          "limits_measurements",
+          "recovery_time",
+          "health_flags",
+          "blood_progesterone",
+          "urine_pdg",
+          "computed_values",
+          "reproductive_events"
+        ],
+        "edit": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "limits_reproductive",
+          "limits_measurements",
+          "recovery_time",
+          "health_flags",
+          "blood_progesterone",
+          "urine_pdg",
+          "computed_values",
+          "reproductive_events"
+        ]
+      },
+      "custom_preset_names": {
+        "new": "",
+        "edit": ""
+      },
+      "event_recipe": {
+        "available_events": [
+          "surgery",
+          "pgf",
+          "fsh",
+          "progesterone"
+        ],
+        "default_event": "surgery"
+      },
+      "eligibility": {},
+      "status_display": {},
+      "show_new_animal_button": false,
+      "imported": false,
+      "review_state": "",
+      "original_label": "",
+      "mapped_to": ""
+    },
+    {
+      "role_id": "surrogate",
+      "value": "surrogate",
+      "label": "Surrogate",
+      "label_key": "role.surrogate",
+      "icon": "☉",
+      "order": 20,
+      "active": true,
+      "built_in": true,
+      "base_editor": "female",
+      "field_preset": "surrogate",
+      "dialog_blocks": {
+        "new": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "limits_reproductive",
+          "limits_measurements",
+          "recovery_time",
+          "health_flags",
+          "blood_progesterone",
+          "urine_pdg",
+          "computed_values",
+          "reproductive_events"
+        ],
+        "edit": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "limits_reproductive",
+          "limits_measurements",
+          "recovery_time",
+          "health_flags",
+          "blood_progesterone",
+          "urine_pdg",
+          "computed_values",
+          "reproductive_events"
+        ]
+      },
+      "custom_preset_names": {
+        "new": "",
+        "edit": ""
+      },
+      "event_recipe": {
+        "available_events": [
+          "embryo_transfer",
+          "pregnancy",
+          "abortion",
+          "birth",
+          "pgf",
+          "progesterone"
+        ],
+        "default_event": "embryo_transfer"
+      },
+      "eligibility": {},
+      "status_display": {},
+      "show_new_animal_button": false,
+      "imported": false,
+      "review_state": "",
+      "original_label": "",
+      "mapped_to": ""
+    },
+    {
+      "role_id": "sperm_donor",
+      "value": "sperm_donor",
+      "label": "Sperm donor",
+      "label_key": "role.sperm_donor",
+      "icon": "♂",
+      "order": 30,
+      "active": true,
+      "built_in": true,
+      "base_editor": "sperm_donor",
+      "field_preset": "sperm_donor",
+      "dialog_blocks": {
+        "new": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "limits_measurements",
+          "recovery_time",
+          "health_flags",
+          "sperm_measurements"
+        ],
+        "edit": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "limits_measurements",
+          "recovery_time",
+          "health_flags",
+          "sperm_measurements"
+        ]
+      },
+      "custom_preset_names": {
+        "new": "",
+        "edit": ""
+      },
+      "event_recipe": {
+        "available_events": [],
+        "default_event": ""
+      },
+      "eligibility": {},
+      "status_display": {},
+      "show_new_animal_button": false,
+      "imported": false,
+      "review_state": "",
+      "original_label": "",
+      "mapped_to": ""
+    },
+    {
+      "role_id": "offspring",
+      "value": "offspring",
+      "label": "Offspring",
+      "label_key": "role.offspring",
+      "icon": "👶",
+      "order": 40,
+      "active": true,
+      "built_in": true,
+      "base_editor": "offspring",
+      "field_preset": "offspring",
+      "dialog_blocks": {
+        "new": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "limits_measurements",
+          "health_flags",
+          "procedure_events"
+        ],
+        "edit": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "limits_measurements",
+          "health_flags",
+          "procedure_events"
+        ]
+      },
+      "custom_preset_names": {
+        "new": "",
+        "edit": ""
+      },
+      "event_recipe": {
+        "available_events": [
+          "special_measurement",
+          "surgery"
+        ],
+        "default_event": "special_measurement"
+      },
+      "eligibility": {},
+      "status_display": {},
+      "show_new_animal_button": true,
+      "imported": false,
+      "review_state": "",
+      "original_label": "",
+      "mapped_to": ""
+    },
+    {
+      "role_id": "partner_animal",
+      "value": "partner_animal",
+      "label": "Partner animal",
+      "label_key": "role.partner_animal",
+      "icon": "🐾",
+      "order": 50,
+      "active": true,
+      "built_in": true,
+      "base_editor": "partner",
+      "field_preset": "partner",
+      "dialog_blocks": {
+        "new": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "partner_fields",
+          "health_flags",
+          "computed_values"
+        ],
+        "edit": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "partner_fields",
+          "health_flags",
+          "computed_values"
+        ]
+      },
+      "custom_preset_names": {
+        "new": "",
+        "edit": ""
+      },
+      "event_recipe": {
+        "available_events": [],
+        "default_event": ""
+      },
+      "eligibility": {},
+      "status_display": {},
+      "show_new_animal_button": false,
+      "imported": false,
+      "review_state": "",
+      "original_label": "",
+      "mapped_to": ""
+    },
+    {
+      "role_id": "breeding_animal",
+      "value": "breeding_animal",
+      "label": "Breeding animal",
+      "label_key": "role.breeding_animal",
+      "icon": "⚤",
+      "order": 60,
+      "active": true,
+      "built_in": true,
+      "base_editor": "breeding_animal",
+      "field_preset": "breeding",
+      "dialog_blocks": {
+        "new": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "mating_partner",
+          "limits_reproductive",
+          "health_flags",
+          "reproductive_events"
+        ],
+        "edit": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "mating_partner",
+          "limits_reproductive",
+          "health_flags",
+          "reproductive_events"
+        ]
+      },
+      "custom_preset_names": {
+        "new": "",
+        "edit": ""
+      },
+      "event_recipe": {
+        "available_events": [
+          "pregnancy",
+          "abortion",
+          "birth"
+        ],
+        "default_event": "pregnancy"
+      },
+      "eligibility": {},
+      "status_display": {},
+      "show_new_animal_button": false,
+      "imported": false,
+      "review_state": "",
+      "original_label": "",
+      "mapped_to": ""
+    },
+    {
+      "role_id": "experimental_animal",
+      "value": "experimental_animal",
+      "label": "Experimental animal",
+      "label_key": "role.experimental_animal",
+      "icon": "💡",
+      "order": 70,
+      "active": true,
+      "built_in": true,
+      "base_editor": "experimental_animal",
+      "field_preset": "experimental",
+      "dialog_blocks": {
+        "new": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "limits_measurements",
+          "health_flags",
+          "procedure_events",
+          "experimental_fields"
+        ],
+        "edit": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "limits_measurements",
+          "health_flags",
+          "procedure_events",
+          "experimental_fields"
+        ]
+      },
+      "custom_preset_names": {
+        "new": "",
+        "edit": ""
+      },
+      "event_recipe": {
+        "available_events": [
+          "surgery",
+          "measurement"
+        ],
+        "default_event": "surgery"
+      },
+      "eligibility": {},
+      "status_display": {},
+      "show_new_animal_button": false,
+      "imported": false,
+      "review_state": "",
+      "original_label": "",
+      "mapped_to": ""
+    },
+    {
+      "role_id": "unknown",
+      "value": "unknown",
+      "label": "Unknown",
+      "label_key": "role.unknown",
+      "icon": "?",
+      "order": 9990,
+      "active": true,
+      "built_in": true,
+      "base_editor": "basic",
+      "field_preset": "basic",
+      "dialog_blocks": {
+        "new": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "health_flags"
+        ],
+        "edit": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "health_flags"
+        ]
+      },
+      "custom_preset_names": {
+        "new": "",
+        "edit": ""
+      },
+      "event_recipe": {
+        "available_events": [],
+        "default_event": ""
+      },
+      "eligibility": {},
+      "status_display": {},
+      "show_new_animal_button": false,
+      "imported": false,
+      "review_state": "",
+      "original_label": "",
+      "mapped_to": ""
+    }
+  ]
+}

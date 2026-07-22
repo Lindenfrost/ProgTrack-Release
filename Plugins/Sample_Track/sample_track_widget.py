@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
     QFrame, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QScrollArea, QScrollBar, QSizePolicy, QSpinBox,
+    QInputDialog,
     QTabWidget, QTextEdit, QVBoxLayout, QWidget, QCompleter,
 )
 from Plugins.core.animal_identity import (
@@ -285,6 +286,45 @@ def _resolve_animal_input(app, value: str) -> tuple[str, Dict[str, Any], str]:
 
 def _display_animal_name(key: str, record: Optional[Dict[str, Any]] = None) -> str:
     return animal_base_name(key, record or {})
+
+
+def _animal_choice_label(key: str, record: Dict[str, Any]) -> str:
+    name = animal_base_name(key, record)
+    animal_id = str(record.get("id") or key).strip()
+    return f"{name} ({animal_id})"
+
+
+def _ambiguous_animal_choices(app, value: str) -> Dict[str, str]:
+    """Return Name (ID) labels mapped to stable IPID keys for a duplicate name."""
+    folded = animal_base_name(value).casefold()
+    choices: Dict[str, str] = {}
+    for key, record in _animal_records(app).items():
+        if animal_base_name(key, record).casefold() != folded:
+            continue
+        label = _animal_choice_label(key, record)
+        if label in choices:
+            label = f"{label} — {key}"
+        choices[label] = key
+    return dict(sorted(choices.items(), key=lambda item: item[0].casefold()))
+
+
+def _choose_ambiguous_animal(parent, app, value: str, messages: Dict) -> str:
+    choices = _ambiguous_animal_choices(app, value)
+    if not choices:
+        return ""
+    label, accepted = QInputDialog.getItem(
+        parent,
+        _msg(messages, "sample_track.animal_choice.title", "Select animal"),
+        _msg(
+            messages,
+            "sample_track.animal_choice.prompt",
+            "More than one animal has this name. Select Name (ID):",
+        ),
+        list(choices),
+        0,
+        False,
+    )
+    return choices.get(label, "") if accepted else ""
 
 
 def _parse_date(s: str) -> Optional[date]:
@@ -977,6 +1017,12 @@ class SampleRowWidget(QFrame):
     def _on_save(self):
         raw_name = self._name_le.text().strip()
         name, rec, error_code = _resolve_animal_input(self._app, raw_name)
+        if error_code == "ambiguous":
+            name = _choose_ambiguous_animal(
+                self, self._app, raw_name, self._messages)
+            if name:
+                rec = dict(_animal_records(self._app).get(name, {}))
+                error_code = ""
         if error_code:
             message = (
                 "This animal name is ambiguous. Please select the full IPID from autocomplete."
@@ -1567,6 +1613,12 @@ class OtherSampleRowWidget(QFrame):
     def _on_save(self):
         raw_name = self._name_le.text().strip()
         name, rec, error_code = _resolve_animal_input(self._app, raw_name)
+        if error_code == "ambiguous":
+            name = _choose_ambiguous_animal(
+                self, self._app, raw_name, self._messages)
+            if name:
+                rec = dict(_animal_records(self._app).get(name, {}))
+                error_code = ""
         if error_code:
             message = (
                 "This animal name is ambiguous. Please select the full IPID from autocomplete."

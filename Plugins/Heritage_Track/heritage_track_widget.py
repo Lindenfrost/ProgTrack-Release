@@ -13,7 +13,7 @@ import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QPixmap
@@ -35,6 +35,9 @@ from PyQt6.QtWidgets import (
     QWidget,
     QComboBox,
     QCheckBox,
+    QGroupBox,
+    QRadioButton,
+    QButtonGroup,
     QSpinBox,
     QStackedWidget,
 )
@@ -43,11 +46,13 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
+from matplotlib.ticker import FixedLocator, FuncFormatter, MultipleLocator
 import matplotlib.patheffects as path_effects
 
 from Plugins.core.animal_identity import (
     animal_base_name,
     animal_identity_key,
+    normalize_birth_date,
     resolve_animal_reference_text,
     split_animal_identity_key,
 )
@@ -66,12 +71,15 @@ from .heritage_store import HeritageStore
 from .inbreeding import InbreedingCalculator
 from .layout_pipeline import (
     LayoutPipeline,
+    VERTICAL_LAYOUT_CHRONOLOGICAL,
+    VERTICAL_LAYOUT_PARTNER_NORMALIZED,
+    compute_chronological_positions,
     parse_complete_birth_date_ordinal,
 )
 from .pedigree_engine import PedigreeEngine
 from .pedigree_router import PedigreeRouter, RoutePlan
 from .scope_provider import ProjectsTrackScopeProvider
-from .ui_parent_fields import build_parent_group, extract_parent_values
+from .ui_parent_fields import ParentSelector, build_parent_group, extract_parent_values
 
 
 class NodeEditDialog(QDialog):
@@ -93,6 +101,9 @@ class NodeEditDialog(QDialog):
         allow_remove: bool = False,
         animal_species: str = "",
         species_options: Optional[List[str]] = None,
+        birth_date: str = "",
+        sex_editable: bool = True,
+        parent_options_provider: Optional[Callable[[str, str], List[str]]] = None,
     ):
         super().__init__(parent)
         self.messages = messages
@@ -103,6 +114,7 @@ class NodeEditDialog(QDialog):
         self._sex = self._normalize_sex(sex)
         self._remove_requested = False
         self._species_options = species_options or []
+        self._parent_options_provider = parent_options_provider
 
         self.setWindowTitle(messages.get("heritage_track.node.edit.title", "Edit Animal Node"))
         self.setModal(True)
@@ -113,6 +125,12 @@ class NodeEditDialog(QDialog):
         if self._allow_name_edit:
             self.name_edit = QLineEdit(self._animal_name)
             form.addRow(messages.get("heritage_track.node.edit.name", "Name:"), self.name_edit)
+            self.birth_date_edit = QLineEdit(str(birth_date or "").strip())
+            self.birth_date_edit.setPlaceholderText("DD.MM.YYYY")
+            form.addRow(
+                messages.get("heritage_track.node.edit.birth_date", "Birth date:"),
+                self.birth_date_edit,
+            )
             # Species dropdown for new animals (only when creating)
             if self._species_options:
                 self.species_combo = QComboBox()
@@ -124,29 +142,27 @@ class NodeEditDialog(QDialog):
                 self.species_combo = None
         else:
             self.name_edit = None
+            self.birth_date_edit = None
             self.species_combo = None
             form.addRow(
                 messages.get("heritage_track.node.edit.animal", "Animal:"),
                 QLabel(self._animal_name),
             )
 
-        from PyQt6.QtWidgets import QCompleter
-        self.mother_combo = QComboBox()
-        self.mother_combo.setEditable(True)
-        self.mother_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.father_combo = QComboBox()
-        self.father_combo.setEditable(True)
-        self.father_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self._populate_parent_combo(self.mother_combo, mother_options or [], mother)
-        self._populate_parent_combo(self.father_combo, father_options or [], father)
-        _m_completer = QCompleter([self.mother_combo.itemText(i) for i in range(self.mother_combo.count())])
-        _m_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        _m_completer.setFilterMode(Qt.MatchFlag.MatchContains)
-        self.mother_combo.setCompleter(_m_completer)
-        _f_completer = QCompleter([self.father_combo.itemText(i) for i in range(self.father_combo.count())])
-        _f_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        _f_completer.setFilterMode(Qt.MatchFlag.MatchContains)
-        self.father_combo.setCompleter(_f_completer)
+        self.mother_combo = ParentSelector(
+            messages,
+            mother_options or [],
+            mother,
+            allow_custom=True,
+            parent=self,
+        )
+        self.father_combo = ParentSelector(
+            messages,
+            father_options or [],
+            father,
+            allow_custom=True,
+            parent=self,
+        )
         if animal_species:
             _sp_hint = messages.get("heritage_track.node.edit.species_filter_hint", "(filtered by species: {sp})").replace("{sp}", animal_species)
             form.addRow(messages.get("heritage_track.node.edit.mother", "Mother:"), self.mother_combo)
@@ -159,14 +175,25 @@ class NodeEditDialog(QDialog):
             form.addRow(messages.get("heritage_track.node.edit.father", "Father:"), self.father_combo)
 
         self.sex_combo = QComboBox()
-        self.sex_combo.addItem(messages.get("heritage_track.sex.auto", "Auto"), "")
         self.sex_combo.addItem(messages.get("heritage_track.sex.male", "Male"), "male")
         self.sex_combo.addItem(messages.get("heritage_track.sex.female", "Female"), "female")
+        self.sex_combo.addItem(messages.get("heritage_track.sex.unknown", "Unknown"), "unknown")
         sex_idx = self.sex_combo.findData(self._sex)
         if sex_idx < 0:
-            sex_idx = 0
+            sex_idx = self.sex_combo.findData("unknown")
         self.sex_combo.setCurrentIndex(sex_idx)
+        self.sex_combo.setEnabled(bool(sex_editable))
+        if not sex_editable:
+            self.sex_combo.setToolTip(
+                messages.get(
+                    "heritage_track.sex.read_only_core",
+                    "Sex is maintained by the main animal record.",
+                )
+            )
         form.addRow(messages.get("heritage_track.node.edit.sex", "Sex:"), self.sex_combo)
+
+        if self.species_combo is not None and self._parent_options_provider is not None:
+            self.species_combo.currentIndexChanged.connect(self._refresh_parent_options)
 
         self.color_display = QLineEdit(self._selected_color or messages.get("heritage_track.node.edit.fill_color.none", "No fill"))
         self.color_display.setReadOnly(True)
@@ -199,26 +226,14 @@ class NodeEditDialog(QDialog):
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
 
-    def _populate_parent_combo(self, combo: QComboBox, options: List[str], selected: str) -> None:
-        clean_selected = self._normalize_parent_value(selected)
-        seen = set()
-
-        combo.addItem(self._none_label, "")
-        seen.add("")
-
-        for name in sorted([str(v).strip() for v in options if str(v).strip()], key=str.lower):
-            if name in seen:
-                continue
-            combo.addItem(name, name)
-            seen.add(name)
-
-        if clean_selected and clean_selected not in seen:
-            combo.addItem(clean_selected, clean_selected)
-
-        index = combo.findData(clean_selected)
-        if index < 0:
-            index = 0
-        combo.setCurrentIndex(index)
+    def _refresh_parent_options(self) -> None:
+        if self._parent_options_provider is None:
+            return
+        species = ""
+        if self.species_combo is not None:
+            species = str(self.species_combo.currentData() or "").strip()
+        self.mother_combo.set_options(self._parent_options_provider("female", species))
+        self.father_combo.set_options(self._parent_options_provider("male", species))
 
     def _request_remove(self) -> None:
         self._remove_requested = True
@@ -254,9 +269,11 @@ class NodeEditDialog(QDialog):
             return "male"
         if text in {"f", "female", "woman", "femmina", "femminile", "weiblich", "w", "ж", "жен", "женский", "самка"}:
             return "female"
+        if text in {"u", "unknown", "unknown sex", "unbekannt", "sconosciuto", "sconosciuta"}:
+            return "unknown"
         return ""
 
-    def values(self) -> Dict[str, str]:
+    def values(self) -> Dict[str, Any]:
         animal_name = self._animal_name
         if self.name_edit is not None:
             animal_name = self.name_edit.text().strip()
@@ -264,12 +281,16 @@ class NodeEditDialog(QDialog):
             "animal_name": animal_name,
             "fill_color": self._selected_color,
             "genotype": self.genotype_edit.text().strip(),
-            "mother": self._normalize_parent_value(self.mother_combo.currentText().strip()),
-            "father": self._normalize_parent_value(self.father_combo.currentText().strip()),
+            "mother": self._normalize_parent_value(self.mother_combo.selected_value()),
+            "father": self._normalize_parent_value(self.father_combo.selected_value()),
+            "mother_allows_missing": self.mother_combo.allows_missing_value(),
+            "father_allows_missing": self.father_combo.allows_missing_value(),
             "sex": self._normalize_sex(self.sex_combo.currentData()),
         }
         if self.species_combo is not None:
             result["species"] = self.species_combo.currentData() or ""
+        if self.birth_date_edit is not None:
+            result["birth_date"] = self.birth_date_edit.text().strip()
         return result
 
 
@@ -363,7 +384,8 @@ class HeritageTrackWidget(QWidget):
         self.coeff_dialog: Optional[CoefficientDialog] = None
         self._coeff_dialog_pos = None  # type: Optional[Any]  # QPoint
         self._ghost_nodes: Set[str] = set()
-        self.settings: Dict[str, bool] = self.plugin.get_settings()
+        self._chronological_undated_nodes: Set[str] = set()
+        self.settings: Dict[str, Any] = self.plugin.get_settings()
         self.collapsed_families: Set[str] = set(self.plugin.store.get_collapsed_families())
 
         # View/interaction state (FlowTrack-like)
@@ -381,7 +403,7 @@ class HeritageTrackWidget(QWidget):
         self.is_dragging = False
         self.drag_threshold = 0.05
         self._drag_background: Optional[Any] = None
-        self._drag_artist_map: Dict[str, Tuple[Any, Any, Optional[Any]]] = {}
+        self._drag_artist_map: Dict[str, Tuple[Any, ...]] = {}
         self.all_animals_mode = True
         self._force_relayout = False
 
@@ -705,6 +727,55 @@ class HeritageTrackWidget(QWidget):
             self.ax.axhline(y, color="#d9d9d9", linewidth=0.6, alpha=0.45, zorder=0)
             y += grid_spacing
 
+    def _configure_chronological_axis(self) -> None:
+        """Show an adaptive calendar Y-axis for the chronological layout."""
+        low, high = sorted(self.ax.get_ylim())
+        span = max(0.1, high - low)
+        year_step = max(1, int(math.ceil(span / 18.0)))
+        if span <= 3.0:
+            month_step = 1
+        elif span <= 8.0:
+            month_step = 2
+        elif span <= 15.0:
+            month_step = 3
+        elif span <= 30.0:
+            month_step = 6
+        else:
+            month_step = 12
+
+        self.ax.yaxis.set_major_locator(MultipleLocator(float(year_step)))
+        self.ax.yaxis.set_major_formatter(
+            FuncFormatter(
+                lambda value, _pos: str(int(round(value)))
+                if abs(value - round(value)) < 1e-6
+                else ""
+            )
+        )
+        month_ticks: List[float] = []
+        first_year = int(math.floor(low)) - 1
+        last_year = int(math.ceil(high)) + 1
+        month_indices = (6,) if month_step == 12 else range(0, 12, month_step)
+        for year in range(first_year, last_year + 1):
+            for month_index in month_indices:
+                tick = year + (month_index / 12.0)
+                if low <= tick <= high and abs(tick - round(tick)) > 1e-6:
+                    month_ticks.append(tick)
+        self.ax.yaxis.set_minor_locator(FixedLocator(month_ticks))
+        self.ax.tick_params(axis="y", which="major", length=6, labelsize=8)
+        self.ax.tick_params(axis="y", which="minor", length=2.5)
+        self.ax.tick_params(axis="x", bottom=False, labelbottom=False)
+        self.ax.spines["top"].set_visible(False)
+        self.ax.spines["right"].set_visible(False)
+        self.ax.spines["bottom"].set_visible(False)
+        self.ax.spines["left"].set_visible(True)
+        self.ax.set_ylabel(
+            self.messages.get("heritage_track.axis.birth_date", "Birth date"),
+            fontsize=9,
+        )
+        self.ax.grid(axis="y", which="major", color="#d4d4d4", linewidth=0.65, zorder=0)
+        self.ax.grid(axis="y", which="minor", color="#ededed", linewidth=0.35, zorder=0)
+        self.figure.subplots_adjust(left=0.075, right=0.995, top=0.995, bottom=0.02)
+
     def _snap_to_grid(self, x: float, y: float) -> Tuple[float, float]:
         if not self.settings.get("snap_to_grid", False):
             return x, y
@@ -735,32 +806,73 @@ class HeritageTrackWidget(QWidget):
         show_legend_check.setChecked(self.settings.get("show_legend", True))
         layout.addWidget(show_legend_check)
 
-        show_inbreeding_f_check = QCheckBox(
-            self.messages.get("heritage_track.settings.show_inbreeding_f", "Show inbreeding coefficient (F)")
-        )
-        show_inbreeding_f_check.setChecked(self.settings.get("show_inbreeding_f", True))
-        layout.addWidget(show_inbreeding_f_check)
-
         exclude_archived_check = QCheckBox(
             self.messages.get("heritage_track.settings.exclude_archived", "Exclude archived animals")
         )
         exclude_archived_check.setChecked(self.settings.get("exclude_archived", False))
         layout.addWidget(exclude_archived_check)
 
-        birthdate_height_check = QCheckBox(
+        vertical_group = QGroupBox(
+            self.messages.get("heritage_track.settings.vertical_placement", "Vertical placement")
+        )
+        vertical_box = QVBoxLayout(vertical_group)
+        vertical_buttons = QButtonGroup(vertical_group)
+        partner_normalized_radio = QRadioButton(
             self.messages.get(
-                "heritage_track.settings.birthdate_height_layout",
-                "Use birth date for vertical placement",
+                "heritage_track.settings.vertical_placement.partner_normalized",
+                "Partner-normalized pedigree",
             )
         )
-        birthdate_height_check.setToolTip(
+        partner_normalized_radio.setToolTip(
             self.messages.get(
-                "heritage_track.settings.birthdate_height_layout.tooltip",
-                "Use complete birth dates as a secondary vertical factor in automatic pedigree layout.",
+                "heritage_track.settings.vertical_placement.partner_normalized.tooltip",
+                "Align partners and pedigree generations for a compact family tree.",
             )
         )
-        birthdate_height_check.setChecked(self.settings.get("birthdate_height_layout", True))
-        layout.addWidget(birthdate_height_check)
+        chronological_radio = QRadioButton(
+            self.messages.get(
+                "heritage_track.settings.vertical_placement.chronological",
+                "Chronological birth-date axis",
+            )
+        )
+        chronological_radio.setToolTip(
+            self.messages.get(
+                "heritage_track.settings.vertical_placement.chronological.tooltip",
+                "Place dated animals at their birth month and show a calendar Y-axis.",
+            )
+        )
+        vertical_buttons.addButton(partner_normalized_radio)
+        vertical_buttons.addButton(chronological_radio)
+        vertical_box.addWidget(partner_normalized_radio)
+        vertical_box.addWidget(chronological_radio)
+        current_vertical_mode = self.settings.get(
+            "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
+        )
+        chronological_radio.setChecked(current_vertical_mode == VERTICAL_LAYOUT_CHRONOLOGICAL)
+        partner_normalized_radio.setChecked(not chronological_radio.isChecked())
+        layout.addWidget(vertical_group)
+
+        detail_group = QGroupBox(
+            self.messages.get("heritage_track.settings.animal_label_detail", "Animal label detail")
+        )
+        detail_box = QVBoxLayout(detail_group)
+        detail_buttons = QButtonGroup(detail_group)
+        detail_radios: Dict[str, QRadioButton] = {}
+        for value, fallback in (
+            ("nothing", "Nothing"),
+            ("inbreeding_f", "Inbreeding F"),
+            ("birth_date", "Birth date"),
+            ("animal_id", "Animal ID"),
+        ):
+            radio = QRadioButton(
+                self.messages.get(f"heritage_track.settings.animal_label_detail.{value}", fallback)
+            )
+            detail_buttons.addButton(radio)
+            detail_box.addWidget(radio)
+            detail_radios[value] = radio
+        current_detail = str(self.settings.get("animal_label_detail", "inbreeding_f"))
+        detail_radios.get(current_detail, detail_radios["inbreeding_f"]).setChecked(True)
+        layout.addWidget(detail_group)
 
         self.canvas.setToolTip(self.messages.get("heritage_track.tooltip.double_click_edit", "Double-click a node to edit"))
 
@@ -776,11 +888,23 @@ class HeritageTrackWidget(QWidget):
         self.settings["snap_to_grid"] = snap_grid_check.isChecked()
         self.settings["show_heritage_only"] = show_heritage_only_check.isChecked()
         self.settings["show_legend"] = show_legend_check.isChecked()
-        self.settings["show_inbreeding_f"] = show_inbreeding_f_check.isChecked()
         self.settings["exclude_archived"] = exclude_archived_check.isChecked()
-        self.settings["birthdate_height_layout"] = birthdate_height_check.isChecked()
+        self.settings["vertical_layout_mode"] = (
+            VERTICAL_LAYOUT_CHRONOLOGICAL
+            if chronological_radio.isChecked()
+            else VERTICAL_LAYOUT_PARTNER_NORMALIZED
+        )
+        self.settings["animal_label_detail"] = next(
+            (value for value, radio in detail_radios.items() if radio.isChecked()),
+            "inbreeding_f",
+        )
         self.plugin.set_settings(self.settings)
-        self.refresh_graph(keep_view=True)
+        placement_changed = self.settings["vertical_layout_mode"] != current_vertical_mode
+        if placement_changed:
+            self._force_relayout = True
+            self.current_xlim = None
+            self.current_ylim = None
+        self.refresh_graph(keep_view=not placement_changed)
 
     def _clear_selection(self) -> None:
         self.selected_nodes.clear()
@@ -1040,6 +1164,15 @@ class HeritageTrackWidget(QWidget):
             values.get("mother", ""),
             values.get("father", ""),
             engine=engine,
+            target_species=values.get("species", ""),
+            explicit_missing_parents={
+                values.get(field, "")
+                for field, marker in (
+                    ("mother", "mother_allows_missing"),
+                    ("father", "father_allows_missing"),
+                )
+                if values.get(marker)
+            },
         )
         if validation_error:
             QMessageBox.warning(self, self.messages.get("error.title", "Error"), validation_error)
@@ -1052,6 +1185,15 @@ class HeritageTrackWidget(QWidget):
             genotype=values.get("genotype", ""),
             fill_color=values.get("fill_color", ""),
             sex=values.get("sex", ""),
+            birth_date=values.get("birth_date", ""),
+            explicit_custom_parents={
+                values.get(field, "")
+                for field, marker in (
+                    ("mother", "mother_allows_missing"),
+                    ("father", "father_allows_missing"),
+                )
+                if values.get(marker)
+            },
         )
         if not created:
             QMessageBox.warning(
@@ -1083,31 +1225,16 @@ class HeritageTrackWidget(QWidget):
         self,
         engine: Optional[PedigreeEngine] = None,
         target_species: str = "",
+        exclude_node: str = "",
     ) -> Tuple[List[str], List[str]]:
-        local_engine = engine or self.plugin.build_engine()
-        all_nodes = sorted(local_engine.all_nodes, key=str.lower)
-        mother_options: List[str] = []
-        father_options: List[str] = []
-        app_animals = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
-        archived = getattr(self.app, "archived", {}) or {}
-
-        for node in all_nodes:
-            if target_species:
-                # Check both active and archived animals for species
-                node_rec = app_animals.get(node) or (archived.get(node, {}) if isinstance(archived, dict) else {})
-                node_sp = (node_rec.get("species") or "").strip() if isinstance(node_rec, dict) else ""
-                # For heritage-only animals, check the heritage store for species
-                if not node_sp and self.plugin.is_heritage_only(node):
-                    node_sp = self.plugin.store.get_species(node)
-                if node_sp and node_sp != target_species:
-                    continue
-            sex = self._effective_sex_for_node(node)
-            if sex == "female":
-                mother_options.append(node)
-            elif sex == "male":
-                father_options.append(node)
-
-        return mother_options, father_options
+        # ``engine`` remains in the signature for compatibility with callers;
+        # candidates deliberately come from actual records, not unresolved
+        # graph labels or archived/dead animals.
+        _ = engine
+        return (
+            self.plugin.parent_candidate_options("female", target_species, exclude_node),
+            self.plugin.parent_candidate_options("male", target_species, exclude_node),
+        )
 
     def _parent_map_has_cycle(self, parent_map: Dict[str, Tuple[Optional[str], Optional[str]]]) -> bool:
         visit_state: Dict[str, int] = {}
@@ -1148,19 +1275,34 @@ class HeritageTrackWidget(QWidget):
         mother: str,
         father: str,
         engine: Optional[PedigreeEngine] = None,
+        target_species: str = "",
+        explicit_missing_parents: Optional[Set[str]] = None,
     ) -> Optional[str]:
         key = (animal_name or "").strip()
-        mother_name = (mother or "").strip()
-        father_name = (father or "").strip()
+        raw_mother = (mother or "").strip()
+        raw_father = (father or "").strip()
+        allowed_missing = {
+            str(value or "").strip()
+            for value in (explicit_missing_parents or set())
+            if str(value or "").strip()
+        }
         if not key:
             return None
 
-        mother_name, mother_status = self.plugin.resolve_parent_reference(mother_name)
-        father_name, father_status = self.plugin.resolve_parent_reference(father_name)
+        mother_name, mother_status = self.plugin.resolve_parent_reference(raw_mother, target_species)
+        father_name, father_status = self.plugin.resolve_parent_reference(raw_father, target_species)
         if mother_status == "ambiguous" or father_status == "ambiguous":
             return self.messages.get(
                 "heritage_track.error.parent_ambiguous",
                 "Parent name is ambiguous. Please select the full animal identity.",
+            )
+        if (
+            (raw_mother and mother_status == "missing" and raw_mother not in allowed_missing)
+            or (raw_father and father_status == "missing" and raw_father not in allowed_missing)
+        ):
+            return self.messages.get(
+                "heritage_track.error.parent_not_selected",
+                "Select an existing animal or use Add Heritage-only ancestor.",
             )
 
         if mother_name and mother_name == key:
@@ -1179,7 +1321,9 @@ class HeritageTrackWidget(QWidget):
                 "Mother and father must be different animals.",
             )
 
-        # Check sex for existing parents (skip for new parents - they become heritage-only placeholders)
+        # Existing parent records must satisfy both the biological slot and
+        # the child's species filter.  Explicit custom ancestors are checked
+        # after they are materialized as Heritage-only records.
         if mother_name:
             mother_exists = self.plugin._parent_exists_in_system(mother_name)
             if mother_exists and self._effective_sex_for_node(mother_name) != "female":
@@ -1194,6 +1338,21 @@ class HeritageTrackWidget(QWidget):
                     "heritage_track.error.father_not_male",
                     "Selected father must be male.",
                 )
+
+        if target_species:
+            for parent_name in (mother_name, father_name):
+                if not parent_name or not self.plugin._parent_exists_in_system(parent_name):
+                    continue
+                parent_record = self.plugin._core_record(parent_name)
+                if parent_record is None:
+                    candidate = self.plugin.store.get_all_entries().get(parent_name, {})
+                    parent_record = candidate if isinstance(candidate, dict) else {}
+                parent_species = str((parent_record or {}).get("species", "") or "").strip()
+                if parent_species != target_species:
+                    return self.messages.get(
+                        "heritage_track.error.parent_wrong_species",
+                        "Selected parents must have the same species as the animal.",
+                    )
 
         local_engine = engine or self.plugin.build_engine()
         parent_map = local_engine.get_genetic_parent_map()
@@ -1259,6 +1418,29 @@ class HeritageTrackWidget(QWidget):
     ) -> List[str]:
         ordered_members = sorted(set(members), key=str.lower)
         if len(ordered_members) <= 2:
+            if len(ordered_members) == 2 and node_x:
+                # Preserve the family-tree side already chosen by the layout.
+                # Alphabetical ordering flipped Arwen/Aragorn and
+                # Dorothea/Dáin, forcing their connectors through siblings.
+                def ancestry_center(node: str) -> float:
+                    parent_values = (
+                        engine.child_to_parents.get(node, {}) if engine else {}
+                    )
+                    parent_x = [
+                        float(node_x[parent])
+                        for parent in (
+                            str(parent_values.get("egg_donor") or ""),
+                            str(parent_values.get("sperm_donor") or ""),
+                        )
+                        if parent in node_x
+                    ]
+                    if parent_x:
+                        return sum(parent_x) / len(parent_x)
+                    return float(node_x.get(node, 0.0))
+                return sorted(
+                    ordered_members,
+                    key=lambda node: (ancestry_center(node), node.lower()),
+                )
             return ordered_members
 
         def _pair_center(a: str, b: str) -> Optional[float]:
@@ -1398,39 +1580,31 @@ class HeritageTrackWidget(QWidget):
         s = (sex or "").strip().lower()
         r = (role or "").strip()
 
-        # Determine resolved sex based on explicit sex, role, or pedigree position
+        # Rendering is deliberately pure: redraws never mutate identity data.
+        # Explicit Unknown is distinct from a blank legacy value and must not
+        # be inferred or silently coerced to Female.
         resolved_sex = s
-        if resolved_sex not in ("male", "female"):
+        if resolved_sex not in ("male", "female", "unknown"):
             male_hint = (
                 node in engine.father_like_nodes
-                or r == self.app.Role.SAMENSP.value
+                or r == ROLE_VALUE_SAMENSP
             )
             if male_hint:
                 resolved_sex = "male"
             else:
                 female_hint = (
                     node in engine.mother_like_nodes
-                    or r in (self.app.Role.SPENDER.value, self.app.Role.AMME.value)
+                    or r in (ROLE_VALUE_SPENDER, ROLE_VALUE_AMME)
                 )
                 if female_hint:
                     resolved_sex = "female"
 
-        # If still not resolved, default to female
-        if resolved_sex not in ("male", "female"):
-            resolved_sex = "female"
-
-        # Save resolved sex to heritage store for all animals if not already set
-        current_manual_sex = self.plugin.get_manual_sex(node)
-        if not current_manual_sex:
-            if pending_sex_updates is None:
-                self.plugin.set_manual_sex(node, resolved_sex)
-            else:
-                pending_sex_updates[node] = resolved_sex
-
-        # Return shape based on resolved sex
+        _ = is_heritage_only, pending_sex_updates
         if resolved_sex == "male":
             return "^"  # triangle
-        return "o"  # circle (female default)
+        if resolved_sex == "female":
+            return "o"  # circle
+        return "s"  # explicit Unknown or unresolved legacy value
 
     def _parse_birth_year(self, raw_value: Any) -> Optional[int]:
         if raw_value is None:
@@ -1498,8 +1672,64 @@ class HeritageTrackWidget(QWidget):
             for key in ("birth_date", "geburtsdatum"):
                 ordinal = parse_complete_birth_date_ordinal(record.get(key))
                 if ordinal is not None:
+                    parsed = datetime.fromordinal(ordinal)
+                    if (parsed.year, parsed.month, parsed.day) == (1900, 1, 1):
+                        continue
                     return ordinal
         return None
+
+    def _get_node_birth_date_text(self, node: str) -> str:
+        ordinal = self._get_node_birth_ordinal(node)
+        if ordinal is None:
+            return self.messages.get("heritage_track.node.detail.missing", "—")
+        return datetime.fromordinal(ordinal).strftime("%d.%m.%Y")
+
+    def _get_node_public_id(self, node: str, record: Optional[Dict[str, Any]] = None) -> str:
+        source = record if isinstance(record, dict) else self._get_node_record(node)
+        for key in ("id", "animal_id", "public_id"):
+            value = str(source.get(key, "") or "").strip()
+            if value:
+                return value
+        return self.messages.get("heritage_track.node.detail.missing", "—")
+
+    def _get_node_detail_text(
+        self,
+        node: str,
+        record: Optional[Dict[str, Any]] = None,
+        f_value: Optional[float] = None,
+    ) -> str:
+        mode = str(self.settings.get("animal_label_detail", "inbreeding_f"))
+        if mode == "nothing":
+            return ""
+        if mode == "birth_date":
+            return self._get_node_birth_date_text(node)
+        if mode == "animal_id":
+            return self._get_node_public_id(node, record)
+        if f_value is None:
+            return ""
+        rounded = round(float(f_value), 4)
+        was_rounded = abs(rounded - float(f_value)) > 1e-9
+        template_key = (
+            "heritage_track.node.inbreeding_f_approx"
+            if was_rounded
+            else "heritage_track.node.inbreeding_f_exact"
+        )
+        fallback = "F: ~{value}" if was_rounded else "F: {value}"
+        return self.messages.get(template_key, fallback).replace("{value}", f"{rounded:.4f}")
+
+    def _get_node_obstacle_label(self, node: str, record: Optional[Dict[str, Any]] = None) -> str:
+        source = record if isinstance(record, dict) else self._get_node_record(node)
+        primary = self._get_node_display_label(node, source)
+        mode = str(self.settings.get("animal_label_detail", "inbreeding_f"))
+        if mode == "nothing":
+            return primary
+        if mode == "birth_date":
+            detail = self._get_node_birth_date_text(node)
+        elif mode == "animal_id":
+            detail = self._get_node_public_id(node, source)
+        else:
+            detail = "F: ~0.0000"
+        return max((primary, detail), key=len)
 
     def _get_node_birth_year(self, node: str) -> Optional[int]:
         ordinal = self._get_node_birth_ordinal(node)
@@ -1852,9 +2082,10 @@ class HeritageTrackWidget(QWidget):
             node: self._get_node_birth_ordinal(node) for node in node_set
         }
 
-        # Use the LayoutPipeline for position computation
+        # Use the LayoutPipeline for horizontal family placement and the
+        # default compact generation layout.
         pipeline = LayoutPipeline()
-        return pipeline.compute_positions(
+        base_positions = pipeline.compute_positions(
             nodes=node_set,
             levels=levels,
             engine=engine,
@@ -1862,8 +2093,25 @@ class HeritageTrackWidget(QWidget):
             locked_positions=locked_positions or {},
             birth_year_by_node=birth_year_by_node,
             birth_ordinal_by_node=birth_ordinal_by_node,
-            birthdate_height_layout=self.settings.get("birthdate_height_layout", True),
+            birthdate_height_layout=(
+                self.settings.get("vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED)
+                == VERTICAL_LAYOUT_PARTNER_NORMALIZED
+            ),
         )
+        if (
+            self.settings.get("vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED)
+            != VERTICAL_LAYOUT_CHRONOLOGICAL
+        ):
+            self._chronological_undated_nodes = set()
+            return base_positions
+
+        chronological, undated = compute_chronological_positions(
+            base_positions,
+            families,
+            birth_ordinal_by_node,
+        )
+        self._chronological_undated_nodes = undated
+        return chronological
 
     def _bfs_relationship_path(
         self,
@@ -2211,6 +2459,18 @@ class HeritageTrackWidget(QWidget):
             families,
             locked_positions=locked_positions,
         )
+        chronological_mode = (
+            self.settings.get("vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED)
+            == VERTICAL_LAYOUT_CHRONOLOGICAL
+        )
+
+        def _respect_vertical_mode(
+            stored: Tuple[float, float],
+            automatic: Tuple[float, float],
+        ) -> Tuple[float, float]:
+            if chronological_mode:
+                return float(stored[0]), float(automatic[1])
+            return float(stored[0]), float(stored[1])
 
         previous_positions = {
             node: pos
@@ -2223,10 +2483,10 @@ class HeritageTrackWidget(QWidget):
             protected_nodes: Set[str] = set()
             for node, pos in auto_positions.items():
                 if node in self.temp_positions:
-                    animal_positions[node] = self.temp_positions[node]
+                    animal_positions[node] = _respect_vertical_mode(self.temp_positions[node], pos)
                     protected_nodes.add(node)
                 elif node in saved_positions and not self._force_relayout:
-                    animal_positions[node] = saved_positions[node]
+                    animal_positions[node] = _respect_vertical_mode(saved_positions[node], pos)
                     protected_nodes.add(node)
                 else:
                     animal_positions[node] = pos
@@ -2247,37 +2507,159 @@ class HeritageTrackWidget(QWidget):
             for node, pos in auto_positions.items():
                 if node in self.temp_positions:
                     # User-dragged position takes priority
-                    animal_positions[node] = self.temp_positions[node]
+                    animal_positions[node] = _respect_vertical_mode(self.temp_positions[node], pos)
                     protected_nodes.add(node)
                 elif self._force_relayout:
                     # Force relayout: use computed positions for all nodes (ignore cached positions)
                     animal_positions[node] = pos
                 elif node in previous_positions:
                     # Use existing position from previous frame
-                    animal_positions[node] = previous_positions[node]
+                    animal_positions[node] = _respect_vertical_mode(previous_positions[node], pos)
                     protected_nodes.add(node)
                 elif node in saved_positions:
                     # Use saved position from store
-                    animal_positions[node] = saved_positions[node]
+                    animal_positions[node] = _respect_vertical_mode(saved_positions[node], pos)
                     protected_nodes.add(node)
                 else:
                     # New node: use computed position
                     animal_positions[node] = pos
 
-        display_labels = {
-            node: self._get_node_display_label(node, self._get_node_record(node))
+        # Horizontal ancestry-side correction is valid in both vertical modes;
+        # chronological mode only owns Y coordinates.
+        if animal_positions:
+            def _ancestry_x(node: str) -> Optional[float]:
+                values = engine.child_to_parents.get(node, {})
+                xs = [
+                    animal_positions[parent][0]
+                    for parent in (
+                        str(values.get("egg_donor") or ""),
+                        str(values.get("sperm_donor") or ""),
+                    )
+                    if parent in animal_positions
+                ]
+                return (sum(xs) / len(xs)) if xs else None
+
+            for family in families.values():
+                mother = str(family.get("mother") or "")
+                father = str(family.get("father") or "")
+                if (
+                    mother not in animal_positions
+                    or father not in animal_positions
+                    or mother in protected_nodes
+                    or father in protected_nodes
+                ):
+                    continue
+                mother_center = _ancestry_x(mother)
+                father_center = _ancestry_x(father)
+                if mother_center is None or father_center is None:
+                    continue
+                mother_x, mother_y = animal_positions[mother]
+                father_x, father_y = animal_positions[father]
+                if (mother_center - father_center) * (mother_x - father_x) < 0:
+                    animal_positions[mother] = (father_x, mother_y)
+                    animal_positions[father] = (mother_x, father_y)
+                    protected_nodes.update((mother, father))
+
+        obstacle_labels = {
+            node: self._get_node_obstacle_label(node, self._get_node_record(node))
             for node in animal_positions
         }
+        has_secondary_label = self.settings.get("animal_label_detail", "inbreeding_f") != "nothing"
         route_plan = self._pedigree_router.plan(
             animal_positions,
             families,
-            labels=display_labels,
+            labels=obstacle_labels,
             protected_nodes=protected_nodes,
-            show_inbreeding=self.settings.get("show_inbreeding_f", True),
+            show_inbreeding=has_secondary_label,
+            vertical_layout_mode=self.settings.get(
+                "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
+            ),
         )
+        if route_plan.animal_positions:
+            reroute_positions = dict(route_plan.animal_positions)
+            reroute_protected = set(protected_nodes)
+            changed = False
+
+            def _routed_ancestry_x(node: str) -> Optional[float]:
+                values = engine.child_to_parents.get(node, {})
+                xs = [
+                    reroute_positions[parent][0]
+                    for parent in (
+                        str(values.get("egg_donor") or ""),
+                        str(values.get("sperm_donor") or ""),
+                    )
+                    if parent in reroute_positions
+                ]
+                return (sum(xs) / len(xs)) if xs else None
+
+            for family in families.values():
+                mother = str(family.get("mother") or "")
+                father = str(family.get("father") or "")
+                if mother not in reroute_positions or father not in reroute_positions:
+                    continue
+                mother_center = _routed_ancestry_x(mother)
+                father_center = _routed_ancestry_x(father)
+                if mother_center is None or father_center is None:
+                    continue
+                mother_x, mother_y = reroute_positions[mother]
+                father_x, father_y = reroute_positions[father]
+                if (mother_center - father_center) * (mother_x - father_x) < 0:
+                    reroute_positions[mother] = (father_x, mother_y)
+                    reroute_positions[father] = (mother_x, father_y)
+                    reroute_protected.update((mother, father))
+                    changed = True
+            if changed:
+                route_plan = self._pedigree_router.plan(
+                    reroute_positions,
+                    families,
+                    labels=obstacle_labels,
+                    protected_nodes=reroute_protected,
+                    show_inbreeding=has_secondary_label,
+                    vertical_layout_mode=self.settings.get(
+                        "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
+                    ),
+                )
         animal_positions = route_plan.animal_positions
         family_positions = route_plan.family_positions
         family_members = route_plan.family_members
+        attached = set().union(*family_members.values()) if family_members else set()
+        singletons = sorted(
+            (
+                node for node in animal_positions
+                if node not in attached and node not in protected_nodes
+            ),
+            key=lambda node: self._get_node_display_label(node).casefold(),
+        )
+        if singletons:
+            connected_points = [
+                point for node, point in animal_positions.items()
+                if node not in singletons
+            ]
+            min_x = min((point[0] for point in connected_points), default=0.0)
+            min_y = min((point[1] for point in connected_points), default=0.0)
+            columns = min(6, max(1, int(math.ceil(math.sqrt(len(singletons))))))
+            chronological = (
+                self.settings.get("vertical_layout_mode")
+                == VERTICAL_LAYOUT_CHRONOLOGICAL
+            )
+            chronological_columns: Dict[float, int] = {}
+            for index, node in enumerate(singletons):
+                if chronological and connected_points:
+                    # Keep the birth-date Y coordinate, but reserve columns
+                    # clearly outside the family-tree envelope.
+                    y = animal_positions[node][1]
+                    y_bucket = round(float(y), 3)
+                    x_column = chronological_columns.get(y_bucket, 0)
+                    chronological_columns[y_bucket] = x_column + 1
+                    animal_positions[node] = (
+                        min_x - 4.2 - x_column * 4.2,
+                        y,
+                    )
+                else:
+                    animal_positions[node] = (
+                        min_x + (index % columns) * 4.2,
+                        min_y - 4.0 - (index // columns) * 3.2,
+                    )
         self._route_plan = route_plan
         self.family_routes = route_plan.routes
 
@@ -2388,19 +2770,10 @@ class HeritageTrackWidget(QWidget):
 
         legend_entries: Dict[str, Dict[str, str]] = {}
 
-        # Sync heritage_only flags: any node not in app.animals gets marked
-        _app_animals = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
-        _store_animals = self.plugin.store.load().get("animals", {})
-        heritage_only_updates: List[str] = []
-        for _node in display_nodes:
-            if _node not in _app_animals and _node in _store_animals:
-                if not _store_animals.get(_node, {}).get("heritage_only", False):
-                    heritage_only_updates.append(_node)
-        if heritage_only_updates:
-            self.plugin.store.set_heritage_only_batch(heritage_only_updates, True)
-
-        # Compute and cache inbreeding coefficients (F) for displayed nodes
-        show_f = self.settings.get("show_inbreeding_f", True)
+        # Compute F only when it is the selected secondary label.  The other
+        # modes avoid an unnecessary full kinship calculation during redraw.
+        label_detail_mode = str(self.settings.get("animal_label_detail", "inbreeding_f"))
+        show_f = label_detail_mode == "inbreeding_f"
         f_values: Dict[str, float] = {}
         if show_f:
             _genetic_map = engine.get_genetic_parent_map()
@@ -2424,7 +2797,6 @@ class HeritageTrackWidget(QWidget):
             if _f_to_save:
                 self.plugin.store.set_inbreeding_f_batch(_f_to_save)
 
-        pending_sex_updates: Dict[str, str] = {}
         for node in sorted(display_nodes, key=str.lower):
             x, y = animal_positions.get(node, (0.0, 0.0))
             is_ghost = node in ghost_nodes
@@ -2433,21 +2805,7 @@ class HeritageTrackWidget(QWidget):
             record = self._get_node_record(node)
             display_label = self._get_node_display_label(node, record)
             role = canonical_role_value(record.get("rolle", ""))
-            # Determine sex: role takes priority, then sex field, then heritage manual sex, default female
-            if role in (ROLE_VALUE_SPENDER, ROLE_VALUE_AMME):
-                sex = "female"
-            elif role == ROLE_VALUE_SAMENSP:
-                sex = "male"
-            else:
-                sex_field = str(record.get("sex", "")).strip().lower()
-                if sex_field in ("male", "female"):
-                    sex = sex_field
-                elif is_heritage_only:
-                    # For heritage-only animals, get manual sex from heritage store
-                    manual_sex = self.plugin.get_manual_sex(node)
-                    sex = manual_sex if manual_sex in ("male", "female") else "female"
-                else:
-                    sex = "female"
+            sex = self.plugin.get_effective_sex(node, record)
 
             visual = self.plugin.store.get_node_visual(node, fallback_genotype=str(record.get("genotype", "")))
             fill_color_raw = visual.get("node_fill_color", "")
@@ -2459,7 +2817,6 @@ class HeritageTrackWidget(QWidget):
                 sex,
                 engine,
                 is_heritage_only=is_heritage_only,
-                pending_sex_updates=pending_sex_updates,
             )
             is_dead = bool(
                 record.get("death_date") or record.get("sterbedatum") or record.get("archived")
@@ -2486,10 +2843,11 @@ class HeritageTrackWidget(QWidget):
                 linewidths=lw,
                 zorder=3,
             )
-            label_artist = self.ax.text(
-                x,
-                y - 0.38,
+            label_artist = self.ax.annotate(
                 display_label,
+                xy=(x, y),
+                xytext=(0, -14),
+                textcoords="offset points",
                 ha="center",
                 va="top",
                 fontsize=9,
@@ -2500,32 +2858,36 @@ class HeritageTrackWidget(QWidget):
                 path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
             )
 
+            detail_text = self._get_node_detail_text(node, record, f_values.get(node))
             f_artist = None
-            if show_f:
-                _f = f_values.get(node)
-                if _f is not None:
-                    _f_rounded = round(_f, 4)
-                    _was_rounded = abs(_f_rounded - _f) > 1e-9
-                    _f_str = f"{_f_rounded:.4f}"
-                    if _was_rounded:
-                        _f_tmpl = self.messages.get(
-                            "heritage_track.node.inbreeding_f_approx", "F: ~{value}"
-                        )
-                    else:
-                        _f_tmpl = self.messages.get(
-                            "heritage_track.node.inbreeding_f_exact", "F: {value}"
-                        )
-                    _f_text = _f_tmpl.replace("{value}", _f_str)
-                    f_artist = self.ax.text(
-                        x,
-                        y - 0.62,
-                        _f_text,
-                        ha="center",
-                        va="top",
-                        fontsize=7,
-                        color="#777777" if not is_ghost else "#bbbbbb",
-                        zorder=4,
-                    )
+            if detail_text:
+                f_artist = self.ax.annotate(
+                    detail_text,
+                    xy=(x, y),
+                    xytext=(0, -27),
+                    textcoords="offset points",
+                    ha="center",
+                    va="top",
+                    fontsize=7,
+                    color="#777777" if not is_ghost else "#bbbbbb",
+                    zorder=4,
+                    path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
+                )
+
+            undated_artist = None
+            if chronological_mode and node in self._chronological_undated_nodes:
+                undated_artist = self.ax.annotate(
+                    self.messages.get("heritage_track.node.undated_marker", "//"),
+                    xy=(x, y),
+                    xytext=(10, 7),
+                    textcoords="offset points",
+                    ha="left",
+                    va="bottom",
+                    fontsize=7,
+                    color="#777777" if not is_ghost else "#aaaaaa",
+                    zorder=5,
+                    path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
+                )
 
             genotype_value = str(visual.get("genotype", "")).strip() or self.messages.get(
                 "heritage_track.legend.no_genotype",
@@ -2548,16 +2910,19 @@ class HeritageTrackWidget(QWidget):
                 "heritage_only": is_heritage_only,
                 "display_label": display_label,
                 "ipid": node,
+                "animal_id": self._get_node_public_id(node, record),
                 "birth_date": str(record.get("birth_date", "") or record.get("geburtsdatum", "")).strip(),
                 "marker_artist": marker_artist,
                 "label_artist": label_artist,
                 "f_artist": f_artist,
+                "undated_artist": undated_artist,
             }
 
-        if pending_sex_updates:
-            self.plugin.store.set_manual_sex_batch(pending_sex_updates)
-
-        self.ax.axis("off")
+        if chronological_mode:
+            self._configure_chronological_axis()
+        else:
+            self.ax.axis("off")
+            self.figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
         if self.settings.get("show_legend", True) and legend_entries:
             legend_handles: List[Line2D] = []
@@ -2638,6 +3003,7 @@ class HeritageTrackWidget(QWidget):
         self._route_plan = None
         self.node_meta.clear()
         self._ghost_nodes = set()
+        self._chronological_undated_nodes = set()
         self.selected_nodes.clear()
         self.temp_positions.clear()
 
@@ -2883,9 +3249,10 @@ class HeritageTrackWidget(QWidget):
             marker = meta.get("marker_artist")
             label = meta.get("label_artist")
             f_artist = meta.get("f_artist")
+            undated_artist = meta.get("undated_artist")
             if marker is None or label is None:
                 continue
-            artists = (marker, label, f_artist)
+            artists = (marker, label, f_artist, undated_artist)
             for artist in artists:
                 if artist is not None:
                     artist.set_animated(True)
@@ -2901,15 +3268,20 @@ class HeritageTrackWidget(QWidget):
 
     @staticmethod
     def _position_drag_artists(
-        artists: Tuple[Any, Any, Optional[Any]],
+        artists: Tuple[Any, ...],
         x: float,
         y: float,
     ) -> None:
-        marker, label, f_artist = artists
+        marker, label, f_artist, undated_artist = (*artists, None)[:4]
         marker.set_offsets([[x, y]])
-        label.set_position((x, y - 0.38))
+        label.xy = (x, y)
+        label.set_position((0, -14))
         if f_artist is not None:
-            f_artist.set_position((x, y - 0.62))
+            f_artist.xy = (x, y)
+            f_artist.set_position((0, -27))
+        if undated_artist is not None:
+            undated_artist.xy = (x, y)
+            undated_artist.set_position((10, 7))
 
     def _redraw_dragged_nodes(self) -> None:
         """Move existing node artists and blit without allocating new artists."""
@@ -2949,11 +3321,19 @@ class HeritageTrackWidget(QWidget):
         if event.button == 1:
             if self.drag_active and self.drag_node is not None:
                 if self.is_dragging:
+                    chronological_mode = (
+                        self.settings.get(
+                            "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
+                        )
+                        == VERTICAL_LAYOUT_CHRONOLOGICAL
+                    )
                     if self.drag_group_nodes:
                         positions_to_save: Dict[str, Tuple[float, float]] = {}
                         for member in sorted(self.drag_group_nodes, key=str.lower):
                             x, y = self.temp_positions.get(member, self.node_positions.get(member, (0.0, 0.0)))
                             sx, sy = self._snap_to_grid(x, y)
+                            if chronological_mode:
+                                sy = self.node_positions.get(member, (sx, sy))[1]
                             self.temp_positions[member] = (sx, sy)
                             if self.all_animals_mode:
                                 positions_to_save[member] = (sx, sy)
@@ -2962,6 +3342,8 @@ class HeritageTrackWidget(QWidget):
                     elif not self._is_family_node(self.drag_node):
                         x, y = self.temp_positions.get(self.drag_node, self.node_positions.get(self.drag_node, (0.0, 0.0)))
                         sx, sy = self._snap_to_grid(x, y)
+                        if chronological_mode:
+                            sy = self.node_positions.get(self.drag_node, (sx, sy))[1]
                         self.temp_positions[self.drag_node] = (sx, sy)
                         # Save the position to heritage_store for persistence
                         if self.all_animals_mode:
@@ -3029,6 +3411,8 @@ class HeritageTrackWidget(QWidget):
         self.ax.set_ylim(new_ylim)
         self.current_xlim = new_xlim
         self.current_ylim = new_ylim
+        if self.settings.get("vertical_layout_mode") == VERTICAL_LAYOUT_CHRONOLOGICAL:
+            self._configure_chronological_axis()
         if self.settings.get("show_grid", False):
             self.refresh_graph(keep_view=True)
         else:
@@ -3042,6 +3426,8 @@ class HeritageTrackWidget(QWidget):
         self.ax.set_ylim(new_ylim)
         self.current_xlim = new_xlim
         self.current_ylim = new_ylim
+        if self.settings.get("vertical_layout_mode") == VERTICAL_LAYOUT_CHRONOLOGICAL:
+            self._configure_chronological_axis()
         self.canvas.draw_idle()
 
     def _open_node_editor(self, node: str) -> None:
@@ -3051,21 +3437,26 @@ class HeritageTrackWidget(QWidget):
         meta = self.node_meta.get(node, {})
         fill_color = str(meta.get("fill_color_raw", ""))
         genotype = str(meta.get("genotype", ""))
-        sex = self.plugin.get_manual_sex(node)
 
         animals = getattr(self.app, "animals", {}) or {}
         archived = getattr(self.app, "archived", {}) or {}
         record = animals.get(node) or (archived.get(node) if isinstance(archived, dict) else {}) or {}
+        is_heritage_only = self.plugin.is_heritage_only(node)
+        sex = self.plugin.get_effective_sex(node, record if isinstance(record, dict) else None)
         animal_species = (record.get("species") or "").strip() if isinstance(record, dict) else ""
         # For heritage-only animals, get species from heritage store
-        if not animal_species and self.plugin.is_heritage_only(node):
+        if not animal_species and is_heritage_only:
             animal_species = self.plugin.store.get_species(node) or ""
         parentage = self.plugin.get_parentage(node, record if isinstance(record, dict) else None)
         mother = parentage.get("egg_donor", "") or self._none_label()
         father = parentage.get("sperm_donor", "") or self._none_label()
 
         engine = self.plugin.build_engine()
-        mother_options, father_options = self._get_parent_dropdown_options(engine, target_species=animal_species)
+        mother_options, father_options = self._get_parent_dropdown_options(
+            engine,
+            target_species=animal_species,
+            exclude_node=node,
+        )
 
         dlg = NodeEditDialog(
             self,
@@ -3079,14 +3470,20 @@ class HeritageTrackWidget(QWidget):
             father=father,
             sex=sex,
             allow_name_edit=False,
-            allow_remove=self.plugin.is_heritage_only(node),
+            allow_remove=is_heritage_only,
             animal_species=animal_species,
+            sex_editable=is_heritage_only,
+            parent_options_provider=lambda required, species: self.plugin.parent_candidate_options(
+                required,
+                species,
+                node,
+            ),
         )
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
         if dlg.remove_requested():
-            confirm = QMessageBox.question(
+            confirm = QMessageBox.warning(
                 self,
                 self.messages.get("heritage_track.node.remove.title", "Remove animal"),
                 self.messages.get(
@@ -3144,6 +3541,15 @@ class HeritageTrackWidget(QWidget):
             mother_value,
             father_value,
             engine=engine,
+            target_species=animal_species,
+            explicit_missing_parents={
+                values.get(field, "")
+                for field, marker in (
+                    ("mother", "mother_allows_missing"),
+                    ("father", "father_allows_missing"),
+                )
+                if values.get(marker)
+            },
         )
         if validation_error:
             QMessageBox.warning(self, self.messages.get("error.title", "Error"), validation_error)
@@ -3161,9 +3567,13 @@ class HeritageTrackWidget(QWidget):
         if mother_name or father_name:
             self.plugin._ensure_parent_placeholders(mother_name, father_name, animal_species)
 
-        self.plugin.set_manual_sex(node, values.get("sex", ""))
+        if is_heritage_only:
+            self.plugin.set_manual_sex(node, values.get("sex", ""))
         self.plugin.store.set_node_visual(node, values.get("genotype", ""), values.get("fill_color", ""))
         self.refresh_graph(keep_view=True)
+        refresh_list = getattr(self.app, "_refresh_list", None)
+        if callable(refresh_list):
+            refresh_list()
 
     def _load_species_options(self) -> List[str]:
         """Load species list from ProgTrack's Species_List.txt file."""
@@ -3216,6 +3626,10 @@ class HeritageTrackWidget(QWidget):
             allow_remove=False,    # can't remove an animal that doesn't exist yet
             animal_species="",
             species_options=species_options,
+            parent_options_provider=lambda required, selected_species: self.plugin.parent_candidate_options(
+                required,
+                selected_species,
+            ),
         )
         dlg.setWindowTitle(self.messages.get("heritage_track.node.edit.title_new", "Add Placeholder Animal"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
@@ -3274,6 +3688,15 @@ class HeritageTrackWidget(QWidget):
             mother_value,
             father_value,
             engine=engine,
+            target_species=species,
+            explicit_missing_parents={
+                values.get(field, "")
+                for field, marker in (
+                    ("mother", "mother_allows_missing"),
+                    ("father", "father_allows_missing"),
+                )
+                if values.get(marker)
+            },
         )
         if validation_error:
             QMessageBox.warning(self, self.messages.get("error.title", "Error"), validation_error)
@@ -3288,6 +3711,15 @@ class HeritageTrackWidget(QWidget):
             fill_color=values.get("fill_color", ""),
             sex=values.get("sex", ""),
             species=species,
+            birth_date=values.get("birth_date", ""),
+            explicit_custom_parents={
+                values.get(field, "")
+                for field, marker in (
+                    ("mother", "mother_allows_missing"),
+                    ("father", "father_allows_missing"),
+                )
+                if values.get(marker)
+            },
         )
 
         if not success:
@@ -3304,6 +3736,9 @@ class HeritageTrackWidget(QWidget):
         if mother_name or father_name:
             self.plugin._ensure_parent_placeholders(mother_name, father_name, species)
 
+        refresh_list = getattr(self.app, "_refresh_list", None)
+        if callable(refresh_list):
+            refresh_list()
         self.refresh_graph(keep_view=True)
 
     def _save_coeff_dialog_pos(self) -> None:
@@ -3361,9 +3796,86 @@ class HeritageTrackPlugin:
     def get_parentage(self, animal_name: Optional[str], record: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
         return self.store.get_parentage(animal_name, record)
 
+    def _core_record(self, animal_name: Optional[str]) -> Optional[Dict[str, Any]]:
+        key = str(animal_name or "").strip()
+        if not key:
+            return None
+        animals = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
+        if key in animals and isinstance(animals[key], dict):
+            return animals[key]
+        archived = getattr(self.app, "archived", {}) or {}
+        if isinstance(archived, dict) and key in archived and isinstance(archived[key], dict):
+            return archived[key]
+        return None
+
+    def _is_core_animal(self, animal_name: Optional[str]) -> bool:
+        key = str(animal_name or "").strip()
+        if not key:
+            return False
+        animals = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
+        archived = getattr(self.app, "archived", {}) or {}
+        return key in animals or (isinstance(archived, dict) and key in archived)
+
+    @staticmethod
+    def _record_is_inactive(record: Dict[str, Any]) -> bool:
+        return bool(
+            record.get("archived")
+            or record.get("death_date")
+            or record.get("sterbedatum")
+        )
+
+    def parent_candidate_options(
+        self,
+        required_sex: str,
+        target_species: str = "",
+        exclude_animal: str = "",
+    ) -> List[str]:
+        """Return live, same-species candidates for a controlled parent picker."""
+        required = self.store._normalize_sex(required_sex)
+        species = str(target_species or "").strip()
+        excluded = str(exclude_animal or "").strip()
+        candidates: List[str] = []
+
+        active = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
+        for key, record in active.items():
+            if key == excluded or not isinstance(record, dict) or self._record_is_inactive(record):
+                continue
+            record_species = str(record.get("species", "") or "").strip()
+            if species and record_species != species:
+                continue
+            if self.get_effective_sex(key, record) == required:
+                candidates.append(key)
+
+        archived = getattr(self.app, "archived", {}) or {}
+        archived_keys = set(archived) if isinstance(archived, dict) else set()
+        for key, record in self.store.get_all_entries().items():
+            if (
+                key == excluded
+                or key in active
+                or key in archived_keys
+                or not isinstance(record, dict)
+                or self._record_is_inactive(record)
+            ):
+                continue
+            record_species = str(record.get("species", "") or "").strip()
+            if species and record_species != species:
+                continue
+            if self.get_effective_sex(key, record) == required:
+                candidates.append(key)
+
+        return sorted(set(candidates), key=str.casefold)
+
     def create_parent_group(self, animal_name: Optional[str], record: Optional[Dict[str, Any]] = None):
         values = self.get_parentage(animal_name, record)
-        return build_parent_group(self.messages, values)
+        source = record if isinstance(record, dict) else self._core_record(animal_name) or {}
+        species = str(source.get("species", "") or "").strip()
+        options = {
+            "egg_donor": self.parent_candidate_options("female", species, str(animal_name or "")),
+            "sperm_donor": self.parent_candidate_options("male", species, str(animal_name or "")),
+            "surrogate_mother": self.parent_candidate_options("female", species, str(animal_name or "")),
+            "surrogate_father": self.parent_candidate_options("male", species, str(animal_name or "")),
+        }
+        return build_parent_group(self.messages, values, options)
 
     def read_parent_group(self, parent_fields: Dict[str, Any]) -> Dict[str, str]:
         return extract_parent_values(parent_fields)
@@ -3371,7 +3883,7 @@ class HeritageTrackPlugin:
     def save_parentage(self, animal_name: str, parent_values: Dict[str, Any], source: str = "plugin") -> None:
         self.store.set_parentage(animal_name, parent_values, source=source)
 
-    def get_settings(self) -> Dict[str, bool]:
+    def get_settings(self) -> Dict[str, Any]:
         return self.store.get_settings()
 
     def set_settings(self, settings: Dict[str, Any]) -> None:
@@ -3381,23 +3893,41 @@ class HeritageTrackPlugin:
         self.store.sync_from_record(animal_name, record, in_main_animals=in_main_animals)
 
     def is_heritage_only(self, animal_name: str) -> bool:
-        return self.store.is_heritage_only(animal_name)
+        key = str(animal_name or "").strip()
+        if not key or self._is_core_animal(key):
+            return False
+        return key in self.store.get_all_entries()
 
     def delete_heritage_only_animal(self, animal_name: str) -> bool:
         key = str(animal_name or "").strip()
         if not key:
             return False
-        if not self.store.is_heritage_only(key):
+        if not self.is_heritage_only(key):
             return False
         return self.store.delete_animal(key)
 
     def set_manual_sex(self, animal_name: str, sex: Optional[str]) -> None:
+        if self._is_core_animal(animal_name):
+            return
         self.store.set_manual_sex(animal_name, sex)
 
     def get_manual_sex(self, animal_name: str) -> str:
+        if self._is_core_animal(animal_name):
+            return ""
         return self.store.get_manual_sex(animal_name)
 
     def get_effective_sex(self, animal_name: Optional[str], fallback_record: Optional[Dict[str, Any]] = None) -> str:
+        core_record = self._core_record(animal_name)
+        if core_record is not None:
+            explicit = self.store._normalize_sex(core_record.get("sex", ""))
+            if explicit:
+                return explicit
+            role = canonical_role_value(core_record.get("rolle", ""))
+            if role in (ROLE_VALUE_SPENDER, ROLE_VALUE_AMME):
+                return "female"
+            if role == ROLE_VALUE_SAMENSP:
+                return "male"
+            return ""
         return self.store.get_effective_sex(animal_name, fallback_record)
 
     def _all_identity_records(self) -> Dict[str, Dict[str, Any]]:
@@ -3439,6 +3969,8 @@ class HeritageTrackPlugin:
         fill_color: str,
         sex: str,
         species: str = "",
+        birth_date: str = "",
+        explicit_custom_parents: Optional[Set[str]] = None,
     ) -> bool:
         raw_name = str(name or "").strip()
         if not raw_name:
@@ -3449,30 +3981,54 @@ class HeritageTrackPlugin:
         if parts is None:
             base_name = animal_base_name(raw_name)
             species_value = str(species or "").strip() or "Unknown species"
-            birth_date = "01.01.1900"
-            try:
-                key = animal_identity_key(base_name, species_value, birth_date)
-            except ValueError:
-                return False
-            review_required = True
-            review_reason = "Heritage-only placeholder was created without an explicit birth date."
+            raw_birth_date = str(birth_date or "").strip()
+            if raw_birth_date:
+                try:
+                    birth_date = normalize_birth_date(raw_birth_date, required=True)
+                    key = animal_identity_key(base_name, species_value, birth_date)
+                except ValueError:
+                    return False
+            else:
+                birth_date = ""
+                key = f"{base_name} | {species_value} | undated"
+                review_required = True
+                review_reason = "Heritage-only placeholder is intentionally undated."
         else:
             base_name, species_value, birth_date = parts
             key = raw_name
+            if str(birth_date).strip().casefold() == "undated":
+                birth_date = ""
+                review_required = True
+                review_reason = "Heritage-only placeholder is intentionally undated."
+            else:
+                try:
+                    birth_date = normalize_birth_date(birth_date, required=True)
+                except ValueError:
+                    return False
 
-        animals = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
-        if key in animals:
+        if self._is_core_animal(key):
             return False
 
         existing_entries = self.store.get_all_entries()
         if key in existing_entries:
             return False
 
-        resolved_mother, mother_status = self.resolve_parent_reference(mother, species_value)
-        if mother_status == "ambiguous":
+        raw_mother = str(mother or "").strip()
+        raw_father = str(father or "").strip()
+        allowed_missing = {
+            str(value or "").strip()
+            for value in (explicit_custom_parents or set())
+            if str(value or "").strip()
+        }
+        resolved_mother, mother_status = self.resolve_parent_reference(raw_mother, species_value)
+        if mother_status == "ambiguous" or (
+            raw_mother and mother_status == "missing" and raw_mother not in allowed_missing
+        ):
             return False
-        resolved_father, father_status = self.resolve_parent_reference(father, species_value)
-        if father_status == "ambiguous":
+        resolved_father, father_status = self.resolve_parent_reference(raw_father, species_value)
+        if father_status == "ambiguous" or (
+            raw_father and father_status == "missing" and raw_father not in allowed_missing
+        ):
             return False
 
         self.store.set_parentage(
@@ -3570,7 +4126,12 @@ class HeritageTrackPlugin:
 
         # Build base-name → [(key, species)] map for resolving same-name animals by species.
         _base_to_variants: Dict[str, List[tuple]] = {}
-        for _k, _r in animals.items():
+        _heritage_entries = self.store.get_all_entries()
+        _identity_records = dict(_heritage_entries)
+        _identity_records.update(animals)
+        for _k, _r in _identity_records.items():
+            if not isinstance(_r, dict):
+                continue
             _base = animal_base_name(_k, _r).strip()
             _sp = (_r.get("species") or "").strip()
             _birth = (_r.get("birth_date") or "").strip()
@@ -3582,14 +4143,14 @@ class HeritageTrackPlugin:
             base_parentage = _store_lookup(animal_name, record)
             if not _base_to_variants:
                 return base_parentage
-            child_rec = animals.get(animal_name, {})
+            child_rec = _identity_records.get(animal_name, {})
             child_species = (child_rec.get("species") or "").strip() if isinstance(child_rec, dict) else ""
             resolved: Dict[str, str] = {}
             for fld, parent_name in base_parentage.items():
                 if not parent_name:
                     resolved[fld] = parent_name
                     continue
-                if parent_name in animals:
+                if parent_name in _identity_records:
                     resolved[fld] = parent_name  # exact key match, no disambiguation needed
                     continue
                 variants = _base_to_variants.get(parent_name.lower(), [])
@@ -3612,7 +4173,7 @@ class HeritageTrackPlugin:
         return self._engine_cache.get_engine(
             animals=animals,
             parent_lookup=_species_aware_lookup,
-            heritage_entries=self.store.get_all_entries(),
+            heritage_entries=_heritage_entries,
         )
 
     def get_tab_widget(self) -> HeritageTrackWidget:

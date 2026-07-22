@@ -62,6 +62,7 @@ PERM_CORE_EDIT_ANIMAL_IMMUTABLE     = "core.edit_animal_immutable"   # chip_nr a
 PERM_CORE_EDIT_ANIMAL_HOUSING       = "core.edit_animal_housing"     # address + parents (+ sex for experimental)
 PERM_CORE_EDIT_ANIMAL_MEASUREMENTS  = "core.edit_animal_measurements"  # weight values + events
 PERM_CORE_EDIT_ANIMAL_RESEARCH_DATA = "core.edit_animal_research_data"  # pdg/prog/sperm + max/recovery fields
+PERM_CORE_EDIT_ANIMAL_ROLE          = "core.edit_animal_role"  # assign an animal to another role
 PERM_CORE_STYLE_SETTINGS = "core.style_settings"  # access Settings - Style menu
 PERM_CORE_MANAGE_ANIMAL_ROLES = "core.manage_animal_roles"
 # core.project_assign moved to project namespace – see PERM_PROJECT_ASSIGN below
@@ -167,6 +168,7 @@ ALL_PERMISSIONS: List[str] = [
     PERM_CORE_ARCHIVE_ANIMALS, PERM_CORE_DELETE_ANIMALS,
     PERM_CORE_EDIT_ANIMAL_IDENTITY, PERM_CORE_EDIT_ANIMAL_IMMUTABLE, PERM_CORE_EDIT_ANIMAL_HOUSING,
     PERM_CORE_EDIT_ANIMAL_MEASUREMENTS, PERM_CORE_EDIT_ANIMAL_RESEARCH_DATA,
+    PERM_CORE_EDIT_ANIMAL_ROLE,
     PERM_CORE_STYLE_SETTINGS, PERM_CORE_MANAGE_ANIMAL_ROLES,
     PERM_MASTER_VIEW_USERS, PERM_MASTER_CREATE_USERS, PERM_MASTER_EDIT_USERS,
     PERM_MASTER_ASSIGN_PRIMARY_ROLE, PERM_MASTER_ASSIGN_JOBS,
@@ -212,7 +214,9 @@ DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
         PERM_REPORTS_VIEW,
     },
     "keeper": {
+        PERM_CORE_CREATE_ANIMALS,
         PERM_CORE_EDIT_ANIMAL_CORE,
+        PERM_CORE_EDIT_ANIMAL_HOUSING,
         PERM_CORE_EDIT_ANIMAL_MEASUREMENTS,
         PERM_CAGE_ASSIGN_LOCATIONS,
         PERM_CAGE_VIEW, PERM_CAGE_RECORD_INSPECTION, PERM_CAGE_EDIT,
@@ -228,6 +232,7 @@ DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
         PERM_CORE_EDIT_ANIMAL_IDENTITY,
         PERM_CORE_EDIT_ANIMAL_IMMUTABLE,
         PERM_CORE_EDIT_ANIMAL_HOUSING,
+        PERM_CORE_EDIT_ANIMAL_ROLE,
         PERM_CORE_MANAGE_ANIMAL_ROLES,
         PERM_CORE_ARCHIVE_ANIMALS,
         PERM_CORE_DELETE_ANIMALS,

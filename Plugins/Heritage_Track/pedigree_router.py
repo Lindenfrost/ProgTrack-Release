@@ -143,21 +143,25 @@ class PedigreeRouter:
         labels: Optional[Mapping[str, str]] = None,
         protected_nodes: Optional[Set[str]] = None,
         show_inbreeding: bool = True,
+        vertical_layout_mode: str = "partner_normalized",
     ) -> RoutePlan:
         labels = labels or {}
         protected = set(protected_nodes or set())
+        chronological = str(vertical_layout_mode or "").strip().casefold() == "chronological"
         adjusted = self._arrange_nodes(
             animal_positions,
             families,
             labels,
             protected,
             show_inbreeding,
+            preserve_y=chronological,
         )
         animal_obstacles = self.node_obstacles(adjusted, labels, show_inbreeding)
         family_positions = self._place_junctions(
             adjusted,
             families,
             animal_obstacles,
+            chronological=chronological,
         )
         family_members = self._family_members(adjusted, families)
         cycle_nodes = self._parentage_cycle_nodes(adjusted, families)
@@ -247,7 +251,7 @@ class PedigreeRouter:
         obstacles: Dict[str, Rect] = {}
         for node, (x, y) in positions.items():
             label = str(labels.get(node, node)).strip()
-            label_half_width = max(0.36, (len(label) * 0.048) + 0.12)
+            label_half_width = max(0.40, (len(label) * 0.075) + 0.14)
             bottom_offset = 0.78 if show_inbreeding else 0.56
             obstacles[node] = Rect(
                 x - label_half_width,
@@ -313,7 +317,11 @@ class PedigreeRouter:
                     )
                 for index, segment in enumerate(segments):
                     for node, rect in animal_obstacles.items():
-                        if node == endpoint and index == len(segments) - 1:
+                        # A route is expected to enter its own endpoint marker.
+                        # That marker is never a foreign obstacle, regardless
+                        # of which canonical parent segment first reaches its
+                        # label/marker rectangle.
+                        if node == endpoint:
                             continue
                         if rect.intersects(segment, margin=0.01):
                             route_gaps = plan.crossing_gaps.get((family_id, endpoint, index), [])
@@ -352,6 +360,8 @@ class PedigreeRouter:
         labels: Mapping[str, str],
         protected: Set[str],
         show_inbreeding: bool,
+        *,
+        preserve_y: bool = False,
     ) -> Dict[str, Point]:
         adjusted = {node: (float(point[0]), float(point[1])) for node, point in positions.items()}
         if not adjusted:
@@ -363,8 +373,14 @@ class PedigreeRouter:
                 for node in protected
                 if node in adjusted
             }
-            self._assign_generation_rows(adjusted, families)
-            self._arrange_partner_blocks(adjusted, families, labels)
+            if not preserve_y:
+                self._assign_generation_rows(adjusted, families)
+            self._arrange_partner_blocks(
+                adjusted,
+                families,
+                labels,
+                normalize_partner_y=not preserve_y,
+            )
             for row in self._cluster_rows(adjusted):
                 self._deoverlap_row(adjusted, row, labels, protected, show_inbreeding)
             if not protected:
@@ -388,6 +404,11 @@ class PedigreeRouter:
                 )
             return adjusted
 
+        if preserve_y:
+            for row in self._cluster_rows(adjusted):
+                self._deoverlap_row(adjusted, row, labels, protected, show_inbreeding)
+            return adjusted
+
         automatic = [node for node in adjusted if node not in protected]
         if automatic and not protected:
             if len(automatic) >= 4:
@@ -402,7 +423,7 @@ class PedigreeRouter:
                 for row_index in range(row_count):
                     row = ordered[row_index * columns : (row_index + 1) * columns]
                     widths = [
-                        max(0.72, (len(str(labels.get(node, node)).strip()) * 0.096) + 0.24)
+                        max(0.80, (len(str(labels.get(node, node)).strip()) * 0.150) + 0.28)
                         for node in row
                     ]
                     row_width = sum(widths) + (0.72 * max(0, len(row) - 1))
@@ -513,6 +534,8 @@ class PedigreeRouter:
         positions: Dict[str, Point],
         families: Mapping[str, Mapping[str, object]],
         labels: Mapping[str, str],
+        *,
+        normalize_partner_y: bool = True,
     ) -> None:
         """Lay out each visible ancestry component as a tidy recursive family tree."""
         original_x = {node: point[0] for node, point in positions.items()}
@@ -618,7 +641,7 @@ class PedigreeRouter:
 
         def node_width(node: str) -> float:
             label = str(labels.get(node, node)).strip()
-            return max(0.72, (len(label) * 0.096) + 0.24)
+            return max(0.80, (len(label) * 0.150) + 0.28)
 
         width_memo: Dict[str, float] = {}
         family_gap = 0.90
@@ -853,7 +876,7 @@ class PedigreeRouter:
                     parent_cursor += width + family_gap
 
             parent_ys = [positions[parent][1] for parent in parents]
-            if max(parent_ys) - min(parent_ys) <= 0.55:
+            if normalize_partner_y and max(parent_ys) - min(parent_ys) <= 0.55:
                 partner_y = sum(parent_ys) / len(parent_ys)
                 for parent_node in parents:
                     positions[parent_node] = (positions[parent_node][0], partner_y)
@@ -1063,26 +1086,22 @@ class PedigreeRouter:
         labels: Mapping[str, str],
         show_inbreeding: bool,
     ) -> None:
-        outgoing: Dict[str, List[str]] = {}
-        for family_id, family in families.items():
-            for parent in self._parents(family):
-                if parent in positions:
-                    outgoing.setdefault(parent, []).append(family_id)
+        """Center every offspring group on its parents, top-down.
 
-        def descendants(seed: str, blocked: Set[str]) -> Set[str]:
-            pending = [seed]
-            result: Set[str] = set()
-            while pending:
-                node = pending.pop()
-                if node in result or node in blocked or node not in positions:
-                    continue
-                result.add(node)
-                for family_id in outgoing.get(node, []):
-                    family = families.get(family_id, {})
-                    pending.extend(self._parents(family))
-                    pending.extend(self._children(family))
-            return result
+        The family junction is defined by the parent midpoint.  Moving a
+        partner during recursive packing must therefore move the *children of
+        that family* to the new midpoint, not translate the partner's entire
+        descendant component (which also drags the other partner away from its
+        own ancestry).  Processing families from older to younger propagates
+        each corrected midpoint through later generations while preserving the
+        spacing within sibling groups.
 
+        Directed parentage cycles are left to the cycle-safe base layout.  A
+        finite projection cannot satisfy contradictory parent/child equations
+        in a corrupt cycle, and must never oscillate or crash.
+        """
+        del show_inbreeding
+        cycle_nodes = self._parentage_cycle_nodes(positions, families)
         ordered = sorted(
             families,
             key=lambda family_id: (
@@ -1094,37 +1113,54 @@ class PedigreeRouter:
                     ),
                     default=0.0,
                 ),
+                max(
+                    (
+                        positions[child][1]
+                        for child in self._children(families[family_id])
+                        if child in positions
+                    ),
+                    default=0.0,
+                ),
                 family_id.casefold(),
             ),
         )
-        for family_id in ordered:
-            family = families[family_id]
-            parents = [node for node in self._parents(family) if node in positions]
-            children = [node for node in self._children(family) if node in positions]
-            if len(parents) != 2 or len(children) != 1:
-                continue
-            child = children[0]
-            target = sum(positions[parent][0] for parent in parents) / 2.0
-            delta = target - positions[child][0]
-            if abs(delta) <= _EPSILON:
-                continue
-            branch = descendants(child, set(parents))
-            original = {node: positions[node] for node in branch}
-            for node in branch:
-                x, y = positions[node]
-                positions[node] = (x + delta, y)
-            obstacles = self.node_obstacles(positions, labels, show_inbreeding)
-            outside = set(positions) - branch
-            collision = any(
-                max(obstacles[node].left, obstacles[other].left)
-                < min(obstacles[node].right, obstacles[other].right) - _EPSILON
-                and max(obstacles[node].bottom, obstacles[other].bottom)
-                < min(obstacles[node].top, obstacles[other].top) - _EPSILON
-                for node in branch
-                for other in outside
-            )
-            if collision:
-                positions.update(original)
+
+        # More than one pass is useful for equal-date families whose stable
+        # lexical order is not their ancestry order.  A DAG converges quickly;
+        # the hard bound protects unusual consanguineous data.
+        for _pass in range(max(2, min(len(ordered) + 1, 12))):
+            changed = False
+            for family_id in ordered:
+                family = families[family_id]
+                parents = [node for node in self._parents(family) if node in positions]
+                children = [node for node in self._children(family) if node in positions]
+                if not parents or not children:
+                    continue
+                if cycle_nodes.intersection(parents) and cycle_nodes.intersection(children):
+                    continue
+                parent_center = sum(positions[parent][0] for parent in parents) / len(parents)
+                ordered_children = sorted(
+                    children,
+                    key=lambda child: (positions[child][0], child.casefold()),
+                )
+                widths = [
+                    max(
+                        0.80,
+                        (len(str(labels.get(child, child)).strip()) * 0.150) + 0.28,
+                    )
+                    for child in ordered_children
+                ]
+                slot_width = max(widths, default=0.80) + 0.72
+                midpoint = (len(ordered_children) - 1) / 2.0
+                for index, child in enumerate(ordered_children):
+                    target_x = parent_center + ((index - midpoint) * slot_width)
+                    x, y = positions[child]
+                    if abs(target_x - x) <= _EPSILON:
+                        continue
+                    positions[child] = (target_x, y)
+                    changed = True
+            if not changed:
+                break
 
     def _shift_automatic_components_from_locks(
         self,
@@ -1227,7 +1263,7 @@ class PedigreeRouter:
 
         def half_width(node: str) -> float:
             label = str(labels.get(node, node)).strip()
-            return max(0.36, (len(label) * 0.048) + 0.12)
+            return max(0.40, (len(label) * 0.075) + 0.14)
 
         original_center = sum(positions[node][0] for node in row) / len(row)
         ordered = sorted(row, key=lambda node: (positions[node][0], node.casefold()))
@@ -1276,6 +1312,8 @@ class PedigreeRouter:
         positions: Mapping[str, Point],
         families: Mapping[str, Mapping[str, object]],
         obstacles: Mapping[str, Rect],
+        *,
+        chronological: bool = False,
     ) -> Dict[str, Point]:
         grouped: Dict[
             Tuple[float, float],
@@ -1301,14 +1339,15 @@ class PedigreeRouter:
                 continue
             parent_x = sum(positions[node][0] for node in parents) / len(parents)
             child_x = sum(positions[node][0] for node in children) / len(children)
-            child_y = sum(positions[node][1] for node in children) / len(children)
+            child_ys = [positions[node][1] for node in children]
+            child_y = min(child_ys) if chronological else sum(child_ys) / len(child_ys)
             parent_ys = [positions[node][1] for node in parents]
             parent_mid_y = sum(parent_ys) / len(parent_ys)
             # In an ancestor/offspring pairing the parents intentionally occupy
             # different ranks.  Place the junction beyond the parent closest
             # to the children, leaving room for the canonical horizontal rail
             # instead of squeezing it into that parent's marker/label box.
-            parent_y = (
+            parent_y = max(parent_ys) if chronological else (
                 max(parent_ys)
                 if child_y >= parent_mid_y
                 else min(parent_ys)

@@ -307,6 +307,7 @@ class ChangePasswordDialog(QDialog):
         self.messages = messages
         self.user_db = user_db
         self.username = username
+        self.forced = bool(forced)
 
         self.setWindowTitle(_msg(messages, "master_track.change_pw.title", "Change Password"))
         self.setModal(True)
@@ -354,6 +355,18 @@ class ChangePasswordDialog(QDialog):
         if not forced:
             buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def reject(self) -> None:
+        """Keep a mandatory password change modal until it is completed."""
+        if self.forced:
+            return
+        super().reject()
+
+    def keyPressEvent(self, event) -> None:
+        if self.forced and event.key() == Qt.Key.Key_Escape:
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def _update_strength(self, text: str) -> None:
         val = _strength(text)
@@ -979,6 +992,10 @@ class EditJobsDialog(QDialog):
         add_btn = QPushButton(_msg(messages, "master_track.manage.add_job", "New Job"))
         add_btn.clicked.connect(self._add_job)
         top.addWidget(add_btn)
+        self.delete_job_btn = QPushButton(_msg(
+            messages, "master_track.manage.delete_job", "× Delete Job"))
+        self.delete_job_btn.clicked.connect(self._delete_job)
+        top.addWidget(self.delete_job_btn)
         layout.addLayout(top)
 
         timeout_row = QHBoxLayout()
@@ -1017,6 +1034,7 @@ class EditJobsDialog(QDialog):
             self._load_job(self.job_combo.currentText())
 
     def _load_job(self, job_name: str) -> None:
+        self.delete_job_btn.setEnabled(bool(job_name) and job_name not in DEFAULT_JOB_BUNDLES)
         for i in reversed(range(self._scroll_vbox.count())):
             w = self._scroll_vbox.itemAt(i).widget()
             if w:
@@ -1082,6 +1100,39 @@ class EditJobsDialog(QDialog):
         self.plugin.save_job_bundles()
         self.job_combo.addItem(name)
         self.job_combo.setCurrentText(name)
+
+    def _delete_job(self) -> None:
+        job_name = self.job_combo.currentText().strip()
+        if not job_name or job_name in DEFAULT_JOB_BUNDLES:
+            self.error_label.setText(_msg(
+                self.messages,
+                "master_track.error.default_job_delete",
+                "Built-in jobs cannot be deleted.",
+            ))
+            return
+        reply = QMessageBox.question(
+            self,
+            _msg(self.messages, "master_track.manage.confirm_delete_job_title", "Confirm"),
+            _msg(
+                self.messages,
+                "master_track.manage.confirm_delete_job",
+                "Delete custom job '{job}' and remove it from all users?",
+            ).replace("{job}", job_name),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        JOB_BUNDLES.pop(job_name, None)
+        affected = self.plugin.user_db.remove_job_from_all_users(job_name)
+        self.plugin.delete_job_timeout(job_name)
+        self.plugin.save_job_bundles()
+        index = self.job_combo.findText(job_name)
+        if index >= 0:
+            self.job_combo.removeItem(index)
+        self.error_label.setText(
+            _msg(self.messages, "master_track.manage.job_deleted", "Job deleted.")
+            + (f" {affected} user(s) updated." if affected else "")
+        )
 
 
 # ===================================================================

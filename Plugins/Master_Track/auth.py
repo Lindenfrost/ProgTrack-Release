@@ -251,6 +251,20 @@ class UserDB:
             self.save()
         return count
 
+    def remove_job_from_all_users(self, job_name: str) -> int:
+        """Remove a deleted custom job from every account atomically."""
+        count = 0
+        for user in self.users:
+            self._ensure_user_defaults(user)
+            jobs = list(user.get("jobs", []))
+            retained = [job for job in jobs if job != job_name]
+            if retained != jobs:
+                user["jobs"] = retained
+                count += 1
+        if count:
+            self.save()
+        return count
+
     def record_login(self, username: str) -> None:
         user = self.get_user(username)
         if user:

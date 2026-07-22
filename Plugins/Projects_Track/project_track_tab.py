@@ -1248,6 +1248,14 @@ class ProjectTrackTab(QWidget):
         mt_dirty = getattr(self._app, 'master_track', None)
         if changed_users and mt_dirty and hasattr(mt_dirty, 'mark_project_visibility_dirty'):
             mt_dirty.mark_project_visibility_dirty(sorted(changed_users))
+        pt_plugin = getattr(self._app, 'projects_plugin', None)
+        if pt_plugin:
+            invalidate = getattr(pt_plugin, 'invalidate_user_caches', None)
+            if changed_users and callable(invalidate):
+                invalidate(sorted(changed_users))
+            refresh = getattr(pt_plugin, 'refresh_projects', None)
+            if callable(refresh):
+                refresh(force_discovery=True)
         self._audit_project_action('edit_project', name)
         self._refresh_animals_section(name)
         self._refresh_project_list()
@@ -1285,7 +1293,9 @@ class ProjectTrackTab(QWidget):
             self._build_detail(self._current_project)
 
     def _on_refresh_clicked(self):
-        pt_plugin = getattr(self._app, 'projects_track_plugin', None)
-        if pt_plugin and hasattr(pt_plugin, '_on_refresh_clicked'):
-            pt_plugin._on_refresh_clicked()
-        self._refresh_project_list()
+        pt_plugin = getattr(self._app, 'projects_plugin', None)
+        refresh = getattr(pt_plugin, 'refresh_projects', None) if pt_plugin else None
+        if callable(refresh):
+            refresh(force_discovery=True)
+        else:
+            self._refresh_project_list()

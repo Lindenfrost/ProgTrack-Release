@@ -119,12 +119,12 @@ def _natural_name_key(path: Path) -> list[int | str]:
 
 
 def discover_default_script(launcher_dir: Path) -> Path | None:
-    """Return the first matching ProgTrack script in deterministic natural order."""
+    """Return the highest matching ProgTrack version in natural order."""
     matches = sorted(
         (p for p in launcher_dir.glob(DEFAULT_SCRIPT_PATTERN) if p.is_file()),
         key=_natural_name_key,
     )
-    return matches[0] if matches else None
+    return matches[-1] if matches else None
 
 
 def resolve_script_path(script_name: str | None, launcher_dir: Path) -> Path:

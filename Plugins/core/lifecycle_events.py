@@ -41,13 +41,22 @@ def add_lifecycle_event(record: Dict[str, Any], event: Mapping[str, Any]) -> Non
     events.append(dict(event))
 
 
-def ever_in_experiment(record: Mapping[str, Any]) -> bool:
-    if record.get("in_experiment"):
-        return True
+def ever_in_experiment(
+    record: Mapping[str, Any],
+    history_entries: Iterable[Mapping[str, Any]] = (),
+) -> bool:
+    """Return whether at least one experiment period has been completed.
+
+    The user-facing filter is deliberately labelled ``was in experiment``.  A
+    first, still-running experiment therefore does *not* qualify.  Older data
+    may only contain the corresponding MediTrack entry, so callers can provide
+    those entries without having to migrate the sample database.
+    """
+    lifecycle_entries = record.get("lifecycle_events") or []
     return any(
         isinstance(event, Mapping)
-        and event.get("event_type") in {"experiment_started", "experiment_ended"}
-        for event in (record.get("lifecycle_events") or [])
+        and (event.get("event_type") or event.get("entry_type")) == "experiment_ended"
+        for event in (*lifecycle_entries, *history_entries)
     )
 
 

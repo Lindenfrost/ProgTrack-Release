@@ -1,0 +1,12 @@
+{
+  "role.egg_cell_donor": "Egg cell donor",
+  "role.surrogate": "Surrogate",
+  "role.sperm_donor": "Sperm donor",
+  "role.offspring": "Offspring",
+  "role.partner_animal": "Partner animal",
+  "role.breeding_animal": "Breeding animal",
+  "role.experimental_animal": "Experimental animal",
+  "role.unknown": "Unknown",
+  "role.custom.neue_rolle": "Probe",
+  "role.custom.new_role": "Test"
+}

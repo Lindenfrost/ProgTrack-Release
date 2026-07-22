@@ -5,7 +5,7 @@
   "cycle_break_days": 30,
   "transfer_offset_days": 6,
   "donors_per_surgery": 1,
-  "surrogates_per_transfer": 1,
+  "surrogates_per_transfer": 2,
   "surgery_weekdays": [
     2
   ],

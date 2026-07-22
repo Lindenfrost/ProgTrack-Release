@@ -38,16 +38,30 @@ class HeritageStore:
         self._legacy_path = os.path.join(plugin_dir, "heritage.json")
         self._data: Optional[Dict[str, Any]] = None
 
-    def _default_settings(self) -> Dict[str, bool]:
+    def _default_settings(self) -> Dict[str, Any]:
         return {
             "show_grid": False,
             "snap_to_grid": False,
             "show_heritage_only": True,
             "show_legend": True,
-            "show_inbreeding_f": True,
             "exclude_archived": False,
-            "birthdate_height_layout": True,
+            "vertical_layout_mode": "partner_normalized",
+            "animal_label_detail": "inbreeding_f",
         }
+
+    @staticmethod
+    def _normalize_vertical_layout_mode(value: Any) -> str:
+        normalized = str(value or "").strip().casefold()
+        if normalized == "chronological":
+            return "chronological"
+        return "partner_normalized"
+
+    @staticmethod
+    def _normalize_animal_label_detail(value: Any) -> str:
+        normalized = str(value or "").strip().casefold()
+        if normalized in {"nothing", "inbreeding_f", "birth_date", "animal_id"}:
+            return normalized
+        return "inbreeding_f"
 
     def _default_data(self) -> Dict[str, Any]:
         return {
@@ -106,23 +120,9 @@ class HeritageStore:
             return "male"
         if text in female_markers:
             return "female"
+        if text in {"u", "unknown", "unknown sex", "unbekannt", "sconosciuto", "sconosciuta"}:
+            return "unknown"
         return ""
-
-    def _set_parent_sex_from_core_role(self, parent_name: Any, forced_sex: str) -> bool:
-        """Persist deterministic parent sex inferred from core mother/father fields."""
-        key = self._normalize_text(parent_name)
-        normalized = self._normalize_sex(forced_sex)
-        if not key or not normalized:
-            return False
-
-        entry = self._entry(key)
-        current = self._normalize_sex(entry.get("sex", ""))
-        if current == normalized:
-            return False
-
-        entry["sex"] = normalized
-        entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
-        return True
 
     def _normalize_genotype_key(self, value: Any) -> str:
         return self._normalize_text(value).lower()
@@ -232,9 +232,13 @@ class HeritageStore:
             "snap_to_grid": bool(raw_settings.get("snap_to_grid", default_settings["snap_to_grid"])),
             "show_heritage_only": bool(raw_settings.get("show_heritage_only", default_settings["show_heritage_only"])),
             "show_legend": bool(raw_settings.get("show_legend", default_settings["show_legend"])),
-            "show_inbreeding_f": bool(raw_settings.get("show_inbreeding_f", default_settings["show_inbreeding_f"])),
             "exclude_archived": bool(raw_settings.get("exclude_archived", default_settings["exclude_archived"])),
-            "birthdate_height_layout": bool(raw_settings.get("birthdate_height_layout", default_settings["birthdate_height_layout"])),
+            "vertical_layout_mode": self._normalize_vertical_layout_mode(
+                raw_settings.get("vertical_layout_mode", default_settings["vertical_layout_mode"])
+            ),
+            "animal_label_detail": self._normalize_animal_label_detail(
+                raw_settings.get("animal_label_detail", default_settings["animal_label_detail"])
+            ),
         }
 
         normalized_positions: Dict[str, Dict[str, float]] = {}
@@ -435,7 +439,7 @@ class HeritageStore:
             }
         return animals[key]
 
-    def get_settings(self) -> Dict[str, bool]:
+    def get_settings(self) -> Dict[str, Any]:
         data = self.load()
         settings = data.get("settings", {}) if isinstance(data, dict) else {}
         default_settings = self._default_settings()
@@ -446,9 +450,13 @@ class HeritageStore:
             "snap_to_grid": bool(settings.get("snap_to_grid", default_settings["snap_to_grid"])),
             "show_heritage_only": bool(settings.get("show_heritage_only", default_settings["show_heritage_only"])),
             "show_legend": bool(settings.get("show_legend", default_settings["show_legend"])),
-            "show_inbreeding_f": bool(settings.get("show_inbreeding_f", default_settings["show_inbreeding_f"])),
             "exclude_archived": bool(settings.get("exclude_archived", default_settings["exclude_archived"])),
-            "birthdate_height_layout": bool(settings.get("birthdate_height_layout", default_settings["birthdate_height_layout"])),
+            "vertical_layout_mode": self._normalize_vertical_layout_mode(
+                settings.get("vertical_layout_mode", default_settings["vertical_layout_mode"])
+            ),
+            "animal_label_detail": self._normalize_animal_label_detail(
+                settings.get("animal_label_detail", default_settings["animal_label_detail"])
+            ),
         }
 
     def set_settings(self, settings: Dict[str, Any]) -> None:
@@ -457,9 +465,17 @@ class HeritageStore:
 
         data = self.load()
         current = self.get_settings()
-        for key in current.keys():
+        for key in ("show_grid", "snap_to_grid", "show_heritage_only", "show_legend", "exclude_archived"):
             if key in settings:
                 current[key] = bool(settings.get(key))
+        if "vertical_layout_mode" in settings:
+            current["vertical_layout_mode"] = self._normalize_vertical_layout_mode(
+                settings.get("vertical_layout_mode")
+            )
+        if "animal_label_detail" in settings:
+            current["animal_label_detail"] = self._normalize_animal_label_detail(
+                settings.get("animal_label_detail")
+            )
 
         data["settings"] = current
         self._save_settings()
@@ -840,13 +856,15 @@ class HeritageStore:
         return self._normalize_sex(entry.get("sex", ""))
 
     def get_effective_sex(self, animal_name: Optional[str], fallback_record: Optional[Dict[str, Any]] = None) -> str:
+        fallback_sex = self._normalize_sex((fallback_record or {}).get("sex", ""))
+        if fallback_sex:
+            return fallback_sex
         key = self._normalize_text(animal_name)
         if key:
             manual = self.get_manual_sex(key)
             if manual:
                 return manual
-        fallback_sex = self._normalize_sex((fallback_record or {}).get("sex", ""))
-        return fallback_sex
+        return ""
 
     def set_node_visual(self, animal_name: str, genotype: Optional[str], fill_color: Optional[str]) -> None:
         key = self._normalize_text(animal_name)
@@ -925,11 +943,6 @@ class HeritageStore:
             "surrogate_father": "ziehvater",
         }
 
-        has_parent_data = any(core_key in record for core_key in core_parent_map.values())
-        has_genotype = "genotype" in record
-        if not has_parent_data and not has_genotype:
-            return False
-
         data = self.load()
         animals = data.get("animals", {}) if isinstance(data, dict) else {}
         entry_exists = isinstance(animals, dict) and key in animals
@@ -947,13 +960,14 @@ class HeritageStore:
                 entry[field] = value
                 changed = True
 
-        if not entry_exists and self._normalize_text(entry.get("source", "")).lower() != "core":
+        if in_main_animals and self._normalize_text(entry.get("source", "")).lower() != "core":
             entry["source"] = "core"
             changed = True
 
-        # Only clear heritage_only flag if the animal exists in main animals list
-        # Heritage-only animals (not in main list) should keep their flag
-        if entry.get("heritage_only", False) and in_main_animals:
+        # Main/archived application membership is authoritative.  A stale
+        # Heritage flag must never turn a real animal into an editable
+        # Heritage-only placeholder.
+        if in_main_animals and bool(entry.get("heritage_only", False)):
             entry["heritage_only"] = False
             changed = True
 
@@ -971,36 +985,21 @@ class HeritageStore:
                 entry[parent_key] = value
                 changed = True
 
-        # Core mother/father semantics should map to explicit female/male sex,
-        # not "auto", for referenced parent animals.
-        if self._set_parent_sex_from_core_role(record.get("eizellspenderin", ""), "female"):
-            changed = True
-        if self._set_parent_sex_from_core_role(record.get("samenspender", ""), "male"):
-            changed = True
-
-        # Sync sex from core record (e.g., Male/Female/Unknown)
-        # Also set sex deterministically based on role: female animals always female,
-        # samenspender always male
+        # Sex on a real application animal is owned by its core record.  An
+        # explicit Unknown is a real value and wins over role inference.  A
+        # role is used only for legacy records that have no explicit value.
         role = canonical_role_value(record.get("rolle", ""))
         role_determined_sex = ""
         if role in (ROLE_VALUE_SPENDER, ROLE_VALUE_AMME):
             role_determined_sex = "female"
         elif role == ROLE_VALUE_SAMENSP:
             role_determined_sex = "male"
-
-        if role_determined_sex:
-            current_sex = self._normalize_sex(entry.get("sex", ""))
-            # Role-determined sex always wins (overwrites existing)
-            if current_sex != role_determined_sex:
-                entry["sex"] = role_determined_sex
-                changed = True
-        elif "sex" in record:
-            sex = self._normalize_sex(record.get("sex", ""))
-            current_sex = self._normalize_sex(entry.get("sex", ""))
-            # Only backfill missing sex from core.
-            if allow_core_backfill and not current_sex and sex:
-                entry["sex"] = sex
-                changed = True
+        explicit_sex = self._normalize_sex(record.get("sex", ""))
+        authoritative_sex = explicit_sex or role_determined_sex
+        current_sex = self._normalize_sex(entry.get("sex", ""))
+        if in_main_animals and current_sex != authoritative_sex:
+            entry["sex"] = authoritative_sex
+            changed = True
 
         if "genotype" in record:
             genotype = self._normalize_text(record.get("genotype", ""))
@@ -1082,18 +1081,33 @@ class HeritageStore:
         changed = False
         data = self.load()
         store_animals = data.get("animals", {}) if isinstance(data, dict) else {}
+        core_keys = {
+            self._normalize_text(name)
+            for name in animals
+            if self._normalize_text(name)
+        }
         for name, record in animals.items():
             key = self._normalize_text(name)
             if not key or not isinstance(record, dict):
                 continue
 
-            existing = store_animals.get(key, {}) if isinstance(store_animals, dict) else {}
-            if isinstance(existing, dict) and existing.get("heritage_only", False):
-                existing["heritage_only"] = False
-                existing["updated_at"] = datetime.utcnow().isoformat() + "Z"
+            if self.sync_from_record(key, record, persist=False, in_main_animals=True):
                 changed = True
 
-            if self.sync_from_record(key, record, persist=False, in_main_animals=True):
+        # Reconcile both directions in one pass.  Records present in the app
+        # (active or archived, as supplied by the plugin) are real; records
+        # present only in this store are Heritage-only regardless of a stale
+        # serialized flag.
+        if isinstance(store_animals, dict):
+            timestamp = datetime.utcnow().isoformat() + "Z"
+            for key, entry in store_animals.items():
+                if not isinstance(entry, dict):
+                    continue
+                expected = key not in core_keys
+                if bool(entry.get("heritage_only", False)) == expected:
+                    continue
+                entry["heritage_only"] = expected
+                entry["updated_at"] = timestamp
                 changed = True
 
         if changed:

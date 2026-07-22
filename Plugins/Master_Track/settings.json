@@ -1,0 +1,8 @@
+{
+  "timeout_minutes": 30,
+  "job_timeouts": {
+    "vet": 30,
+    "tester": 1,
+    "controller": 1
+  }
+}

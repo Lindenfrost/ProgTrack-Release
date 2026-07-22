@@ -16,3 +16,12 @@ runtime_plot_test.*
 .windsurf/
 ProgTrack.v.0.1.0.zip
 progtrack_daten.lock
+tests/
+tmp/
+outputs/
+.pytest_cache/
+.ruff_cache/
+*.bak
+Plugins/Projects_Track/project_assignment_cache/
+Plugins/Master_Track/sessions/*.json
+Plugins/Medi_Track/medi_track/Thranduil _ Callitrix jacchus _ 11.02.2021/

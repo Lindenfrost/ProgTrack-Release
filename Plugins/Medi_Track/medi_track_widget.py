@@ -13,7 +13,7 @@ import os
 import shutil
 import tempfile
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
@@ -71,12 +71,370 @@ _TABLE_EXTS  = {'.csv', '.xls', '.xlsx', '.ods'}
 _PDF_EXTS    = {'.pdf'}
 
 
+class UnifiedExportDialog(QDialog):
+    """Shared export options dialog for Reports and Medi Track.
+
+    ``tab_current`` deliberately renders only an identity label.  The
+    ``file_multi`` mode adds prefix search and multi-selection.  Keeping those
+    contexts explicit prevents a tab-local export from accidentally exposing
+    other animals while still giving the File menu its batch workflow.
+    """
+
+    MODE_TAB_CURRENT = "tab_current"
+    MODE_FILE_MULTI = "file_multi"
+
+    def __init__(
+        self,
+        parent: Optional[QWidget],
+        *,
+        title: str,
+        candidates: Iterable[Tuple[str, ...]],
+        mode: str,
+        current_animal: Optional[str] = None,
+        formats: Iterable[str] = ("PDF", "XLSX"),
+        messages: Optional[Dict[str, Any]] = None,
+        show_signatures: bool = False,
+        show_documents: bool = False,
+        show_date_range: bool = False,
+        initial_from: Optional[date] = None,
+        initial_to: Optional[date] = None,
+        project_options: Optional[Iterable[str]] = None,
+    ) -> None:
+        super().__init__(parent)
+        if mode not in (self.MODE_TAB_CURRENT, self.MODE_FILE_MULTI):
+            raise ValueError(f"Unsupported export dialog mode: {mode}")
+
+        self.messages = messages or {}
+        self.mode = mode
+        self._candidates = [
+            (
+                str(row[0]),
+                str(row[1]),
+                str(row[2]) if len(row) > 2 else "",
+                str(row[3]) if len(row) > 3 else "",
+                str(row[4]) if len(row) > 4 else "",
+            )
+            for row in candidates
+        ]
+        self._candidate_ids = {row[0] for row in self._candidates}
+        self._current_animal = (
+            str(current_animal)
+            if current_animal is not None and str(current_animal) in self._candidate_ids
+            else None
+        )
+        self._animal_list: Optional[QListWidget] = None
+        self._search_edit: Optional[QLineEdit] = None
+
+        self.setObjectName("unifiedExportDialog")
+        self.setProperty("exportContext", mode)
+        self.setWindowModality(Qt.WindowModality.WindowModal)
+        self.setWindowTitle(title)
+        self.setStyleSheet(
+            "QDialog#unifiedExportDialog QGroupBox { font-weight: bold; margin-top: 8px; }"
+            "QDialog#unifiedExportDialog QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
+            "QDialog#unifiedExportDialog QListWidget { min-height: 180px; }"
+        )
+
+        self._root_layout = QVBoxLayout(self)
+        self._root_layout.setContentsMargins(12, 12, 12, 12)
+        self._root_layout.setSpacing(8)
+
+        animal_group = QGroupBox(
+            _msg(
+                self.messages,
+                "export.animals" if mode == self.MODE_FILE_MULTI else "export.animal",
+                "Animals" if mode == self.MODE_FILE_MULTI else "Animal",
+            )
+        )
+        animal_layout = QVBoxLayout(animal_group)
+
+        if mode == self.MODE_TAB_CURRENT:
+            current_label = next(
+                (row[1] for row in self._candidates if row[0] == self._current_animal),
+                "",
+            )
+            self.current_animal_label = QLabel(current_label)
+            self.current_animal_label.setObjectName("exportCurrentAnimal")
+            self.current_animal_label.setWordWrap(True)
+            animal_layout.addWidget(self.current_animal_label)
+        else:
+            filter_row = QHBoxLayout()
+            self.species_filter = QComboBox()
+            self.species_filter.setObjectName("exportSpeciesFilter")
+            self.species_filter.addItem(
+                _msg(self.messages, "filter.all_species", "All species"), ""
+            )
+            for species in sorted(
+                {row[3] for row in self._candidates if row[3]},
+                key=str.casefold,
+            ):
+                self.species_filter.addItem(species, species)
+            filter_row.addWidget(self.species_filter)
+
+            self.project_filter = QComboBox()
+            self.project_filter.setObjectName("exportProjectFilter")
+            self.project_filter.addItem(
+                _msg(self.messages, "filter.all_projects", "All projects"), ""
+            )
+            allowed_projects = (
+                {str(value) for value in project_options if str(value).strip()}
+                if project_options is not None
+                else {row[4] for row in self._candidates if row[4]}
+            )
+            for project in sorted(allowed_projects, key=str.casefold):
+                self.project_filter.addItem(project, project)
+            filter_row.addWidget(self.project_filter)
+            animal_layout.addLayout(filter_row)
+
+            self._search_edit = QLineEdit()
+            self._search_edit.setObjectName("exportAnimalSearch")
+            self._search_edit.setPlaceholderText(
+                _msg(
+                    self.messages,
+                    "medi_track.export.search",
+                    "Search animals by name prefix",
+                )
+            )
+            animal_layout.addWidget(self._search_edit)
+
+            self.select_all_checkbox = QCheckBox(
+                _msg(self.messages, "checkbox.select_all", "Select all visible")
+            )
+            self.select_all_checkbox.setObjectName("exportSelectAll")
+            animal_layout.addWidget(self.select_all_checkbox)
+
+            self._animal_list = QListWidget()
+            self._animal_list.setObjectName("exportAnimalList")
+            self._animal_list.setSelectionMode(
+                QAbstractItemView.SelectionMode.ExtendedSelection
+            )
+            previous_group = None
+            for animal_id, label, group, species, project in self._candidates:
+                if group and group != previous_group:
+                    header = QListWidgetItem(group)
+                    header.setData(Qt.ItemDataRole.UserRole, None)
+                    header.setData(Qt.ItemDataRole.UserRole + 1, group)
+                    header.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                    font = header.font()
+                    font.setBold(True)
+                    header.setFont(font)
+                    self._animal_list.addItem(header)
+                    previous_group = group
+                item = QListWidgetItem(label)
+                item.setData(Qt.ItemDataRole.UserRole, animal_id)
+                item.setData(Qt.ItemDataRole.UserRole + 1, group)
+                item.setData(Qt.ItemDataRole.UserRole + 2, species)
+                item.setData(Qt.ItemDataRole.UserRole + 3, project)
+                self._animal_list.addItem(item)
+                if animal_id == self._current_animal:
+                    item.setSelected(True)
+            self._search_edit.textChanged.connect(self._apply_prefix_filter)
+            self.species_filter.currentIndexChanged.connect(self._apply_filters)
+            self.project_filter.currentIndexChanged.connect(self._apply_filters)
+            self.select_all_checkbox.toggled.connect(self._select_all_visible)
+            animal_layout.addWidget(self._animal_list)
+
+        self._root_layout.addWidget(animal_group)
+
+        options_group = QGroupBox(
+            _msg(self.messages, "export.options", "Export options")
+        )
+        self.options_layout = QFormLayout(options_group)
+        self.format_combo = QComboBox()
+        self.format_combo.setObjectName("exportFormat")
+        self.format_combo.addItems([str(fmt).upper() for fmt in formats])
+        self.options_layout.addRow(
+            _msg(self.messages, "export.format", "Format"), self.format_combo
+        )
+
+        self.signature_checkbox: Optional[QCheckBox] = None
+        if show_signatures:
+            self.signature_checkbox = QCheckBox(
+                _msg(
+                    self.messages,
+                    "medi_track.export.include_signatures",
+                    "Include signatures",
+                )
+            )
+            self.signature_checkbox.setObjectName("exportIncludeSignatures")
+            self.signature_checkbox.setChecked(True)
+            self.options_layout.addRow("", self.signature_checkbox)
+
+        self.documents_checkbox: Optional[QCheckBox] = None
+        if show_documents:
+            self.documents_checkbox = QCheckBox(
+                _msg(
+                    self.messages,
+                    "medi_track.export.include_documents",
+                    "Copy uploaded documents (XLSX)",
+                )
+            )
+            self.documents_checkbox.setObjectName("exportIncludeDocuments")
+            self.documents_checkbox.setChecked(True)
+            self.options_layout.addRow("", self.documents_checkbox)
+            self.format_combo.currentTextChanged.connect(
+                self._sync_document_option
+            )
+            self._sync_document_option(self.format_combo.currentText())
+
+        self._root_layout.addWidget(options_group)
+
+        self.complete_checkbox: Optional[QCheckBox] = None
+        self.from_date: Optional[QDateEdit] = None
+        self.to_date: Optional[QDateEdit] = None
+        if show_date_range:
+            today = date.today()
+            initial_to = initial_to or today
+            initial_from = initial_from or (today - timedelta(days=31))
+            date_group = QGroupBox(
+                _msg(self.messages, "export.date_range", "Date range")
+            )
+            date_layout = QFormLayout(date_group)
+            self.complete_checkbox = QCheckBox(
+                _msg(self.messages, "export.complete", "Complete")
+            )
+            self.complete_checkbox.setObjectName("exportComplete")
+            date_layout.addRow("", self.complete_checkbox)
+            self.from_date = QDateEdit()
+            self.from_date.setObjectName("exportFromDate")
+            self.from_date.setCalendarPopup(True)
+            self.from_date.setDate(QDate(initial_from.year, initial_from.month, initial_from.day))
+            self.to_date = QDateEdit()
+            self.to_date.setObjectName("exportToDate")
+            self.to_date.setCalendarPopup(True)
+            self.to_date.setDate(QDate(initial_to.year, initial_to.month, initial_to.day))
+            date_layout.addRow(_msg(self.messages, "form.label.from", "From"), self.from_date)
+            date_layout.addRow(_msg(self.messages, "form.label.to", "To"), self.to_date)
+            self.complete_checkbox.toggled.connect(self._sync_date_range)
+            self._root_layout.addWidget(date_group)
+        self._extra_options_index = self._root_layout.count()
+
+        self.button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        self.button_box.setObjectName("exportDialogButtons")
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        self._root_layout.addWidget(self.button_box)
+        self.resize(480, 520 if mode == self.MODE_FILE_MULTI else 280)
+
+    def add_options_widget(self, widget: QWidget) -> None:
+        """Insert context-specific controls before the common button row."""
+        self._root_layout.insertWidget(self._root_layout.count() - 1, widget)
+
+    def _apply_prefix_filter(self, text: str) -> None:
+        self._apply_filters()
+
+    def _apply_filters(self, *_args) -> None:
+        if self._animal_list is None:
+            return
+        prefix = str(self._search_edit.text() if self._search_edit else "").strip().casefold()
+        species = str(self.species_filter.currentData() or "")
+        project = str(self.project_filter.currentData() or "")
+        visible_groups = set()
+        for index in range(self._animal_list.count()):
+            item = self._animal_list.item(index)
+            if item.data(Qt.ItemDataRole.UserRole) is None:
+                continue
+            visible = (
+                (not prefix or item.text().casefold().startswith(prefix))
+                and (not species or item.data(Qt.ItemDataRole.UserRole + 2) == species)
+                and (not project or item.data(Qt.ItemDataRole.UserRole + 3) == project)
+            )
+            item.setHidden(not visible)
+            if visible:
+                visible_groups.add(str(item.data(Qt.ItemDataRole.UserRole + 1) or ""))
+        for index in range(self._animal_list.count()):
+            item = self._animal_list.item(index)
+            if item.data(Qt.ItemDataRole.UserRole) is None:
+                item.setHidden(str(item.data(Qt.ItemDataRole.UserRole + 1) or "") not in visible_groups)
+
+    def _select_all_visible(self, checked: bool) -> None:
+        if self._animal_list is None:
+            return
+        for index in range(self._animal_list.count()):
+            item = self._animal_list.item(index)
+            if item.data(Qt.ItemDataRole.UserRole) is not None and not item.isHidden():
+                item.setSelected(bool(checked))
+
+    def _sync_document_option(self, format_text: str) -> None:
+        if self.documents_checkbox is not None:
+            self.documents_checkbox.setEnabled(str(format_text).upper() == "XLSX")
+
+    def _sync_date_range(self, complete: bool) -> None:
+        if self.from_date is not None:
+            self.from_date.setEnabled(not complete)
+        if self.to_date is not None:
+            self.to_date.setEnabled(not complete)
+
+    def selected_date_range(self) -> Tuple[Optional[date], Optional[date]]:
+        if self.complete_checkbox is not None and self.complete_checkbox.isChecked():
+            return None, None
+        if self.from_date is None or self.to_date is None:
+            return None, None
+        return self.from_date.date().toPyDate(), self.to_date.date().toPyDate()
+
+    def selected_animal_ids(self) -> List[str]:
+        if self.mode == self.MODE_TAB_CURRENT:
+            return [self._current_animal] if self._current_animal else []
+        if self._animal_list is None:
+            return []
+        return [
+            str(item.data(Qt.ItemDataRole.UserRole))
+            for item in self._animal_list.selectedItems()
+        ]
+
+    def selected_format(self) -> str:
+        return self.format_combo.currentText().strip().lower()
+
+    def include_signatures(self) -> bool:
+        return bool(
+            self.signature_checkbox is None or self.signature_checkbox.isChecked()
+        )
+
+    def include_documents(self) -> bool:
+        return bool(
+            self.documents_checkbox is not None
+            and self.documents_checkbox.isEnabled()
+            and self.documents_checkbox.isChecked()
+        )
+
+
 def _safe_name(name: str) -> str:
     """Make animal name safe for use as a folder name."""
     safe = str(name).strip()
     for ch in r'/\:*?"<>|':
         safe = safe.replace(ch, '_')
     return safe or 'unknown'
+
+
+def _entry_date_in_range(
+    value: object,
+    date_from: Optional[date],
+    date_to: Optional[date],
+) -> bool:
+    if date_from is None and date_to is None:
+        return True
+    parsed = None
+    for fmt in ("%d.%m.%Y", "%Y-%m-%d"):
+        try:
+            parsed = datetime.strptime(str(value or ""), fmt).date()
+            break
+        except ValueError:
+            continue
+    if parsed is None:
+        return False
+    return not ((date_from and parsed < date_from) or (date_to and parsed > date_to))
+
+
+def _format_neutral_export_label(text: str, fallback: str = "Export") -> str:
+    """Remove a legacy PDF-only qualifier while retaining localized wording."""
+    label = str(text or "").strip()
+    label = label.replace("(.pdf)", "").replace("(.PDF)", "")
+    label = label.replace(".pdf", "").replace(".PDF", "")
+    label = " ".join(part for part in label.split() if part.casefold() != "pdf")
+    return label.strip() or fallback
 
 
 def _path_identity(path: Path) -> str:
@@ -778,11 +1136,24 @@ class MediTrackWidget(QWidget):
             (self.FILTER_EVER_SICK,     "medi_track.filter.ever_sick",     "Ever Sick"),
             (self.FILTER_ABNORMAL,      "medi_track.filter.current_abnormal", "Currently Abnormal"),
             (self.FILTER_EVER_ABNORMAL, "medi_track.filter.ever_abnormal", "Ever Abnormal"),
-            (self.FILTER_IN_EXPERIMENT, "medi_track.filter.current_experiment", "💡"),
-            (self.FILTER_EVER_EXPERIMENT, "medi_track.filter.ever_experiment", "💬"),
+            (
+                self.FILTER_IN_EXPERIMENT,
+                "medi_track.filter.current_experiment",
+                "Currently in experiment",
+            ),
+            (
+                self.FILTER_EVER_EXPERIMENT,
+                "medi_track.filter.ever_experiment",
+                "Was in experiment",
+            ),
         ]
         for fkey, msg_key, fallback in _filters:
-            btn = QPushButton(_msg(self.messages, msg_key, fallback))
+            label = _msg(self.messages, msg_key, fallback)
+            if fkey == self.FILTER_IN_EXPERIMENT:
+                label = f"💡  {label}"
+            elif fkey == self.FILTER_EVER_EXPERIMENT:
+                label = f"💬  {label}"
+            btn = QPushButton(label)
             btn.setCheckable(True)
             if fkey in (self.FILTER_IN_EXPERIMENT, self.FILTER_EVER_EXPERIMENT):
                 btn.setToolTip(_msg(self.messages, msg_key, fallback))
@@ -874,7 +1245,8 @@ class MediTrackWidget(QWidget):
         self._btn_add_entry.clicked.connect(self._on_add_entry_clicked)
         hist_toolbar.addWidget(self._btn_add_entry)
         self._btn_export = QPushButton(
-            _msg(self.messages, "medi_track.btn.export", "Export PDF"))
+            _format_neutral_export_label(
+                _msg(self.messages, "medi_track.btn.export", "Export")))
         self._btn_export.setEnabled(False)
         self._btn_export.clicked.connect(self._on_export_clicked)
         hist_toolbar.addWidget(self._btn_export)
@@ -942,6 +1314,10 @@ class MediTrackWidget(QWidget):
         fn = getattr(self.app, '_master_can', None)
         return bool(fn('medi_track.add_docs')) if callable(fn) else True
 
+    def _can_export(self) -> bool:
+        fn = getattr(self.app, '_master_can', None)
+        return bool(fn('medi_track.view')) if callable(fn) else True
+
     def _can_upload(self) -> bool:
         fn = getattr(self.app, '_master_can', None)
         return bool(fn('medi_track.upload_document')) if callable(fn) else True
@@ -951,7 +1327,7 @@ class MediTrackWidget(QWidget):
         can_docs = self._can_docs()
         can_upload = self._can_upload()
         self._btn_add_entry.setEnabled(visible and can_docs)
-        self._btn_export.setEnabled(visible and can_docs)
+        self._btn_export.setEnabled(visible and self._can_export())
         self._btn_add_doc.setEnabled(visible and can_upload)
 
     def update_language(self, messages: Dict[str, Any], lang_code: str = "") -> None:
@@ -966,18 +1342,26 @@ class MediTrackWidget(QWidget):
             self.FILTER_EVER_SICK:     ("medi_track.filter.ever_sick",        "Ever Sick"),
             self.FILTER_ABNORMAL:      ("medi_track.filter.current_abnormal", "Currently Abnormal"),
             self.FILTER_EVER_ABNORMAL: ("medi_track.filter.ever_abnormal",    "Ever Abnormal"),
-            self.FILTER_IN_EXPERIMENT: ("medi_track.filter.current_experiment", "💡"),
-            self.FILTER_EVER_EXPERIMENT: ("medi_track.filter.ever_experiment", "💬"),
+            self.FILTER_IN_EXPERIMENT: (
+                "medi_track.filter.current_experiment",
+                "Currently in experiment",
+            ),
+            self.FILTER_EVER_EXPERIMENT: (
+                "medi_track.filter.ever_experiment",
+                "Was in experiment",
+            ),
         }
         for fkey, btn in self._filter_btns.items():
             if fkey in _filter_map:
                 k, fb = _filter_map[fkey]
                 if fkey == self.FILTER_IN_EXPERIMENT:
-                    btn.setText("💡")
+                    label = _msg(messages, k, fb)
+                    btn.setText(f"💡  {label}")
                     btn.setToolTip(_msg(messages, k, "Currently in experiment"))
                 elif fkey == self.FILTER_EVER_EXPERIMENT:
-                    btn.setText("💬")
-                    btn.setToolTip(_msg(messages, k, "Ever in experiment"))
+                    label = _msg(messages, k, fb)
+                    btn.setText(f"💬  {label}")
+                    btn.setToolTip(_msg(messages, k, "Was in experiment"))
                 else:
                     btn.setText(_msg(messages, k, fb))
         # Group box titles
@@ -1013,7 +1397,9 @@ class MediTrackWidget(QWidget):
             self._table.setHorizontalHeaderItem(col, QTableWidgetItem(_msg(messages, key, fb)))
         # Buttons
         self._btn_add_entry.setText(_msg(messages, "medi_track.btn.add_entry",    "+ Add Entry"))
-        self._btn_export.setText(   _msg(messages, "medi_track.btn.export",       "Export PDF"))
+        self._btn_export.setText(
+            _format_neutral_export_label(
+                _msg(messages, "medi_track.btn.export", "Export")))
         self._btn_add_doc.setText(  _msg(messages, "medi_track.btn.add_document", "+ Add Document"))
         self._docs_toggle.setText("▶  " + _msg(messages, "medi_track.section.documents", "Documents"))
         # Refresh animal display with updated labels
@@ -1085,6 +1471,8 @@ class MediTrackWidget(QWidget):
         output_path: str,
         lang: Optional[str] = None,
         include_signature: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> None:
         """Build and write a Medi Track PDF for *animal_name* to *output_path*.
 
@@ -1154,7 +1542,10 @@ class MediTrackWidget(QWidget):
             diag_display = '\u2013'
 
         entries = sorted(
-            self.store.get_entries(animal_name),
+            (
+                entry for entry in self.store.get_entries(animal_name)
+                if _entry_date_in_range(entry.get("date"), date_from, date_to)
+            ),
             key=lambda e: str(e.get('date', '')))
 
         rows = ''
@@ -1290,6 +1681,9 @@ class MediTrackWidget(QWidget):
         output_path: str,
         *,
         include_signature: bool = True,
+        include_documents: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> int:
         from openpyxl import Workbook
 
@@ -1302,24 +1696,28 @@ class MediTrackWidget(QWidget):
         headers.append("Document")
         sheet.append(headers)
 
-        document_dir = Path(output_path).with_suffix("")
-        document_dir = document_dir.parent / f"{document_dir.name}_documents"
-        document_dir.mkdir(parents=True, exist_ok=True)
         copied = {}
-        for source in _document_paths_for_animal(animal_name, self.store):
-            src = Path(source)
-            if not src.is_file():
-                continue
-            destination = document_dir / src.name
-            counter = 1
-            while destination.exists():
-                destination = document_dir / f"{src.stem}_{counter}{src.suffix}"
-                counter += 1
-            shutil.copy2(src, destination)
-            copied[str(src)] = destination
+        if include_documents:
+            document_dir = Path(output_path).with_suffix("")
+            document_dir = document_dir.parent / f"{document_dir.name}_documents"
+            document_dir.mkdir(parents=True, exist_ok=True)
+            for source in _document_paths_for_animal(animal_name, self.store):
+                src = Path(source)
+                if not src.is_file():
+                    continue
+                destination = document_dir / src.name
+                counter = 1
+                while destination.exists():
+                    destination = document_dir / f"{src.stem}_{counter}{src.suffix}"
+                    counter += 1
+                shutil.copy2(src, destination)
+                copied[str(src)] = destination
 
         entries = sorted(
-            self.store.get_entries(animal_name),
+            (
+                entry for entry in self.store.get_entries(animal_name)
+                if _entry_date_in_range(entry.get("date"), date_from, date_to)
+            ),
             key=lambda entry: str(entry.get("date", "")),
         )
         for entry in entries:
@@ -1359,104 +1757,203 @@ class MediTrackWidget(QWidget):
         workbook.save(output_path)
         return len(copied)
 
-    def _on_export_clicked(self) -> None:
-        """Open the unified PDF/XLSX multi-animal export dialog."""
-        if not self._current_animal:
-            return
-        if not self._can_docs():
-            QMessageBox.warning(self,
-                _msg(self.messages, 'medi_track.dialog.permission_denied.title', 'Permission Denied'),
-                _msg(self.messages, 'medi_track.dialog.permission_denied.docs',
-                     'You do not have permission to export medical history.'))
-            return
-        dialog = QDialog(self)
-        dialog.setWindowTitle(_msg(
-            self.messages, "medi_track.dialog.export.title", "Export Medical History"))
-        layout = QVBoxLayout(dialog)
-        format_combo = QComboBox()
-        format_combo.addItems(["PDF", "XLSX"])
-        layout.addWidget(format_combo)
-        include_signature = QCheckBox(_msg(
-            self.messages, "medi_track.export.include_signatures", "Include signatures"))
-        include_signature.setChecked(True)
-        layout.addWidget(include_signature)
-        search = QLineEdit()
-        search.setPlaceholderText(_msg(
-            self.messages, "medi_track.export.search", "Search animals by name prefix"))
-        layout.addWidget(search)
-        animal_list = QListWidget()
-        animal_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+    def _permission_scoped_export_candidates(self) -> List[Tuple[str, str]]:
+        """Return user-visible animals as ``(internal key, Name (ID))`` rows."""
+        central = getattr(self.app, "_permitted_export_candidates", None)
+        if callable(central):
+            try:
+                return list(central(grouped=True, purpose="medi"))
+            except TypeError:
+                return list(central())
+
         app_animals = getattr(self.app, "animals", {}) or {}
         visible_fn = getattr(self.app, "_animal_visible_to_current_user", None)
-        for animal_id, record in sorted(app_animals.items()):
+        candidates: List[Tuple[str, str]] = []
+        for animal_id, record in app_animals.items():
             if callable(visible_fn) and not visible_fn(record):
                 continue
             display = _display_animal_name(animal_id, record)
-            public_id = str(record.get("id") or "")
-            item = QListWidgetItem(
-                f"{display} ({public_id})" if public_id else display)
-            item.setData(Qt.ItemDataRole.UserRole, animal_id)
-            animal_list.addItem(item)
-            if animal_id == self._current_animal:
-                item.setSelected(True)
-        search.textChanged.connect(
-            lambda text: [
-                animal_list.item(i).setHidden(
-                    not animal_list.item(i).text().casefold().startswith(
-                        text.strip().casefold()))
-                for i in range(animal_list.count())
-            ])
-        layout.addWidget(animal_list)
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
+            public_id = str(record.get("id") or "").strip()
+            label = f"{display} ({public_id})" if public_id else display
+            candidates.append((str(animal_id), label))
+        return sorted(candidates, key=lambda row: (row[1].casefold(), row[0]))
+
+    def _permission_scope_export_ids(self, requested: Iterable[str]) -> List[str]:
+        central = getattr(self.app, "_permission_scope_export_ids", None)
+        if callable(central):
+            try:
+                return list(central(requested, purpose="medi"))
+            except TypeError:
+                return list(central(requested))
+        allowed = {row[0] for row in self._permission_scoped_export_candidates()}
+        return [str(animal_id) for animal_id in requested if str(animal_id) in allowed]
+
+    def _build_export_dialog(
+        self,
+        *,
+        mode: str = UnifiedExportDialog.MODE_TAB_CURRENT,
+    ) -> UnifiedExportDialog:
+        candidates = self._permission_scoped_export_candidates()
+        if mode == UnifiedExportDialog.MODE_TAB_CURRENT:
+            candidates = [row for row in candidates if row[0] == self._current_animal]
+        project_options = None
+        scope = getattr(self.app, "_project_visibility_scope", None)
+        if callable(scope):
+            _unrestricted, visible_projects = scope()
+            project_options = sorted(visible_projects)
+        return UnifiedExportDialog(
+            self,
+            title=_msg(
+                self.messages,
+                "medi_track.dialog.export.title",
+                "Export Medical History",
+            ),
+            candidates=candidates,
+            mode=mode,
+            current_animal=self._current_animal,
+            formats=("PDF", "XLSX"),
+            messages=self.messages,
+            show_signatures=True,
+            show_documents=True,
+            show_date_range=True,
+            project_options=project_options,
+        )
+
+    def _export_animals_to_directory(
+        self,
+        requested_animals: Iterable[str],
+        output_dir: str,
+        *,
+        export_format: str,
+        include_signatures: bool,
+        include_documents: bool,
+        lang: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[str]:
+        """Export only if every requested animal is still permission-visible."""
+        requested = [str(animal_id) for animal_id in requested_animals]
+        selected = self._permission_scope_export_ids(requested)
+        if selected != requested:
+            raise PermissionError(
+                _msg(
+                    self.messages,
+                    "medi_track.dialog.permission_denied.docs",
+                    "You do not have permission to export medical history.",
+                )
+            )
+
+        suffix = str(export_format).strip().lower()
+        if suffix not in ("pdf", "xlsx"):
+            raise ValueError(f"Unsupported export format: {export_format}")
+        exported: List[str] = []
+        for animal_id in selected:
+            path = os.path.join(
+                output_dir,
+                f"{_safe_name(animal_id)}_medical_history.{suffix}",
+            )
+            if suffix == "xlsx":
+                self._export_animal_to_xlsx(
+                    animal_id,
+                    path,
+                    include_signature=include_signatures,
+                    include_documents=include_documents,
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+            else:
+                self._export_animal_to_pdf(
+                    animal_id,
+                    path,
+                    lang=lang or self._lang,
+                    include_signature=include_signatures,
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+            exported.append(path)
+        return exported
+
+    def _on_export_clicked(self) -> None:
+        """Export the current tab animal without exposing a batch selector."""
+        if not self._current_animal:
+            return
+        if not self._can_export():
+            QMessageBox.warning(
+                self,
+                _msg(
+                    self.messages,
+                    "medi_track.dialog.permission_denied.title",
+                    "Permission Denied",
+                ),
+                _msg(
+                    self.messages,
+                    "medi_track.dialog.permission_denied.docs",
+                    "You do not have permission to export medical history.",
+                ),
+            )
+            return
+
+        dialog = self._build_export_dialog(
+            mode=UnifiedExportDialog.MODE_TAB_CURRENT
+        )
+        if not dialog.selected_animal_ids():
+            QMessageBox.warning(
+                self,
+                _msg(self.messages, "error.title", "Error"),
+                _msg(
+                    self.messages,
+                    "medi_track.dialog.permission_denied.docs",
+                    "You do not have permission to export medical history.",
+                ),
+            )
+            return
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        selected = [
-            item.data(Qt.ItemDataRole.UserRole)
-            for item in animal_list.selectedItems()
-        ]
-        if not selected:
-            return
+
         output_dir = QFileDialog.getExistingDirectory(
             self,
-            _msg(self.messages, "medi_track.dialog.export.title", "Export Medical History"),
-            QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DesktopLocation),
+            _msg(
+                self.messages,
+                "medi_track.dialog.export.title",
+                "Export Medical History",
+            ),
+            QStandardPaths.writableLocation(
+                QStandardPaths.StandardLocation.DesktopLocation
+            ),
         )
         if not output_dir:
             return
         try:
-            for animal_id in selected:
-                suffix = format_combo.currentText().lower()
-                path = os.path.join(
-                    output_dir, f"{_safe_name(animal_id)}_medical_history.{suffix}")
-                if suffix == "xlsx":
-                    self._export_animal_to_xlsx(
-                        animal_id,
-                        path,
-                        include_signature=include_signature.isChecked(),
-                    )
-                else:
-                    self._export_animal_to_pdf(
-                        animal_id,
-                        path,
-                        lang=self._lang,
-                        include_signature=include_signature.isChecked(),
-                    )
-                    self._copy_documents_for_export(animal_id, path)
-        except RuntimeError as exc:
-            QMessageBox.warning(self, _msg(self.messages, 'error.title', 'Error'), str(exc))
+            date_from, date_to = dialog.selected_date_range()
+            self._export_animals_to_directory(
+                dialog.selected_animal_ids(),
+                output_dir,
+                export_format=dialog.selected_format(),
+                include_signatures=dialog.include_signatures(),
+                include_documents=dialog.include_documents(),
+                lang=self._lang,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        except (PermissionError, RuntimeError, ValueError) as exc:
+            QMessageBox.warning(
+                self, _msg(self.messages, "error.title", "Error"), str(exc)
+            )
             return
         except Exception as exc:
-            QMessageBox.warning(self, _msg(self.messages, 'error.title', 'Error'), str(exc))
+            QMessageBox.warning(
+                self, _msg(self.messages, "error.title", "Error"), str(exc)
+            )
             return
         QMessageBox.information(
             self,
-            _msg(self.messages, 'title.info', 'Info'),
-            _msg(self.messages, 'medi_track.export.success',
-                 'Medical history exported.'))
+            _msg(self.messages, "title.info", "Info"),
+            _msg(
+                self.messages,
+                "medi_track.export.success",
+                "Medical history exported.",
+            ),
+        )
 
     # ── add-document helpers ──
 
@@ -1686,6 +2183,8 @@ class MediTrackWidget(QWidget):
             ("severity_changed", "other"): ("medi_track.report.event.severity_changed", "Severity \u2014 changed"),
             ("experiment_started", "other"): ("medi_track.report.event.experiment_started", "Experiment \u2014 started"),
             ("experiment_ended",   "other"): ("medi_track.report.event.experiment_ended",   "Experiment \u2014 ended"),
+            ("death",              "other"): ("medi_track.report.event.death",              "Death"),
+            ("identity_changed",   "other"): ("medi_track.report.event.identity_changed",   "Identity changed"),
         }
         msg_key, fallback = key_map.get((etype, stype), ("medi_track.entry_type.unknown", etype or stype or "\u2013"))
         return _msg(self.messages, msg_key, fallback)
@@ -2235,12 +2734,33 @@ class MediTrackPlugin:
         if self._widget and self._widget._current_animal == animal_name:
             self._widget.show_animal(animal_name)
 
-    def log_experiment_change(self, animal_name: str,
-                              entry_type: str, signature: str = '') -> None:
-        """Record an experiment-started / experiment-ended event as a Medi Track entry."""
+    @staticmethod
+    def _lifecycle_date_iso(value: str) -> str:
+        """Return an ISO date without silently replacing a supplied valid date."""
+        raw = str(value or "").strip()
+        if not raw:
+            return _today_iso()
+        for pattern in ("%Y-%m-%d", "%d.%m.%Y"):
+            try:
+                return datetime.strptime(raw, pattern).date().isoformat()
+            except ValueError:
+                continue
+        return _today_iso()
+
+    def log_lifecycle_change(
+        self,
+        animal_name: str,
+        entry_type: str,
+        signature: str = "",
+        *,
+        details: str = "",
+        event_date: str = "",
+        role: str = "",
+    ) -> None:
+        """Record one dated lifecycle event in an animal's medical history."""
         entry = {
             'id': str(uuid.uuid4()),
-            'date': _today_iso(),
+            'date': self._lifecycle_date_iso(event_date),
             'entry_type': entry_type,
             'status_type': 'other',
             'issue_id': '',
@@ -2250,9 +2770,10 @@ class MediTrackPlugin:
             'condition_path_label_snapshot': [],
             'condition_language': self._lang,
             'condition_depth': 0,
-            'note': '',
+            'note': str(details or '').strip(),
             'signature': signature or _msg(
                 self.messages, 'medi_track.value.guest', '(guest)'),
+            'actor_role': str(role or '').strip(),
             'linked_document_ids': [],
         }
         try:
@@ -2261,6 +2782,26 @@ class MediTrackPlugin:
             logger.error('log_experiment_change: %s', exc)
         if self._widget and self._widget._current_animal == animal_name:
             self._widget.show_animal(animal_name)
+
+    def log_experiment_change(
+        self,
+        animal_name: str,
+        entry_type: str,
+        signature: str = '',
+        *,
+        details: str = '',
+        event_date: str = '',
+        role: str = '',
+    ) -> None:
+        """Compatibility entry point for experiment lifecycle events."""
+        self.log_lifecycle_change(
+            animal_name,
+            entry_type,
+            signature,
+            details=details,
+            event_date=event_date,
+            role=role,
+        )
 
     # ── filter helpers used by ProgTrack._refresh_list ──
 
@@ -2283,5 +2824,5 @@ class MediTrackPlugin:
         if filter_key == MediTrackWidget.FILTER_IN_EXPERIMENT:
             return bool(rec.get("in_experiment", False))
         if filter_key == MediTrackWidget.FILTER_EVER_EXPERIMENT:
-            return ever_in_experiment(rec)
+            return ever_in_experiment(rec, self.store.get_entries(animal_name))
         return True

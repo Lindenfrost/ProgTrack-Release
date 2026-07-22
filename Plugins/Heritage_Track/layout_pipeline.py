@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime
+from statistics import median
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .pedigree_engine import PedigreeEngine
@@ -21,6 +22,120 @@ DEFAULT_COMPONENT_GAP = 3.80
 DEFAULT_LEVEL_SPACING = 2.0
 DEFAULT_BIRTHDATE_ROW_OFFSET_FACTOR = 0.28
 DEFAULT_PARTNER_LINE_NUDGE = 0.35
+
+VERTICAL_LAYOUT_PARTNER_NORMALIZED = "partner_normalized"
+VERTICAL_LAYOUT_CHRONOLOGICAL = "chronological"
+
+
+def birth_ordinal_to_month_y(ordinal: Optional[int]) -> Optional[float]:
+    """Return an absolute, month-snapped calendar coordinate.
+
+    Integer years mark January.  Every following month advances by 1/12,
+    providing one stable linear transform for the complete graph while exact
+    stored days remain available as labels/tooltips.
+    """
+    if ordinal is None:
+        return None
+    try:
+        value = datetime.fromordinal(int(ordinal))
+    except (OverflowError, TypeError, ValueError):
+        return None
+    return float(value.year) + ((int(value.month) - 1) / 12.0)
+
+
+def compute_chronological_positions(
+    base_positions: Dict[str, Tuple[float, float]],
+    families: Dict[str, Dict[str, Any]],
+    birth_ordinal_by_node: Dict[str, Optional[int]],
+) -> Tuple[Dict[str, Tuple[float, float]], Set[str]]:
+    """Keep pedigree X placement and replace Y with absolute birth months.
+
+    Undated nodes are placed deterministically beside their dated family
+    members.  The returned undated set lets the renderer draw an explicit
+    local scale-break marker so fallback coordinates cannot be mistaken for a
+    measured date.
+    """
+    if not base_positions:
+        return {}, set()
+
+    dated_y: Dict[str, float] = {}
+    for node in base_positions:
+        y = birth_ordinal_to_month_y(birth_ordinal_by_node.get(node))
+        if y is not None:
+            dated_y[node] = y
+
+    adjacency: Dict[str, Set[str]] = {node: set() for node in base_positions}
+    local_peer_dates: Dict[str, List[float]] = defaultdict(list)
+    for family in families.values():
+        mother = str(family.get("mother", "") or "").strip()
+        father = str(family.get("father", "") or "").strip()
+        children = [
+            str(child or "").strip()
+            for child in family.get("children", [])
+            if str(child or "").strip() in base_positions
+        ]
+        members = [
+            node
+            for node in (
+                mother,
+                father,
+                *children,
+            )
+            if node in base_positions
+        ]
+        for node in members:
+            adjacency[node].update(member for member in members if member != node)
+        for child in children:
+            local_peer_dates[child].extend(
+                dated_y[sibling]
+                for sibling in children
+                if sibling != child and sibling in dated_y
+            )
+        if mother in base_positions and father in dated_y:
+            local_peer_dates[mother].append(dated_y[father])
+        if father in base_positions and mother in dated_y:
+            local_peer_dates[father].append(dated_y[mother])
+
+    undated = set(base_positions) - set(dated_y)
+    fallback_y: Dict[str, float] = {}
+    global_center = median(dated_y.values()) if dated_y else 0.0
+    base_values = [point[1] for point in base_positions.values()]
+    base_center = median(base_values) if base_values else 0.0
+
+    for node in sorted(undated, key=str.casefold):
+        neighbour_dates = local_peer_dates.get(node) or [
+            dated_y[other] for other in adjacency.get(node, set()) if other in dated_y
+        ]
+        if neighbour_dates:
+            anchor = float(median(neighbour_dates))
+        else:
+            second_hop_dates = [
+                dated_y[other]
+                for neighbour in adjacency.get(node, set())
+                for other in adjacency.get(neighbour, set())
+                if other in dated_y
+            ]
+            if second_hop_dates:
+                anchor = float(median(second_hop_dates))
+            else:
+                anchor = global_center + ((base_positions[node][1] - base_center) * 0.35)
+
+        # Multiple undated members in one local family receive tiny stable
+        # offsets so their markers remain individually selectable.
+        occupied = [
+            fallback_y[other]
+            for other in adjacency.get(node, set())
+            if other in fallback_y
+        ]
+        while any(abs(anchor - other_y) < 0.16 for other_y in occupied):
+            anchor += 0.18
+        fallback_y[node] = anchor
+
+    positions = {
+        node: (float(point[0]), dated_y.get(node, fallback_y.get(node, global_center)))
+        for node, point in base_positions.items()
+    }
+    return positions, undated
 
 
 def parse_complete_birth_date_ordinal(raw_value: Any) -> Optional[int]:
@@ -993,6 +1108,56 @@ class LayoutPipeline:
                 x = locked_x[node]
 
             positions[node] = (x, y)
+
+        # A single horizontal strip wastes most of the canvas when a species
+        # contains one pedigree plus many unrelated sample animals.  Pack
+        # disconnected pedigrees into shelves so each family can use the full
+        # viewport width; relationships inside a component remain untouched.
+        if len(component_nodes) > 1:
+            bounds: Dict[int, Tuple[float, float, float, float]] = {}
+            for comp_id, members in component_nodes.items():
+                points = [positions[node] for node in members if node in positions]
+                if not points:
+                    continue
+                xs = [point[0] for point in points]
+                ys = [point[1] for point in points]
+                bounds[comp_id] = (min(xs), max(xs), min(ys), max(ys))
+            ordered = sorted(
+                bounds,
+                key=lambda comp_id: (
+                    -len(component_nodes.get(comp_id, set())),
+                    -(bounds[comp_id][1] - bounds[comp_id][0]),
+                    comp_id,
+                ),
+            )
+            widest = max(
+                (bounds[comp_id][1] - bounds[comp_id][0] for comp_id in ordered),
+                default=0.0,
+            )
+            shelf_width = max(18.0, widest * 1.15)
+            cursor_x = 0.0
+            cursor_y = 0.0
+            shelf_height = 0.0
+            placements: Dict[int, Tuple[float, float]] = {}
+            for comp_id in ordered:
+                left, right, bottom, top = bounds[comp_id]
+                # Reserve label-sized space even for singletons; otherwise a
+                # shelf of unrelated sample animals becomes an unreadable knot.
+                width = max(self.node_spacing * 3.1, right - left)
+                height = max(self.level_spacing, top - bottom)
+                if cursor_x and cursor_x + width > shelf_width:
+                    cursor_y += shelf_height + self.component_gap
+                    cursor_x = 0.0
+                    shelf_height = 0.0
+                placements[comp_id] = (cursor_x - left, -cursor_y - bottom)
+                cursor_x += width + self.component_gap
+                shelf_height = max(shelf_height, height)
+            for comp_id, members in component_nodes.items():
+                shift_x, shift_y = placements.get(comp_id, (0.0, 0.0))
+                for node in members:
+                    if node in positions:
+                        x, y = positions[node]
+                        positions[node] = (x + shift_x, y + shift_y)
 
         return positions
 

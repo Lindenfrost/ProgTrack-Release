@@ -317,6 +317,11 @@ class ProjectsTrackPlugin:
         """
         self.app = app
         self.plugin_dir = os.path.dirname(__file__)
+        # ``projects_cache.json`` used to be shared by Guest and every user
+        # with ``project.view_all``.  Apart from leaking the previous user's
+        # selection, that made a privileged login able to reuse a stale list
+        # produced in a different session.  Keep the old path only for read
+        # compatibility; all new session state is isolated below.
         self.global_cache_file = os.path.join(self.plugin_dir, 'projects_cache.json')
         self.cache_file = self._cache_file_for_current_user()
         
@@ -353,40 +358,113 @@ class ProjectsTrackPlugin:
         self._load_projects()
         self._discover_species()
 
-    def _uses_global_project_cache(self) -> bool:
-        mt = getattr(self.app, 'master_track', None)
-        if mt is None or "master_track" in getattr(self.app, '_disabled_plugins', set()):
-            return True
-        if not getattr(mt, 'is_logged_in', False):
-            return True
-        if getattr(mt, 'current_role', '') in {'lord', 'master'}:
-            return True
-        return bool(getattr(mt, 'can', lambda _perm: False)('project.view_all'))
+    def _cache_identity(self) -> str:
+        """Return the identity whose sidebar state may be cached.
 
-    def _cache_file_for_current_user(self) -> str:
-        if self._uses_global_project_cache():
-            return self.global_cache_file
+        Guest is deliberately an identity of its own.  Privileged users are
+        *not* folded into one global cache: visibility, active selections and
+        the underlying project list all belong to the current login context.
+        """
         mt = getattr(self.app, 'master_track', None)
-        username = str(getattr(mt, 'current_username', '') or 'guest').strip() or 'guest'
-        safe_username = ''.join(ch if ch.isalnum() or ch in ('-', '_') else '_' for ch in username)
-        cache_dir = os.path.join(self.plugin_dir, 'project_assignment_cache', safe_username)
+        disabled = "master_track" in getattr(self.app, '_disabled_plugins', set())
+        if mt is None or disabled or not getattr(mt, 'is_logged_in', False):
+            return 'guest'
+        return str(getattr(mt, 'current_username', '') or 'guest').strip() or 'guest'
+
+    def _uses_global_project_cache(self) -> bool:
+        """Compatibility hook retained for callers; shared caches are unsafe."""
+        return False
+
+    @staticmethod
+    def _safe_cache_identity(identity: str) -> str:
+        return ''.join(
+            ch if ch.isalnum() or ch in ('-', '_') else '_'
+            for ch in identity
+        ) or 'guest'
+
+    def _cache_path_for_identity(self, identity: str) -> str:
+        cache_dir = os.path.join(
+            self.plugin_dir,
+            'project_assignment_cache',
+            self._safe_cache_identity(identity),
+        )
         os.makedirs(cache_dir, exist_ok=True)
         return os.path.join(cache_dir, 'projects_cache.json')
+
+    def _cache_file_for_current_user(self) -> str:
+        return self._cache_path_for_identity(self._cache_identity())
+
+    def _cache_context(self) -> Dict[str, Any]:
+        """Describe the permission scope represented by the current cache."""
+        unrestricted = True
+        visible_projects: List[str] = []
+        scope_fn = getattr(self.app, '_project_visibility_scope', None)
+        if callable(scope_fn):
+            try:
+                unrestricted, visible = scope_fn()
+                visible_projects = sorted(
+                    {str(project) for project in visible if str(project).strip()},
+                    key=str.lower,
+                )
+            except Exception:
+                logging.exception("ProjectsTrack: failed to resolve project cache scope")
+        mt = getattr(self.app, 'master_track', None)
+        can_view_all = bool(
+            mt and getattr(mt, 'can', lambda _permission: False)('project.view_all')
+        )
+        return {
+            'identity': self._cache_identity(),
+            'role': str(getattr(mt, 'current_role', '') or ''),
+            'can_view_all': can_view_all,
+            'unrestricted': bool(unrestricted),
+            'visible_projects': visible_projects,
+        }
     
-    def _load_projects(self):
+    def _load_projects(self, force_discovery: bool = False):
         """Load projects from cache or discover from animals, and restore session state."""
+        current_context = self._cache_context()
         if os.path.exists(self.cache_file):
             try:
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
                     cached = json.load(f)
-                    self.all_projects = cached.get('projects', [])
-                    # Restore last active selections
-                    self.current_project = cached.get('active_project', 'All') or 'All'
-                    self.active_species = cached.get('active_species') or None
-                    return
+                    cached_context = cached.get('context') or {}
+                    if cached_context.get('identity') == current_context['identity']:
+                        # Selection is per identity and remains safe even when
+                        # the discoverable project list was invalidated.
+                        self.current_project = cached.get('active_project', 'All') or 'All'
+                        self.active_species = cached.get('active_species') or None
+                    if cached.get('invalidated') or cached_context != current_context:
+                        raise ValueError('stale project cache context')
+                    if not force_discovery:
+                        self.all_projects = cached.get('projects', [])
+                        return
             except Exception:
                 pass
         self._discover_projects()
+
+    def _visibility_scope(self) -> Optional[tuple[bool, set[str]]]:
+        scope_fn = getattr(self.app, '_project_visibility_scope', None)
+        if callable(scope_fn):
+            try:
+                unrestricted, visible = scope_fn()
+                return bool(unrestricted), {
+                    str(project) for project in visible if str(project).strip()
+                }
+            except Exception:
+                logging.exception("ProjectsTrack: failed to resolve visibility scope")
+        return None
+
+    def _record_is_visible(
+        self,
+        record: Dict[str, Any],
+        scope: Optional[tuple[bool, set[str]]] = None,
+    ) -> bool:
+        if scope is not None:
+            return animal_visible_by_project_scope(record, scope[0], scope[1])
+        visible_fn = getattr(self.app, '_animal_visible_to_current_user', None)
+        if callable(visible_fn):
+            return bool(visible_fn(record))
+        return True
     
     def _discover_projects(self):
         """Scan all animals and collect unique project names."""
@@ -398,8 +476,9 @@ class ProjectsTrackPlugin:
             self._save_cache()
             return
         
+        scope = self._visibility_scope()
         for animal_name, animal_data in self.app.animals.items():
-            if hasattr(self.app, '_animal_visible_to_current_user') and not self.app._animal_visible_to_current_user(animal_data):
+            if not isinstance(animal_data, dict) or not self._record_is_visible(animal_data, scope):
                 continue
             # Check for 'project' field in animal record
             project = animal_data.get('project')
@@ -426,6 +505,10 @@ class ProjectsTrackPlugin:
                     pass
             existing['projects'] = self.all_projects
             existing['version'] = self.version
+            existing['active_project'] = self.current_project
+            existing['active_species'] = self.active_species
+            existing['context'] = self._cache_context()
+            existing['invalidated'] = False
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(existing, f, indent=2, ensure_ascii=False)
         except Exception:
@@ -440,10 +523,35 @@ class ProjectsTrackPlugin:
                     cached = json.load(f)
             cached['active_project'] = self.current_project
             cached['active_species'] = self.active_species
+            cached['context'] = self._cache_context()
+            cached['invalidated'] = False
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cached, f, indent=2, ensure_ascii=False)
         except Exception:
             pass
+
+    def invalidate_user_caches(self, identities) -> None:
+        """Mark selected login caches stale without deleting session state."""
+        if isinstance(identities, str):
+            identities = [identities]
+        for identity in identities or []:
+            identity = str(identity or '').strip()
+            if not identity:
+                continue
+            path = self._cache_path_for_identity(identity)
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path, 'r', encoding='utf-8') as handle:
+                    cached = json.load(handle)
+                if not isinstance(cached, dict):
+                    cached = {}
+                cached['invalidated'] = True
+                with open(path, 'w', encoding='utf-8') as handle:
+                    json.dump(cached, handle, indent=2, ensure_ascii=False)
+            except Exception:
+                logging.exception(
+                    "ProjectsTrack: failed to invalidate cache for %s", identity)
     
     def _make_scroll_column(self, parent, inner_widget) -> QScrollArea:
         """Helper: wrap *inner_widget* in a narrow vertical scroll area."""
@@ -645,8 +753,6 @@ class ProjectsTrackPlugin:
     def on_user_login(self) -> None:
         """Reload per-user sidebar toggle state after login/logout."""
         self.cache_file = self._cache_file_for_current_user()
-        self._load_projects()
-        self._discover_species()
         self._sidebar_visible = self._load_sidebar_visibility()
         if self._proj_content_w:
             self._proj_content_w.setVisible(self._sidebar_visible)
@@ -656,9 +762,7 @@ class ProjectsTrackPlugin:
             self._sidebar_toggle_btn.blockSignals(True)
             self._sidebar_toggle_btn.setChecked(self._sidebar_visible)
             self._sidebar_toggle_btn.blockSignals(False)
-        self._update_container_width()
-        self._rebuild_tabs()
-        self._rebuild_species_tabs()
+        self.refresh_projects(force_discovery=True)
 
     def update_language(self, messages):
         """Update UI texts when language changes.
@@ -720,26 +824,53 @@ class ProjectsTrackPlugin:
     
     def _on_refresh_clicked(self):
         """Handle refresh button click - rebuild project and species lists."""
-        previous_project = self.current_project
-        previous_species = self.active_species
+        self.refresh_projects(force_discovery=True)
 
-        self._discover_projects()
+    def refresh_projects(self, force_discovery: bool = True) -> None:
+        """Refresh every Projects Track consumer from one consistent scope.
+
+        This is the public plugin-local refresh hook used by the sidebar,
+        Project Track tab and save/login integration.  It deliberately
+        refreshes discovery, both sidebar columns, the tab list and registered
+        scope callbacks as one operation.
+        """
+        self.cache_file = self._cache_file_for_current_user()
+        self._load_projects(force_discovery=force_discovery)
         self._discover_species()
+        desired_project = self.current_project
+        desired_species = self.active_species
         self._rebuild_tabs()
         self._rebuild_species_tabs()
         pt_w = getattr(self.app, 'project_track_widget', None)
         if pt_w and hasattr(pt_w, '_refresh_project_list'):
             pt_w._refresh_project_list()
 
-        if previous_project in self.tab_buttons:
-            self.tab_buttons[previous_project].setChecked(True)
-        elif "All" in self.tab_buttons:
-            self.tab_buttons["All"].setChecked(True)
+        project_target = self.tab_buttons.get(desired_project)
+        if project_target is None and "All" in self.tab_buttons:
+            self.current_project = "All"
+            project_target = self.tab_buttons["All"]
+        if project_target is not None:
+            for button in self.tab_buttons.values():
+                button.blockSignals(True)
+            project_target.setChecked(True)
+            for button in self.tab_buttons.values():
+                button.setActive(button is project_target)
+                button.blockSignals(False)
 
-        if previous_species and previous_species in self.species_tab_buttons:
-            self.species_tab_buttons[previous_species].setChecked(True)
-        elif "All" in self.species_tab_buttons:
-            self.species_tab_buttons["All"].setChecked(True)
+        species_target = self.species_tab_buttons.get(desired_species or "All")
+        if species_target is None and "All" in self.species_tab_buttons:
+            self.active_species = None
+            species_target = self.species_tab_buttons["All"]
+        if species_target is not None:
+            for button in self.species_tab_buttons.values():
+                button.blockSignals(True)
+            species_target.setChecked(True)
+            for button in self.species_tab_buttons.values():
+                button.setActive(button is species_target)
+                button.blockSignals(False)
+        self._save_session_state()
+        self._update_container_width()
+        self._apply_filter()
     
     def _clear_layout_buttons(self, layout, button_group, buttons_dict) -> None:
         """Helper: remove all buttons from a layout/group/dict."""
@@ -811,17 +942,19 @@ class ProjectsTrackPlugin:
         self._apply_filter()
 
     def _discover_species(self) -> None:
-        """Scan all animals and collect unique species names."""
+        """Collect species only from animals visible in the current scope."""
         species: set = set()
         animals = getattr(self.app, 'animals', {}) or {}
         if not isinstance(animals, dict):
             self.all_species = []
             return
+        scope = self._visibility_scope()
         for rec in animals.values():
-            if isinstance(rec, dict):
-                sp = rec.get('species', '')
-                if sp and isinstance(sp, str) and sp.strip():
-                    species.add(sp.strip())
+            if not isinstance(rec, dict) or not self._record_is_visible(rec, scope):
+                continue
+            sp = rec.get('species', '')
+            if sp and isinstance(sp, str) and sp.strip():
+                species.add(sp.strip())
         self.all_species = sorted(species, key=str.lower)
 
     def animals_in_scope(self) -> List[str]:
@@ -872,12 +1005,7 @@ class ProjectsTrackPlugin:
             return
         self._project_ui_refresh_pending = False
         try:
-            self._discover_projects()
-            if self.tabs_inner_widget:
-                self._rebuild_tabs()
-            pt_w = getattr(self.app, 'project_track_widget', None)
-            if pt_w and hasattr(pt_w, '_refresh_project_list'):
-                pt_w._refresh_project_list()
+            self.refresh_projects(force_discovery=True)
         except Exception:
             logging.exception("ProjectsTrack: failed to refresh project UI after animal project change")
     
@@ -996,7 +1124,7 @@ class ProjectsTrackPlugin:
         Args:
             animal_name: Name of the removed animal
         """
-        pass  # Optional: could check if project is now empty
+        self._schedule_project_ui_refresh()
     
     def on_animal_project_removed(self, animal_name: str,
                                    old_project: str, severity: str = None,

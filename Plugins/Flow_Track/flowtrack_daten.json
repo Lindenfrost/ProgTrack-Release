@@ -1,0 +1,132 @@
+{
+  "version": "3.0",
+  "last_updated": "2026-07-07T09:30:26.999142",
+  "manual_data": {
+    "sperm_donors": {
+      "Lindir | Papio hamadryas anubis | 02.02.2024": {
+        "donations": {
+          "2026-07-07": {
+            "applied_to_in_vivo_m2": 0,
+            "fertilized_in_vivo_m2": 0,
+            "embryos_from_in_vivo_m2": 0,
+            "applied_to_in_vitro_m2": 10,
+            "fertilized_in_vitro_m2": 3,
+            "embryos_from_in_vitro_m2": 3
+          }
+        }
+      },
+      "Dana | Unknown species | 12.01.2021": {
+        "donations": {}
+      },
+      "Lindir | Callitrix jacchus | 02.02.2024": {
+        "donations": {
+          "2026-07-07": {
+            "applied_to_in_vivo_m2": 0,
+            "fertilized_in_vivo_m2": 0,
+            "embryos_from_in_vivo_m2": 0,
+            "applied_to_in_vitro_m2": 12,
+            "fertilized_in_vitro_m2": 5,
+            "embryos_from_in_vitro_m2": 3
+          }
+        }
+      }
+    },
+    "egg_donors": {
+      "Lindir | Callitrix jacchus | 01.02.2024": {
+        "surgeries": {
+          "2026-07-07": {
+            "gv_isolated": 25,
+            "m1_isolated": 0,
+            "m2_isolated": 4,
+            "m1_to_m2": 20,
+            "in_vivo_m2_fertilized": 0,
+            "in_vitro_m2_fertilized": 15,
+            "embryos_from_in_vivo_m2": 0,
+            "embryos_from_in_vitro_m2": 3,
+            "comments": "",
+            "frozen_from_in_vivo_m2": 0,
+            "frozen_from_in_vitro_m2": 0
+          }
+        }
+      }
+    },
+    "transfers_by_id": {
+      "freezer_main": {
+        "surrogate_name": "FREEZER",
+        "transfer_date": null,
+        "embryos": [
+          {
+            "embryo_id": "FZ_2026-07-07_E00001",
+            "egg_donor_name": "Lindir | Callitrix jacchus | 01.02.2024",
+            "egg_donation_date": "2026-07-07",
+            "sperm_donor_name": "Lindir | Callitrix jacchus | 02.02.2024",
+            "sperm_donation_id": "2026-07-07",
+            "stage": "in_vitro_m2",
+            "implanted": false,
+            "cryopreserved": true,
+            "freeze_date": "2026-07-07",
+            "comment": ""
+          },
+          {
+            "embryo_id": "FZ_2026-07-07_E00002",
+            "egg_donor_name": "Lindir | Callitrix jacchus | 01.02.2024",
+            "egg_donation_date": "2026-07-07",
+            "sperm_donor_name": "Lindir | Callitrix jacchus | 02.02.2024",
+            "sperm_donation_id": "2026-07-07",
+            "stage": "in_vitro_m2",
+            "implanted": false,
+            "cryopreserved": true,
+            "freeze_date": "2026-07-07",
+            "comment": ""
+          }
+        ]
+      },
+      "transfer_Olga | Callitrix jacchus | 20.06.2015_2025-05-11T00:00:00": {
+        "surrogate_name": "Olga | Callitrix jacchus | 20.06.2015",
+        "transfer_date": "2025-05-11T00:00:00",
+        "embryos": [
+          {
+            "embryo_id": "Olga_2025-05-11_embryo_1",
+            "egg_donor_name": null,
+            "egg_donation_date": null,
+            "sperm_donor_name": null,
+            "sperm_donation_id": null,
+            "stage": "in_vitro_m2",
+            "implanted": false,
+            "cryopreserved": false,
+            "freeze_date": null,
+            "comment": "",
+            "confidence": 0
+          }
+        ]
+      },
+      "transfer_Lindir | Callitrix jacchus | 03.02.2026_2026-07-07T00:00:00": {
+        "surrogate_name": "Lindir | Callitrix jacchus | 03.02.2026",
+        "transfer_date": "2026-07-07T00:00:00",
+        "embryos": [
+          {
+            "embryo_id": "Lindir_2026-07-07_embryo_1",
+            "egg_donor_name": "Lindir | Callitrix jacchus | 01.02.2024",
+            "egg_donation_date": "2026-07-07",
+            "sperm_donor_name": "Lindir | Callitrix jacchus | 02.02.2024",
+            "sperm_donation_id": "2026-07-07",
+            "stage": "in_vitro_m2",
+            "implanted": true,
+            "cryopreserved": false,
+            "freeze_date": "2026-07-07",
+            "comment": "",
+            "confidence": 0
+          }
+        ]
+      }
+    },
+    "total_embryo_count": 2,
+    "Lindir | Callitrix jacchus | 03.02.2026": {
+      "transfers": {
+        "transfer_Lindir | Callitrix jacchus | 03.02.2026_2026-07-07T00:00:00": {
+          "embryo_count": 1
+        }
+      }
+    }
+  }
+}

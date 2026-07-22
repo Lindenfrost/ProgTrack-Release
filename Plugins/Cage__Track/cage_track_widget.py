@@ -11,10 +11,11 @@ import json
 import logging
 import os
 from datetime import datetime
+from textwrap import wrap
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from PyQt6.QtCore import Qt, QDate, QTimer
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QCursor
 from PyQt6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -35,6 +36,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -71,6 +73,9 @@ logger = logging.getLogger(__name__)
 BLD_BG = "#F5F7FA"
 BLD_BORDER = "#90A4AE"
 BLD_TITLE_BG = "#CFD8DC"
+UNIT_BG = "#F4F6FB"
+UNIT_BORDER = "#9FA8DA"
+UNIT_TITLE_BG = "#E8EAF6"
 ROOM_BG = "#F7F9F7"
 ROOM_BORDER = "#A5D6A7"
 ROOM_TITLE_BG = "#C8E6C9"
@@ -86,6 +91,7 @@ ARCHIVED_COLOR = "#757575"
 
 # Sizing (in data-coordinate units, 1 unit ≈ 1 px at zoom 1)
 BLD_PAD = 10
+UNIT_PAD = 9
 ROOM_PAD = 8
 CAGE_PAD = 5
 CAGE_MIN_W = 90
@@ -95,6 +101,7 @@ TITLE_H = 20
 SPACING = 10
 
 FONT_BLD = {"fontsize": 11, "fontweight": "bold"}
+FONT_UNIT = {"fontsize": 10, "fontweight": "bold"}
 FONT_ROOM = {"fontsize": 9.5, "fontweight": "bold"}
 FONT_CAGE = {"fontsize": 8.5, "fontweight": "bold"}
 FONT_OCC = {"fontsize": 7.5}
@@ -103,6 +110,89 @@ DEFAULT_PROJECT_PALETTE = [
     "#1976D2", "#D32F2F", "#388E3C", "#7B1FA2", "#F57C00",
     "#0097A7", "#C2185B", "#455A64", "#FBC02D", "#512DA8",
 ]
+
+
+def movement_identity_text(
+    occupant_id: str,
+    occupant: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Return the concise visible ``Name (ID)`` movement-history label."""
+    occupant = occupant or {}
+    name = str(occupant.get("name") or animal_base_name(occupant_id)).strip()
+    animal_id = str(
+        occupant.get("animal_id") or occupant.get("id") or ""
+    ).strip()
+    if animal_id and animal_id != name:
+        return f"{name} ({animal_id})"
+    return name
+
+
+def inspection_export_table(
+    messages: Dict[str, Any],
+    records: List[Dict[str, Any]],
+    include_inspector: bool,
+) -> Tuple[List[str], List[List[str]], List[float]]:
+    """Build inspection PDF columns with optional inspector attribution."""
+    headers = [
+        messages.get("cage_track.inspection.col_unit", "Unit"),
+        messages.get("cage_track.inspection.col_date", "Date"),
+        messages.get("cage_track.inspection.col_cages", "Cages"),
+    ]
+    def wrapped(value: object, width: int) -> str:
+        lines: List[str] = []
+        for source_line in str(value or "").splitlines() or [""]:
+            lines.extend(wrap(source_line, width=width) or [""])
+        return "\n".join(lines)
+
+    def wrapped_hierarchy(value: object, width: int = 64) -> str:
+        """Wrap only between hierarchy segments, never through a cage path."""
+        output: List[str] = []
+        for source_line in str(value or "").replace(", ", "\n").splitlines():
+            source_line = source_line.strip()
+            if not source_line or len(source_line) <= width:
+                output.append(source_line)
+                continue
+            segments = source_line.split("/")
+            current = ""
+            for segment in segments:
+                candidate = segment if not current else f"{current}/{segment}"
+                if current and len(candidate) > width:
+                    output.append(current)
+                    current = segment
+                else:
+                    current = candidate
+            if current:
+                output.append(current)
+        return "\n".join(output)
+
+    rows = [
+        [wrapped(record.get("unit_name", ""), 32), record.get("date", ""),
+         wrapped_hierarchy(record.get("cages", ""))]
+        for record in records
+    ]
+    if include_inspector:
+        headers.append(messages.get(
+            "cage_track.inspection.col_inspector", "Inspector"))
+        for row, record in zip(rows, records):
+            row.append(wrapped(record.get("user", ""), 24))
+        return headers, rows, [0.26, 0.12, 0.44, 0.18]
+    return headers, rows, [0.30, 0.14, 0.56]
+
+
+def movement_export_col_widths(cell_text: List[List[str]]) -> List[float]:
+    """Return readable PDF widths while favouring verbose cage-mate labels."""
+    longest_mates = max(
+        (max((len(line) for line in row[4].splitlines()), default=0)
+         for row in cell_text if len(row) > 4),
+        default=0,
+    )
+    mates_width = min(
+        0.52,
+        max(0.34, 0.34 + max(0, longest_mates - 18) * 0.006),
+    )
+    remaining = 1.0 - mates_width
+    return [remaining * 0.43, remaining * 0.19, remaining * 0.19,
+            remaining * 0.19, mates_width]
 
 
 # ======================================================================
@@ -117,9 +207,11 @@ class MovementHistoryDialog(QDialog):
         super().__init__(parent)
         self.messages = messages
         self.occupant_id = occupant_id
+        occ = store.get_occupant(occupant_id)
+        self._occupant_display = movement_identity_text(occupant_id, occ)
         self.setWindowTitle(
             messages.get("cage_track.history.title", "Movement History: {occupant}").replace(
-                "{occupant}", animal_base_name(occupant_id)
+                "{occupant}", self._occupant_display
             )
         )
         self.setModal(True)
@@ -127,10 +219,8 @@ class MovementHistoryDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        occ = store.get_occupant(occupant_id)
-        occupant_label = (occ or {}).get("name") or animal_base_name(occupant_id)
-        occupant_widget = QLabel(f"<b>{occupant_label}</b>")
-        occupant_widget.setToolTip(occupant_id)
+        occupant_widget = QLabel(f"<b>{self._occupant_display}</b>")
+        occupant_widget.setToolTip(self._occupant_display)
         layout.addWidget(occupant_widget)
 
         current_cage_id = occ.get("cage_id", UNASSIGNED_CAGE_ID) if occ else UNASSIGNED_CAGE_ID
@@ -160,7 +250,9 @@ class MovementHistoryDialog(QDialog):
             no_edit = Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
 
             for row, entry in enumerate(history):
-                cage_path = engine.resolve_cage_path(entry.get("cage_id", ""), ua_label)
+                cage_path = engine.resolve_cage_path(
+                    entry.get("cage_id", ""), ua_label
+                ).replace(" > ", "\n")
                 item0 = QTableWidgetItem(cage_path)
                 item0.setFlags(no_edit)
                 table.setItem(row, 0, item0)
@@ -181,16 +273,17 @@ class MovementHistoryDialog(QDialog):
                 table.setItem(row, 3, item3)
 
                 mate_ids = [str(mate) for mate in entry.get("cage_mates_snapshot", [])]
-                mates = ", ".join(animal_base_name(mate) for mate in mate_ids)
+                mate_records = [store.get_occupant(mate) for mate in mate_ids]
+                mates = "\n".join(
+                    movement_identity_text(mate, mate_record)
+                    for mate, mate_record in zip(mate_ids, mate_records)
+                )
                 item4 = QTableWidgetItem(mates)
-                if mate_ids:
-                    item4.setToolTip("\n".join(
-                        f"{animal_base_name(mate)}: {mate}" for mate in mate_ids
-                    ))
                 item4.setFlags(no_edit)
                 table.setItem(row, 4, item4)
 
             table.cellChanged.connect(self._on_cell_changed)
+            table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
             layout.addWidget(table)
             self._table = table
 
@@ -211,13 +304,14 @@ class MovementHistoryDialog(QDialog):
         now_str = datetime.now().strftime("%Y-%m-%d")
         safe_occupant = ''.join(
             c if c.isalnum() or c in ('_', '-', ' ') else '_'
-            for c in self.occupant_id
+            for c in self._occupant_display
         ).strip().replace(' ', '_')
         default_name = f"Movement_History_{safe_occupant}_{now_str}.pdf"
+        default_path = default_save_path(default_name)
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.messages.get("cage_track.history.export_pdf", "Export PDF"),
-            default_name,
+            default_path,
             "PDF Files (*.pdf)",
         )
         if not path:
@@ -225,12 +319,23 @@ class MovementHistoryDialog(QDialog):
         try:
             from matplotlib.backends.backend_pdf import PdfPages as _PdfPages
             from matplotlib.figure import Figure as _Figure
-            fig = _Figure(figsize=(11, max(4, self._table.rowCount() * 0.4 + 2)))
+            line_rows = sum(
+                max(
+                    1,
+                    max(
+                        (self._table.item(row, col).text().count("\n") + 1)
+                        if self._table.item(row, col) else 1
+                        for col in range(self._table.columnCount())
+                    ),
+                )
+                for row in range(self._table.rowCount())
+            )
+            fig = _Figure(figsize=(11, max(4, line_rows * 0.28 + 2)))
             ax = fig.add_subplot(111)
             ax.axis("off")
             ax.set_title(
                 self.messages.get("cage_track.history.title", "Movement History: {occupant}").replace(
-                    "{occupant}", animal_base_name(self.occupant_id)),
+                    "{occupant}", self._occupant_display),
                 fontsize=12, fontweight="bold", loc="left",
             )
             cols = self._table.columnCount()
@@ -243,7 +348,13 @@ class MovementHistoryDialog(QDialog):
                     item = self._table.item(r, c)
                     row_data.append(item.text() if item else "")
                 cell_text.append(row_data)
-            tbl = ax.table(cellText=cell_text, colLabels=headers, loc="center", cellLoc="left")
+            tbl = ax.table(
+                cellText=cell_text,
+                colLabels=headers,
+                colWidths=movement_export_col_widths(cell_text),
+                loc="center",
+                cellLoc="left",
+            )
             tbl.auto_set_font_size(False)
             tbl.set_fontsize(8)
             tbl.scale(1.0, 1.4)
@@ -251,6 +362,9 @@ class MovementHistoryDialog(QDialog):
                 if row_idx == 0:
                     cell.set_facecolor("#CFD8DC")
                     cell.set_text_props(fontweight="bold")
+                elif row_idx - 1 < len(cell_text):
+                    lines = max(value.count("\n") + 1 for value in cell_text[row_idx - 1])
+                    cell.set_height(cell.get_height() * max(1.0, lines * 0.72))
             fig.tight_layout()
             with _PdfPages(path) as pdf:
                 pdf.savefig(fig)
@@ -415,7 +529,7 @@ class ProjectColorDialog(QDialog):
 # ======================================================================
 
 class AddStructureDialog(QDialog):
-    """Create building / room / cage."""
+    """Create building / unit / room / cage."""
 
     def __init__(self, parent: QWidget, messages: Dict[str, Any], engine: CageEngine, store: CageStore):
         super().__init__(parent)
@@ -431,6 +545,7 @@ class AddStructureDialog(QDialog):
         self.type_combo = QComboBox()
         self.type_combo.setEditable(False)
         self.type_combo.addItem(messages.get("cage_track.add.type.building", "Building"), "building")
+        self.type_combo.addItem(messages.get("cage_track.add.type.unit", "Unit"), "unit")
         self.type_combo.addItem(messages.get("cage_track.add.type.room", "Room"), "room")
         self.type_combo.addItem(messages.get("cage_track.add.type.cage", "Cage"), "cage")
         layout.addRow(messages.get("cage_track.add.type", "Type:"), self.type_combo)
@@ -446,6 +561,11 @@ class AddStructureDialog(QDialog):
         self.building_label = QLabel(messages.get("cage_track.add.parent_building", "Parent Building:"))
         layout.addRow(self.building_label, self.building_combo)
 
+        self.unit_combo = QComboBox()
+        self.unit_combo.setEditable(False)
+        self.unit_label = QLabel(messages.get("cage_track.add.parent_unit", "Parent Unit:"))
+        layout.addRow(self.unit_label, self.unit_combo)
+
         self.room_combo = QComboBox()
         self.room_combo.setEditable(False)
         self.room_label = QLabel(messages.get("cage_track.add.parent_room", "Parent Room:"))
@@ -457,7 +577,8 @@ class AddStructureDialog(QDialog):
         layout.addRow(btn_box)
 
         self.type_combo.currentIndexChanged.connect(self._update_visibility)
-        self.building_combo.currentIndexChanged.connect(self._populate_rooms)
+        self.building_combo.currentIndexChanged.connect(self._populate_units)
+        self.unit_combo.currentIndexChanged.connect(self._populate_rooms)
 
         self._populate_buildings()
         self._update_visibility()
@@ -468,18 +589,29 @@ class AddStructureDialog(QDialog):
         for b in self.engine.get_all_buildings():
             self.building_combo.addItem(b.get("display_name", b["id"]), b["id"])
 
+    def _populate_units(self) -> None:
+        self.unit_combo.clear()
+        self.unit_combo.addItem("\u2014", None)
+        bid = self.building_combo.currentData()
+        if bid:
+            for unit in self.engine.get_units_in_building(bid):
+                self.unit_combo.addItem(unit.get("display_name", unit["id"]), unit["id"])
+        self._populate_rooms()
+
     def _populate_rooms(self) -> None:
         self.room_combo.clear()
         self.room_combo.addItem("\u2014", None)
-        bid = self.building_combo.currentData()
-        if bid:
-            for r in self.engine.get_rooms_in_building(bid):
+        unit_id = self.unit_combo.currentData()
+        if unit_id:
+            for r in self.engine.get_rooms_in_unit(unit_id):
                 self.room_combo.addItem(r.get("display_name", r["id"]), r["id"])
 
     def _update_visibility(self) -> None:
         t = self.type_combo.currentData()
-        self.building_label.setVisible(t in ("room", "cage"))
-        self.building_combo.setVisible(t in ("room", "cage"))
+        self.building_label.setVisible(t in ("unit", "room", "cage"))
+        self.building_combo.setVisible(t in ("unit", "room", "cage"))
+        self.unit_label.setVisible(t in ("room", "cage"))
+        self.unit_combo.setVisible(t in ("room", "cage"))
         self.room_label.setVisible(t == "cage")
         self.room_combo.setVisible(t == "cage")
 
@@ -493,13 +625,22 @@ class AddStructureDialog(QDialog):
 
         if t == "building":
             self.store.create_building(name, self.virtual_check.isChecked())
-        elif t == "room":
+        elif t == "unit":
             bid = self.building_combo.currentData()
             if not bid:
-                QMessageBox.warning(self, self.messages.get("error.title", "Error"),
-                                    self.messages.get("cage_track.error.no_building", "Please select a building"))
+                QMessageBox.warning(
+                    self, self.messages.get("error.title", "Error"),
+                    self.messages.get("cage_track.error.no_building", "Please select a building"),
+                )
                 return
-            self.store.create_room(bid, name, self.virtual_check.isChecked())
+            self.store.create_unit(bid, name, self.virtual_check.isChecked())
+        elif t == "room":
+            unit_id = self.unit_combo.currentData()
+            if not unit_id:
+                QMessageBox.warning(self, self.messages.get("error.title", "Error"),
+                                    self.messages.get("cage_track.error.no_unit", "Please select a unit"))
+                return
+            self.store.create_room(unit_id, name, self.virtual_check.isChecked())
         elif t == "cage":
             rid = self.room_combo.currentData()
             if not rid:
@@ -582,15 +723,31 @@ class CageSettingsDialog(QDialog):
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.messages.get("cage_track.export.title", "Export Cage Layout"),
-            default_name,
+            default_save_path(default_name),
             "PDF Files (*.pdf)",
         )
         if not path:
             return
 
         try:
-            with PdfPages(path) as pdf:
-                pdf.savefig(pw.figure)
+            old_xlim, old_ylim = pw.ax.get_xlim(), pw.ax.get_ylim()
+            expanded = set(pw.store.get_ui_state().get("expanded_buildings", []))
+            building_boxes = [
+                box for box, entity_id, entity_type in pw._hit_map
+                if entity_type == "building" and entity_id in expanded
+            ]
+            if len(building_boxes) == 1:
+                x0, y0, x1, y1 = building_boxes[0]
+                margin = 8
+                pw.ax.set_xlim(x0 - margin, x1 + margin)
+                pw.ax.set_ylim(y1 + margin, y0 - margin)
+            try:
+                with PdfPages(path) as pdf:
+                    pdf.savefig(pw.figure, bbox_inches="tight")
+            finally:
+                pw.ax.set_xlim(old_xlim)
+                pw.ax.set_ylim(old_ylim)
+                pw.canvas.draw_idle()
             QMessageBox.information(
                 self,
                 self.messages.get("cage_track.export.title", "Export Cage Layout"),
@@ -615,6 +772,7 @@ class InspectionDialog(QDialog):
                  records: List[Dict[str, Any]], on_export, on_inspect=None):
         super().__init__(parent)
         self.messages = messages
+        self._on_inspect_callback = on_inspect
         self.setWindowTitle(messages.get(
             "cage_track.inspection.title", "Inspection Log"))
         self.setModal(True)
@@ -639,26 +797,14 @@ class InspectionDialog(QDialog):
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
 
-        sorted_recs = sorted(
-            records, key=lambda r: r.get("date_sort", ""), reverse=True)
-        self._table.setRowCount(len(sorted_recs))
-        for row, rec in enumerate(sorted_recs):
-            self._table.setItem(
-                row, 0, QTableWidgetItem(rec.get("unit_name", "")))
-            self._table.setItem(
-                row, 1, QTableWidgetItem(rec.get("date", "")))
-            self._table.setItem(
-                row, 2, QTableWidgetItem(rec.get("cages", "")))
-            self._table.setItem(
-                row, 3, QTableWidgetItem(rec.get("user", "")))
+        self.set_records(records)
         layout.addWidget(self._table)
 
         btn_row = QHBoxLayout()
         if callable(on_inspect):
             inspect_btn = QPushButton(messages.get(
                 "cage_track.inspection.inspect_now", "Inspect now"))
-            inspect_btn.clicked.connect(
-                lambda: (on_inspect(), self.accept()))
+            inspect_btn.clicked.connect(self._inspect_now)
             btn_row.addWidget(inspect_btn)
         btn_row.addStretch()
         export_btn = QPushButton(messages.get(
@@ -670,6 +816,28 @@ class InspectionDialog(QDialog):
         close_btn.clicked.connect(self.reject)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
+
+    def set_records(self, records: List[Dict[str, Any]]) -> None:
+        """Refresh the viewer table without closing the inspection dialog."""
+        sorted_records = sorted(
+            records, key=lambda record: record.get("date_sort", ""), reverse=True)
+        self._table.setRowCount(len(sorted_records))
+        for row, record in enumerate(sorted_records):
+            self._table.setItem(
+                row, 0, QTableWidgetItem(record.get("unit_name", "")))
+            self._table.setItem(
+                row, 1, QTableWidgetItem(record.get("date", "")))
+            self._table.setItem(
+                row, 2, QTableWidgetItem(record.get("cages", "")))
+            self._table.setItem(
+                row, 3, QTableWidgetItem(record.get("user", "")))
+
+    def _inspect_now(self) -> None:
+        if not callable(self._on_inspect_callback):
+            return
+        refreshed = self._on_inspect_callback()
+        if isinstance(refreshed, list):
+            self.set_records(refreshed)
 
 
 class InspectionPDFExportDialog(QDialog):
@@ -743,6 +911,13 @@ class InspectionPDFExportDialog(QDialog):
             self._to_date)
         layout.addLayout(form)
 
+        self._include_inspector_cb = QCheckBox(messages.get(
+            "cage_track.inspection.include_inspector",
+            "Include inspector names",
+        ))
+        self._include_inspector_cb.setChecked(True)
+        layout.addWidget(self._include_inspector_cb)
+
         # --- Export button ---
         export_btn = QPushButton(messages.get(
             "cage_track.inspection.export_pdf", "Export PDF"))
@@ -801,25 +976,15 @@ class InspectionPDFExportDialog(QDialog):
                                   "Cage Inspection Report"),
                 fontsize=14, fontweight="bold", loc="left")
 
-            headers = [
-                self.messages.get("cage_track.inspection.col_unit", "Unit"),
-                self.messages.get("cage_track.inspection.col_date", "Date"),
-                self.messages.get("cage_track.inspection.col_cages", "Cages"),
-                self.messages.get(
-                    "cage_track.inspection.col_inspector", "Inspector"),
-            ]
-            cell_text = [
-                [rec.get("unit_name", ""), rec.get("date", ""),
-                 rec.get("cages", ""), rec.get("user", "")]
-                for rec in filtered
-            ]
+            include_inspector = self._include_inspector_cb.isChecked()
+            headers, cell_text, col_widths = inspection_export_table(
+                self.messages, filtered, include_inspector)
 
             tbl = ax.table(cellText=cell_text, colLabels=headers,
                            loc="center", cellLoc="left")
             tbl.auto_set_font_size(False)
             tbl.set_fontsize(8)
             tbl.scale(1.0, 1.4)
-            col_widths = [0.15, 0.12, 0.53, 0.20]
             for ci, w in enumerate(col_widths):
                 for ri in range(len(filtered) + 1):
                     tbl[ri, ci].set_width(w)
@@ -827,6 +992,17 @@ class InspectionPDFExportDialog(QDialog):
                 if ri == 0:
                     cell.set_facecolor("#CFD8DC")
                     cell.set_text_props(fontweight="bold")
+                else:
+                    lines = max(
+                        1,
+                        max(
+                            str(value).count("\n") + 1
+                            for value in cell_text[ri - 1]
+                        ),
+                    )
+                    cell.set_height(
+                        cell.get_height() * max(1.0, lines * 0.72)
+                    )
 
             fig.tight_layout()
             with PdfPages(path) as pdf:
@@ -879,6 +1055,15 @@ class CageTrackWidget(QWidget):
         # Legend drag state
         self._legend_dragging = False
         self._legend_drag_offset: Optional[Tuple[float, float]] = None
+
+        # The first press of a Matplotlib double click is also delivered as a
+        # normal click.  Defer the redraw so the second press keeps its target.
+        self._pending_occupant_click: Optional[str] = None
+        self._occupant_click_timer = QTimer(self)
+        self._occupant_click_timer.setSingleShot(True)
+        self._occupant_click_timer.setInterval(250)
+        self._occupant_click_timer.timeout.connect(
+            self._apply_pending_occupant_click)
 
         self._build_ui()
         QTimer.singleShot(0, lambda: self.refresh_view(sync_animals=True))
@@ -1018,6 +1203,7 @@ class CageTrackWidget(QWidget):
             hierarchy = self._hierarchy_cache
         ui_state = self.store.get_ui_state()
         expanded_buildings = set(ui_state.get("expanded_buildings", []))
+        expanded_units = set(ui_state.get("expanded_units", []))
         expanded_rooms = set(ui_state.get("expanded_rooms", []))
 
         if sync_animals or not self._project_color_cache:
@@ -1033,6 +1219,7 @@ class CageTrackWidget(QWidget):
 
         x_cursor = SPACING
         max_y = 0
+        max_structure_w = 0.0
 
         # Draw unassigned section at top if occupants exist
         unassigned = [
@@ -1049,31 +1236,35 @@ class CageTrackWidget(QWidget):
                 unassigned, x_cursor, 0, animals_dict, project_colors, show_unassigned)
             max_y = unassigned_height + SPACING
 
-        y_start = max_y
+        y_cursor = max_y
 
-        # Draw buildings
+        # Measure all buildings first so the vertical stack uses one readable
+        # column width even when most buildings are collapsed.
+        building_layout: List[Tuple[Dict[str, Any], bool, float, float]] = []
         for bld in hierarchy:
             bld_id = bld["id"]
             is_expanded = bld_id in expanded_buildings
 
             if is_expanded:
-                bld_w, bld_h = self._measure_building(bld, expanded_rooms, animals_dict)
+                bld_w, bld_h = self._measure_building(
+                    bld, expanded_units, expanded_rooms, animals_dict)
             else:
-                bld_w = 160
+                bld_w = self._title_width(bld, 180, 18.0)
                 bld_h = TITLE_H + 6
+            building_layout.append((bld, is_expanded, bld_w, bld_h))
 
-            self._draw_building(bld, x_cursor, y_start, bld_w, bld_h,
-                                is_expanded, expanded_rooms, animals_dict, project_colors)
-            x_cursor += bld_w + SPACING
-            max_y = max(max_y, y_start + bld_h)
+        max_structure_w = max(
+            (building_width for _bld, _expanded, building_width, _height in building_layout),
+            default=0.0,
+        )
 
-        # Fit view
-        total_w = max(x_cursor + SPACING, 400)
-        total_h = max(max_y + SPACING, 300)
-        self.ax.set_xlim(-SPACING, total_w)
-        self.ax.set_ylim(total_h, -SPACING)  # y inverted so top-to-bottom
-        self._current_xlim = self.ax.get_xlim()
-        self._current_ylim = self.ax.get_ylim()
+        # Draw buildings
+        for bld, is_expanded, _bld_w, bld_h in building_layout:
+            self._draw_building(bld, x_cursor, y_cursor, max_structure_w, bld_h,
+                                is_expanded, expanded_units, expanded_rooms,
+                                animals_dict, project_colors)
+            y_cursor += bld_h + SPACING
+            max_y = max(max_y, y_cursor)
 
         legend_project_colors = {
             project: project_colors[project]
@@ -1081,8 +1272,22 @@ class CageTrackWidget(QWidget):
             if project in project_colors
         }
 
+        # Fit view. Reserve a separate right-hand column for the default
+        # legend so it never covers a building, unit, room, or cage.
+        total_w = max(x_cursor + max_structure_w + SPACING, 400)
+        total_h = max(max_y + SPACING, 300)
+        show_legend = ui_state.get("show_legend", True) and bool(legend_project_colors)
+        if show_legend and not ui_state.get("legend_pos"):
+            longest_project = max((len(name) for name in legend_project_colors), default=0)
+            legend_w = max(130, 46 + longest_project * 6.5)
+            total_w += legend_w + SPACING * 2
+        self.ax.set_xlim(-SPACING, total_w)
+        self.ax.set_ylim(total_h, -SPACING)  # y inverted so top-to-bottom
+        self._current_xlim = self.ax.get_xlim()
+        self._current_ylim = self.ax.get_ylim()
+
         # Legend – only show projects that currently have animals.
-        if ui_state.get("show_legend", True) and legend_project_colors:
+        if show_legend:
             legend_pos = ui_state.get("legend_pos", None)
             self._draw_legend(legend_project_colors, total_w, total_h, legend_pos)
 
@@ -1231,7 +1436,12 @@ class CageTrackWidget(QWidget):
     # Measurement helpers
     # ------------------------------------------------------------------
 
-    def _measure_cage(self, cage: Dict[str, Any]) -> Tuple[float, float]:
+    @staticmethod
+    def _title_width(record: Dict[str, Any], minimum: float, char_width: float = 12.0) -> float:
+        label = str(record.get("display_name", record.get("id", "")))
+        return max(minimum, len(label) * char_width + 34)
+
+    def _measure_cage(self, cage: Dict[str, Any], animals_dict: Dict[str, Any]) -> Tuple[float, float]:
         occupants = cage.get("occupants", [])
         h = TITLE_H + max(len(occupants), 1) * OCCUPANT_LINE_H + CAGE_PAD * 2
         h = max(h, CAGE_MIN_H)
@@ -1241,12 +1451,13 @@ class CageTrackWidget(QWidget):
         max_text_width = 0
         for occ in occupants:
             occ_id = occ.get("occupant_id", "")
-            text_width = len(occ_id) * 7.5  # ~7.5px per char at 7.5pt for mixed chars
+            label = animal_base_name(occ_id, animals_dict.get(occ_id, {}))
+            text_width = len(label) * 7.0
             max_text_width = max(max_text_width, text_width)
 
         # Minimum width: circle area (18px) + text + padding on both sides + safety buffer
         min_pixel_width = CAGE_PAD + 18 + max_text_width + CAGE_PAD + 10  # +10px safety buffer
-        w = max(CAGE_MIN_W, min_pixel_width)
+        w = max(self._title_width(cage, CAGE_MIN_W, 7.0), min_pixel_width)
 
         # Store minimum pixel width and data width for resize enforcement
         cage_id = cage.get("id", "")
@@ -1259,7 +1470,7 @@ class CageTrackWidget(QWidget):
     def _measure_room(self, room: Dict[str, Any], animals_dict: Dict[str, Any]) -> Tuple[float, float]:
         cages = room.get("cages", [])
         if not cages:
-            return 140, TITLE_H + 30
+            return self._title_width(room, 140), TITLE_H + 30
 
         max_per_row = room.get("max_per_row", 4)
         rows_of_cages: List[List[Dict[str, Any]]] = []
@@ -1272,47 +1483,87 @@ class CageTrackWidget(QWidget):
             row_w = ROOM_PAD
             max_cage_h = 0
             for cage in row_cages:
-                cw, ch = self._measure_cage(cage)
+                cw, ch = self._measure_cage(cage, animals_dict)
                 row_w += cw + SPACING
                 max_cage_h = max(max_cage_h, ch)
             row_w = row_w - SPACING + ROOM_PAD
             max_row_w = max(max_row_w, row_w)
             total_h += max_cage_h + SPACING
 
-        total_w = max(max_row_w, 140)
+        total_w = max(max_row_w, self._title_width(room, 140))
         total_h = max(total_h - SPACING + ROOM_PAD, TITLE_H + 30)
         return total_w, total_h
 
-    def _measure_building(self, bld: Dict[str, Any], expanded_rooms: Set[str],
-                          animals_dict: Dict[str, Any]) -> Tuple[float, float]:
-        rooms = bld.get("rooms", [])
+    def _measure_unit(self, unit: Dict[str, Any], expanded_rooms: Set[str],
+                      animals_dict: Dict[str, Any]) -> Tuple[float, float]:
+        rooms = unit.get("rooms", [])
         if not rooms:
-            return 180, TITLE_H + 30
-
-        max_per_row = bld.get("max_per_row", 4)
-        rows_of_rooms: List[List[Dict[str, Any]]] = []
-        for i in range(0, len(rooms), max_per_row):
-            rows_of_rooms.append(rooms[i:i + max_per_row])
-
-        max_row_w = 0
-        total_h = TITLE_H + BLD_PAD
+            return self._title_width(unit, 165), TITLE_H + 30
+        max_per_row = unit.get("max_per_row", 4)
+        rows_of_rooms = [
+            rooms[index:index + max_per_row]
+            for index in range(0, len(rooms), max_per_row)
+        ]
+        max_row_w = 0.0
+        total_h = TITLE_H + UNIT_PAD
         for row_rooms in rows_of_rooms:
-            row_w = BLD_PAD
-            max_room_h = 0
+            row_w = UNIT_PAD
+            max_room_h = 0.0
             for room in row_rooms:
                 if room["id"] in expanded_rooms:
-                    rw, rh = self._measure_room(room, animals_dict)
+                    room_w, room_h = self._measure_room(room, animals_dict)
                 else:
-                    rw, rh = 140, TITLE_H + 6
-                row_w += rw + SPACING
-                max_room_h = max(max_room_h, rh)
-            row_w = row_w - SPACING + BLD_PAD
-            max_row_w = max(max_row_w, row_w)
+                    room_w = self._title_width(room, 140)
+                    room_h = TITLE_H + 6
+                row_w += room_w + SPACING
+                max_room_h = max(max_room_h, room_h)
+            max_row_w = max(max_row_w, row_w - SPACING + UNIT_PAD)
             total_h += max_room_h + SPACING
+        return (
+            max(max_row_w, self._title_width(unit, 165)),
+            max(total_h - SPACING + UNIT_PAD, TITLE_H + 30),
+        )
 
-        total_w = max(max_row_w, 180)
-        total_h = max(total_h - SPACING + BLD_PAD, TITLE_H + 30)
-        return total_w, total_h
+    def _measure_building(self, bld: Dict[str, Any], expanded_units: Set[str],
+                          expanded_rooms: Set[str],
+                          animals_dict: Dict[str, Any]) -> Tuple[float, float]:
+        children: List[Tuple[str, Dict[str, Any]]] = [
+            ("unit", unit) for unit in bld.get("units", [])
+        ] + [("room", room) for room in bld.get("rooms", [])]
+        if not children:
+            return 180, TITLE_H + 30
+
+        max_per_row = bld.get("max_per_row", 3)
+        child_rows = [
+            children[index:index + max_per_row]
+            for index in range(0, len(children), max_per_row)
+        ]
+        max_row_w = 0.0
+        total_h = TITLE_H + BLD_PAD
+        for row_children in child_rows:
+            row_w = BLD_PAD
+            max_child_h = 0.0
+            for child_type, child in row_children:
+                if child_type == "unit":
+                    if child["id"] in expanded_units:
+                        child_w, child_h = self._measure_unit(
+                            child, expanded_rooms, animals_dict)
+                    else:
+                        child_w = self._title_width(child, 165)
+                        child_h = TITLE_H + 6
+                elif child["id"] in expanded_rooms:
+                    child_w, child_h = self._measure_room(child, animals_dict)
+                else:
+                    child_w = self._title_width(child, 140)
+                    child_h = TITLE_H + 6
+                row_w += child_w + SPACING
+                max_child_h = max(max_child_h, child_h)
+            max_row_w = max(max_row_w, row_w - SPACING + BLD_PAD)
+            total_h += max_child_h + SPACING
+        return (
+            max(max_row_w, self._title_width(bld, 180, 18.0)),
+            max(total_h - SPACING + BLD_PAD, TITLE_H + 30),
+        )
 
     # ------------------------------------------------------------------
     # Drawing helpers
@@ -1365,7 +1616,12 @@ class CageTrackWidget(QWidget):
 
         cols = min(n, 4)
         rows = max(1, (n + 3) // 4)
-        w = max(300, cols * 110 + CAGE_PAD * 2)
+        longest = max(
+            (len(animal_base_name(occ.get("occupant_id", ""), animals_dict.get(occ.get("occupant_id", ""), {}))) for occ in occupants),
+            default=10,
+        )
+        column_width = max(78, min(170, longest * 7 + 26))
+        w = max(180, cols * column_width + CAGE_PAD * 2)
         h = TITLE_H + OCCUPANT_LINE_H * rows + CAGE_PAD * 2
 
         self._draw_flat_rect(x, y, w, h, UNASSIGNED_BG, UNASSIGNED_BORDER, linewidth=1.5, zorder=2)
@@ -1385,7 +1641,7 @@ class CageTrackWidget(QWidget):
         for i, occ in enumerate(occupants):
             col_idx = i % 4
             row_idx = i // 4
-            tx = ox + col_idx * 110
+            tx = ox + col_idx * column_width
             ty = oy + row_idx * OCCUPANT_LINE_H
             occ_id = occ["occupant_id"]
             is_archived = occ.get("archived", False)
@@ -1395,26 +1651,26 @@ class CageTrackWidget(QWidget):
             else:
                 color = self._cached_animal_role_color(occ_id, animals_dict)
                 project_color = self._cached_animal_project_color(occ_id, animals_dict, project_colors)
-            scatter_x.append(tx + 5)
+            scatter_x.append(tx + 4)
             scatter_y.append(ty)
             face_colors.append(color)
             edge_colors.append("#000000")
-            text_rows.append((tx + 13, ty, animal_base_name(occ_id, animals_dict.get(occ_id, {})), project_color))
-            self._hit_map.append(((tx - 2, ty - 6, tx + 100, ty + 8), occ_id, "occupant"))
+            text_rows.append((tx + 15, ty, animal_base_name(occ_id, animals_dict.get(occ_id, {})), project_color))
+            self._hit_map.append(((tx - 2, ty - 6, tx + column_width - 4, ty + 8), occ_id, "occupant"))
 
         if scatter_x:
-            self.ax.scatter(scatter_x, scatter_y, s=42, marker="o",
+            self.ax.scatter(scatter_x, scatter_y, s=30, marker="o",
                             facecolors=face_colors, edgecolors=edge_colors,
                             linewidths=0.8, zorder=4, clip_on=True)
         for tx, ty, occ_id, project_color in text_rows:
-            self._draw_animal_name(tx, ty, occ_id, project_color, zorder=3)
+            self._draw_animal_name(tx, ty, occ_id, project_color, zorder=5)
 
         self._hit_map.append(((x, y, x + w, y + h), UNASSIGNED_CAGE_ID, "cage"))
         self._hit_map.append(((x, y, x + w, y + TITLE_H), UNASSIGNED_CAGE_ID, "unassigned_title"))
         return h
 
     def _draw_building(self, bld: Dict[str, Any], x: float, y: float, w: float, h: float,
-                       expanded: bool, expanded_rooms: Set[str],
+                       expanded: bool, expanded_units: Set[str], expanded_rooms: Set[str],
                        animals_dict: Dict[str, Any], project_colors: Dict[str, str]) -> None:
         bld_id = bld["id"]
         border = SELECTED_BORDER if self.selected_cage_id == bld_id else BLD_BORDER
@@ -1438,26 +1694,86 @@ class CageTrackWidget(QWidget):
         if not expanded:
             return
 
-        # Draw rooms in rows respecting max_per_row
-        max_per_row = bld.get("max_per_row", 4)
-        all_rooms = bld.get("rooms", [])
-        ry = y + TITLE_H + BLD_PAD
-        for row_start in range(0, len(all_rooms), max_per_row):
-            row_rooms = all_rooms[row_start:row_start + max_per_row]
-            rx = x + BLD_PAD
-            max_room_h = 0
-            for room in row_rooms:
-                room_id = room["id"]
-                room_expanded = room_id in expanded_rooms
-                if room_expanded:
-                    rw, rh = self._measure_room(room, animals_dict)
+        children: List[Tuple[str, Dict[str, Any]]] = [
+            ("unit", unit) for unit in bld.get("units", [])
+        ] + [("room", room) for room in bld.get("rooms", [])]
+        max_per_row = bld.get("max_per_row", 3)
+        child_y = y + TITLE_H + BLD_PAD
+        for row_start in range(0, len(children), max_per_row):
+            row_children = children[row_start:row_start + max_per_row]
+            child_x = x + BLD_PAD
+            max_child_h = 0.0
+            for child_type, child in row_children:
+                if child_type == "unit":
+                    child_expanded = child["id"] in expanded_units
+                    if child_expanded:
+                        child_w, child_h = self._measure_unit(
+                            child, expanded_rooms, animals_dict)
+                    else:
+                        child_w = self._title_width(child, 165)
+                        child_h = TITLE_H + 6
+                    self._draw_unit(
+                        child, child_x, child_y, child_w, child_h,
+                        child_expanded, expanded_rooms, animals_dict, project_colors)
                 else:
-                    rw, rh = 140, TITLE_H + 6
-                self._draw_room(room, rx, ry, rw, rh, room_expanded,
-                                animals_dict, project_colors)
-                rx += rw + SPACING
-                max_room_h = max(max_room_h, rh)
-            ry += max_room_h + SPACING
+                    child_expanded = child["id"] in expanded_rooms
+                    if child_expanded:
+                        child_w, child_h = self._measure_room(child, animals_dict)
+                    else:
+                        child_w = self._title_width(child, 140)
+                        child_h = TITLE_H + 6
+                    self._draw_room(
+                        child, child_x, child_y, child_w, child_h,
+                        child_expanded, animals_dict, project_colors)
+                child_x += child_w + SPACING
+                max_child_h = max(max_child_h, child_h)
+            child_y += max_child_h + SPACING
+
+    def _draw_unit(self, unit: Dict[str, Any], x: float, y: float, w: float, h: float,
+                   expanded: bool, expanded_rooms: Set[str],
+                   animals_dict: Dict[str, Any], project_colors: Dict[str, str]) -> None:
+        unit_id = unit["id"]
+        border = SELECTED_BORDER if self.selected_cage_id == unit_id else UNIT_BORDER
+        linewidth = 2.5 if self.selected_cage_id == unit_id else 1.0
+        background = (
+            "#B3E5FC" if self.store.is_effectively_virtual(unit_id)
+            else "#FFCDD2" if self._structure_overdue(unit_id)
+            else UNIT_BG
+        )
+        self._draw_rect(x, y, w, h, background, border, linewidth=linewidth, zorder=2)
+        self._draw_flat_rect(
+            x + 1, y + 1, w - 2, TITLE_H - 2,
+            UNIT_TITLE_BG, "none", zorder=3)
+        arrow = "▼" if expanded else "▶"
+        self.ax.text(
+            x + 6, y + TITLE_H * 0.65,
+            f"{arrow} {unit.get('display_name', unit_id)}",
+            **FONT_UNIT, color="#3949AB", zorder=4, clip_on=True)
+        self._hit_map.append(((x, y, x + w, y + h), unit_id, "unit"))
+        self._hit_map.append(((x, y, x + w, y + TITLE_H), unit_id, "unit_title"))
+        if not expanded:
+            return
+
+        rooms = unit.get("rooms", [])
+        max_per_row = unit.get("max_per_row", 4)
+        room_y = y + TITLE_H + UNIT_PAD
+        for row_start in range(0, len(rooms), max_per_row):
+            row_rooms = rooms[row_start:row_start + max_per_row]
+            room_x = x + UNIT_PAD
+            max_room_h = 0.0
+            for room in row_rooms:
+                room_expanded = room["id"] in expanded_rooms
+                if room_expanded:
+                    room_w, room_h = self._measure_room(room, animals_dict)
+                else:
+                    room_w = self._title_width(room, 140)
+                    room_h = TITLE_H + 6
+                self._draw_room(
+                    room, room_x, room_y, room_w, room_h,
+                    room_expanded, animals_dict, project_colors)
+                room_x += room_w + SPACING
+                max_room_h = max(max_room_h, room_h)
+            room_y += max_room_h + SPACING
 
     def _draw_room(self, room: Dict[str, Any], x: float, y: float, w: float, h: float,
                    expanded: bool, animals_dict: Dict[str, Any],
@@ -1492,7 +1808,7 @@ class CageTrackWidget(QWidget):
             cx = x + ROOM_PAD
             max_cage_h = 0
             for cage in row_cages:
-                cw, ch = self._measure_cage(cage)
+                cw, ch = self._measure_cage(cage, animals_dict)
                 self._draw_cage(cage, cx, cy, cw, ch, animals_dict, project_colors)
                 cx += cw + SPACING
                 max_cage_h = max(max_cage_h, ch)
@@ -1533,12 +1849,12 @@ class CageTrackWidget(QWidget):
             occ_id = occ["occupant_id"]
             circle_color = self._cached_animal_role_color(occ_id, animals_dict)
             project_color = self._cached_animal_project_color(occ_id, animals_dict, project_colors)
-            scatter_x.append(x + CAGE_PAD + 5)
+            scatter_x.append(x + CAGE_PAD + 4)
             scatter_y.append(oy)
             face_colors.append(circle_color)
             edge_colors.append("#000000")
             text_rows.append((
-                x + CAGE_PAD + 13,
+                x + CAGE_PAD + 15,
                 oy,
                 animal_base_name(occ_id, animals_dict.get(occ_id, {})),
                 project_color,
@@ -1547,11 +1863,11 @@ class CageTrackWidget(QWidget):
                                   occ_id, "occupant"))
             oy += OCCUPANT_LINE_H
         if scatter_x:
-            self.ax.scatter(scatter_x, scatter_y, s=42, marker="o",
+            self.ax.scatter(scatter_x, scatter_y, s=30, marker="o",
                             facecolors=face_colors, edgecolors=edge_colors,
                             linewidths=0.8, zorder=6, clip_on=True)
         for tx, ty, occ_id, project_color in text_rows:
-            self._draw_animal_name(tx, ty, occ_id, project_color, zorder=5)
+            self._draw_animal_name(tx, ty, occ_id, project_color, zorder=7)
 
     def _inspected_cages_today(self) -> Set[str]:
         today = datetime.now().strftime("%Y-%m-%d")
@@ -1573,10 +1889,28 @@ class CageTrackWidget(QWidget):
                 for cage_id, cage in data["cages"].items()
                 if cage.get("parent_room_id") == structure_id
             )
-        if structure_id in data["buildings"]:
+        if structure_id in data["units"]:
             room_ids = {
                 room_id for room_id, room in data["rooms"].items()
-                if room.get("parent_building_id") == structure_id
+                if room.get("parent_unit_id") == structure_id
+            }
+            return any(
+                cage_id in overdue
+                for cage_id, cage in data["cages"].items()
+                if cage.get("parent_room_id") in room_ids
+            )
+        if structure_id in data["buildings"]:
+            unit_ids = {
+                unit_id for unit_id, unit in data["units"].items()
+                if unit.get("parent_building_id") == structure_id
+            }
+            room_ids = {
+                room_id for room_id, room in data["rooms"].items()
+                if room.get("parent_unit_id") in unit_ids
+                or (
+                    room.get("parent_building_id") == structure_id
+                    and not room.get("parent_unit_id")
+                )
             }
             return any(
                 cage_id in overdue
@@ -1628,11 +1962,23 @@ class CageTrackWidget(QWidget):
 
     def _hit_test(self, x: float, y: float) -> Optional[Tuple[str, str]]:
         """Return (entity_id, entity_type) for the topmost hit, or None."""
-        # Walk in reverse so top-drawn items win
+        # Occupants always win over their enclosing cage/room hit boxes.
+        for (x0, y0, x1, y1), eid, etype in reversed(self._hit_map):
+            if etype == "occupant" and x0 <= x <= x1 and y0 <= y <= y1:
+                return eid, etype
+        # Walk in reverse so top-drawn structural items win.
         for (x0, y0, x1, y1), eid, etype in reversed(self._hit_map):
             if x0 <= x <= x1 and y0 <= y <= y1:
                 return eid, etype
         return None
+
+    def _apply_pending_occupant_click(self) -> None:
+        occupant_id = self._pending_occupant_click
+        self._pending_occupant_click = None
+        if not occupant_id:
+            return
+        self._highlight_occupant = occupant_id
+        self.refresh_view(sync_animals=False)
 
     def _on_canvas_press(self, event) -> None:
         if event.inaxes is not self.ax:
@@ -1662,17 +2008,26 @@ class CageTrackWidget(QWidget):
 
                 # Double-click on occupant → movement history
                 if getattr(event, "dblclick", False) and etype == "occupant":
+                    self._occupant_click_timer.stop()
+                    self._pending_occupant_click = None
                     self._show_movement_history(eid)
                     return
 
                 if etype == "occupant":
-                    self._highlight_occupant = eid
-                    self.refresh_view(sync_animals=False)
+                    self._pending_occupant_click = eid
+                    self._occupant_click_timer.start()
                     return
-                elif etype in ("building_title", "room_title", "cage_title", "unassigned_title"):
+                elif etype in (
+                    "building_title", "unit_title", "room_title",
+                    "unassigned_title",
+                ):
                     self._toggle_expand(eid, etype)
                     return
-                elif etype in ("building", "room", "cage"):
+                elif etype == "cage_title":
+                    self.selected_cage_id = eid
+                    self.refresh_view(sync_animals=False)
+                    return
+                elif etype in ("building", "unit", "room", "cage"):
                     self.selected_cage_id = eid
                     self.refresh_view(sync_animals=False)
                     return
@@ -1723,6 +2078,14 @@ class CageTrackWidget(QWidget):
             self.ax.set_ylim(self._pan_ylim[0] - ddy, self._pan_ylim[1] - ddy)
             self.canvas.draw_idle()
             return
+        if event.inaxes is self.ax and event.xdata is not None and event.ydata is not None:
+            hit = self._hit_test(event.xdata, event.ydata)
+            if hit and hit[1] == "occupant":
+                animal_id = hit[0]
+                occupant = self.store.get_occupant(animal_id) or {}
+                QToolTip.showText(QCursor.pos(), movement_identity_text(animal_id, occupant), self)
+                return
+        QToolTip.hideText()
 
     def _on_scroll(self, event) -> None:
         """Zoom via scroll wheel."""
@@ -1809,10 +2172,20 @@ class CageTrackWidget(QWidget):
         if entity_type == "building_title":
             expanded = list(ui_state.get("expanded_buildings", []))
             if entity_id in expanded:
+                expanded = []
+            else:
+                # Buildings behave as an accordion: keeping a single large
+                # hierarchy open avoids an unnecessarily long canvas.
+                expanded = [entity_id]
+            self.store.set_ui_state({"expanded_buildings": expanded})
+
+        elif entity_type == "unit_title":
+            expanded = list(ui_state.get("expanded_units", []))
+            if entity_id in expanded:
                 expanded.remove(entity_id)
             else:
                 expanded.append(entity_id)
-            self.store.set_ui_state({"expanded_buildings": expanded})
+            self.store.set_ui_state({"expanded_units": expanded})
 
         elif entity_type == "room_title":
             expanded = list(ui_state.get("expanded_rooms", []))
@@ -1840,11 +2213,21 @@ class CageTrackWidget(QWidget):
             edit_action = menu.addAction(self.messages.get("cage_track.context.edit", "Edit"))
             edit_action.triggered.connect(lambda checked=False, sid=_eid: self._edit_structure(sid, "building"))
 
+            add_unit = menu.addAction(self.messages.get("cage_track.context.add_unit", "Add Unit"))
+            add_unit.triggered.connect(lambda checked=False, sid=_eid: self._quick_add_child(sid, "unit"))
+
+            delete_action = menu.addAction(self.messages.get("cage_track.context.delete", "Delete"))
+            delete_action.triggered.connect(lambda checked=False, sid=_eid: self._delete_structure(sid, "building"))
+
+        elif entity_type in ("unit", "unit_title"):
+            edit_action = menu.addAction(self.messages.get("cage_track.context.edit", "Edit"))
+            edit_action.triggered.connect(lambda checked=False, sid=_eid: self._edit_structure(sid, "unit"))
+
             add_room = menu.addAction(self.messages.get("cage_track.context.add_room", "Add Room"))
             add_room.triggered.connect(lambda checked=False, sid=_eid: self._quick_add_child(sid, "room"))
 
             delete_action = menu.addAction(self.messages.get("cage_track.context.delete", "Delete"))
-            delete_action.triggered.connect(lambda checked=False, sid=_eid: self._delete_structure(sid, "building"))
+            delete_action.triggered.connect(lambda checked=False, sid=_eid: self._delete_structure(sid, "unit"))
 
         elif entity_type in ("room", "room_title"):
             edit_action = menu.addAction(self.messages.get("cage_track.context.edit", "Edit"))
@@ -1903,8 +2286,21 @@ class CageTrackWidget(QWidget):
         max_per_row_spin = None
 
         if struct_type == "building":
-            # Current room count
-            existing_rooms = self.engine.get_rooms_in_building(struct_id)
+            existing_units = self.engine.get_units_in_building(struct_id)
+            count_spin = QSpinBox()
+            count_spin.setMinimum(0)
+            count_spin.setMaximum(200)
+            count_spin.setValue(len(existing_units))
+            layout.addRow(self.messages.get("cage_track.edit.unit_count", "Number of units:"), count_spin)
+
+            max_per_row_spin = QSpinBox()
+            max_per_row_spin.setMinimum(1)
+            max_per_row_spin.setMaximum(20)
+            max_per_row_spin.setValue(current.get("max_per_row", 4))
+            layout.addRow(self.messages.get("cage_track.edit.max_per_row", "Max units per row:"), max_per_row_spin)
+
+        elif struct_type == "unit":
+            existing_rooms = self.engine.get_rooms_in_unit(struct_id)
             count_spin = QSpinBox()
             count_spin.setMinimum(0)
             count_spin.setMaximum(200)
@@ -1950,7 +2346,14 @@ class CageTrackWidget(QWidget):
             if count_spin is not None:
                 desired = count_spin.value()
                 if struct_type == "building":
-                    existing = self.engine.get_rooms_in_building(struct_id)
+                    existing = self.engine.get_units_in_building(struct_id)
+                    current_count = len(existing)
+                    if desired > current_count:
+                        base_name = new_name or old_name
+                        for i in range(current_count + 1, desired + 1):
+                            self.store.create_unit(struct_id, f"{base_name} U{i}")
+                elif struct_type == "unit":
+                    existing = self.engine.get_rooms_in_unit(struct_id)
                     current_count = len(existing)
                     if desired > current_count:
                         base_name = new_name or old_name
@@ -1967,9 +2370,9 @@ class CageTrackWidget(QWidget):
             self.refresh_view()
 
     def _set_structure_max_per_row(self, struct_id: str, struct_type: str, value: int) -> None:
-        """Persist max_per_row setting on a building or room."""
+        """Persist max_per_row setting on a building, unit, or room."""
         data = self.store.load_data()
-        type_map = {"building": "buildings", "room": "rooms"}
+        type_map = {"building": "buildings", "unit": "units", "room": "rooms"}
         container = data["structures"].get(type_map.get(struct_type, ""), {})
         if struct_id in container:
             container[struct_id]["max_per_row"] = value
@@ -1991,7 +2394,7 @@ class CageTrackWidget(QWidget):
             self.refresh_view()
 
     def _quick_add_child(self, parent_id: str, child_type: str) -> None:
-        """Quick-add a room or cage under a parent."""
+        """Quick-add a unit, room, or cage under a parent."""
         if not self._can('cage.manage_rooms_buildings'):
             self._deny()
             return
@@ -2012,7 +2415,9 @@ class CageTrackWidget(QWidget):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             name = name_edit.text().strip()
             if name:
-                if child_type == "room":
+                if child_type == "unit":
+                    self.store.create_unit(parent_id, name, virtual_check.isChecked())
+                elif child_type == "room":
                     self.store.create_room(parent_id, name, virtual_check.isChecked())
                 elif child_type == "cage":
                     self.store.create_cage(parent_id, name, virtual_check.isChecked())
@@ -2061,6 +2466,8 @@ class CageTrackWidget(QWidget):
         s = data["structures"]
         if entity_id in s["buildings"]:
             return "building"
+        if entity_id in s["units"]:
+            return "unit"
         if entity_id in s["rooms"]:
             return "room"
         if entity_id in s["cages"]:
@@ -2068,7 +2475,7 @@ class CageTrackWidget(QWidget):
         return None
 
     def _resolve_inspection_data(self) -> Optional[Dict[str, Any]]:
-        """From current selection, resolve building (unit) and cage addresses."""
+        """Resolve an inspection scope at any hierarchy level."""
         eid = self.selected_cage_id
         if not eid or eid == UNASSIGNED_CAGE_ID:
             return None
@@ -2080,67 +2487,81 @@ class CageTrackWidget(QWidget):
         data = self.store.load_data()
         s = data["structures"]
 
+        def room_ancestors(room: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+            unit = s["units"].get(room.get("parent_unit_id"))
+            building_id = (
+                unit.get("parent_building_id") if unit
+                else room.get("parent_building_id")
+            )
+            return unit, s["buildings"].get(building_id)
+
         if etype == "building":
-            bld_id = eid
-            bld_name = s["buildings"][eid].get("display_name", eid)
-            rooms = sorted(
-                [r for r in s["rooms"].values()
-                 if r.get("parent_building_id") == bld_id],
-                key=lambda r: r.get("order", 0))
-            cage_names: List[str] = []
-            cage_ids: List[str] = []
-            for room in rooms:
-                r_name = room.get("display_name", room["id"])
-                cages = sorted(
-                    [c for c in s["cages"].values()
-                     if c.get("parent_room_id") == room["id"]
-                     and not c.get("is_virtual")],
-                    key=lambda c: c.get("order", 0))
-                cage_names.extend(
-                    f"{r_name}/{c.get('display_name', c['id'])}" for c in cages)
-                cage_ids.extend(str(c["id"]) for c in cages)
-
+            scope = s["buildings"][eid]
+            unit_ids = {
+                unit_id for unit_id, unit in s["units"].items()
+                if unit.get("parent_building_id") == eid
+            }
+            rooms = [
+                room for room in s["rooms"].values()
+                if room.get("parent_unit_id") in unit_ids
+                or (
+                    room.get("parent_building_id") == eid
+                    and not room.get("parent_unit_id")
+                )
+            ]
+        elif etype == "unit":
+            scope = s["units"][eid]
+            rooms = [
+                room for room in s["rooms"].values()
+                if room.get("parent_unit_id") == eid
+            ]
         elif etype == "room":
-            room = s["rooms"][eid]
-            bld_id = room.get("parent_building_id")
-            bld = s["buildings"].get(bld_id) if bld_id else None
-            if not bld:
-                return None
-            bld_name = bld.get("display_name", bld_id)
-            cages = sorted(
-                [c for c in s["cages"].values()
-                 if c.get("parent_room_id") == eid
-                 and not c.get("is_virtual")],
-                key=lambda c: c.get("order", 0))
-            r_name = room.get("display_name", eid)
-            cage_names = [
-                f"{r_name}/{c.get('display_name', c['id'])}" for c in cages]
-            cage_ids = [str(c["id"]) for c in cages]
-
+            scope = s["rooms"][eid]
+            rooms = [scope]
         elif etype == "cage":
-            cage = s["cages"][eid]
-            if cage.get("is_virtual"):
-                return None
-            room_id = cage.get("parent_room_id")
-            room = s["rooms"].get(room_id) if room_id else None
-            bld_id = room.get("parent_building_id") if room else None
-            bld = s["buildings"].get(bld_id) if bld_id else None
-            if not bld:
-                return None
-            bld_name = bld.get("display_name", bld_id)
-            r_name = room.get("display_name", room_id) if room else ""
-            cage_names = [f"{r_name}/{cage.get('display_name', eid)}"]
-            cage_ids = [str(eid)]
+            scope = s["cages"][eid]
+            room = s["rooms"].get(scope.get("parent_room_id"))
+            rooms = [room] if room else []
         else:
             return None
+
+        eligible = set(self.store.eligible_inspection_cages())
+        candidate_cages = sorted(
+            [
+                cage for cage in s["cages"].values()
+                if cage.get("parent_room_id") in {room["id"] for room in rooms}
+                and cage["id"] in eligible
+                and (etype != "cage" or cage["id"] == eid)
+            ],
+            key=lambda cage: (
+                s["rooms"].get(cage.get("parent_room_id"), {}).get("order", 0),
+                cage.get("order", 0),
+            ),
+        )
+        cage_names: List[str] = []
+        cage_ids: List[str] = []
+        for cage in candidate_cages:
+            room = s["rooms"].get(cage.get("parent_room_id"), {})
+            unit, _building = room_ancestors(room)
+            path_parts = [
+                unit.get("display_name", unit["id"]) if unit else "",
+                room.get("display_name", room.get("id", "")),
+                cage.get("display_name", cage["id"]),
+            ]
+            cage_names.append("/".join(part for part in path_parts if part))
+            cage_ids.append(str(cage["id"]))
 
         if not cage_names:
             return None
 
         return {
-            "unit_id": bld_id if etype != "building" else eid,
-            "unit_name": bld_name,
-            "cages": ", ".join(cage_names),
+            "scope_id": eid,
+            "scope_type": etype,
+            "scope_name": scope.get("display_name", eid),
+            # Keep legacy export fields readable while storing exact scope.
+            "unit_id": eid,
+            "unit_name": f"{etype.title()}: {scope.get('display_name', eid)}",
+            "cages": "\n".join(cage_names),
             "cage_ids": cage_ids,
         }
 
@@ -2148,20 +2569,23 @@ class CageTrackWidget(QWidget):
         """Show inspection history; recording requires explicit Inspect now."""
         inspection_data = self._resolve_inspection_data()
 
-        def record_now() -> None:
+        def record_now() -> List[Dict[str, Any]]:
             if not inspection_data or not self._can('cage.record_inspection'):
-                return
+                return self._load_inspections()
             today = datetime.now().strftime("%d/%m/%Y")
             today_sort = datetime.now().strftime("%Y-%m-%d")
             user = self._get_current_username()
 
             records = self._load_inspections()
-            # Same unit + same date → overwrite
+            # Same exact scope + same date → overwrite.
             records = [
                 r for r in records
-                if not (r.get("unit_id") == inspection_data["unit_id"]
+                if not ((r.get("scope_id") or r.get("unit_id")) == inspection_data["scope_id"]
                         and r.get("date") == today)]
             records.append({
+                "scope_id": inspection_data["scope_id"],
+                "scope_type": inspection_data["scope_type"],
+                "scope_name": inspection_data["scope_name"],
                 "unit_id": inspection_data["unit_id"],
                 "unit_name": inspection_data["unit_name"],
                 "date": today,
@@ -2172,6 +2596,7 @@ class CageTrackWidget(QWidget):
             })
             self._save_inspections(records)
             self.refresh_view()
+            return records
 
         def on_export():
             export_dlg = InspectionPDFExportDialog(
@@ -2314,6 +2739,7 @@ class CageTrackPlugin:
         self.store.set_address_from_dialog(
             animal_name,
             address_values.get("building_id"),
+            address_values.get("unit_id"),
             address_values.get("room_id"),
             address_values.get("cage_id"),
         )
@@ -2346,6 +2772,7 @@ class CageTrackPlugin:
         """Return all structures for populating address dropdowns."""
         return {
             "buildings": self.store.get_all_buildings(),
+            "units": self.store.get_all_units(),
             "rooms": self.store.get_all_rooms(),
             "cages": self.store.get_all_cages(),
         }

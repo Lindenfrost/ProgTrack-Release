@@ -174,6 +174,12 @@ class MasterTrackPlugin:
         values[str(job_name)] = max(1, int(minutes))
         self._save_settings()
 
+    def delete_job_timeout(self, job_name: str) -> None:
+        values = self._settings.get("job_timeouts", {})
+        if isinstance(values, dict) and str(job_name) in values:
+            del values[str(job_name)]
+            self._save_settings()
+
     def _resolve_effective_timeout(self, jobs: Any) -> int:
         configured = [self.get_job_timeout(str(job)) for job in (jobs or [])]
         return max(configured, default=max(1, int(self._timeout_minutes)))

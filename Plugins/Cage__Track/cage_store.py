@@ -11,7 +11,7 @@ import json
 import os
 import tempfile
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from Plugins.core.animal_identity import animal_base_name
@@ -37,6 +37,7 @@ class CageStore:
             "version": "1.0",
             "structures": {
                 "buildings": {},
+                "units": {},
                 "rooms": {},
                 "cages": {
                     UNASSIGNED_CAGE_ID: {
@@ -53,6 +54,7 @@ class CageStore:
             "project_colors": {},
             "ui_state": {
                 "expanded_buildings": [],
+                "expanded_units": [],
                 "expanded_rooms": [],
                 "view_position": {"x": 0, "y": 0},
                 "zoom_level": 1.0,
@@ -89,6 +91,19 @@ class CageStore:
         except (ValueError, TypeError):
             return None
 
+    @staticmethod
+    def _event_date_iso(value: Any = None) -> str:
+        """Normalize lifecycle dates to the movement-history ISO date format."""
+        text = str(value or "").strip()
+        if not text:
+            return CageStore._now_iso()
+        for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(text[:10], fmt).date().isoformat()
+            except ValueError:
+                continue
+        return CageStore._now_iso()
+
     # ------------------------------------------------------------------
     # Load / Save
     # ------------------------------------------------------------------
@@ -117,9 +132,10 @@ class CageStore:
             structures = {}
             raw["structures"] = structures
         structures.setdefault("buildings", {})
+        structures.setdefault("units", {})
         structures.setdefault("rooms", {})
         cages = structures.setdefault("cages", {})
-        for container_name in ("buildings", "rooms", "cages"):
+        for container_name in ("buildings", "units", "rooms", "cages"):
             for entry in structures[container_name].values():
                 entry.setdefault("virtual", False)
 
@@ -153,6 +169,7 @@ class CageStore:
             ui = {}
             raw["ui_state"] = ui
         ui.setdefault("expanded_buildings", [])
+        ui.setdefault("expanded_units", [])
         ui.setdefault("expanded_rooms", [])
         ui.setdefault("view_position", {"x": 0, "y": 0})
         ui.setdefault("zoom_level", 1.0)
@@ -193,17 +210,57 @@ class CageStore:
         self.save_data()
         return entry
 
-    def create_room(
+    def create_unit(
         self, parent_building_id: str, name: str, virtual: bool = False
     ) -> Dict[str, Any]:
         data = self.load_data()
-        rooms = data["structures"]["rooms"]
-        siblings = [r for r in rooms.values() if r.get("parent_building_id") == parent_building_id]
+        structures = data["structures"]
+        if parent_building_id not in structures["buildings"]:
+            raise ValueError(f"Unknown parent building: {parent_building_id}")
+        units = structures["units"]
+        siblings = [
+            unit for unit in units.values()
+            if unit.get("parent_building_id") == parent_building_id
+        ]
+        max_order = max((unit.get("order", 0) for unit in siblings), default=-1)
+        unit_id = self.generate_unique_id("unit")
+        entry = {
+            "id": unit_id,
+            "parent_building_id": parent_building_id,
+            "display_name": name.strip(),
+            "order": max_order + 1,
+            "virtual": bool(virtual),
+        }
+        units[unit_id] = entry
+        self.save_data()
+        return entry
+
+    def create_room(
+        self, parent_id: str, name: str, virtual: bool = False
+    ) -> Dict[str, Any]:
+        data = self.load_data()
+        structures = data["structures"]
+        rooms = structures["rooms"]
+        if parent_id in structures["units"]:
+            parent_unit_id: Optional[str] = parent_id
+            parent_building_id = structures["units"][parent_id].get("parent_building_id")
+        elif parent_id in structures["buildings"]:
+            # Legacy three-level installations remain readable and editable.
+            parent_unit_id = None
+            parent_building_id = parent_id
+        else:
+            raise ValueError(f"Unknown parent unit/building: {parent_id}")
+        siblings = [
+            room for room in rooms.values()
+            if room.get("parent_unit_id") == parent_unit_id
+            and room.get("parent_building_id") == parent_building_id
+        ]
         max_order = max((r.get("order", 0) for r in siblings), default=-1)
         rid = self.generate_unique_id("room")
         entry = {
             "id": rid,
             "parent_building_id": parent_building_id,
+            "parent_unit_id": parent_unit_id,
             "display_name": name.strip(),
             "order": max_order + 1,
             "virtual": bool(virtual),
@@ -243,13 +300,24 @@ class CageStore:
         if struct_type == "building":
             if struct_id not in structures["buildings"]:
                 return False
-            # Collect child rooms
+            child_units = [
+                unit_id for unit_id, unit in structures["units"].items()
+                if unit.get("parent_building_id") == struct_id
+            ]
+            for unit_id in child_units:
+                self._cascade_delete_unit(unit_id, structures, data["occupants"])
+            # Legacy rooms may still be attached directly to a building.
             child_rooms = [rid for rid, r in structures["rooms"].items()
-                           if r.get("parent_building_id") == struct_id]
-            # Cascade: delete each child room (which cascades cages+occupants)
+                           if r.get("parent_building_id") == struct_id
+                           and not r.get("parent_unit_id")]
             for rid in child_rooms:
                 self._cascade_delete_room(rid, structures, data["occupants"])
             del structures["buildings"][struct_id]
+
+        elif struct_type == "unit":
+            if struct_id not in structures["units"]:
+                return False
+            self._cascade_delete_unit(struct_id, structures, data["occupants"])
 
         elif struct_type == "room":
             if struct_id not in structures["rooms"]:
@@ -287,7 +355,10 @@ class CageStore:
 
     def rename_structure(self, struct_id: str, struct_type: str, new_name: str) -> bool:
         data = self.load_data()
-        type_map = {"building": "buildings", "room": "rooms", "cage": "cages"}
+        type_map = {
+            "building": "buildings", "unit": "units",
+            "room": "rooms", "cage": "cages",
+        }
         container = data["structures"].get(type_map.get(struct_type, ""), {})
         if struct_id not in container:
             return False
@@ -295,11 +366,24 @@ class CageStore:
         self.save_data()
         return True
 
+    def _cascade_delete_unit(self, unit_id: str, structures: dict, occupants: dict) -> None:
+        """Delete a unit and all child rooms/cages, orphaning occupants."""
+        child_rooms = [
+            room_id for room_id, room in structures["rooms"].items()
+            if room.get("parent_unit_id") == unit_id
+        ]
+        for room_id in child_rooms:
+            self._cascade_delete_room(room_id, structures, occupants)
+        structures["units"].pop(unit_id, None)
+
     def set_structure_virtual(
         self, struct_id: str, struct_type: str, virtual: bool
     ) -> bool:
         data = self.load_data()
-        type_map = {"building": "buildings", "room": "rooms", "cage": "cages"}
+        type_map = {
+            "building": "buildings", "unit": "units",
+            "room": "rooms", "cage": "cages",
+        }
         container = data["structures"].get(type_map.get(struct_type, ""), {})
         if struct_id not in container:
             return False
@@ -312,18 +396,28 @@ class CageStore:
         structures = data["structures"]
         if struct_id in structures["buildings"]:
             return bool(structures["buildings"][struct_id].get("virtual"))
+        if struct_id in structures["units"]:
+            unit = structures["units"][struct_id]
+            building = structures["buildings"].get(
+                unit.get("parent_building_id"), {})
+            return bool(unit.get("virtual") or building.get("virtual"))
         if struct_id in structures["rooms"]:
             room = structures["rooms"][struct_id]
+            unit = structures["units"].get(room.get("parent_unit_id"), {})
             building = structures["buildings"].get(
-                room.get("parent_building_id"), {})
-            return bool(room.get("virtual") or building.get("virtual"))
+                unit.get("parent_building_id") or room.get("parent_building_id"), {})
+            return bool(
+                room.get("virtual") or unit.get("virtual") or building.get("virtual")
+            )
         if struct_id in structures["cages"]:
             cage = structures["cages"][struct_id]
             room = structures["rooms"].get(cage.get("parent_room_id"), {})
+            unit = structures["units"].get(room.get("parent_unit_id"), {})
             building = structures["buildings"].get(
-                room.get("parent_building_id"), {})
+                unit.get("parent_building_id") or room.get("parent_building_id"), {})
             return bool(
-                cage.get("virtual") or room.get("virtual") or building.get("virtual")
+                cage.get("virtual") or room.get("virtual")
+                or unit.get("virtual") or building.get("virtual")
             )
         return False
 
@@ -332,7 +426,10 @@ class CageStore:
         occupied = {
             str(item.get("cage_id") or "")
             for item in data.get("occupants", {}).values()
-            if item.get("cage_id") and not item.get("archived")
+            if item.get("cage_id")
+            and not item.get("archived")
+            and not item.get("dead")
+            and not item.get("death_date")
         }
         return sorted(
             cage_id
@@ -347,9 +444,23 @@ class CageStore:
         structures = data["structures"]
 
         # Determine type from ID presence
-        if struct_id in structures["rooms"]:
-            entry = structures["rooms"][struct_id]
+        if struct_id in structures["units"]:
+            entry = structures["units"][struct_id]
+            if new_parent_id not in structures["buildings"]:
+                return False
             entry["parent_building_id"] = new_parent_id
+            entry["order"] = new_order
+        elif struct_id in structures["rooms"]:
+            entry = structures["rooms"][struct_id]
+            if new_parent_id in structures["units"]:
+                entry["parent_unit_id"] = new_parent_id
+                entry["parent_building_id"] = structures["units"][new_parent_id].get(
+                    "parent_building_id")
+            elif new_parent_id in structures["buildings"]:
+                entry["parent_unit_id"] = None
+                entry["parent_building_id"] = new_parent_id
+            else:
+                return False
             entry["order"] = new_order
         elif struct_id in structures["cages"]:
             entry = structures["cages"][struct_id]
@@ -366,7 +477,7 @@ class CageStore:
     def reorder_structure(self, struct_id: str, new_order: int) -> bool:
         data = self.load_data()
         structures = data["structures"]
-        for kind in ("buildings", "rooms", "cages"):
+        for kind in ("buildings", "units", "rooms", "cages"):
             if struct_id in structures[kind]:
                 structures[kind][struct_id]["order"] = new_order
                 self.save_data()
@@ -376,7 +487,7 @@ class CageStore:
     def get_structure_by_id(self, struct_id: str) -> Optional[Dict[str, Any]]:
         data = self.load_data()
         structures = data["structures"]
-        for kind in ("buildings", "rooms", "cages"):
+        for kind in ("buildings", "units", "rooms", "cages"):
             if struct_id in structures[kind]:
                 return structures[kind][struct_id]
         return None
@@ -436,6 +547,90 @@ class CageStore:
             return occ.get("cage_id")
         return None
 
+    def _move_occupant_in_data(
+        self,
+        data: Dict[str, Any],
+        occupant_id: str,
+        cage_id: str,
+        *,
+        moved_at: Any = None,
+        reason: Optional[str] = None,
+    ) -> bool:
+        """Move one occupant while preserving exactly one open history row."""
+        occupants = data["occupants"]
+        key = occupant_id.strip()
+        if key not in occupants:
+            return False
+
+        target_cage = cage_id or UNASSIGNED_CAGE_ID
+        event_date = self._event_date_iso(moved_at)
+        history = data["movement_history"].setdefault(key, [])
+        old_cage = occupants[key].get("cage_id") or UNASSIGNED_CAGE_ID
+        open_entries = [
+            entry for entry in history if entry.get("moved_out") is None
+        ]
+        if (
+            old_cage == target_cage
+            and len(open_entries) == 1
+            and open_entries[0].get("cage_id") == target_cage
+        ):
+            return False
+
+        # Daily precision: replace the final movement made on the same day,
+        # then close every open predecessor before recording the new address.
+        last_moved_in = str(history[-1].get("moved_in") or "") if history else ""
+        if history and last_moved_in[:10] == event_date[:10]:
+            history.pop()
+            if history:
+                previous_out = str(history[-1].get("moved_out") or "")
+                if previous_out[:10] == event_date[:10]:
+                    history[-1]["moved_out"] = None
+
+        for entry in history:
+            if entry.get("moved_out") is None:
+                entry["moved_out"] = event_date
+
+        mates = [] if target_cage == UNASSIGNED_CAGE_ID else [
+            occupant["occupant_id"]
+            for occupant in occupants.values()
+            if occupant.get("cage_id") == target_cage
+            and occupant.get("occupant_id") != key
+            and not occupant.get("archived")
+            and not occupant.get("dead")
+        ]
+        movement = {
+            "cage_id": target_cage,
+            "moved_in": event_date,
+            "moved_out": None,
+            "cage_mates_snapshot": mates,
+        }
+        if reason:
+            movement["reason"] = str(reason)
+        history.append(movement)
+        occupants[key]["cage_id"] = target_cage
+        occupants[key]["moved_at"] = event_date
+        return True
+
+    def unhouse_occupant(
+        self,
+        occupant_id: str,
+        *,
+        moved_at: Any = None,
+        reason: str = "lifecycle",
+    ) -> bool:
+        """Move an occupant to Unassigned and close prior housing history."""
+        data = self.load_data()
+        changed = self._move_occupant_in_data(
+            data,
+            occupant_id,
+            UNASSIGNED_CAGE_ID,
+            moved_at=moved_at,
+            reason=reason,
+        )
+        if changed:
+            self.save_data()
+        return changed
+
     def set_occupant_cage(self, occupant_id: str, cage_id: str) -> None:
         """Move occupant to a new cage and record movement history.
 
@@ -443,49 +638,14 @@ class CageStore:
         previous same-day entry is overwritten instead of appended.
         """
         data = self.load_data()
-        occupants = data["occupants"]
-        key = occupant_id.strip()
-        if key not in occupants:
+        occupant = data["occupants"].get(occupant_id.strip())
+        if not occupant:
             return
-
-        old_cage = occupants[key].get("cage_id")
-        if old_cage == cage_id:
-            return
-
-        today = self._now_iso()
-
-        history = data["movement_history"].setdefault(key, [])
-
-        # Same-day overwrite: if the last entry started today, remove it
-        # and re-open the entry before it so the chain stays consistent.
-        if history and history[-1].get("moved_in", "")[:10] == today[:10]:
-            history.pop()
-            if history and history[-1].get("moved_out", "")[:10] == today[:10]:
-                history[-1]["moved_out"] = None
-
-        # Close the current open entry
-        if history:
-            last = history[-1]
-            if last.get("moved_out") is None:
-                last["moved_out"] = today
-
-        # Snapshot cage mates at new cage
-        mates = [
-            o["occupant_id"]
-            for o in occupants.values()
-            if o.get("cage_id") == cage_id and o["occupant_id"] != key
-        ]
-        history.append({
-            "cage_id": cage_id,
-            "moved_in": today,
-            "moved_out": None,
-            "cage_mates_snapshot": mates,
-        })
-
-        occupants[key]["cage_id"] = cage_id
-        occupants[key]["moved_at"] = today
-
-        self.save_data()
+        target = cage_id
+        if (occupant.get("archived") or occupant.get("dead")) and cage_id != UNASSIGNED_CAGE_ID:
+            target = UNASSIGNED_CAGE_ID
+        if self._move_occupant_in_data(data, occupant_id, target):
+            self.save_data()
 
     def delete_occupant(self, occupant_id: str) -> bool:
         """Remove a dummy occupant. Real animals cannot be deleted here."""
@@ -544,27 +704,42 @@ class CageStore:
     # ------------------------------------------------------------------
 
     def get_address_for_dialog(self, occupant_id: str) -> Dict[str, Optional[str]]:
-        """Return current building/room/cage selection for ProgTrack dialog."""
+        """Return current building/unit/room/cage selection for ProgTrack dialog."""
         data = self.load_data()
         occ = data["occupants"].get(occupant_id.strip())
         if not occ:
-            return {"building_id": None, "room_id": None, "cage_id": None}
+            return {
+                "building_id": None, "unit_id": None,
+                "room_id": None, "cage_id": None,
+            }
 
         cage_id = occ.get("cage_id")
         if not cage_id or cage_id == UNASSIGNED_CAGE_ID:
-            return {"building_id": None, "room_id": None, "cage_id": None}
+            return {
+                "building_id": None, "unit_id": None,
+                "room_id": None, "cage_id": None,
+            }
 
         structures = data["structures"]
         cage = structures["cages"].get(cage_id)
         if not cage:
-            return {"building_id": None, "room_id": None, "cage_id": None}
+            return {
+                "building_id": None, "unit_id": None,
+                "room_id": None, "cage_id": None,
+            }
 
         room_id = cage.get("parent_room_id")
         room = structures["rooms"].get(room_id) if room_id else None
-        building_id = room.get("parent_building_id") if room else None
+        unit_id = room.get("parent_unit_id") if room else None
+        unit = structures["units"].get(unit_id) if unit_id else None
+        building_id = (
+            unit.get("parent_building_id") if unit
+            else room.get("parent_building_id") if room else None
+        )
 
         return {
             "building_id": building_id,
+            "unit_id": unit_id,
             "room_id": room_id,
             "cage_id": cage_id,
         }
@@ -573,6 +748,7 @@ class CageStore:
         self,
         occupant_id: str,
         building_id: Optional[str],
+        unit_id: Optional[str],
         room_id: Optional[str],
         cage_id: Optional[str],
     ) -> None:
@@ -635,9 +811,11 @@ class CageStore:
 
     def sync_from_progtrack(self, animals_dict: Dict[str, Any],
                             archived_dict: Optional[Dict[str, Any]] = None) -> None:
-        """Ensure every ProgTrack animal has an occupant record; orphan stale ones.
+        """Synchronize identities and lifecycle-safe current housing.
 
-        Archived animals are removed from the unassigned section.
+        Dead and archived animals are always un-housed.  Restoring an archived
+        animal clears its archived marker but intentionally leaves it in
+        ``Unassigned`` until a keeper chooses a new physical address.
         """
         if not isinstance(animals_dict, dict):
             return
@@ -647,8 +825,11 @@ class CageStore:
         occupants = data["occupants"]
         changed = False
 
-        # 1. Create occupant entries for new ProgTrack animals
-        for animal_name, record in animals_dict.items():
+        source_records = dict(archived_dict)
+        source_records.update(animals_dict)
+
+        # 1. Create occupant entries for every active or archived animal.
+        for animal_name, record in source_records.items():
             if animal_name not in occupants:
                 now = self._now_iso()
                 occupants[animal_name] = {
@@ -668,33 +849,30 @@ class CageStore:
                 })
                 changed = True
 
-        # 2. Mark archived animals (grey in unassigned, but still visible)
-        for arch_name in archived_dict:
-            occ = occupants.get(arch_name)
-            if occ and occ.get("type") == "real":
-                if not occ.get("archived"):
-                    occ["archived"] = True
-                    changed = True
-        # Un-archive animals that are back in the active dict
-        for animal_name in animals_dict:
-            occ = occupants.get(animal_name)
-            if occ and occ.get("archived"):
-                del occ["archived"]
-                changed = True
-
-        # 3. Remove occupants that no longer exist in ProgTrack (deleted)
+        # 2. Remove occupants that no longer exist in ProgTrack (deleted).
         for occ_id, occ in list(occupants.items()):
             if occ.get("type") != "real":
                 continue
             if occ_id not in animals_dict and occ_id not in archived_dict:
                 del occupants[occ_id]
+                # Movement history is keyed by the same canonical identity.
+                # Keeping it after a hard deletion creates an orphan row that
+                # cannot be displayed or attributed to an animal any longer.
+                data["movement_history"].pop(occ_id, None)
                 changed = True
 
-        # 3. Check for invalid cage references
+        # Also repair histories orphaned by older versions that removed only
+        # the occupant record.
+        for occ_id in list(data["movement_history"]):
+            if occ_id not in occupants:
+                del data["movement_history"][occ_id]
+                changed = True
+
+        # 3. Refresh identity/lifecycle markers and reconcile current housing.
         valid_cages = set(data["structures"]["cages"].keys())
         for occ_id, occ in occupants.items():
-            rec = animals_dict.get(occ_id, {}) or archived_dict.get(occ_id, {})
             if occ.get("type") == "real":
+                rec = source_records.get(occ_id, {}) or {}
                 expected_name = animal_base_name(occ_id, rec)
                 if occ.get("ipid") != occ_id:
                     occ["ipid"] = occ_id
@@ -702,10 +880,58 @@ class CageStore:
                 if occ.get("name") != expected_name:
                     occ["name"] = expected_name
                     changed = True
-            if occ.get("cage_id") and occ["cage_id"] not in valid_cages:
-                occ["cage_id"] = UNASSIGNED_CAGE_ID
-                occ["moved_at"] = self._now_iso()
-                changed = True
+
+                stored_id = str(rec.get("id") or "").strip()
+                if stored_id and occ.get("animal_id") != stored_id:
+                    occ["animal_id"] = stored_id
+                    changed = True
+                elif not stored_id and "animal_id" in occ:
+                    del occ["animal_id"]
+                    changed = True
+
+                is_archived = occ_id in archived_dict
+                if bool(occ.get("archived")) != is_archived:
+                    if is_archived:
+                        occ["archived"] = True
+                    else:
+                        occ.pop("archived", None)
+                    changed = True
+
+                death_date = str(rec.get("death_date") or "").strip()
+                is_dead = bool(death_date)
+                if bool(occ.get("dead")) != is_dead:
+                    if is_dead:
+                        occ["dead"] = True
+                    else:
+                        occ.pop("dead", None)
+                    changed = True
+                if death_date:
+                    if occ.get("death_date") != death_date:
+                        occ["death_date"] = death_date
+                        changed = True
+                elif "death_date" in occ:
+                    del occ["death_date"]
+                    changed = True
+
+                if is_dead or is_archived:
+                    event_date = death_date or rec.get("departure_date")
+                    reason = "death" if is_dead else "archived"
+                    changed = self._move_occupant_in_data(
+                        data,
+                        occ_id,
+                        UNASSIGNED_CAGE_ID,
+                        moved_at=event_date,
+                        reason=reason,
+                    ) or changed
+                    continue
+
+            if occ.get("cage_id") not in valid_cages:
+                changed = self._move_occupant_in_data(
+                    data,
+                    occ_id,
+                    UNASSIGNED_CAGE_ID,
+                    reason="invalid_cage",
+                ) or changed
 
         if changed:
             self.save_data()
@@ -719,6 +945,12 @@ class CageStore:
         buildings = list(data["structures"]["buildings"].values())
         buildings.sort(key=lambda b: b.get("order", 0))
         return buildings
+
+    def get_all_units(self) -> List[Dict[str, Any]]:
+        data = self.load_data()
+        units = list(data["structures"]["units"].values())
+        units.sort(key=lambda unit: unit.get("order", 0))
+        return units
 
     def get_all_rooms(self) -> List[Dict[str, Any]]:
         data = self.load_data()

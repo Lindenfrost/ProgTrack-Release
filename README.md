@@ -1,11 +1,11 @@
-# ProgTrack 0.1.1
+# ProgTrack 0.1.2
 
 <p align="center">
   <img src="icons/Splash.png" alt="ProgTrack splash">
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.1.1-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.1.2-blue">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-portable%20Python-green">
   <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue">
@@ -16,7 +16,7 @@ research workflows. It brings hormone measurements, reproductive events,
 animal roles, medical history, cage placement, pedigree data, sample tracking,
 project assignment, reports, and planning tools into one Windows bundle.
 
-> 🌱 **Release status:** `0.1.1` is an early public testing release.  
+> 🌱 **Release status:** `0.1.2` is a Phase 1 testing release.
 > It is meant for evaluation, feedback, bug reports, and workflow testing.
 
 ## 💡 Why ProgTrack?
@@ -126,7 +126,7 @@ This release combines two layers:
 
 The editable application payload:
 
-- `ProgTrack.v.0.1.1.py`
+- `ProgTrack.v.0.1.2.py`
 - `Plugins/`
 - `icons/`
 - `lang/`
@@ -163,7 +163,7 @@ temporary directory.
 To launch a specific script manually:
 
 ```text
-Launcher.exe --script ProgTrack.v.0.1.1.py
+Launcher.exe --script ProgTrack.v.0.1.2.py
 ```
 
 > 💡 The ProgTrack application is **not compiled into** `Launcher.exe`.  
@@ -175,7 +175,7 @@ Launcher.exe --script ProgTrack.v.0.1.1.py
 | --- | --- |
 | `Launcher.exe` | 🚀 Portable Windows launcher. |
 | `_internal/` | 🧰 Bundled Python runtime and third-party libraries. |
-| `ProgTrack.v.0.1.1.py` | 🧬 Main ProgTrack application script. |
+| `ProgTrack.v.0.1.2.py` | 🧬 Main ProgTrack application script. |
 | `Plugins/` | 🔌 ProgTrack modules and plugin data. |
 | `icons/` | 🎨 Icons and visual resources. |
 | `lang/` | 🌍 User-interface translation files. |
@@ -380,7 +380,7 @@ Also confirm that these are still in the same folder:
 
 - `Launcher.exe`
 - `_internal/`
-- `ProgTrack.v.0.1.1.py`
+- `ProgTrack.v.0.1.2.py`
 - `Plugins/`
 - `icons/`
 - `lang/`
@@ -442,8 +442,37 @@ beside `Launcher.exe`.
 
 | Version | Focus |
 | --- | --- |
+| `0.1.2` | Phase 1 caretaker, manager, veterinarian, and tester feedback. |
 | `0.1.1` | Phase 0 stabilization and release hardening. |
 | `0.1.0` | Initial public testing package. |
+
+### 0.1.2 Release Note
+
+`0.1.2` is the Phase 1 validation release. It consolidates caretaker,
+manager, veterinarian, researcher, and tester feedback into a single portable
+build.
+
+Highlights include:
+
+- configurable role tabs, job-specific animal views, and role-builder action
+  blocks with permission-aware controls;
+- controlled animal IDs, parent relationships, lifecycle events, and
+  four-level Cage Track addresses with inspectable hierarchy levels;
+- clearer and faster Heritage Track pedigrees, including chronological
+  birth-date placement, alternative partner-normalized placement, selectable
+  node details, and safer routing for complex relationships;
+- coordinated Project Track, Medi Track, Reports, Sample Track, and Cage Track
+  workflows, including project history and medical-history hand-off;
+- report and medical exports with optional signatures, portable document
+  folders, plain-text XLSX cells, and stable identity fields;
+- import templates that retain both animal ID and sample ID, and request the
+  required species and full birth date before newly detected animals are
+  imported;
+- refreshed multilingual manuals, sample data, permissions, role presets, and
+  Linux source-compatibility checks.
+
+The portable release ZIP intentionally omits the repository's launcher build
+sources, automated tests, caches, logs, and temporary test output.
 
 ### 0.1.1 Release Note
 

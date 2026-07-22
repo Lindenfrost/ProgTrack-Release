@@ -1,5 +1,5 @@
 {
-  "Adèle | Papio hamadryas anubis | 04.03.2020": {
+  "Adèle | Papio hamadryas anubis | 04.03.1998": {
     "locked_dates": [],
     "edits": {
       "03.06.2026": {
@@ -8,7 +8,423 @@
         "signatures": ""
       }
     },
-    "ipid": "Adèle | Papio hamadryas anubis | 04.03.2020",
+    "ipid": "Adèle | Papio hamadryas anubis | 04.03.1998",
     "name": "Adèle"
+  },
+  "Elrond | Callitrix jacchus | 04.02.2012": {
+    "locked_dates": [],
+    "edits": {
+      "05.07.2026": {
+        "daily_data": "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Testentry</p>"
+      }
+    },
+    "ipid": "Elrond | Callitrix jacchus | 04.02.2012",
+    "name": "Elrond"
+  },
+  "Lindir | Callitrix jacchus | 01.02.2024": {
+    "locked_dates": [
+      "08.07.2026",
+      "06.06.2026",
+      "17.06.2026",
+      "15.06.2026",
+      "23.06.2026",
+      "22.06.2026",
+      "01.07.2026",
+      "14.07.2026",
+      "13.07.2026",
+      "07.07.2026",
+      "05.06.2026",
+      "09.07.2026",
+      "20.07.2026",
+      "07.06.2026",
+      "18.06.2026",
+      "24.06.2026",
+      "14.06.2026",
+      "21.06.2026",
+      "11.06.2026",
+      "27.06.2026",
+      "13.06.2026",
+      "01.06.2026",
+      "10.07.2026",
+      "16.06.2026",
+      "19.07.2026",
+      "16.07.2026",
+      "04.07.2026",
+      "03.07.2026",
+      "03.06.2026",
+      "22.07.2026",
+      "26.06.2026",
+      "02.06.2026",
+      "04.06.2026",
+      "02.07.2026",
+      "09.06.2026",
+      "20.06.2026",
+      "17.07.2026",
+      "11.07.2026",
+      "15.07.2026",
+      "10.06.2026",
+      "25.06.2026",
+      "30.06.2026",
+      "18.07.2026",
+      "12.06.2026",
+      "06.07.2026",
+      "28.06.2026",
+      "29.06.2026",
+      "12.07.2026",
+      "19.06.2026",
+      "08.06.2026",
+      "21.07.2026",
+      "05.07.2026"
+    ],
+    "edits": {
+      "06.07.2026": {
+        "daily_data": "Assigned to project: Backcrossing",
+        "scores": "",
+        "signatures": ""
+      },
+      "01.07.2026": {
+        "daily_data": ""
+      },
+      "02.07.2026": {
+        "daily_data": "PGF (1/12)"
+      },
+      "03.07.2026": {
+        "daily_data": ""
+      },
+      "04.07.2026": {
+        "daily_data": ""
+      },
+      "05.07.2026": {
+        "scores": "",
+        "signatures": "",
+        "daily_data": ""
+      },
+      "07.07.2026": {
+        "daily_data": "Status: Recovery, OP"
+      },
+      "08.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "09.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "10.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "11.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "12.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "13.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "14.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "15.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "16.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "17.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "18.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "19.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "20.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "21.07.2026": {
+        "daily_data": "Status: Recovery"
+      },
+      "22.07.2026": {
+        "daily_data": "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Status: Recovered</p>",
+        "scores": "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">0</p>",
+        "signatures": "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">TTJ</p>"
+      },
+      "01.06.2026": {
+        "daily_data": ""
+      },
+      "02.06.2026": {
+        "daily_data": ""
+      },
+      "03.06.2026": {
+        "daily_data": ""
+      },
+      "04.06.2026": {
+        "daily_data": ""
+      },
+      "05.06.2026": {
+        "daily_data": ""
+      },
+      "06.06.2026": {
+        "daily_data": ""
+      },
+      "07.06.2026": {
+        "daily_data": ""
+      },
+      "08.06.2026": {
+        "daily_data": ""
+      },
+      "09.06.2026": {
+        "daily_data": ""
+      },
+      "10.06.2026": {
+        "daily_data": ""
+      },
+      "11.06.2026": {
+        "daily_data": ""
+      },
+      "12.06.2026": {
+        "daily_data": ""
+      },
+      "13.06.2026": {
+        "daily_data": ""
+      },
+      "14.06.2026": {
+        "daily_data": ""
+      },
+      "15.06.2026": {
+        "daily_data": ""
+      },
+      "16.06.2026": {
+        "daily_data": ""
+      },
+      "17.06.2026": {
+        "daily_data": ""
+      },
+      "18.06.2026": {
+        "daily_data": ""
+      },
+      "19.06.2026": {
+        "daily_data": ""
+      },
+      "20.06.2026": {
+        "daily_data": ""
+      },
+      "21.06.2026": {
+        "daily_data": ""
+      },
+      "22.06.2026": {
+        "daily_data": ""
+      },
+      "23.06.2026": {
+        "daily_data": ""
+      },
+      "24.06.2026": {
+        "daily_data": ""
+      },
+      "25.06.2026": {
+        "daily_data": ""
+      },
+      "26.06.2026": {
+        "daily_data": ""
+      },
+      "27.06.2026": {
+        "daily_data": ""
+      },
+      "28.06.2026": {
+        "daily_data": ""
+      },
+      "29.06.2026": {
+        "daily_data": ""
+      },
+      "30.06.2026": {
+        "daily_data": ""
+      }
+    },
+    "ipid": "Lindir | Callitrix jacchus | 01.02.2024",
+    "name": "Lindir"
+  },
+  "Arwen | Callitrix jacchus | 23.02.2015": {
+    "locked_dates": [
+      "08.07.2026",
+      "01.07.2026",
+      "14.07.2026",
+      "13.07.2026",
+      "07.07.2026",
+      "09.07.2026",
+      "20.07.2026",
+      "10.07.2026",
+      "19.07.2026",
+      "16.07.2026",
+      "04.07.2026",
+      "03.07.2026",
+      "02.07.2026",
+      "17.07.2026",
+      "11.07.2026",
+      "15.07.2026",
+      "18.07.2026",
+      "06.07.2026",
+      "12.07.2026",
+      "21.07.2026",
+      "05.07.2026"
+    ],
+    "edits": {
+      "01.07.2026": {
+        "daily_data": "Weight: 410g (<span style='color:red'>-20.4%</span>)"
+      },
+      "02.07.2026": {
+        "daily_data": ""
+      },
+      "03.07.2026": {
+        "daily_data": ""
+      },
+      "04.07.2026": {
+        "daily_data": ""
+      },
+      "05.07.2026": {
+        "daily_data": ""
+      },
+      "06.07.2026": {
+        "daily_data": ""
+      },
+      "07.07.2026": {
+        "daily_data": ""
+      },
+      "08.07.2026": {
+        "daily_data": ""
+      },
+      "09.07.2026": {
+        "daily_data": ""
+      },
+      "10.07.2026": {
+        "daily_data": ""
+      },
+      "11.07.2026": {
+        "daily_data": ""
+      },
+      "12.07.2026": {
+        "daily_data": ""
+      },
+      "13.07.2026": {
+        "daily_data": ""
+      },
+      "14.07.2026": {
+        "daily_data": ""
+      },
+      "15.07.2026": {
+        "daily_data": ""
+      },
+      "16.07.2026": {
+        "daily_data": ""
+      },
+      "17.07.2026": {
+        "daily_data": ""
+      },
+      "18.07.2026": {
+        "daily_data": ""
+      },
+      "19.07.2026": {
+        "daily_data": ""
+      },
+      "20.07.2026": {
+        "daily_data": ""
+      },
+      "21.07.2026": {
+        "daily_data": ""
+      }
+    },
+    "ipid": "Arwen | Callitrix jacchus | 23.02.2015",
+    "name": "Arwen"
+  },
+  "Eldarion | Callitrix jacchus | 01.03.2026": {
+    "locked_dates": [
+      "08.07.2026",
+      "01.07.2026",
+      "14.07.2026",
+      "13.07.2026",
+      "07.07.2026",
+      "09.07.2026",
+      "20.07.2026",
+      "10.07.2026",
+      "19.07.2026",
+      "16.07.2026",
+      "04.07.2026",
+      "03.07.2026",
+      "02.07.2026",
+      "17.07.2026",
+      "11.07.2026",
+      "15.07.2026",
+      "18.07.2026",
+      "06.07.2026",
+      "12.07.2026",
+      "21.07.2026",
+      "05.07.2026"
+    ],
+    "edits": {
+      "01.07.2026": {
+        "daily_data": ""
+      },
+      "02.07.2026": {
+        "daily_data": ""
+      },
+      "03.07.2026": {
+        "daily_data": ""
+      },
+      "04.07.2026": {
+        "daily_data": ""
+      },
+      "05.07.2026": {
+        "daily_data": ""
+      },
+      "06.07.2026": {
+        "daily_data": ""
+      },
+      "07.07.2026": {
+        "daily_data": ""
+      },
+      "08.07.2026": {
+        "daily_data": ""
+      },
+      "09.07.2026": {
+        "daily_data": ""
+      },
+      "10.07.2026": {
+        "daily_data": ""
+      },
+      "11.07.2026": {
+        "daily_data": ""
+      },
+      "12.07.2026": {
+        "daily_data": ""
+      },
+      "13.07.2026": {
+        "daily_data": ""
+      },
+      "14.07.2026": {
+        "daily_data": ""
+      },
+      "15.07.2026": {
+        "daily_data": ""
+      },
+      "16.07.2026": {
+        "daily_data": ""
+      },
+      "17.07.2026": {
+        "daily_data": ""
+      },
+      "18.07.2026": {
+        "daily_data": ""
+      },
+      "19.07.2026": {
+        "daily_data": ""
+      },
+      "20.07.2026": {
+        "daily_data": ""
+      },
+      "21.07.2026": {
+        "daily_data": ""
+      }
+    },
+    "ipid": "Eldarion | Callitrix jacchus | 01.03.2026",
+    "name": "Eldarion"
   }
 }

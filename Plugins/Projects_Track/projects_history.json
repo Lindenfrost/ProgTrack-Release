@@ -131,11 +131,12 @@
         },
         {
           "name": "Elrond",
-          "status": "active",
+          "status": "former",
           "date_entered": "20.04.2026",
-          "date_left": null,
+          "date_left": "20.07.2026",
           "last_severity": null,
-          "ipid": "Elrond | Callitrix jacchus | 04.02.2012"
+          "ipid": "Elrond | Callitrix jacchus | 04.02.2012",
+          "previous_in_experiment": false
         },
         {
           "name": "Isildur",
@@ -160,6 +161,60 @@
           "date_left": null,
           "last_severity": null,
           "ipid": "Taylor | Callitrix jacchus | 14.06.2018"
+        },
+        {
+          "ipid": "Lindir | Callitrix jacchus | 01.02.2024",
+          "name": "Lindir",
+          "status": "active",
+          "date_entered": "06.07.2026",
+          "date_left": null,
+          "last_severity": null,
+          "previous_project_snapshot": [],
+          "previous_experimental_snapshot": []
+        },
+        {
+          "ipid": "Lindir | Papio hamadryas anubis | 02.02.2024",
+          "name": "Lindir",
+          "status": "active",
+          "date_entered": "06.07.2026",
+          "date_left": null,
+          "last_severity": null,
+          "previous_project_snapshot": [],
+          "previous_experimental_snapshot": []
+        },
+        {
+          "ipid": "Lindir | Callitrix jacchus | 03.02.2026",
+          "name": "Lindir",
+          "status": "active",
+          "date_entered": "06.07.2026",
+          "date_left": null,
+          "last_severity": null,
+          "previous_project_snapshot": [],
+          "previous_experimental_snapshot": []
+        },
+        {
+          "ipid": "Test | Callitrix jacchus | 02.02.2018",
+          "name": "Test",
+          "status": "active",
+          "date_entered": "20.07.2026",
+          "date_left": null,
+          "last_severity": null,
+          "previous_project_snapshot": [],
+          "previous_experimental_snapshot": [],
+          "previous_in_experiment": true,
+          "had_in_experiment": true
+        },
+        {
+          "ipid": "Test | Callitrix jacchus | 01.01.2018",
+          "name": "Test",
+          "status": "active",
+          "date_entered": "20.07.2026",
+          "date_left": null,
+          "last_severity": null,
+          "previous_project_snapshot": [],
+          "previous_experimental_snapshot": [],
+          "previous_in_experiment": true,
+          "had_in_experiment": true
         }
       ]
     },
@@ -176,7 +231,7 @@
           "previous_experimental_snapshot": [],
           "previous_in_experiment": true,
           "had_in_experiment": true,
-          "ipid": "Andy | Unknown species | 01.01.1900"
+          "ipid": "Andy | Unknown species | 02.01.2011"
         },
         {
           "name": "Cindy",
@@ -187,7 +242,7 @@
           "previous_project_snapshot": [],
           "previous_experimental_snapshot": [],
           "previous_in_experiment": false,
-          "ipid": "Cindy | Unknown species | 01.01.1900"
+          "ipid": "Cindy | Unknown species | 11.01.2020"
         },
         {
           "name": "Dana",
@@ -199,7 +254,27 @@
           "previous_experimental_snapshot": [],
           "previous_in_experiment": true,
           "had_in_experiment": true,
-          "ipid": "Dana | Unknown species | 01.01.1900"
+          "ipid": "Dana | Unknown species | 12.01.2021"
+        },
+        {
+          "ipid": "Azog | Papio hamadryas anubis | 04.04.2010",
+          "name": "Azog",
+          "status": "active",
+          "date_entered": "20.07.2026",
+          "date_left": null,
+          "last_severity": null,
+          "previous_project_snapshot": [],
+          "previous_experimental_snapshot": []
+        },
+        {
+          "ipid": "Andy | Callitrix jacchus | 02.01.2011",
+          "name": "Andy",
+          "status": "active",
+          "date_entered": "22.07.2026",
+          "date_left": null,
+          "last_severity": null,
+          "previous_project_snapshot": [],
+          "previous_experimental_snapshot": []
         }
       ]
     },
@@ -208,9 +283,9 @@
       "animals": [
         {
           "name": "Andy",
-          "status": "active",
+          "status": "former",
           "date_entered": "17.06.2026",
-          "date_left": null,
+          "date_left": "22.07.2026",
           "last_severity": null,
           "previous_project_snapshot": [
             {
@@ -240,7 +315,74 @@
               "project": "Anode"
             }
           ],
-          "ipid": "Andy | Unknown species | 01.01.1900"
+          "ipid": "Andy | Unknown species | 02.01.2011",
+          "previous_in_experiment": false
+        },
+        {
+          "ipid": "Azog | Papio hamadryas anubis | 04.04.2010",
+          "name": "Azog",
+          "status": "former",
+          "date_entered": "20.07.2026",
+          "date_left": "20.07.2026",
+          "last_severity": null,
+          "previous_project_snapshot": [],
+          "previous_experimental_snapshot": [],
+          "previous_in_experiment": false
+        }
+      ]
+    },
+    "Oakshield": {
+      "archived": false,
+      "animals": [
+        {
+          "ipid": "Azog | Papio hamadryas anubis | 04.04.2010",
+          "name": "Azog",
+          "status": "former",
+          "date_entered": "20.07.2026",
+          "date_left": "20.07.2026",
+          "last_severity": null,
+          "previous_project_snapshot": [
+            {
+              "ipid": "Azog | Papio hamadryas anubis | 04.04.2010",
+              "name": "Azog",
+              "status": "former",
+              "date_entered": "20.07.2026",
+              "date_left": "20.07.2026",
+              "last_severity": null,
+              "previous_project_snapshot": [],
+              "previous_experimental_snapshot": [],
+              "previous_in_experiment": false,
+              "project": "Zucht"
+            }
+          ],
+          "previous_experimental_snapshot": [],
+          "previous_in_experiment": true,
+          "had_in_experiment": true
+        },
+        {
+          "ipid": "Azog | Papio hamadryas anubis | 04.04.2010",
+          "name": "Azog",
+          "status": "active",
+          "date_entered": "21.07.2026",
+          "date_left": null,
+          "last_severity": null,
+          "previous_project_snapshot": [
+            {
+              "ipid": "Azog | Papio hamadryas anubis | 04.04.2010",
+              "name": "Azog",
+              "status": "former",
+              "date_entered": "20.07.2026",
+              "date_left": "20.07.2026",
+              "last_severity": null,
+              "previous_project_snapshot": [],
+              "previous_experimental_snapshot": [],
+              "previous_in_experiment": false,
+              "project": "Zucht"
+            }
+          ],
+          "previous_experimental_snapshot": [],
+          "previous_in_experiment": true,
+          "had_in_experiment": true
         }
       ]
     }

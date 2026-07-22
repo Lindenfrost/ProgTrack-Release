@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from .cage_store import CageStore, UNASSIGNED_CAGE_ID
 
@@ -23,11 +23,12 @@ class CageEngine:
     # ------------------------------------------------------------------
 
     def build_hierarchy(self) -> List[Dict[str, Any]]:
-        """Build tree: list of buildings, each with rooms, each with cages."""
+        """Build Building → Unit → Room → Cage tree, retaining legacy rooms."""
         data = self.store.load_data()
         structures = data["structures"]
 
         buildings = sorted(structures["buildings"].values(), key=lambda b: b.get("order", 0))
+        units = structures["units"]
         rooms = structures["rooms"]
         cages = structures["cages"]
         occupants_by_cage: Dict[str, List[Dict[str, Any]]] = {}
@@ -36,29 +37,55 @@ class CageEngine:
             occupants_by_cage.setdefault(cage_id, []).append(occupant)
 
         tree = []
+
+        def room_node(room: Dict[str, Any]) -> Dict[str, Any]:
+            room_id = room["id"]
+            room_cages = sorted(
+                [
+                    cage for cage in cages.values()
+                    if cage.get("parent_room_id") == room_id
+                    and not cage.get("is_virtual")
+                ],
+                key=lambda cage: cage.get("order", 0),
+            )
+            cage_nodes = [
+                {**cage, "occupants": occupants_by_cage.get(cage["id"], [])}
+                for cage in room_cages
+            ]
+            return {**room, "cages": cage_nodes}
+
         for bld in buildings:
             bld_id = bld["id"]
-            bld_rooms = sorted(
-                [r for r in rooms.values() if r.get("parent_building_id") == bld_id],
-                key=lambda r: r.get("order", 0),
+            bld_units = sorted(
+                [
+                    unit for unit in units.values()
+                    if unit.get("parent_building_id") == bld_id
+                ],
+                key=lambda unit: unit.get("order", 0),
             )
-            room_nodes = []
-            for room in bld_rooms:
-                room_id = room["id"]
-                room_cages = sorted(
+            unit_nodes = []
+            for unit in bld_units:
+                unit_rooms = sorted(
                     [
-                        c
-                        for c in cages.values()
-                        if c.get("parent_room_id") == room_id and not c.get("is_virtual")
+                        room for room in rooms.values()
+                        if room.get("parent_unit_id") == unit["id"]
                     ],
-                    key=lambda c: c.get("order", 0),
+                    key=lambda room: room.get("order", 0),
                 )
-                cage_nodes = []
-                for cage in room_cages:
-                    occupants = occupants_by_cage.get(cage["id"], [])
-                    cage_nodes.append({**cage, "occupants": occupants})
-                room_nodes.append({**room, "cages": cage_nodes})
-            tree.append({**bld, "rooms": room_nodes})
+                unit_nodes.append({**unit, "rooms": [room_node(room) for room in unit_rooms]})
+            legacy_rooms = sorted(
+                [
+                    room for room in rooms.values()
+                    if room.get("parent_building_id") == bld_id
+                    and not room.get("parent_unit_id")
+                ],
+                key=lambda room: room.get("order", 0),
+            )
+            tree.append({
+                **bld,
+                "units": unit_nodes,
+                "rooms": [room_node(room) for room in legacy_rooms],
+            })
         return tree
 
     # ------------------------------------------------------------------
@@ -67,6 +94,24 @@ class CageEngine:
 
     def get_all_buildings(self) -> List[Dict[str, Any]]:
         return self.store.get_all_buildings()
+
+    def get_units_in_building(self, building_id: str) -> List[Dict[str, Any]]:
+        data = self.store.load_data()
+        units = [
+            unit for unit in data["structures"]["units"].values()
+            if unit.get("parent_building_id") == building_id
+        ]
+        units.sort(key=lambda unit: unit.get("order", 0))
+        return units
+
+    def get_rooms_in_unit(self, unit_id: str) -> List[Dict[str, Any]]:
+        data = self.store.load_data()
+        rooms = [
+            room for room in data["structures"]["rooms"].values()
+            if room.get("parent_unit_id") == unit_id
+        ]
+        rooms.sort(key=lambda room: room.get("order", 0))
+        return rooms
 
     def get_rooms_in_building(self, building_id: str) -> List[Dict[str, Any]]:
         data = self.store.load_data()
@@ -91,7 +136,7 @@ class CageEngine:
 
     def resolve_cage_path(self, cage_id: str,
                           unassigned_label: str = "Unassigned") -> str:
-        """Get full display path: Building > Room > Cage."""
+        """Get full display path: Building > Unit > Room > Cage."""
         data = self.store.load_data()
         structures = data["structures"]
 
@@ -109,17 +154,25 @@ class CageEngine:
             return cage_name
 
         room_name = room.get("display_name", room_id)
-        bld_id = room.get("parent_building_id")
+        unit_id = room.get("parent_unit_id")
+        unit = structures["units"].get(unit_id) if unit_id else None
+        bld_id = unit.get("parent_building_id") if unit else room.get("parent_building_id")
         bld = structures["buildings"].get(bld_id) if bld_id else None
         if not bld:
             return f"{room_name} > {cage_name}"
 
         bld_name = bld.get("display_name", bld_id)
+        if unit:
+            unit_name = unit.get("display_name", unit_id)
+            return f"{bld_name} > {unit_name} > {room_name} > {cage_name}"
         return f"{bld_name} > {room_name} > {cage_name}"
 
     def validate_structure_exists(self, struct_id: str, struct_type: str) -> bool:
         data = self.store.load_data()
-        type_map = {"building": "buildings", "room": "rooms", "cage": "cages"}
+        type_map = {
+            "building": "buildings", "unit": "units",
+            "room": "rooms", "cage": "cages",
+        }
         container = data["structures"].get(type_map.get(struct_type, ""), {})
         return struct_id in container
 
@@ -131,9 +184,26 @@ class CageEngine:
 
         empty_buildings = []
         for bld in structures["buildings"].values():
-            has_rooms = any(r.get("parent_building_id") == bld["id"] for r in structures["rooms"].values())
-            if not has_rooms:
+            has_units = any(
+                unit.get("parent_building_id") == bld["id"]
+                for unit in structures["units"].values()
+            )
+            has_legacy_rooms = any(
+                room.get("parent_building_id") == bld["id"]
+                and not room.get("parent_unit_id")
+                for room in structures["rooms"].values()
+            )
+            if not has_units and not has_legacy_rooms:
                 empty_buildings.append(bld)
+
+        empty_units = []
+        for unit in structures["units"].values():
+            has_rooms = any(
+                room.get("parent_unit_id") == unit["id"]
+                for room in structures["rooms"].values()
+            )
+            if not has_rooms:
+                empty_units.append(unit)
 
         empty_rooms = []
         for room in structures["rooms"].values():
@@ -153,11 +223,17 @@ class CageEngine:
             if not has_occupants:
                 empty_cages.append(cage)
 
-        return {"buildings": empty_buildings, "rooms": empty_rooms, "cages": empty_cages}
+        return {
+            "buildings": empty_buildings, "units": empty_units,
+            "rooms": empty_rooms, "cages": empty_cages,
+        }
 
     def get_structure_by_id(self, struct_id: str, struct_type: str) -> Optional[Dict[str, Any]]:
         data = self.store.load_data()
-        type_map = {"building": "buildings", "room": "rooms", "cage": "cages"}
+        type_map = {
+            "building": "buildings", "unit": "units",
+            "room": "rooms", "cage": "cages",
+        }
         container = data["structures"].get(type_map.get(struct_type, ""), {})
         return container.get(struct_id)
 
@@ -229,7 +305,14 @@ class CageEngine:
             return target_id in data["structures"]["rooms"]
 
         if drag_type == "room":
-            # Target must be a valid building
+            # New rooms target units; legacy installations may use buildings.
+            data = self.store.load_data()
+            return (
+                target_id in data["structures"]["units"]
+                or target_id in data["structures"]["buildings"]
+            )
+
+        if drag_type == "unit":
             data = self.store.load_data()
             return target_id in data["structures"]["buildings"]
 

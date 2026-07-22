@@ -2152,7 +2152,31 @@ def _clean_html_for_reportlab(html_text: str) -> str:
     return text
 
 
-def create_monthly_report(header_info: dict, daily_data: list, month: int, year: int, output_path: str, von_date=None, bis_date=None, messages: dict = None) -> None:
+def daily_report_table_spec(include_signatures: bool = True):
+    """Return PDF daily-table column keys and widths in centimetres."""
+    if include_signatures:
+        return (
+            ("date", "daily_data", "scores", "signatures", "pi"),
+            (1.5, 15.0, 2.0, 4.0, 1.5),
+        )
+    return (
+        ("date", "daily_data", "scores", "pi"),
+        (1.5, 19.0, 2.0, 1.5),
+    )
+
+
+def create_monthly_report(
+    header_info: dict,
+    daily_data: list,
+    month: int,
+    year: int,
+    output_path: str,
+    von_date=None,
+    bis_date=None,
+    messages: dict = None,
+    *,
+    include_signatures: bool = True,
+) -> None:
     """
     Create a PDF report for one animal for one month.
     
@@ -2165,6 +2189,7 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
         von_date: Start date of the report range
         bis_date: End date of the report range
         messages (dict): Localization messages dictionary
+        include_signatures (bool): Include the complete Signatures table column.
     """
     # Use default empty dict if no messages provided
     if messages is None:
@@ -2402,7 +2427,8 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
         def header(canvas, doc):
             canvas.saveState()
             page_width, page_height = doc.pagesize
-            header_top = page_height - 0.6*cm
+            # Leave a practical hole-punch margin above the complete header.
+            header_top = page_height - 1.5*cm
             # Title subject can be passed explicitly (e.g. "Name (ID + Species)").
             # Fallback to Name and optionally append ID.
             title_subject = header_info.get('Title Subject')
@@ -2472,7 +2498,7 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
         # Create PDF document with custom page template - minimal margins for wider table
         doc = BaseDocTemplate(output_path, pagesize=landscape(A4),
                              leftMargin=0.5*cm, rightMargin=0.5*cm,
-                             topMargin=6.8*cm, bottomMargin=1*cm)
+                             topMargin=7.7*cm, bottomMargin=1*cm)
         
         # Define frame for content (below header)
         frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='normal')
@@ -2481,13 +2507,19 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
         
         # Add daily data table
         # Use Paragraph objects for column headers with HTML formatting - localized
-        table_data = [[
-            Paragraph('<b>' + messages.get('report.column.date', 'Date') + '</b>', normal_style), 
-            Paragraph('<b>' + messages.get('report.column.daily_data', 'Daily Data') + '</b>', normal_style), 
-            Paragraph('<b>' + messages.get('report.column.scores', 'Scores') + '</b>', normal_style), 
-            Paragraph('<b>' + messages.get('report.column.signatures', 'Signatures') + '</b>', normal_style),
-            Paragraph('<b>' + messages.get('report.column.pi', 'PI') + '</b>', normal_style)
-        ]]
+        column_keys, column_widths_cm = daily_report_table_spec(include_signatures)
+        column_labels = {
+            'date': messages.get('report.column.date', 'Date'),
+            'daily_data': messages.get('report.column.daily_data', 'Daily Data'),
+            'scores': messages.get('report.column.scores', 'Scores'),
+            'signatures': messages.get('report.column.signatures', 'Signatures'),
+            'pi': messages.get('report.column.pi', 'PI'),
+        }
+        table_header = [
+            Paragraph('<b>' + column_labels[key] + '</b>', normal_style)
+            for key in column_keys
+        ]
+        table_data = [table_header]
         
         for day_entry in daily_data:
             # Convert date from day number to dd/mm/yy format
@@ -2497,25 +2529,35 @@ def create_monthly_report(header_info: dict, daily_data: list, month: int, year:
             
             daily_text = day_entry['daily_data'] or ''
             scores = day_entry['scores'] or ''
-            signatures = day_entry['signatures'] or ''
             # Clean HTML: Convert inline styles to ReportLab format (includes curly brace escaping)
             daily_text = _clean_html_for_reportlab(daily_text)
             scores = _clean_html_for_reportlab(scores)
-            signatures = _clean_html_for_reportlab(signatures)
             
             # Create paragraphs for wrapping text
             daily_para = Paragraph(daily_text if daily_text else '-', normal_style)
             scores_para = Paragraph(scores if scores else '-', normal_style)
-            sigs_para = Paragraph(signatures if signatures else '-', normal_style)
             pi_para = Paragraph('-', normal_style)  # Empty PI column
             
-            row = [date_val, daily_para, scores_para, sigs_para, pi_para]
+            row_values = {
+                'date': date_val,
+                'daily_data': daily_para,
+                'scores': scores_para,
+                'pi': pi_para,
+            }
+            if include_signatures:
+                signatures = _clean_html_for_reportlab(
+                    day_entry.get('signatures') or ''
+                )
+                row_values['signatures'] = Paragraph(
+                    signatures if signatures else '-', normal_style
+                )
+            row = [row_values[key] for key in column_keys]
             table_data.append(row)
         
         # Create the table with appropriate column widths
-        # Date: 1.5cm, Daily Data: 15cm, Scores: 2cm, Signatures: 4cm, PI: 1.5cm (slim)
+        # Without signatures, Daily Data receives the released 4 cm.
         # splitByRow=1 allows rows to split across pages if needed
-        col_widths = [1.5*cm, 15*cm, 2*cm, 4*cm, 1.5*cm]
+        col_widths = [width * cm for width in column_widths_cm]
         data_table = Table(table_data, colWidths=col_widths, repeatRows=1, splitByRow=1)
         
         # Build table style - smaller font for better fitting
