@@ -317,7 +317,7 @@ normal `user` account, but still receive the `vet`, `keeper`, `manager`, or
 | --- | --- | --- |
 | ![Lord](icons/job_lord.png) | `lord` | IT administrative role for global settings and installation, with unlimited rights. |
 | ![Master](icons/job_master.png) | `master` | Animal-facility administrative role for user management and fine-tuning ProgTrack to the facility's needs. |
-| ![AWO](icons/job_AWO.png) | Animal Welfare Officer | Animal Welfare Officer role for animal-welfare-related work with extended access. The Manage Users overview shows the compact label `AWO`. |
+| ![AWO](icons/job_AWO.png) | `animal welfare officer` | Animal Welfare Officer role for animal-welfare-related work with extended access. The Manage Users overview shows the compact label `AWO`. |
 | ![User](icons/information.png) | `user` | Standard logged-in account. Effective permissions come from the user baseline, assigned jobs, direct grants, and revoked permissions. |
 | ![Guest](icons/question.png) | `guest` | Read-oriented fallback account. Guest uses a fixed guest permission baseline; direct grants and revocations are ignored. |
 
