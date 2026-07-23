@@ -110,6 +110,7 @@ For real shared use, change the default passwords before entering sensitive data
 | `Manager` | Dr. Manager Plansdottir | `user` | `manager` |
 | `Keeper` | Keeper Breedsson | `user` | `keeper` |
 | `Tester` | Tester Aitisson | `user` | `tester` |
+| `Veti` | Dr. Veterinary Medicinsdottir | `AWO` (`animal_welfare_officer`) | `vet` |
 
 The portable release already contains Python and the required runtime
 libraries. Users of the release bundle do **not** need to install Python,
@@ -314,16 +315,16 @@ normal `user` account, but still receive the `vet`, `keeper`, `manager`, or
 
 | Icon | Role | Meaning |
 | --- | --- | --- |
-| ![Lord](icons/job_lord.png) | `lord` | Highest authority. Lord has the wildcard permission and can perform all actions, including lord-exclusive actions such as creating users and controlling Master Track itself. |
-| ![Master](icons/job_master.png) | `master` | Administrative account with almost all known permissions. Master can manage most users, jobs, permissions, audits, and application workflows, but deliberately lacks the lord-exclusive permissions to create new user accounts and to disable user permission management plugin. |
-| ![AWO](icons/job_AWO.png) | `AWO` (`animal_welfare_officer` internally) | Dedicated Animal Welfare Officer account role used for IACUC/project welfare assignments. It starts from the normal user permission baseline; institution-wide animal/project visibility or veterinary capabilities must be granted explicitly or through an assigned job and do not imply Master privileges. The Manage Users overview shows the compact label `AWO`. |
+| ![Lord](icons/job_lord.png) | `lord` | IT administrative role for global settings and installation, with unlimited rights. |
+| ![Master](icons/job_master.png) | `master` | Animal-facility administrative role for user management and fine-tuning ProgTrack to the facility's needs. |
+| ![AWO](icons/job_AWO.png) | `AWO` (`animal_welfare_officer` internally) | Animal Welfare Officer role for animal-welfare-related work with extended access. The Manage Users overview shows the compact label `AWO`. |
 | ![User](icons/information.png) | `user` | Standard logged-in account. Effective permissions come from the user baseline, assigned jobs, direct grants, and revoked permissions. |
 | ![Guest](icons/question.png) | `guest` | Read-oriented fallback account. Guest uses a fixed guest permission baseline; direct grants and revocations are ignored. |
 
 **Lord vs Master in short:**  
-`lord` is the owner-level account and always has every permission. `master` is
-the daily administration account: powerful enough to manage the system, but
-kept below `lord` for user creation and Master Track control.
+Use `lord` for IT administration, global settings, and installation. It has
+unlimited rights. Use `master` for animal-facility administration, user
+management, and adapting ProgTrack to the facility's workflows and conventions.
 
 ### 🧰 Current Job Bundles
 

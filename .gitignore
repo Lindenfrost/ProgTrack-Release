@@ -23,5 +23,8 @@ outputs/
 .ruff_cache/
 *.bak
 Plugins/Projects_Track/project_assignment_cache/
+# The encrypted starter-user database is intentional release data. Keep it
+# versioned even though Master Track also writes to it at runtime.
+!Plugins/Master_Track/users.enc
 Plugins/Master_Track/sessions/*.json
 Plugins/Medi_Track/medi_track/Thranduil _ Callitrix jacchus _ 11.02.2021/
