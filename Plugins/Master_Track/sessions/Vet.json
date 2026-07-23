@@ -23,5 +23,9 @@
   "display_chk_events": true,
   "display_chk_events_offspring": true,
   "display_chk_events_breeding": true,
-  "display_chk_events_experimental": true
+  "display_chk_events_experimental": true,
+  "project_visibility_cache": {
+    "dirty": false,
+    "projects": []
+  }
 }
