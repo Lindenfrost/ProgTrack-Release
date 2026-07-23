@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,9 @@ class SessionManager:
     def _path(self, username: str) -> str:
         safe = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in username)
         return os.path.join(self.sessions_dir, f"{safe}.json")
+
+    def exists(self, username: str) -> bool:
+        return os.path.isfile(self._path(username))
 
     def load(self, username: str) -> Dict[str, Any]:
         path = self._path(username)

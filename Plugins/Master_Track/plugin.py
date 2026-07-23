@@ -23,10 +23,8 @@ from .permissions import (
     ALL_PERMISSIONS,
     PERM_MASTER_CREATE_USERS,
     ROLE_BASELINES,
-    DEFAULT_JOB_BUNDLES,
     can as _perm_can,
     resolve_effective_permissions,
-    get_permission_label,
 )
 from .session import SessionManager
 from Plugins.core.platform_helpers import open_local_path
@@ -297,13 +295,23 @@ class MasterTrackPlugin:
         for username in usernames or []:
             if not username:
                 continue
-            data = self.session_mgr.load(username)
+            user = self.user_db.get_user(str(username))
+            if not user:
+                logger.warning(
+                    "Skipped project visibility invalidation for unknown user %r",
+                    username,
+                )
+                continue
+            canonical_username = str(user.get("username") or "").strip()
+            if not canonical_username or not self.session_mgr.exists(canonical_username):
+                continue
+            data = self.session_mgr.load(canonical_username)
             cache = data.get("project_visibility_cache")
             if not isinstance(cache, dict):
                 cache = {"projects": []}
             cache["dirty"] = True
             data["project_visibility_cache"] = cache
-            self.session_mgr.save(username, data)
+            self.session_mgr.save(canonical_username, data)
 
     # ------------------------------------------------------------------
     # Login / Logout

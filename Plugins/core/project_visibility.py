@@ -12,6 +12,23 @@ from Plugins.core.animal_identity import animal_base_name
 
 ANIMAL_WELFARE_ROLE = "animal_welfare_officer"
 UNRESTRICTED_PROJECT_ROLES = {"lord", "master"}
+PROJECT_LOGIN_FIELDS = {
+    "summary": (
+        "contact1_login",
+        "contact2_login",
+        "contacts_other_logins",
+    ),
+    "iacuc": (
+        "pi_login",
+        "di_login",
+        "welfare_login",
+    ),
+    "assoc_users": (
+        "applicant_login",
+        "planning_login",
+        "staff_logins",
+    ),
+}
 
 
 def _clean(value: Any) -> str:
@@ -23,10 +40,10 @@ def _collect_logins(value: Any, result: set[str]) -> None:
         login = value.strip()
         if login:
             result.add(login.lower())
-    elif isinstance(value, Mapping):
-        for nested in value.values():
-            _collect_logins(nested, result)
-    elif isinstance(value, Iterable) and not isinstance(value, (bytes, bytearray)):
+    elif (
+        isinstance(value, Iterable)
+        and not isinstance(value, (bytes, bytearray, Mapping))
+    ):
         for nested in value:
             _collect_logins(nested, result)
 
@@ -34,10 +51,11 @@ def _collect_logins(value: Any, result: set[str]) -> None:
 def associated_usernames(project_record: Mapping[str, Any]) -> set[str]:
     """Return normalized usernames associated with one Project Track record."""
     usernames: set[str] = set()
-    for key in ("assoc_users", "summary", "iacuc"):
-        section = project_record.get(key, {})
+    for section_name, field_names in PROJECT_LOGIN_FIELDS.items():
+        section = project_record.get(section_name, {})
         if isinstance(section, Mapping):
-            _collect_logins(section, usernames)
+            for field_name in field_names:
+                _collect_logins(section.get(field_name), usernames)
     return usernames
 
 
