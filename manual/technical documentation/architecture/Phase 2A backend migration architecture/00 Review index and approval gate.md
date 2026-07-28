@@ -101,7 +101,9 @@ The target also requires:
    with the recorded IPID, deployment-profile, storage, branding, and
    measurement-import contracts. Historical comments were retained.
 
-Issue #48 formally blocks Issues #49, #50, #51, #52, and #53.
+Issue #48 formally blocked Issues #49, #50, #51, #52, and #53 until the
+approved package was published. It was closed as completed on 2026-07-28;
+Issues #49–#53 are now unblocked.
 
 Completed before approval:
 
@@ -140,4 +142,6 @@ external/approval actions remain.
 
 Final reviewer approval was granted on 2026-07-28 after the concrete
 path/callable reconciliation and clean-baseline verifier passed. The approved
-package is ready for versioned publication and Issue #48 closure.
+package was published in repository commit `bb227f5` and Issue #48 was closed
+as completed. Closure evidence:
+https://github.com/Lindenfrost/ProgTrack-Release/issues/48#issuecomment-5105002497

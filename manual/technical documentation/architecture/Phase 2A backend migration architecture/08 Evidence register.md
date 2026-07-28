@@ -190,7 +190,7 @@ The historical managed-payload table below intentionally retains the deleted
 | #15 | closed Phase 1 history is valid, but post-creation identity editing and import-created animals must receive a Phase 2 superseding note |
 | #16 | grantable permission catalogue and internal-only distinction remain binding |
 | #34 | example workbooks remain measurement templates for existing animals only; mixed fixtures belong to #53 validation |
-| #48 | remains open and blocks #49–#53; historical comments require a newer correction, not rewriting |
+| #48 | closed as completed after final approval and versioned publication; #49–#53 are unblocked |
 | #49 | owns both profile runtime paths plus managed config/document roots |
 | #50 | currently requires synchronization to four-block IPID, typed IDs, two supported profiles, and #53 service separation |
 | #51 | packaged icons remain resources, not managed payload/interchange |
@@ -211,9 +211,12 @@ Published synchronization completed on 2026-07-28:
   `issuecomment-5104678946`, and its local/GitHub body was resynchronized;
 - Issue #48 received the final clean-baseline evidence comment
   `issuecomment-5104741156`;
+- the approved architecture was published in repository commit `bb227f5`;
+- Issue #48 received the final completion evidence comment
+  `issuecomment-5105002497` and was closed as completed;
 - no historical comment was edited or deleted;
-- #48 remains open in milestone `0.2.0`; #49–#53 remain open in milestone
-  `0.2.1`.
+- #48 is closed in milestone `0.2.0`; #49–#53 remain open and unblocked in
+  milestone `0.2.1`.
 
 ## Repeatable read-only verification contract
 
