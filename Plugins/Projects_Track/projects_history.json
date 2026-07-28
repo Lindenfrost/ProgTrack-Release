@@ -173,16 +173,6 @@
           "previous_experimental_snapshot": []
         },
         {
-          "ipid": "Lindir | Papio hamadryas anubis | 02.02.2024",
-          "name": "Lindir",
-          "status": "active",
-          "date_entered": "06.07.2026",
-          "date_left": null,
-          "last_severity": null,
-          "previous_project_snapshot": [],
-          "previous_experimental_snapshot": []
-        },
-        {
           "ipid": "Lindir | Callitrix jacchus | 03.02.2026",
           "name": "Lindir",
           "status": "active",
@@ -221,18 +211,6 @@
     "Anode": {
       "archived": false,
       "animals": [
-        {
-          "name": "Andy",
-          "status": "former",
-          "date_entered": "16.06.2026",
-          "date_left": "16.06.2026",
-          "last_severity": "SV2",
-          "previous_project_snapshot": [],
-          "previous_experimental_snapshot": [],
-          "previous_in_experiment": true,
-          "had_in_experiment": true,
-          "ipid": "Andy | Unknown species | 02.01.2011"
-        },
         {
           "name": "Cindy",
           "status": "former",
@@ -281,43 +259,6 @@
     "Zucht": {
       "archived": false,
       "animals": [
-        {
-          "name": "Andy",
-          "status": "former",
-          "date_entered": "17.06.2026",
-          "date_left": "22.07.2026",
-          "last_severity": null,
-          "previous_project_snapshot": [
-            {
-              "name": "Andy",
-              "status": "former",
-              "date_entered": "16.06.2026",
-              "date_left": "16.06.2026",
-              "last_severity": "SV2",
-              "previous_project_snapshot": [],
-              "previous_experimental_snapshot": [],
-              "previous_in_experiment": true,
-              "had_in_experiment": true,
-              "project": "Anode"
-            }
-          ],
-          "previous_experimental_snapshot": [
-            {
-              "name": "Andy",
-              "status": "former",
-              "date_entered": "16.06.2026",
-              "date_left": "16.06.2026",
-              "last_severity": "SV2",
-              "previous_project_snapshot": [],
-              "previous_experimental_snapshot": [],
-              "previous_in_experiment": true,
-              "had_in_experiment": true,
-              "project": "Anode"
-            }
-          ],
-          "ipid": "Andy | Unknown species | 02.01.2011",
-          "previous_in_experiment": false
-        },
         {
           "ipid": "Azog | Papio hamadryas anubis | 04.04.2010",
           "name": "Azog",
