@@ -1,5 +1,16 @@
 # ProgTrack Launcher Versions
 
+## 0.1.2
+
+Date: 2026-07-29
+
+- Uses neutral public release metadata without implementation details.
+- Release archives are assembled from a clean PyInstaller OneDir runtime so
+  native Python extension modules are not omitted by Git ignore rules.
+- Embedded Windows version metadata:
+  - FileVersion: `0.1.2.0`
+  - ProductVersion: `0.1.2`
+
 ## 0.1.1-log-menu
 
 Date: 2026-06-13

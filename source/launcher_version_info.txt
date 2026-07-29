@@ -1,8 +1,8 @@
 # UTF-8
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(0, 1, 1, 0),
-    prodvers=(0, 1, 1, 0),
+    filevers=(0, 1, 2, 0),
+    prodvers=(0, 1, 2, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -16,13 +16,13 @@ VSVersionInfo(
         '040904B0',
         [
           StringStruct('CompanyName', 'Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH'),
-          StringStruct('FileDescription', 'ProgTrack Launcher - updated log-menu variant'),
-          StringStruct('FileVersion', '0.1.1.0'),
+          StringStruct('FileDescription', 'ProgTrack Launcher'),
+          StringStruct('FileVersion', '0.1.2.0'),
           StringStruct('InternalName', 'Launcher'),
           StringStruct('OriginalFilename', 'Launcher.exe'),
-          StringStruct('ProductName', 'ProgTrack Launcher'),
-          StringStruct('ProductVersion', '0.1.1-log-menu'),
-          StringStruct('Comments', 'Updated launcher variant with central logs folder support.')
+          StringStruct('ProductName', 'ProgTrack'),
+          StringStruct('ProductVersion', '0.1.2'),
+          StringStruct('Comments', 'Portable launcher for ProgTrack.')
         ]
       )
     ]),

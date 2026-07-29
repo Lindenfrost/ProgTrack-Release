@@ -22,6 +22,10 @@ as part of the ProgTrack distribution under its terms.
   launcher executable.
 - `build_launcher_small.bat` — Windows batch script to invoke the PyInstaller build.
 - `hiddenimports.txt` — List of hidden imports required by the PyInstaller build.
+- `frozen_runtime_smoke.py` — Isolated import and SQLite smoke test executed
+  through the frozen launcher.
+- `package_release.ps1` — Validated release assembler that combines committed
+  application payload with a clean PyInstaller OneDir runtime.
 - `progtrack_icon.ico` — Application icon used for the compiled launcher.
 
 ## Disclaimer

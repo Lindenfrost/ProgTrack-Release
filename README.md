@@ -110,7 +110,7 @@ For real shared use, change the default passwords before entering sensitive data
 | `Manager` | Dr. Manager Plansdottir | `user` | `manager` |
 | `Keeper` | Keeper Breedsson | `user` | `keeper` |
 | `Tester` | Tester Aitisson | `user` | `tester` |
-| `Veti` | Dr. Veterinary Medicinsdottir | `AWO` (`animal_welfare_officer`) | `vet` |
+| `Veti` | Dr. Veterinary Medicinsdottir | `AWO` | `vet` |
 
 The portable release already contains Python and the required runtime
 libraries. Users of the release bundle do **not** need to install Python,

@@ -6,7 +6,7 @@ cd /d "%~dp0"
 set "PROJECT_DIR=%CD%"
 set "SPEC_FILE=%PROJECT_DIR%\launcher_small.spec"
 set "DIST_DIR=%PROJECT_DIR%\dist\ProgTrack_small"
-set "LOCAL_ENV=%PROJECT_DIR%\.build_env_py312"
+set "LOCAL_ENV=%PROJECT_DIR%\.build_env_py313"
 set "BUILD_TEMP=%PROJECT_DIR%\.build_tmp"
 set "PYTHON_EXE="
 
@@ -32,16 +32,16 @@ if exist "%LOCAL_ENV%\Scripts\python.exe" set "PYTHON_EXE=%LOCAL_ENV%\Scripts\py
 if not defined PYTHON_EXE (
     echo No existing build environment found. Creating local venv: %LOCAL_ENV%
     set "BOOTSTRAP_PY="
-    py -3.10 -c "import sys" >nul 2>nul && set "BOOTSTRAP_PY=py -3.10"
-    if not defined BOOTSTRAP_PY py -3 -c "import sys" >nul 2>nul && set "BOOTSTRAP_PY=py -3"
+    py -3.13 -c "import sys" >nul 2>nul && set "BOOTSTRAP_PY=py -3.13"
+    if not defined BOOTSTRAP_PY py -3 -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul && set "BOOTSTRAP_PY=py -3"
     if not defined BOOTSTRAP_PY (
         if exist "%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" (
-            "%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)" >nul 2>nul && set "BOOTSTRAP_PY=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+            "%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul && set "BOOTSTRAP_PY=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
         )
     )
-    if not defined BOOTSTRAP_PY python -c "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 13) else 1)" >nul 2>nul && set "BOOTSTRAP_PY=python"
+    if not defined BOOTSTRAP_PY python -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul && set "BOOTSTRAP_PY=python"
     if not defined BOOTSTRAP_PY (
-        echo ERROR: No usable Python 3.10, 3.11, 3.12, or 3.13 found.
+        echo ERROR: Python 3.13 is required for this release build.
         exit /b 1
     )
     !BOOTSTRAP_PY! -m venv "%LOCAL_ENV%"
@@ -56,9 +56,9 @@ if not defined PYTHON_EXE (
 )
 
 echo Using Python: %PYTHON_EXE%
-"%PYTHON_EXE%" -c "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 13) else 1)"
+"%PYTHON_EXE%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)"
 if errorlevel 1 (
-    echo ERROR: Local build environment must use Python 3.10, 3.11, 3.12, or 3.13. Remove %LOCAL_ENV% and rebuild.
+    echo ERROR: Local build environment must use Python 3.13. Remove %LOCAL_ENV% and rebuild.
     exit /b 1
 )
 "%PYTHON_EXE%" -m ensurepip --upgrade >nul 2>nul

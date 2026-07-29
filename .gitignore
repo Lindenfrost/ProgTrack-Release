@@ -1,4 +1,6 @@
 __pycache__/
+# Native `.pyd` files are generated PyInstaller runtime artifacts too. Release
+# ZIPs must be assembled with `source/package_release.ps1`, not `git archive`.
 *.py[cod]
 *.log
 launcher_error.log
