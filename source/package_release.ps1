@@ -121,6 +121,14 @@ Expand-Archive -LiteralPath $payloadArchive -DestinationPath $packageRoot -Force
 Copy-Item -LiteralPath (Join-Path $runtime "Launcher.exe") -Destination $packageRoot
 Copy-Item -LiteralPath (Join-Path $runtime "_internal") -Destination $packageRoot -Recurse
 
+foreach ($excludedRuntimePath in @(
+    (Join-Path $packageRoot "_internal\logs"),
+    (Join-Path $packageRoot "_internal\matplotlib_cache"),
+    (Join-Path $packageRoot "_internal\PyQt6\Qt6\plugins\multimedia\ffmpegmediaplugin.dll")
+)) {
+    Remove-GeneratedPath -Path $excludedRuntimePath
+}
+
 if (-not (Test-Path -LiteralPath (Join-Path $packageRoot "Plugins\Master_Track\users.enc"))) {
     throw "The committed starter-user database is missing from the release package."
 }
@@ -150,9 +158,11 @@ foreach ($requiredEntry in @(
     }
 }
 if ($archiveEntries | Where-Object {
-    $_ -match "^$([regex]::Escape($releaseName))/(tests|tmp|outputs|source)/"
+    $_ -match "^$([regex]::Escape($releaseName))/(tests|tmp|outputs|source)/" -or
+    $_ -match "^$([regex]::Escape($releaseName))/_internal/(logs|matplotlib_cache)/" -or
+    $_ -eq "$releaseName/_internal/PyQt6/Qt6/plugins/multimedia/ffmpegmediaplugin.dll"
 }) {
-    throw "Release archive contains an excluded development directory."
+    throw "Release archive contains an excluded development/runtime artifact."
 }
 
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseArchive).Hash.ToLowerInvariant()
