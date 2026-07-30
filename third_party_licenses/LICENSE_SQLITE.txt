@@ -1,0 +1,7 @@
+SQLite public-domain notice
+
+SQLite is dedicated to the public domain by its authors. It is not distributed
+under a conventional copyright license.
+
+Official copyright and public-domain information:
+https://www.sqlite.org/copyright.html

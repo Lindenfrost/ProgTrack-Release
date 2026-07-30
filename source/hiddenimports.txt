@@ -11,6 +11,9 @@ PyQt6.QtPrintSupport
 PyQt6.QtSvg
 PyQt6.QtSvgWidgets
 PyQt6.QtWidgets
+ctypes
+sqlite3
+ssl
 matplotlib.artist
 matplotlib.backends.backend_qt
 matplotlib.backends.backend_qt5agg
@@ -29,6 +32,7 @@ matplotlib.transforms
 matplotlib.widgets
 openpyxl
 pandas
+pyqtgraph
 reportlab
 reportlab.pdfbase.ttfonts
 reportlab.lib

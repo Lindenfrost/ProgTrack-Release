@@ -2,8 +2,8 @@
 """
 Smaller OneDir PyInstaller spec for ProgTrack.
 
-This keeps the ProgTrack script and plugins external, but includes the Python
-runtime and the libraries needed by the discovered ProgTrack.v.*.py files.
+This keeps the ProgTrack script and plugins external. Runtime dependencies are
+declared in hiddenimports.txt and verified through frozen_runtime_smoke.py.
 """
 
 import importlib.util
@@ -14,11 +14,6 @@ from PyInstaller.utils.hooks import collect_data_files
 
 project_dir = Path(SPECPATH).resolve()
 launcher_script = project_dir / "launcher.py"
-payload_candidates = [
-    project_dir / "payload",
-    project_dir / "dist" / "ProgTrack",
-]
-payload_dir = next((path for path in payload_candidates if path.exists()), None)
 icon_candidates = [
     project_dir / "progtrack_icon.ico",
     project_dir / "icons" / "progtrack_icon.ico",
@@ -52,18 +47,6 @@ def collect_tree_files(source_dir, target_dir):
 
 
 analysis_scripts = [str(launcher_script)]
-if payload_dir:
-    analysis_scripts.extend(str(path) for path in sorted(payload_dir.glob("ProgTrack.v.*.py")))
-    plugins_dir = payload_dir / "Plugins"
-    if plugins_dir.exists():
-        analysis_scripts.extend(
-            str(path)
-            for path in sorted(plugins_dir.rglob("*.py"))
-            if "__pycache__" not in path.parts
-            and not any("archive" in part.lower() for part in path.parts)
-            and not path.name.lower().startswith("working_")
-            and "working" not in path.name.lower()
-        )
 
 
 hiddenimports_file = project_dir / "hiddenimports.txt"
@@ -204,6 +187,7 @@ excluded_binary_fragments = (
     "reportlab/graphics/samples",
     "reportlab\\graphics\\test",
     "reportlab/graphics/test",
+    "ffmpegmediaplugin.dll",
 )
 
 

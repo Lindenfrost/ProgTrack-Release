@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 build/
 dist/
+payload/
+release/
 .build_env/
 .build_tmp/
 matplotlib_cache/

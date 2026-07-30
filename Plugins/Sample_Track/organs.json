@@ -1,28 +1,5 @@
 [
   {
-    "animal_name": "Donor | callitrix jacchus | 01.01.2018",
-    "species": "cj",
-    "id": "001",
-    "sex": "Male",
-    "birth_date": "01.01.2018",
-    "death_date": "01.01.2026",
-    "grosshirn_checked": true,
-    "grosshirn_num_aliquots": 1,
-    "grosshirn_aliquot_locations": "[{\"unit\": \"\", \"storage\": \"\"}]",
-    "grosshirn_comment": "",
-    "grosshirn_warning": false,
-    "mittelhirn_checked": true,
-    "mittelhirn_num_aliquots": 1,
-    "mittelhirn_aliquot_locations": "[{\"unit\": \"\", \"storage\": \"\"}]",
-    "mittelhirn_comment": "",
-    "mittelhirn_warning": false,
-    "kleinhirn_checked": true,
-    "kleinhirn_num_aliquots": 3,
-    "kleinhirn_aliquot_locations": "[{\"unit\": \"PSR\", \"storage\": \"\"}, {\"unit\": \"HUS\", \"storage\": \"\"}, {\"unit\": \"\", \"storage\": \"\"}]",
-    "kleinhirn_comment": "",
-    "kleinhirn_warning": false
-  },
-  {
     "animal_name": "Elrond | Callitrix jacchus | 04.02.2012",
     "species": "Callitrix jacchus",
     "id": "cj_99652953",

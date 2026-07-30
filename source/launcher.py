@@ -3,7 +3,7 @@
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack Launcher 0.1.1-log-menu
+# Part of: ProgTrack Launcher 0.1.2
 # Module: Portable Windows launcher for external ProgTrack payload scripts.
 # Default target: first ProgTrack.v.*.py script in the launcher directory.
 
@@ -20,8 +20,8 @@ from datetime import datetime
 from pathlib import Path
 
 DEFAULT_SCRIPT_PATTERN = "ProgTrack.v.*.py"
-LAUNCHER_VERSION = "0.1.1-log-menu"
-LAUNCHER_BUILD_NOTE = "Updated launcher variant with central logs folder support."
+LAUNCHER_VERSION = "0.1.2"
+LAUNCHER_BUILD_NOTE = "Portable launcher for ProgTrack."
 LOG_DIR_NAME = "logs"
 ERROR_LOG_NAME = "launcher_error.log"
 FAULT_LOG_NAME = "launcher_fault.log"
