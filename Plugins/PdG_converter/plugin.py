@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime
 
 from Plugins.core.animal_identity import animal_base_name
+from Plugins.core.backend_store import BackendJsonStore
 
 from .converter import PdGConverter, get_paired_data
 
@@ -32,6 +33,9 @@ class PdGConverterPlugin:
         
         # Storage file for model parameters
         self.models_file = self.data_dir / "models.json"
+        self._models_store = BackendJsonStore(
+            app.backend, "measurements", "pdg-models"
+        )
     
     def get_parameters(self, animal_name):
         """Read conversion parameters from storage.
@@ -42,15 +46,8 @@ class PdGConverterPlugin:
         Returns:
             Dict with model parameters or None if not found
         """
-        if not self.models_file.exists():
-            return None
-        
-        try:
-            with open(self.models_file, 'r') as f:
-                all_models = json.load(f)
-            return all_models.get(animal_name)
-        except (json.JSONDecodeError, IOError):
-            return None
+        all_models = self._models_store.load({})
+        return all_models.get(animal_name) if isinstance(all_models, dict) else None
     
     def save_parameters(self, animal_name, params):
         """Save conversion parameters to storage.
@@ -59,13 +56,7 @@ class PdGConverterPlugin:
             animal_name: Name of the animal
             params: Model parameters dict
         """
-        all_models = {}
-        if self.models_file.exists():
-            try:
-                with open(self.models_file, 'r') as f:
-                    all_models = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                all_models = {}
+        all_models = self._models_store.load({})
         
         if params is None:
             # Remove entry if params is None
@@ -79,8 +70,7 @@ class PdGConverterPlugin:
             )
             all_models[animal_name] = stored_params
         
-        with open(self.models_file, 'w') as f:
-            json.dump(all_models, f, indent=2)
+        self._models_store.save(all_models)
     
     def fit_animal_model(self, animal_name):
         """Fit conversion model for an animal using paired data.

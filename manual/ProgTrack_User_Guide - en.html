@@ -202,24 +202,16 @@
   </ul>
   <div class="hint"><strong>Tip:</strong> If the application does not start, check <code>launcher_error.log</code> and <code>launcher_fault.log</code> in the launcher folder.</div>
   
-  <h3>2.2 Data and settings files</h3>
-  <p>ProgTrack stores data in JSON files in the program or working directory:</p>
+  <h3>2.2 Backend profiles and managed data</h3>
+  <p>ProgTrack uses one shared data-access layer with two deployment profiles:</p>
   <table class="basic">
-    <tr><th>File</th><th>Purpose</th></tr>
-    <tr><td><code>progtrack_daten.json</code></td><td>Main animal and
-      measurement database.</td></tr>
-    <tr><td><code>progtrack_settings.json</code></td><td>User interface and
-      plotting settings (language, colors, styles, etc.).</td></tr>
+    <tr><th>Profile</th><th>Use</th></tr>
+    <tr><td><strong>Standalone SQLite</strong></td><td>One local workstation or testing. The writable database must stay on local, non-synchronized storage.</td></tr>
+    <tr><td><strong>Shared PostgreSQL</strong></td><td>Network and multi-workstation facilities. Users, animals, projects, plugin records, locks and configuration share the same backend.</td></tr>
   </table>
-
-  <div class="warning">
-    <strong>Do not edit these JSON files by hand</strong> unless you know
-    exactly what you are doing. Use the ProgTrack UI instead.
-  </div>
-
-  <div class="hint">
-    <strong>Tip:</strong> For safe manual backups, close ProgTrack and then copy <code>progtrack_daten.json</code>, <code>progtrack_settings.json</code> or the whole ProgTrack folder to a protected location.
-  </div>
+  <p>PDFs and other documents are kept in managed storage belonging to the selected backend. The database retains ownership, safe-path and checksum metadata. Installed/read-only application folders use user-profile data directories on Windows and XDG data/config/cache/state roots on Linux.</p>
+  <div class="warning"><strong>Do not place Standalone SQLite on a network drive or cloud-synchronized folder.</strong> Do not copy a live database and managed files separately; use the complete interchange/backup workflow.</div>
+  <p>A clean example installation is initialized from the single deterministic, entirely fictional package under <code>Resources/Seed</code>. Legacy JSON files are not imported during backend cutover.</p>
 
   <h3>2.3 Sample Excel files</h3>
   <p>
@@ -340,9 +332,9 @@
   <h3>5.3 Importing from Excel</h3>
   <p>Excel imports are based on exact column names. Use the import button that matches the data type and clean invalid dates, empty names, or non-numeric values before importing.</p>
   <table class="basic"><tr><th>Button</th><th>Required columns</th></tr><tr><td><strong>📈 Load Blood Values</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Load Urine Values</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Load Weights</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Load Sperm Values</strong></td><td><code>Datum</code>, <code>Name</code>, <code>Animal ID</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
-  <p>After selecting a valid file, ProgTrack opens a read-only preview <strong>before writing any animals or measurements</strong>. It shows the total number of rows, all imported columns and up to the first 200 rows. The additional Animal status column marks each preview row as Existing animal or New animal; new animals are highlighted.</p>
-  <p>Check Animal ID, Name, dates, Sample ID and measurement values in this preview. Choose <strong>Cancel</strong> to leave the database unchanged, or <strong>Import</strong> to continue. Identity dialogs for unknown animals appear only after the preview has been accepted.</p>
-  <p><code>Animal ID</code> is used to match existing animals. The standard templates deliberately omit species and birth date. If an unknown Animal ID is detected, an additional dialog requires the animal's species and complete birth date before any data can be imported.</p>
+  <p>After selecting a valid file, ProgTrack opens a read-only preview <strong>before writing any animals or measurements</strong>. It reports counts for the complete file, displays up to the first 200 rows, and classifies each row as existing, unknown, archived, ambiguous, or invalid.</p>
+  <p>Check Animal ID, Name, dates, Sample ID and measurement values. Choose <strong>Cancel</strong> to leave the backend unchanged. Choosing <strong>Import</strong> writes only permitted rows for existing active animals.</p>
+  <p><code>Animal ID</code> is authoritative for matching. Unknown animals remain visible as skipped rows and trigger a warning to ask a Manager to create them first. Measurement import never creates an animal and never opens a species/birth-date dialog.</p>
   <p><code>Sample ID</code> is a separate template column for the individual sample and may remain empty when no sample number exists. It is never a replacement for <code>Animal ID</code>.</p>
 
   
@@ -463,18 +455,13 @@
   <h2 id="saving-export">8. Saving &amp; exporting</h2>
 
   <h3>8.1 Saving the database</h3>
-  <p>
-    Use <strong>File → Save Database</strong> to explicitly write the
-    current state to <code>progtrack_daten.json</code>. Automatic saving may
-    also occur during certain operations, but an explicit save is recommended
-    after larger editing sessions.
-  </p>
+  <p>Use <strong>File → Save Database</strong> to persist the current state through the active backend transaction. Standalone and Shared profiles use the same application service; plugins do not write operational JSON beside their code.</p>
+  <div class="hint"><strong>Tip:</strong> Use the complete interchange/backup workflow before bulk operations so database records and managed documents stay together.</div>
 
-  <div class="hint">
-    <strong>Tip:</strong> Get into the habit of saving just before bulk imports or complex plugin operations (for example the OP Planner). If anything unexpected happens, you can roll back to the last known-good JSON backup.
-  </div>
+  <h3>8.2 Institution branding for PDFs</h3>
+  <p>Lord, Master, and Manager users open <strong>Settings → Institution branding</strong>, enter the institution name, choose an optional PNG/JPEG logo, and enable the header. The previewed configuration is stored with the backend. Every generated PDF page receives a compact header; oversized logos are reduced while preserving their aspect ratio. A missing logo produces a valid name-only header.</p>
 
-  <h3>8.2 Excel export</h3>
+  <h3>8.3 Excel export</h3>
   <p>
     <strong>File → Export Reports (.xlsx)</strong> opens a dialog where you:
   </p>
@@ -556,8 +543,7 @@
     <li>Avoid editing very large Excel files at once; consider importing data
       in batches.</li>
     <li>Use <strong>File → Save Database</strong> regularly.</li>
-    <li>Back up <code>progtrack_daten.json</code> periodically via your normal
-      file backup procedures.</li>
+    <li>Back up the database and managed documents together through the supported backend workflow.</li>
   </ul>
   <h3>10.4 Technical logs</h3>
   <p>

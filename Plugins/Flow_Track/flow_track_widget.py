@@ -16,6 +16,8 @@ from typing import Dict, List, Optional, Any
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_roles import canonical_role_value
 from Plugins.core.platform_helpers import default_save_path
+from Plugins.core.backend_store import BackendJsonStore
+from Plugins.core.ui_icons import apply_icon
 
 # Set up paths
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -69,6 +71,12 @@ class FlowTrackWidget:
         # Store parent app reference for LazyLoader access
         self.parent_app = parent_app
         self.messages = messages or {}
+        self._data_store = BackendJsonStore(
+            parent_app.backend, "reproduction", "flow"
+        )
+        self._settings_store = BackendJsonStore(
+            parent_app.backend, "configuration", "flow-track"
+        )
         
         # Access Qt modules via parent_app LazyLoader
         QtWidgets = parent_app.QtWidgets
@@ -225,7 +233,8 @@ class FlowTrackWidget:
         toolbar_layout.addStretch()
         
         # Fit Automatically button (store reference for language updates)
-        self.fit_btn = QtWidgets.QPushButton("🔄")
+        self.fit_btn = QtWidgets.QPushButton()
+        apply_icon(self.fit_btn, "action.refresh", fallback="Refresh")
         self.fit_btn.setToolTip(self.messages.get("flow_track.button.fit_auto", "Fit Automatically"))
         self.fit_btn.clicked.connect(self._fit_automatically)
         toolbar_layout.addWidget(self.fit_btn)
@@ -369,26 +378,9 @@ class FlowTrackWidget:
     
     def _load_settings(self):
         """Load plugin settings from flowtrack_config.json (Flow_Track 3.0 schema)."""
-        data_dir = Path(PLUGIN_DIR).resolve()
-        
-        config_path = data_dir / 'flowtrack_config.json'
-        
-        if config_path.exists():
-            try:
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                
-                # Extract settings and ui_preferences from v3.0 schema
-                self.settings = config.get('settings', self._get_default_settings())
-                self.ui_preferences = config.get('ui_preferences', {})
-                logger.info("Settings loaded from flowtrack_config.json")
-            except Exception as e:
-                logger.error(f"Failed to load settings: {e}")
-                self.settings = self._get_default_settings()
-                self.ui_preferences = {}
-        else:
-            self.settings = self._get_default_settings()
-            self.ui_preferences = {}
+        config = self._settings_store.load({})
+        self.settings = config.get('settings', self._get_default_settings())
+        self.ui_preferences = config.get('ui_preferences', {})
     
     def _get_default_settings(self):
         """Get default settings (Flow_Track 3.0 schema)."""
@@ -417,18 +409,13 @@ class FlowTrackWidget:
     
     def _save_settings(self):
         """Save settings to flowtrack_config.json (Flow_Track 3.0 schema)."""
-        data_dir = Path(PLUGIN_DIR).resolve()
-        
-        config_path = data_dir / 'flowtrack_config.json'
-        
         try:
             config = {
                 'settings': self.settings,
                 'ui_preferences': self.ui_preferences
             }
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=2, ensure_ascii=False)
-            logger.info("Settings saved to flowtrack_config.json")
+            self._settings_store.save(config)
+            logger.info("Flow Track settings saved through backend")
         except Exception as e:
             logger.error(f"Failed to save settings: {e}")
 
@@ -456,23 +443,11 @@ class FlowTrackWidget:
     
     def _load_flow_track_data(self):
         """Load flowtrack_daten.json (Flow_Track 3.0 schema)."""
-        data_dir = Path(PLUGIN_DIR).resolve()
-        
-        json_path = data_dir / 'flowtrack_daten.json'
-        
-        if not json_path.exists():
-            # Initialize with v3.0 schema
-            self.manual_data = {
-                'sperm_donors': {},
-                'egg_donors': {},
-                'transfers_by_id': {},
-                'total_embryo_count': 0
-            }
-            return
-        
         try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            data = self._data_store.load({
+                "version": "3.0",
+                "manual_data": {},
+            })
             
             version = data.get('version', '1.0')
             if version != '3.0':
@@ -492,7 +467,7 @@ class FlowTrackWidget:
                 if animal_name not in ['sperm_donors', 'egg_donors', 'transfers_by_id', 'total_embryo_count']:
                     self.manual_data[animal_name] = animal_data
             
-            logger.info(f"Flow track data loaded from flowtrack_daten.json (v{version})")
+            logger.info("Flow Track data loaded through backend (v%s)", version)
         except Exception as e:
             logger.error(f"Failed to load flowtrack_daten.json: {e}")
             self.manual_data = {
@@ -582,10 +557,6 @@ class FlowTrackWidget:
             logger.error(f"Validation failed: {error_msg}")
             return  # Block save
         
-        data_dir = Path(PLUGIN_DIR).resolve()
-        
-        json_path = data_dir / 'flowtrack_daten.json'
-        
         # v3.0 schema: nested manual_data (includes per-animal transfer data for persistence)
         data = {
             'version': '3.0',
@@ -594,14 +565,8 @@ class FlowTrackWidget:
         }
         
         try:
-            # Atomic write
-            temp_path = json_path.with_suffix('.json.tmp')
-            with open(temp_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, default=str, ensure_ascii=False)
-            
-            import shutil
-            shutil.move(str(temp_path), str(json_path))
-            logger.info("Flow track data saved to flowtrack_daten.json (v3.0)")
+            self._data_store.save(data)
+            logger.info("Flow Track data saved through backend (v3.0)")
         except Exception as e:
             logger.error(f"Failed to save flowtrack_daten.json: {e}")
             QtWidgets = self.parent_app.QtWidgets
@@ -6711,6 +6676,8 @@ class FlowTrackWidget:
                         
                         # Export timeline chart on separate page
                         pdf.savefig(self.timeline_figure, bbox_inches='tight')
+                    from Plugins.core.institution_branding import brand_generated_pdf
+                    brand_generated_pdf(self.parent_app, filename)
                     
                     QtWidgets.QMessageBox.information(
                         self.widget,
@@ -6738,6 +6705,8 @@ class FlowTrackWidget:
                 try:
                     # Save current figure as PDF
                     self.figure.savefig(filename, format='pdf', bbox_inches='tight')
+                    from Plugins.core.institution_branding import brand_generated_pdf
+                    brand_generated_pdf(self.parent_app, filename)
                     
                     QtWidgets.QMessageBox.information(
                         self.widget,

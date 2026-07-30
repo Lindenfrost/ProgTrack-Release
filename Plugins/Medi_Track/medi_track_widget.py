@@ -56,6 +56,7 @@ from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_status import status_summary_with_death_priority
 from Plugins.core.lifecycle_events import ever_in_experiment
 from Plugins.core.platform_helpers import open_local_path
+from Plugins.core.ui_icons import apply_icon
 
 logger = logging.getLogger(__name__)
 
@@ -447,7 +448,6 @@ def _document_paths_for_animal(
     docs_root: Optional[Path] = None,
 ) -> List[Path]:
     """Return all filesystem documents known for an animal."""
-    root = Path(docs_root) if docs_root is not None else PLUGIN_DIR / MEDI_DOCS_SUBDIR
     seen = set()
     paths: List[Path] = []
 
@@ -466,13 +466,20 @@ def _document_paths_for_animal(
         seen.add(ident)
         paths.append(path)
 
-    folder = root / _safe_name(animal_name)
-    if folder.exists():
-        try:
-            for path in folder.iterdir():
-                add(path)
-        except OSError:
-            pass
+    backend = getattr(store, "backend", None)
+    if backend is not None:
+        for record in backend.documents.list_for_owner(
+            "animal-medical", animal_name
+        ):
+            add(backend.documents.payload_path(record))
+    elif docs_root is not None:
+        folder = Path(docs_root) / _safe_name(animal_name)
+        if folder.exists():
+            try:
+                for path in folder.iterdir():
+                    add(path)
+            except OSError:
+                pass
 
     try:
         json_docs = store.get_documents(animal_name)
@@ -572,8 +579,11 @@ def _snake(label: str) -> str:
 class MediStore:
     """Read/write medi_history.json inside the Medi_Track plugin directory."""
 
-    def __init__(self) -> None:
+    def __init__(self, backend: Any) -> None:
+        from Plugins.core.backend_store import BackendJsonStore
         self._path = str(PLUGIN_DIR / MEDI_HISTORY_FILENAME)
+        self.backend = backend
+        self._backend_store = BackendJsonStore(backend, "medical", "history")
         self._data: Optional[Dict[str, Any]] = None
 
     # ── internal ──
@@ -593,34 +603,13 @@ class MediStore:
     def load(self) -> Dict[str, Any]:
         if self._data is not None:
             return self._data
-        try:
-            with open(self._path, "r", encoding="utf-8") as fh:
-                raw = json.load(fh)
-        except (FileNotFoundError, json.JSONDecodeError):
-            raw = self._default()
+        raw = self._backend_store.load(self._default())
         self._data = self._coerce(raw)
         return self._data
 
     def save(self) -> None:
         data = self.load()
-        dir_ = os.path.dirname(self._path) or "."
-        os.makedirs(dir_, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(prefix="medi_", suffix=".json", dir=dir_)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump(data, fh, indent=2, ensure_ascii=False, default=str)
-            try:
-                os.replace(tmp, self._path)
-            except PermissionError:
-                import time
-                time.sleep(0.12)
-                shutil.move(tmp, self._path)
-        except Exception:
-            try:
-                os.unlink(tmp)
-            except Exception:
-                pass
-            raise
+        self._backend_store.save(data)
 
     def _block(self, name: str) -> Dict[str, Any]:
         data = self.load()
@@ -1276,12 +1265,13 @@ class MediTrackWidget(QWidget):
 
         # Documents section (collapsible)
         self._docs_toggle = QPushButton(
-            "▶  " + _msg(self.messages, "medi_track.section.documents", "Documents"))
+            _msg(self.messages, "medi_track.section.documents", "Documents"))
         self._docs_toggle.setCheckable(True)
         self._docs_toggle.setChecked(False)
         self._docs_toggle.setStyleSheet(
             "QPushButton { text-align: left; font-weight: bold; border: none; }")
         self._docs_toggle.toggled.connect(self._on_docs_toggled)
+        apply_icon(self._docs_toggle, "toggle.expand", fallback="Documents")
 
         self._docs_widget = QWidget()
         docs_inner = QVBoxLayout(self._docs_widget)
@@ -1401,7 +1391,9 @@ class MediTrackWidget(QWidget):
             _format_neutral_export_label(
                 _msg(messages, "medi_track.btn.export", "Export")))
         self._btn_add_doc.setText(  _msg(messages, "medi_track.btn.add_document", "+ Add Document"))
-        self._docs_toggle.setText("▶  " + _msg(messages, "medi_track.section.documents", "Documents"))
+        self._docs_toggle.setText(
+            _msg(messages, "medi_track.section.documents", "Documents"))
+        apply_icon(self._docs_toggle, "toggle.expand", fallback="Documents")
         # Refresh animal display with updated labels
         if self._current_animal:
             self.show_animal(self._current_animal)
@@ -1958,9 +1950,7 @@ class MediTrackWidget(QWidget):
     # ── add-document helpers ──
 
     def _animal_docs_folder(self, animal_name: str) -> Path:
-        folder = PLUGIN_DIR / MEDI_DOCS_SUBDIR / _safe_name(animal_name)
-        folder.mkdir(parents=True, exist_ok=True)
-        return folder
+        return self.app.backend.paths.managed_documents
 
     def _on_add_document_clicked(self) -> None:
         if not self._current_animal:
@@ -1972,15 +1962,18 @@ class MediTrackWidget(QWidget):
         if not path:
             return
         src = Path(path)
-        folder = self._animal_docs_folder(self._current_animal)
-        dest = folder / src.name
-        # Avoid overwriting: append counter if needed
-        counter = 1
-        while dest.exists():
-            dest = folder / f"{src.stem}_{counter}{src.suffix}"
-            counter += 1
         try:
-            shutil.copy2(str(src), str(dest))
+            mt = getattr(self.app, "master_track", None)
+            actor = str(
+                getattr(mt, "current_username", "") or "medical-user"
+            )
+            record = self.app.backend.documents.add(
+                src,
+                owner_type="animal-medical",
+                owner_id=self._current_animal,
+                actor=actor,
+            )
+            dest = self.app.backend.documents.payload_path(record)
         except Exception as exc:
             logger.error("copy document failed: %s", exc)
             QMessageBox.warning(
@@ -1992,6 +1985,7 @@ class MediTrackWidget(QWidget):
             "original_name": src.name,
             "path": str(dest),
             "title": src.name,
+            "document_id": str(record["document_id"]),
         }
         try:
             self.store.add_document(self._current_animal, doc)
@@ -2002,20 +1996,13 @@ class MediTrackWidget(QWidget):
     def _reload_docs(self, animal_name: str) -> None:
         """Refresh the documents list for the given animal."""
         self._docs_list.clear()
-        # Primary: scan filesystem folder
-        folder = self._animal_docs_folder(animal_name)
         found: List[str] = []
-        if folder.exists():
-            try:
-                found = sorted(
-                    str(p) for p in folder.iterdir()
-                    if p.is_file()
-                    and not p.name.startswith('.')
-                    and p.name.lower() != 'thumbs.db'
-                )
-            except Exception:
-                found = []
-        # Secondary: docs from JSON not in folder (backward compat)
+        for record in self.app.backend.documents.list_for_owner(
+            "animal-medical", animal_name
+        ):
+            found.append(
+                str(self.app.backend.documents.payload_path(record))
+            )
         json_docs = self.store.get_documents(animal_name)
         json_paths = {d.get('path', '') for d in json_docs}
         extra = [d for d in json_docs
@@ -2061,9 +2048,13 @@ class MediTrackWidget(QWidget):
     # ── docs section ──
 
     def _on_docs_toggled(self, checked: bool) -> None:
-        arrow = "▼" if checked else "▶"
         self._docs_toggle.setText(
-            f"{arrow}  " + _msg(self.messages, "medi_track.section.documents", "Documents"))
+            _msg(self.messages, "medi_track.section.documents", "Documents"))
+        apply_icon(
+            self._docs_toggle,
+            "toggle.collapse" if checked else "toggle.expand",
+            fallback="Documents",
+        )
         self._docs_widget.setVisible(checked)
 
     # ── public API called by plugin ──
@@ -2312,7 +2303,7 @@ class MediTrackPlugin:
         self.app = app
         self.messages: Dict[str, Any] = getattr(app, "messages", {}) or {}
         self._lang = self._detect_lang()
-        self.store = MediStore()
+        self.store = MediStore(app.backend)
         self._widget: Optional[MediTrackWidget] = None
 
     # ── helpers ──

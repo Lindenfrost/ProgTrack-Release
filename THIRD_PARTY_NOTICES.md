@@ -11,7 +11,7 @@ from the runtime bundle are stored in `third_party_licenses/`.
 | Component | Version in build | License / notice |
 | --- | ---: | --- |
 | Python runtime | 3.13.3 build environment | Python Software Foundation License |
-| SQLite runtime used by Python `sqlite3` | 3.49.1 in the Windows 0.1.2 launcher | Public domain; see `LICENSE_SQLITE.txt` |
+| SQLite runtime used by Python `sqlite3` | Bundled with the Windows launcher | Public domain; see `LICENSE_SQLITE.txt` |
 | PyInstaller bootloader/runtime | 6.14.1 | GPLv2-or-later with PyInstaller bootloader exception |
 | PyQt6 | 6.7.1 | GPL v3 |
 | PyQt6-sip | 13.11.1 | SIP license |
@@ -33,9 +33,22 @@ from the runtime bundle are stored in `third_party_licenses/`.
 | kiwisolver | 1.5.0 | Modified BSD |
 | charset-normalizer | 3.4.7 | MIT |
 | pyqtgraph | 0.14.0 | MIT |
+| Psycopg | 3.3.4 | GNU LGPL v3 only; see `LICENSE_PSYCOPG.txt` |
+| psycopg-pool | 3.3.1 | GNU LGPL v3 only; see `LICENSE_PSYCOPG_POOL.txt` |
+| psycopg-binary Windows implementation | 3.3.4 | GNU LGPL v3 only; self-contained wheel used for the portable Windows build |
+| PostgreSQL libpq bundled by psycopg-binary | 18.3 | PostgreSQL License; see `LICENSE_POSTGRESQL.txt` |
+| OpenSSL libraries bundled by psycopg-binary | OpenSSL 3.x | Apache License 2.0; see `LICENSE_OPENSSL.txt` |
+| pypdf | 6.14.2 | BSD 3-Clause; see `LICENSE_PYPDF.txt` |
 | DejaVu fonts | bundled with matplotlib | DejaVu font license |
 | STIX fonts | bundled with matplotlib | STIX font license |
 | ReportLab bundled fonts | bundled with reportlab | See ReportLab font license files |
+
+## Backend build variants
+
+The Windows portable build forces `PSYCOPG_IMPL=binary` and verifies the
+runtime implementation and libpq version. Managed Linux builds use the pinned
+`psycopg[c]` variant with distribution-provided libpq/OpenSSL and must generate
+their component inventory from the actual package artifact.
 
 ## Important Release Note
 

@@ -45,6 +45,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .auth import UserDB
+from Plugins.core.ui_icons import apply_icon
 from .permissions import (
     ALL_PERMISSIONS,
     DEFAULT_JOB_BUNDLES,
@@ -615,7 +616,12 @@ class _CollapsibleSection(QWidget):
         outer.addWidget(self._content)
 
     def _set_title(self, title, expanded):
-        self._btn.setText(("▼  " if expanded else "▶  ") + title)
+        self._btn.setText(title)
+        apply_icon(
+            self._btn,
+            "toggle.collapse" if expanded else "toggle.expand",
+            fallback=title,
+        )
 
     def content_layout(self):
         return self._content_lay
@@ -1966,6 +1972,8 @@ class AuditLogsDialog(QDialog):
         ]))
 
         doc.build([table])
+        from Plugins.core.institution_branding import brand_generated_pdf
+        brand_generated_pdf(self, path)
 
     def _apply_filters(self) -> None:
         search_text = self.search_edit.text().strip().lower()

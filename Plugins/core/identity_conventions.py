@@ -19,8 +19,8 @@ from Plugins.core.resource_catalogs import (
 
 
 DEFAULT_CONVENTIONS: Dict[str, Any] = {
-    "animal_id_pattern": "{species}_{year2}_{sequence:04d}_{sex}_{name}",
-    "animal_id_components": ["species", "year_short", "count_year", "sex", "name"],
+    "animal_id_pattern": "{species}_{year2}_{sequence:04d}_{sex}_{name}_{origin}",
+    "animal_id_components": ["species", "year_short", "count_year", "sex", "name", "origin"],
     "yearly_sequences": {},
     "absolute_sequence": 0,
     "experiment_exit_reasons": [
@@ -66,6 +66,11 @@ def load_conventions(path: Path) -> Dict[str, Any]:
     data["animal_id_components"] = [
         aliases.get(str(value), str(value)) for value in data["animal_id_components"]
     ]
+    if "origin" not in data["animal_id_components"]:
+        data["animal_id_components"].append("origin")
+    data["animal_id_pattern"] = pattern_from_components(
+        data["animal_id_components"]
+    )
     # Existing installations used one free-text default. Seed the new controlled
     # catalogue once, without retaining compatibility UI or migration logic.
     legacy_origin = str(data.get("default_offspring_origin") or "").strip()
@@ -110,6 +115,7 @@ ID_COMPONENT_PATTERNS = {
     "count_absolute": "{absolute_sequence:04d}",
     "sex": "{sex}",
     "name": "{name}",
+    "origin": "{origin}",
 }
 
 
@@ -129,6 +135,7 @@ def preview_animal_id(
     species: str = "",
     birth_date: str = "",
     sex: str = "",
+    origin: str = "",
 ) -> str:
     """Render an unsaved ID with explicit placeholders for missing values."""
     component_values = {
@@ -141,6 +148,7 @@ def preview_animal_id(
         "count": "XXXX",
         "sex": sex_token(sex) if str(sex).strip() else "XX",
         "name": _token(name, "XXXX") if str(name).strip() else "XXXX",
+        "origin": _token(origin, "XXXX") if str(origin).strip() else "XXXX",
     }
     return "_".join(
         component_values[str(component)]
@@ -189,6 +197,7 @@ def render_animal_id(
     species: str,
     birth_date: str,
     sex: str,
+    origin: str,
     sequence: int,
     absolute_sequence: Optional[int] = None,
 ) -> str:
@@ -199,6 +208,7 @@ def render_animal_id(
         "year2": birth_year_token(birth_date),
         "year4": birth_year_full_token(birth_date),
         "sex": sex_token(sex),
+        "origin": _token(origin),
         "sequence": int(sequence),
         "absolute_sequence": int(absolute_sequence if absolute_sequence is not None else sequence),
     }
@@ -215,6 +225,7 @@ def next_generated_id(
     species: str,
     birth_date: str,
     sex: str,
+    origin: str,
     existing_ids: Iterable[str] = (),
 ) -> str:
     year = birth_year_token(birth_date)
@@ -231,6 +242,7 @@ def next_generated_id(
             species=species,
             birth_date=birth_date,
             sex=sex,
+            origin=origin,
             sequence=sequence,
             absolute_sequence=absolute,
         )
@@ -256,6 +268,7 @@ def regenerated_id_for_edit(
         species=str(new_record.get("species") or ""),
         birth_date=str(new_record.get("birth_date") or ""),
         sex=str(new_record.get("sex") or ""),
+        origin=str(new_record.get("origin") or ""),
         sequence=old_sequence,
         absolute_sequence=int(old_record.get("generated_id_absolute_sequence") or old_sequence),
     )

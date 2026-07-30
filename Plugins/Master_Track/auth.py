@@ -67,19 +67,29 @@ def verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
 # ---------------------------------------------------------------------------
 
 class UserDB:
-    """Encrypted JSON user database stored in *users.enc*."""
+    """Backend-owned user database with PBKDF2 password hashes."""
 
-    def __init__(self, plugin_dir: str):
+    def __init__(self, plugin_dir: str, backend=None):
         self.path = os.path.join(plugin_dir, "users.enc")
+        self.backend = backend
         self._users: List[Dict[str, Any]] = []
         self._loaded = False
 
     # -- persistence --------------------------------------------------------
 
     def exists(self) -> bool:
+        if self.backend is not None:
+            return bool(
+                self.backend.records.get("security", "users", default=[])
+            )
         return os.path.isfile(self.path)
 
     def load(self) -> List[Dict[str, Any]]:
+        if self.backend is not None:
+            value = self.backend.records.get("security", "users", default=[])
+            self._users = value if isinstance(value, list) else []
+            self._loaded = True
+            return self._users
         if not self.exists():
             self._users = []
             self._loaded = True
@@ -95,6 +105,9 @@ class UserDB:
         return self._users
 
     def save(self) -> None:
+        if self.backend is not None:
+            self.backend.records.put("security", "users", self._users)
+            return
         raw = json.dumps(self._users, indent=2).encode("utf-8")
         enc = _encrypt(raw)
         with open(self.path, "wb") as f:

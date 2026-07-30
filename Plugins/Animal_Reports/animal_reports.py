@@ -97,6 +97,15 @@ class AnimalReportsWidget(QMainWindow):
         # Initialize instance variables
         self.animal_name = animal_name
         self.messages = messages or {}
+        from Plugins.core.backend_store import BackendJsonStore
+        backend = getattr(parent, "backend", None)
+        self._backend = backend
+        self._report_store = BackendJsonStore(
+            backend, "animal-reports", "report-data"
+        )
+        self._locked_store = BackendJsonStore(
+            backend, "animal-reports", "locked-entries"
+        )
         self.data = {}  # Initialize as empty dict to avoid None checks
         self.current_animal_data = None
         self._data_loaded = False
@@ -1013,48 +1022,28 @@ class AnimalReportsWidget(QMainWindow):
         return {}
 
     def _load_locked_entries(self):
-        """Load locked entries from file."""
+        """Load locked entries from the shared backend."""
         self.locked_entries = {}
-        
-        # Try to find the locked entries file in the same directory as the data file
-        data_dir = os.path.dirname(AnimalReportsWidget.DATA_FILE) if AnimalReportsWidget.DATA_FILE else '.'
-        locked_entries_file = os.path.join(data_dir, AnimalReportsWidget.LOCKED_ENTRIES_FILE)
-        
-        if os.path.exists(locked_entries_file):
-            try:
-                with open(locked_entries_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    
-                for animal_name, entries in data.items():
-                    self.locked_entries[animal_name] = [
-                        LockedEntry.from_dict(entry) for entry in entries
-                    ]
-                logger.info(f"Loaded {sum(len(entries) for entries in self.locked_entries.values())} locked entries")
-            except Exception as e:
-                logger.error(f"Error loading locked entries: {str(e)}", exc_info=True)
-        else:
-            logger.info(f"No locked entries file found at {locked_entries_file}")
+        try:
+            data = self._locked_store.load({})
+            for animal_name, entries in data.items():
+                self.locked_entries[animal_name] = [
+                    LockedEntry.from_dict(entry) for entry in entries
+                ]
+            logger.info(f"Loaded {sum(len(entries) for entries in self.locked_entries.values())} locked entries")
+        except Exception as e:
+            logger.error(f"Error loading locked entries: {str(e)}", exc_info=True)
     
     def _save_locked_entries(self):
-        """Save locked entries to file."""
-        if not self.locked_entries:
-            return
-            
+        """Save locked entries to the shared backend."""
         try:
             # Create a serializable dictionary
             data = {}
             for animal_name, entries in self.locked_entries.items():
                 data[animal_name] = [entry.to_dict() for entry in entries]
             
-            # Save to file in the same directory as the data file
-            data_dir = os.path.dirname(AnimalReportsWidget.DATA_FILE) if AnimalReportsWidget.DATA_FILE else '.'
-            os.makedirs(data_dir, exist_ok=True)
-            locked_entries_file = os.path.join(data_dir, AnimalReportsWidget.LOCKED_ENTRIES_FILE)
-            
-            with open(locked_entries_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-                
-            logger.info(f"Saved {sum(len(entries) for entries in self.locked_entries.values())} locked entries to {locked_entries_file}")
+            self._locked_store.save(data)
+            logger.info(f"Saved {sum(len(entries) for entries in self.locked_entries.values())} locked entries to backend")
             
         except Exception as e:
             logger.error(f"Error saving locked entries: {str(e)}", exc_info=True)
@@ -1199,77 +1188,32 @@ class AnimalReportsWidget(QMainWindow):
         return result
     
     def _load_data(self):
-        """Load and process data from progtrack_daten.json into animal_report_data.json"""
+        """Aggregate current animal data while preserving report-owned edits."""
         if self._data_loaded:
             return
             
         try:
             logger.info("Starting data loading and aggregation")
             
-            # Define possible locations for progtrack_daten.json
-            possible_paths = [
-                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'progtrack_daten.json'),
-                os.path.join(os.path.expanduser('~'), '.progtrack', 'progtrack_daten.json'),
-                'progtrack_daten.json'  # Current directory
-            ]
-            
-            # Try to find the progtrack data file
-            progtrack_data_file = None
-            for path in possible_paths:
-                if os.path.exists(path):
-                    progtrack_data_file = os.path.abspath(path)
-                    break
-            
-            if not progtrack_data_file:
-                error_msg = "Could not find progtrack_daten.json in any of these locations:\n"
-                error_msg += "\n".join(possible_paths)
-                logger.error(error_msg)
-                QMessageBox.critical(
-                    self,
-                    self._get_message('error.load_failed', 'Load Failed'),
-                    error_msg
-                )
-                return
-            
-            # Define report data file path (inside the Animal_Reports plugin folder)
-            report_data_file = os.path.join(os.path.dirname(__file__), 'animal_report_data.json')
-            
-            logger.info(f"Using progtrack data from: {progtrack_data_file}")
-            logger.info(f"Using report data file: {report_data_file}")
-            
             try:
-                with open(progtrack_data_file, 'r', encoding='utf-8') as f:
-                    progtrack_data = json.load(f)
-                logger.info("Successfully loaded progtrack data")
+                progtrack_data = self._backend.load_core_data()
+                logger.info("Successfully loaded ProgTrack data from backend")
             except Exception as e:
                 logger.error(f"Error loading progtrack data: {str(e)}", exc_info=True)
                 QMessageBox.critical(
                     self,
                     self._get_message('error.load_failed', 'Load Failed'),
                     self._get_message('error.json_parse_error', 'Failed to parse {file}').format(
-                        file='progtrack_daten.json')
+                        file='backend')
                 )
                 return
             
             # Initialize report data structure
             report_data = {'animals': {}}
             
-            # Load existing report data if it exists
-            if os.path.exists(report_data_file):
-                try:
-                    with open(report_data_file, 'r', encoding='utf-8') as f:
-                        report_data = json.load(f)
-                    
-                    # Ensure report_data has the correct structure
-                    if 'animals' not in report_data:
-                        report_data['animals'] = {}
-                    
-                    logger.info(f"Loaded existing report data with {len(report_data['animals'])} animals")
-                    
-                except Exception as e:
-                    logger.error(f"Error loading report data: {str(e)}", exc_info=True)
-                    # Continue with empty report data
-                    report_data = {'animals': {}}
+            report_data = self._report_store.load({'animals': {}})
+            report_data.setdefault('animals', {})
+            logger.info(f"Loaded existing report data with {len(report_data['animals'])} animals")
             
             # Process animals from progtrack data
             animals_dict = self._get_animals_dict(progtrack_data)
@@ -1313,23 +1257,9 @@ class AnimalReportsWidget(QMainWindow):
                 except Exception as e:
                     logger.error(f"Error processing animal {animal_name}: {str(e)}", exc_info=True)
             
-            # Save the updated report data
             try:
-                # Create directory if it doesn't exist
-                os.makedirs(os.path.dirname(report_data_file) or '.', exist_ok=True)
-                
-                # Save with atomic write to prevent corruption
-                temp_file = f"{report_data_file}.tmp"
-                with open(temp_file, 'w', encoding='utf-8') as f:
-                    json.dump(report_data, f, indent=2, ensure_ascii=False, default=str)
-                
-                # On Windows, we need to handle file replacement carefully
-                if os.path.exists(report_data_file):
-                    os.replace(temp_file, report_data_file)
-                else:
-                    os.rename(temp_file, report_data_file)
-                
-                logger.info(f"Successfully saved report data to {report_data_file}")
+                self._report_store.save(report_data)
+                logger.info("Successfully saved report data to backend")
                 
             except Exception as e:
                 error_msg = f"Error saving report data: {str(e)}"
@@ -1823,31 +1753,13 @@ class AnimalReportsWidget(QMainWindow):
         self._save_data()
     
     def _save_data(self):
-        """Save the current data to animal_report_data.json."""
+        """Save the current report-owned data to the backend."""
         if not hasattr(self, 'data') or not self.data:
             logger.warning("No data to save")
             return False
         
         try:
-            # Determine path for animal_report_data.json inside the Animal_Reports plugin folder
-            animal_report_data_file = os.path.join(os.path.dirname(__file__), 'animal_report_data.json')
-            
-            logger.info(f"Saving data to {animal_report_data_file}")
-            
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(animal_report_data_file) or '.', exist_ok=True)
-            
-            # Atomic write to avoid corruption
-            temp_file = f"{animal_report_data_file}.tmp"
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                json.dump(self.data, f, indent=2, ensure_ascii=False)
-            
-            # Replace target file safely (Windows-friendly)
-            if os.path.exists(animal_report_data_file):
-                os.replace(temp_file, animal_report_data_file)
-            else:
-                os.rename(temp_file, animal_report_data_file)
-            
+            self._report_store.save(self.data)
             logger.info("Successfully saved report data")
             return True
         
@@ -2592,6 +2504,8 @@ def create_monthly_report(
         
         # Build PDF
         doc.build(elements)
+        from Plugins.core.institution_branding import brand_generated_pdf
+        brand_generated_pdf(self, output_path)
         logger.info(f"Successfully created PDF report: {output_path}")
         
     except ImportError as e:

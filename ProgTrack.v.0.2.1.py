@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.2
-# Required Launcher version: 0.1.1-log-menu or newer.
+# Part of: ProgTrack 0.2.1
+# Required Launcher version: 0.2.1 or newer.
 # Module: Main application entry point and core user interface.
 # Minimum Python version: 3.9.
 
@@ -64,6 +64,14 @@ from Plugins.core.project_visibility import (
     visible_projects_for_user,
 )
 from Plugins.core.platform_helpers import default_export_directory, default_save_path
+from Plugins.core.runtime_paths import (
+    BackendProfile,
+    RuntimePathError,
+    backend_diagnostics,
+    resolve_runtime_paths,
+)
+from Plugins.core.backend import LockConflictError, ProgTrackBackend
+from Plugins.core.ui_icons import icon as ui_icon
 from Plugins.core.animal_identity import (
     animal_base_name,
     animal_identity_key,
@@ -133,9 +141,10 @@ APP_RUNTIME_DIR = (
     if (APP_BASE_DIR / "_internal").exists()
     else APP_BASE_DIR
 )
-LOG_DIR = APP_RUNTIME_DIR / "logs"
+RUNTIME_PATHS = resolve_runtime_paths(APP_BASE_DIR)
+LOG_DIR = RUNTIME_PATHS.logs
 APP_LOG_PATH = LOG_DIR / "progtrack.log"
-MPL_CONFIG_DIR = APP_RUNTIME_DIR / "matplotlib_cache"
+MPL_CONFIG_DIR = RUNTIME_PATHS.cache_root / "matplotlib"
 
 try:
     MPL_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -222,9 +231,9 @@ logging.getLogger('PIL').setLevel(logging.WARNING)
 # # ================================================================ #
 # # 3. Constants and Enums                                             #
 # # ================================================================ #
-DATEN_DATEI = "progtrack_daten.json"
-SETTINGS_FILE = "progtrack_settings.json"
-LOCK_FILE = "progtrack_daten.lock"
+DATEN_DATEI = str(RUNTIME_PATHS.database_path or "shared_postgresql")
+SETTINGS_FILE = str(RUNTIME_PATHS.config_root / "progtrack_settings.json")
+LOCK_FILE = str(RUNTIME_PATHS.runtime / "standalone.lock")
 DATE_FORMAT = "%d.%m.%Y"
 PHASESCHWELLE = 10.0
 MAX_SELECTED_ANIMALS = 5
@@ -989,7 +998,7 @@ class StyleSettingsDialog(QDialog):
         self._role_setup_editable = self.parent_app._can_configure_animal_roles()
         self._accepted_role_definitions = None
         self._role_block_preset_registry = RoleBlockPresetRegistry(
-            role_block_presets_path(APP_BASE_DIR)
+            self.parent_app._role_block_presets_runtime_path()
         )
         self._custom_role_block_presets = (
             self._role_block_preset_registry.presets()
@@ -1462,8 +1471,9 @@ class StyleSettingsDialog(QDialog):
         scroll.setWidgetResizable(True)
         content = QWidget(scroll)
         form = QFormLayout(content)
-        self._identity_conventions = load_conventions(
-            conventions_path(APP_BASE_DIR))
+        self._identity_conventions = (
+            self.parent_app._load_identity_conventions()
+        )
         configured_components = [
             str(value)
             for value in self._identity_conventions.get("animal_id_components", [])
@@ -2189,6 +2199,14 @@ class StyleSettingsDialog(QDialog):
                 self._role_block_preset_registry.save_presets(
                     self._custom_role_block_presets
                 )
+                self.parent_app.backend.records.put(
+                    "configuration",
+                    "role-block-presets",
+                    {
+                        "schema_version": 1,
+                        "presets": self._custom_role_block_presets,
+                    },
+                )
             except ValueError as exc:
                 QMessageBox.warning(
                     self,
@@ -2219,7 +2237,7 @@ class StyleSettingsDialog(QDialog):
             conventions["genotypes"] = self._genotype_catalog_editor.values(species)
             for key, edit in self._lifecycle_catalog_edits.items():
                 conventions[key] = edit.values()
-            save_conventions(conventions_path(APP_BASE_DIR), conventions)
+            self.parent_app._save_identity_conventions(conventions)
         super().accept()
     
     def _create_color_button(self, default_color):
@@ -2448,18 +2466,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._no_data_pending = False   # set in _load_persistence() if DB is empty
             self._no_data_warned  = False   # ensure we show it only once
             
-            # ---- File locking for multi-instance support ----
+            # ---- Shared backend and deployment profile ----
+            # Standalone acquires exclusive process ownership. Shared
+            # PostgreSQL uses service-level revisions and visible entity leases.
             self.lock_handle = None
             self.read_only_mode = False
             self.lock_retry_timer = None
-            
-            # Try to acquire lock on the data file
-            self.lock_handle = try_acquire_lock(LOCK_FILE)
-            if self.lock_handle is None:
-                # Another instance has the lock - run in read-only mode
-                self.read_only_mode = True
-                logger.warning("Running in READ-ONLY mode - another instance is editing the data")
-                self._start_read_only_lock_timer()
+            self.backend = ProgTrackBackend(RUNTIME_PATHS)
+            logger.info(
+                "Backend initialized: %s",
+                json.dumps(backend_diagnostics(RUNTIME_PATHS), ensure_ascii=False),
+            )
             
             # Set up basic window properties
             self.setWindowTitle(self.messages.get("app.initializing", "ProgTrack - Loading..."))
@@ -2512,9 +2529,27 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # Expose Role enum for plugin access
         self.Role = Role
-        self.animal_role_registry = AnimalRoleRegistry(
-            APP_BASE_DIR / "Plugins" / "core" / "animal_roles.json"
+        role_path = RUNTIME_PATHS.preferences / "animal_roles.json"
+        role_payload = self.backend.records.get(
+            "configuration", "animal-roles", default=None
         )
+        if not isinstance(role_payload, dict):
+            bundled_roles = (
+                APP_BASE_DIR / "Plugins" / "core" / "animal_roles.json"
+            )
+            try:
+                role_payload = json.loads(bundled_roles.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                role_payload = {"schema_version": 1, "roles": []}
+            self.backend.records.put(
+                "configuration", "animal-roles", role_payload
+            )
+        role_path.parent.mkdir(parents=True, exist_ok=True)
+        role_path.write_text(
+            json.dumps(role_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        self.animal_role_registry = AnimalRoleRegistry(role_path)
         
         # Import Qt components that are needed immediately
         global QIcon, QMainWindow
@@ -2675,22 +2710,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------------------------------------------------
 
     def _load_disabled_plugins(self) -> set:
-        """Load set of disabled plugin keys from disabled_plugins.json."""
-        path = os.path.join(os.path.dirname(__file__), "disabled_plugins.json")
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return set(json.load(f))
-        except Exception:
-            return set()
+        """Load disabled plugin keys from the configured backend."""
+        value = self.backend.records.get(
+            "configuration", "disabled-plugins", default=[]
+        )
+        return set(value if isinstance(value, list) else [])
 
     def _save_disabled_plugins(self) -> None:
-        """Persist current disabled plugin keys to disabled_plugins.json."""
-        path = os.path.join(os.path.dirname(__file__), "disabled_plugins.json")
+        """Persist disabled plugin keys through the configured backend."""
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(sorted(self._disabled_plugins), f, indent=2)
+            self.backend.records.put(
+                "configuration",
+                "disabled-plugins",
+                sorted(self._disabled_plugins),
+            )
         except Exception as e:
-            logging.error(f"Failed to save disabled_plugins.json: {e}")
+            logging.error("Failed to save disabled plugin state: %s", e)
 
     _PLUGIN_ACTION_ATTRS = {
         "animal_reports": "animal_reports_action",
@@ -3681,7 +3716,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 username = 'guest'
         
         # Create user-specific settings directory if it doesn't exist
-        user_settings_dir = os.path.join('Plugins', 'core', 'user_settings')
+        user_settings_dir = str(RUNTIME_PATHS.preferences / "users")
         os.makedirs(user_settings_dir, exist_ok=True)
         
         return os.path.join(user_settings_dir, f"{username}_style.json")
@@ -3703,14 +3738,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # If empty, return defaults (will be saved when user changes settings)
             return self._get_default_style_settings()
 
-        # Fall back to file-based storage for non-Master Track setups
-        user_style_file = self._get_user_style_settings_file(username)
-        if os.path.exists(user_style_file):
-            try:
-                with open(user_style_file, encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception as e:
-                logging.error(f"Failed to load user style settings: {e}")
+        identity = str(username or "guest")
+        stored = self.backend.records.get(
+            "preferences", f"style:{identity}", default=None
+        )
+        if isinstance(stored, dict):
+            return stored
 
         # Return default settings if file doesn't exist or loading fails
         return self._get_default_style_settings()
@@ -3736,10 +3769,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if username is None:
             username = 'default_user'
 
-        user_style_file = self._get_user_style_settings_file(username)
         try:
-            with open(user_style_file, "w", encoding="utf-8") as f:
-                json.dump(settings, f, indent=2)
+            self.backend.records.put(
+                "preferences", f"style:{username}", settings
+            )
         except Exception as e:
             logging.error(f"Failed to save user style settings: {e}")
 
@@ -3767,16 +3800,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._apply_style_settings(user_style_settings)
 
     def _get_global_language_fallback(self):
-        """Get language from global settings file or default to 'en'."""
-        if os.path.exists(SETTINGS_FILE):
-            try:
-                with open(SETTINGS_FILE, encoding="utf-8") as f:
-                    data = json.load(f)
-                    return data.get("language", "en")
-            except Exception:
-                logging.error("Failed to read settings file; defaulting language to 'en'")
-                return "en"
-        return "en"
+        """Get the installation language from backend configuration."""
+        data = self.backend.records.get(
+            "configuration", "global-settings", default={}
+        )
+        return str(data.get("language", "en")) if isinstance(data, dict) else "en"
 
     def _save_settings(self):
         # Check if running in read-only mode
@@ -3794,12 +3822,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Guest mode: do NOT persist language changes between sessions
             return
 
-        # Non-Master Track: save to global settings file
         try:
-            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-                json.dump({
-                    "language": self.lang
-                }, f, indent=2)
+            self.backend.records.put(
+                "configuration", "global-settings", {"language": self.lang}
+            )
         except Exception as e:
             logging.error(f"Failed to save settings: {e}")
 
@@ -3819,7 +3845,53 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _user_messages_path(self, lang_code: Optional[str] = None) -> Path:
         lang_code = lang_code or getattr(self, "lang", "de") or "de"
-        return APP_BASE_DIR / "Plugins" / "core" / "user_lang" / f"messages_{lang_code}.json"
+        return RUNTIME_PATHS.preferences / "language" / f"messages_{lang_code}.json"
+
+    def _load_identity_conventions(self) -> Dict[str, Any]:
+        bundled = load_conventions(conventions_path(APP_BASE_DIR))
+        value = self.backend.records.get(
+            "configuration",
+            "identity-lifecycle-conventions",
+            default=None,
+        )
+        if isinstance(value, dict):
+            merged = dict(bundled)
+            merged.update(value)
+            return merged
+        self.backend.records.put(
+            "configuration",
+            "identity-lifecycle-conventions",
+            bundled,
+        )
+        return bundled
+
+    def _save_identity_conventions(self, conventions: Mapping[str, Any]) -> None:
+        self.backend.records.put(
+            "configuration",
+            "identity-lifecycle-conventions",
+            dict(conventions),
+        )
+
+    def _role_block_presets_runtime_path(self) -> Path:
+        path = RUNTIME_PATHS.preferences / "role_block_presets.json"
+        payload = self.backend.records.get(
+            "configuration", "role-block-presets", default=None
+        )
+        if not isinstance(payload, dict):
+            bundled_path = role_block_presets_path(APP_BASE_DIR)
+            try:
+                payload = json.loads(bundled_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                payload = {"schema_version": 1, "presets": []}
+            self.backend.records.put(
+                "configuration", "role-block-presets", payload
+            )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return path
 
     def _merge_user_messages(self, lang_code: Optional[str] = None) -> None:
         path = self._user_messages_path(lang_code)
@@ -4529,6 +4601,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         new_name: str,
         new_species: str,
         birth_date: str = "",
+        origin: str = "",
         *,
         exclude_key: Optional[str] = None,
     ) -> bool:
@@ -4537,14 +4610,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             new_name,
             new_species,
             birth_date,
+            origin,
             self.animals,
             getattr(self, 'archived', {}),
             exclude_key=exclude_key,
         )
 
-    def _resolve_animal_key(self, base_name: str, species: str, birth_date: str) -> str:
+    def _resolve_animal_key(
+        self,
+        base_name: str,
+        species: str,
+        birth_date: str,
+        origin: str,
+    ) -> str:
         """Return the dict key to use for a new animal."""
-        return animal_identity_key(base_name, species, birth_date)
+        return animal_identity_key(base_name, species, birth_date, origin)
 
     def _normalize_identity_birth_for_save(self, value: str, *, required: bool) -> Optional[str]:
         try:
@@ -4576,9 +4656,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         base_name: str,
         species: str,
         birth_date: str,
+        origin: str,
     ) -> bool:
         try:
-            target_key = self._resolve_animal_key(base_name, species, birth_date)
+            target_key = self._resolve_animal_key(
+                base_name, species, birth_date, origin
+            )
         except ValueError as exc:
             self._show_message_raw(
                 self.messages.get("error.title", "Error"),
@@ -4588,24 +4671,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return False
         if target_key == animal_key:
             return True
-        if not self._master_can('core.edit_animal_identity'):
-            self._show_permission_denied()
-            return False
-        reason, accepted = QInputDialog.getText(
-            self,
-            self.messages.get("identity.change_reason.title", "Identity change"),
+        self._show_message_raw(
+            self.messages.get("error.title", "Error"),
             self.messages.get(
-                "identity.change_reason.prompt",
-                "Reason for changing controlled animal identity:",
+                "identity.immutable",
+                "Name, species, full birth date, origin, and IPID cannot be "
+                "changed after the animal has been created.",
             ),
+            "warning",
         )
-        if not accepted or not reason.strip():
-            return False
-        self._pending_identity_change_reason = reason.strip()
-        self._pending_identity_old_public_id = str(
-            self.animals.get(animal_key, {}).get("id") or animal_key
-        )
-        return True
+        return False
 
     @staticmethod
     def _import_row_text(row: Any, candidates: Tuple[str, ...]) -> str:
@@ -4621,7 +4696,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return text
         return ""
 
-    def _resolve_import_animal_key(self, row: Any, *, create_missing: bool = True) -> Optional[str]:
+    def _resolve_import_animal_key(self, row: Any) -> Optional[str]:
         raw_name = self._import_row_text(row, ("Name",))
         if not raw_name:
             return None
@@ -4636,54 +4711,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     return key
             for _key, record in getattr(self, "archived", {}).items():
                 if str(record.get("id") or "").strip() == animal_id:
-                    if create_missing:
-                        self._show_message_raw(
-                            self.messages.get("error.title", "Error"),
-                            self.messages.get(
-                                "import.identity.archived_id",
-                                "Animal ID {animal_id} belongs to an archived animal "
-                                "and cannot receive new measurements.",
-                            ).format(animal_id=animal_id),
-                            "warning",
-                        )
                     return None
-
-            # An explicitly supplied but unknown public ID is authoritative:
-            # do not silently fall back to a same-name animal.  The new
-            # identity must be completed interactively before any write.
-            if not create_missing:
-                return None
-            base_name = animal_base_name(raw_name)
-            prompted = self._prompt_identity_for_import(base_name, animal_id)
-            if prompted is None:
-                return None
-            species, birth = prompted
-            new_key = animal_identity_key(base_name, species, birth)
-            if new_key in self.animals:
-                self._show_message_raw(
-                    self.messages.get("error.title", "Error"),
-                    self.messages.get(
-                        "import.identity.conflicting_id",
-                        "This name, species, and birth date already belong to an "
-                        "animal with a different Animal ID. Check the imported ID.",
-                    ),
-                    "warning",
-                )
-                return None
-            record = self._ensure_defaults_for_new(
-                new_key,
-                base_name=base_name,
-                species=species,
-                birth_date=birth,
-            )
-            record["id"] = animal_id
-            return new_key
+            return None
 
         if raw_name in self.animals:
             return raw_name
 
         species = self._normalize_species_value(
             self._import_row_text(row, ("Species", "species", "Spezies", "Art"))
+        )
+        origin = self._import_row_text(
+            row, ("Origin", "origin", "Tierherkunft", "Herkunft")
         )
         birth_raw = self._import_row_text(
             row,
@@ -4703,6 +4741,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             base_name = parts[0]
             species = species or parts[1]
             birth_raw = birth_raw or parts[2]
+            origin = origin or parts[3]
 
         birth = ""
         if birth_raw:
@@ -4712,9 +4751,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 logging.warning(f"Import row skipped for {raw_name}: {exc}")
                 return None
 
-        if species and birth:
+        if species and birth and origin:
             try:
-                normalized_key = animal_identity_key(base_name, species, birth)
+                normalized_key = animal_identity_key(
+                    base_name, species, birth, origin
+                )
             except ValueError as exc:
                 logging.warning(f"Import row skipped for {raw_name}: {exc}")
                 return None
@@ -4743,37 +4784,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
             return None
 
-        if create_missing and species and birth:
-            new_key = animal_identity_key(base_name, species, birth)
-            self._ensure_defaults_for_new(
-                new_key,
-                base_name=base_name,
-                species=species,
-                birth_date=birth,
-            )
-            return new_key
-
-        if create_missing:
-            prompted = self._prompt_identity_for_import(base_name)
-            if prompted is not None:
-                species, birth = prompted
-                new_key = animal_identity_key(base_name, species, birth)
-                self._ensure_defaults_for_new(
-                    new_key,
-                    base_name=base_name,
-                    species=species,
-                    birth_date=birth,
-                )
-                return new_key
-
         logging.warning(
             "Import row skipped for %s: animal not found and identity columns missing.",
             raw_name,
         )
         return None
-
-    def _reset_import_identity_prompt_cache(self) -> None:
-        self._import_identity_prompt_cache = {}
 
     @staticmethod
     def _import_sample_id_column(df: Any) -> Optional[str]:
@@ -4789,19 +4804,64 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     return column
         return None
 
+    def _measurement_import_row_status(self, row: Any) -> Tuple[str, Optional[str]]:
+        """Classify one row without mutating animals or prompting for identity."""
+        raw_name = self._import_row_text(row, ("Name",))
+        animal_id = self._import_row_text(
+            row,
+            ("Animal ID", "AnimalID", "animal_id", "Tier-ID", "Tier ID"),
+        )
+        if not raw_name or not animal_id:
+            return "invalid", None
+
+        active_id_matches = [
+            key for key, record in self.animals.items()
+            if str(record.get("id") or "").strip() == animal_id
+        ]
+        archived_id_matches = [
+            key for key, record in getattr(self, "archived", {}).items()
+            if str(record.get("id") or "").strip() == animal_id
+        ]
+        if len(active_id_matches) == 1:
+            return "existing", active_id_matches[0]
+        if len(active_id_matches) > 1:
+            return "ambiguous", None
+        if archived_id_matches:
+            return "archived", None
+
+        # An explicitly supplied Animal ID is authoritative. A matching name
+        # with a different ID must never receive the measurement.
+        return "unknown", None
+
+    def _measurement_import_plan(self, df: Any) -> List[Tuple[Any, str, Optional[str]]]:
+        return [
+            (index, *self._measurement_import_row_status(row))
+            for index, row in df.iterrows()
+        ]
+
     def _confirm_measurement_import_preview(self, df: Any, title: str) -> bool:
         """Show parsed import rows before any animal or measurement is written."""
         columns = [str(column) for column in getattr(df, "columns", [])]
+        full_plan = self._measurement_import_plan(df)
         preview_rows = list(df.head(200).iterrows())
-        new_count = 0
-        statuses: List[str] = []
-        for _index, row in preview_rows:
-            resolved = self._resolve_import_animal_key(row, create_missing=False)
-            if resolved:
-                statuses.append(self.messages.get("import.preview.existing", "Existing animal"))
-            else:
-                statuses.append(self.messages.get("import.preview.new", "New animal"))
-                new_count += 1
+        status_by_index = {index: status for index, status, _key in full_plan}
+        counts = {
+            status: sum(1 for _index, planned, _key in full_plan if planned == status)
+            for status in ("existing", "unknown", "archived", "ambiguous", "invalid")
+        }
+        status_labels = {
+            status: self.messages.get(
+                f"import.preview.status.{status}",
+                {
+                    "existing": "Existing animal — will import",
+                    "unknown": "Unknown animal — will skip",
+                    "archived": "Archived animal — will skip",
+                    "ambiguous": "Ambiguous Animal ID — will skip",
+                    "invalid": "Invalid identity — will skip",
+                }[status],
+            )
+            for status in counts
+        }
 
         dlg = QDialog(self)
         dlg.setWindowTitle(title)
@@ -4809,10 +4869,36 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         layout = QVBoxLayout(dlg)
         total = len(df)
         summary = self.messages.get(
-            "import.preview.summary",
-            "{rows} rows will be processed. {new} preview rows refer to new animals.",
-        ).format(rows=total, new=new_count)
+            "import.preview.summary.existing_only",
+            "{rows} rows: {existing} existing-animal rows can be imported; "
+            "{skipped} rows will be skipped.",
+        ).format(
+            rows=total,
+            existing=counts["existing"],
+            skipped=total - counts["existing"],
+        )
         layout.addWidget(QLabel(summary))
+        unknown_ids = sorted({
+            self._import_row_text(
+                row,
+                ("Animal ID", "AnimalID", "animal_id", "Tier-ID", "Tier ID"),
+            )
+            for index, row in df.iterrows()
+            if status_by_index.get(index) == "unknown"
+        })
+        if unknown_ids:
+            warning_text = self.messages.get(
+                "import.preview.unknown_manager_warning",
+                "Unknown animal(s) detected: {animals}. Only existing animals' "
+                "data will be imported. Ask a Manager to add them first.",
+            ).format(animals=", ".join(unknown_ids))
+            warning_label = QLabel(warning_text)
+            warning_label.setWordWrap(True)
+            warning_label.setStyleSheet(
+                "QLabel { background: #fff3cd; color: #664d03; "
+                "padding: 8px; border: 1px solid #ffecb5; }"
+            )
+            layout.addWidget(warning_label)
         if total > len(preview_rows):
             layout.addWidget(QLabel(self.messages.get(
                 "import.preview.truncated",
@@ -4825,7 +4911,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
         table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
-        for table_row, ((_index, row), status) in enumerate(zip(preview_rows, statuses)):
+        for table_row, (_index, row) in enumerate(preview_rows):
+            status = status_by_index.get(_index, "invalid")
             for column_index, column in enumerate(columns):
                 value = row[column]
                 if pd.isna(value):
@@ -4835,8 +4922,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 else:
                     text = str(value)
                 table.setItem(table_row, column_index, QTableWidgetItem(text))
-            status_item = QTableWidgetItem(status)
-            if status == self.messages.get("import.preview.new", "New animal"):
+            status_item = QTableWidgetItem(status_labels[status])
+            if status != "existing":
                 status_item.setBackground(QColor("#FFF3CD"))
             table.setItem(table_row, len(columns), status_item)
         table.resizeColumnsToContents()
@@ -4853,87 +4940,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         buttons.rejected.connect(dlg.reject)
         layout.addWidget(buttons)
         return dlg.exec() == QDialog.DialogCode.Accepted
-
-    def _prompt_identity_for_import(
-        self,
-        base_name: str,
-        animal_id: str = "",
-    ) -> Optional[Tuple[str, str]]:
-        cache = getattr(self, '_import_identity_prompt_cache', None)
-        if not isinstance(cache, dict):
-            cache = {}
-            self._import_identity_prompt_cache = cache
-        cache_key = (
-            animal_base_name(base_name).casefold(),
-            str(animal_id or "").strip().casefold(),
-        )
-        if cache_key in cache:
-            return cache[cache_key]
-
-        dlg = QDialog(self)
-        dlg.setWindowTitle(self.messages.get(
-            "dialog.import_identity.title",
-            "Animal identity required",
-        ))
-        layout = QVBoxLayout(dlg)
-        form = QFormLayout()
-
-        name_le = QLineEdit(animal_base_name(base_name))
-        name_le.setReadOnly(True)
-        form.addRow(self.messages.get("dialog.field.name", "Name:"), name_le)
-
-        if animal_id:
-            animal_id_le = QLineEdit(animal_id)
-            animal_id_le.setReadOnly(True)
-            form.addRow(
-                self.messages.get("dialog.field.id", "Animal ID:"),
-                animal_id_le,
-            )
-
-        species_cb = QComboBox()
-        placeholder = self.messages.get("dialog.species.placeholder", "(Please select)")
-        species_cb.addItem(placeholder, "")
-        for species in self._load_species_options():
-            species_cb.addItem(species, species)
-        form.addRow(self.messages.get("dialog.field.species", "Species:"), species_cb)
-
-        birth_le = QLineEdit()
-        birth_le.setPlaceholderText(self.messages.get("form.placeholder.date_short", "(DD.MM.YYYY)"))
-        form.addRow(self.messages.get("dialog.field.birth_date", "Birth date:"), birth_le)
-        layout.addLayout(form)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
-            parent=dlg,
-        )
-        buttons.accepted.connect(dlg.accept)
-        buttons.rejected.connect(dlg.reject)
-        layout.addWidget(buttons)
-
-        while True:
-            if dlg.exec() != QDialog.DialogCode.Accepted:
-                cache[cache_key] = None
-                return None
-            species = self._species_from_combo(species_cb)
-            try:
-                birth_text = birth_le.text().strip()
-                if len(birth_text) < 10:
-                    raise ValueError(
-                        "A complete birth date with four-digit year is required "
-                        "(DD.MM.YYYY)."
-                    )
-                birth = normalize_birth_date(birth_text, required=True)
-                animal_identity_key(base_name, species, birth)
-            except ValueError as exc:
-                self._show_message_raw(
-                    self.messages.get("error.title", "Error"),
-                    str(exc),
-                    "error",
-                )
-                continue
-            cache[cache_key] = (species, birth)
-            return cache[cache_key]
-
 
     def _display_name(self, key: str) -> str:
         """Return the user-visible name for an animal key.
@@ -4954,7 +4960,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     #   Load and parse the JSON configuration file, returning a dict.
     # ------------------------
     def _read_json(self) -> Dict[str, Any]:
-        """Read persistence data from JSON file with size validation and corruption recovery."""
+        """Read the authoritative core dataset from the configured backend."""
         # Default empty database structure
         default_data = {
             'version': SCHEMA_VERSION,
@@ -4968,53 +4974,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 'show_events': True
             }
         }
-        
-        if not os.path.exists(DATEN_DATEI):
+
+        data = self.backend.load_core_data()
+        if not isinstance(data, dict):
             return default_data
-            
-        if os.path.getsize(DATEN_DATEI) > 10 * 1024 * 1024:  # 10 MB limit
-            logging.error(f"Data file {DATEN_DATEI} is too large (>10MB)")
-            self._show_message("error.read_json.too_large")
-            return default_data
-            
-        try:
-            with open(DATEN_DATEI, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                
-            # Validate basic structure
-            if not isinstance(data, dict):
-                raise ValueError("Root element must be a JSON object")
-                
-            # Ensure all required top-level keys exist
-            if 'animals' not in data:
-                data['animals'] = {}
-            if 'archived_animals' not in data:
-                # Handle legacy 'archived' key
-                if 'archived' in data:
-                    data['archived_animals'] = data['archived']
-                    logging.info("Migrated legacy 'archived' key to 'archived_animals'")
-                else:
-                    data['archived_animals'] = {}
-            if 'settings' not in data:
-                data['settings'] = default_data['settings']
-            if 'version' not in data:
-                data['version'] = SCHEMA_VERSION
-                
-            return data
-                
-        except (json.JSONDecodeError, IOError, ValueError) as e:
-            # Corruption detected - preserve the broken file and start fresh
-            logging.error(f"Failed to read {DATEN_DATEI}: {e}")
-            corrupt_path = f"{DATEN_DATEI}.corrupt.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            try:
-                import shutil
-                shutil.copy2(DATEN_DATEI, corrupt_path)
-                logging.warning(f"Corrupted database preserved as {corrupt_path}")
-                # Show user-friendly warning (will be shown by _load_persistence)
-            except Exception as copy_error:
-                logging.error(f"Could not preserve corrupt file: {copy_error}")
-            
-            return default_data
+        data.setdefault('animals', {})
+        data.setdefault('archived_animals', {})
+        data.setdefault('settings', default_data['settings'])
+        data.setdefault('version', SCHEMA_VERSION)
+        return data
 
     # ------------------------
     # 7.10 Write JSON Data
@@ -5025,7 +4993,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         data: Dict[str, Any],
         audit_after_save: bool = True,
     ) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
-        """Write persistence data (animals/archived_animals) safely to JSON file with atomic write."""
+        """Serialize and transactionally persist core data through the backend."""
         self._save_trace(
             "write_json.enter",
             audit_after_save=audit_after_save,
@@ -5075,6 +5043,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     rec_copy['birth_date'] = (
                         normalize_birth_date(rec_copy.get('birth_date'), required=False)
                         or normalize_birth_date(parts[2], required=False)
+                    )
+                    rec_copy['origin'] = (
+                        str(rec_copy.get('origin') or '').strip() or parts[3]
                     )
 
                 # --- progesterone (blood) ---
@@ -5184,58 +5155,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
 
         # Atomic write: temp file → fsync → replace
-        target_dir = os.path.dirname(DATEN_DATEI) or '.'
-        os.makedirs(target_dir, exist_ok=True)
-        self._save_trace("write_json.tempfile.before", target_dir=target_dir)
-        fd, tmp_path = tempfile.mkstemp(prefix="progtrack_", suffix=".tmp", dir=target_dir)
-        self._save_trace("write_json.tempfile.after", tmp_path=tmp_path)
-        try:
-            self._save_trace("write_json.dump.before", tmp_path=tmp_path)
-            with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                json.dump(out, f, ensure_ascii=False, indent=2)
-                f.flush()
-                os.fsync(f.fileno())
-            self._save_trace("write_json.dump.after", tmp_path=tmp_path)
-            # Atomic replace (works on Windows and Unix)
-            self._save_trace("write_json.replace.before", tmp_path=tmp_path, target=DATEN_DATEI)
-            os.replace(tmp_path, DATEN_DATEI)
-            self._save_trace("write_json.replace.after", target=DATEN_DATEI)
-            logging.info(f"Successfully saved data to {DATEN_DATEI}")
-            if audit_after_save:
-                self._save_trace("write_json.audit_immediate.before")
-                self._audit_data_snapshot_diff_when_safe(before_snapshot, out)
-                self._save_trace("write_json.audit_immediate.after")
-            else:
-                self._save_trace("write_json.return_audit_snapshots")
-                return before_snapshot, out
-        except Exception as e:
-            self._save_trace("write_json.primary.exception", error=e)
-            # Clean up temp file on error
-            try:
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
-                    self._save_trace("write_json.temp_cleanup.after", tmp_path=tmp_path)
-            except Exception:
-                self._save_trace("write_json.temp_cleanup.exception", tmp_path=tmp_path)
-                pass
-            # Try fallback save to user home directory
-            fallback_path = os.path.expanduser(f"~/progtrack_daten_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-            try:
-                self._save_trace("write_json.fallback.before", fallback_path=fallback_path)
-                logging.warning(f"Primary save failed: {e}. Attempting fallback to {fallback_path}")
-                with open(fallback_path, 'w', encoding='utf-8') as f:
-                    json.dump(out, f, ensure_ascii=False, indent=2)
-                    f.flush()
-                    os.fsync(f.fileno())
-                self._show_message("warning.write_json.fallback", target=DATEN_DATEI, fallback_path=fallback_path)
-                logging.info(f"Fallback save successful to {fallback_path}")
-                self._save_trace("write_json.fallback.after", fallback_path=fallback_path)
-            except Exception as fallback_error:
-                self._save_trace("write_json.fallback.exception", error=fallback_error)
-                self._show_message("error.write_json.fallback_failure", error=fallback_error)
-                logging.error(f"Failed to save to fallback {fallback_path}: {fallback_error}")
-                raise  # Re-raise original error
-        self._save_trace("write_json.exit")
+        self.backend.save_core_data(out)
+        logging.info(
+            "Successfully saved core data through %s",
+            RUNTIME_PATHS.profile.value,
+        )
+        if audit_after_save:
+            self._audit_data_snapshot_diff_when_safe(before_snapshot, out)
+        else:
+            return before_snapshot, out
         return None
 
     # ------------------------
@@ -5457,7 +5385,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         return values
 
     def _genotype_options_for_species(self, species: str) -> List[str]:
-        conventions = load_conventions(conventions_path(APP_BASE_DIR))
+        conventions = self._load_identity_conventions()
         mapping = conventions.get("genotypes", {})
         if not isinstance(mapping, dict):
             return []
@@ -5524,13 +5452,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
 
-        can_edit_identity = self._master_can('core.edit_animal_identity')
+        # Identity is immutable for every role, including Lord, after creation.
+        can_edit_identity = not editing
         display_name_value = animal_base_name(name_value) if editing else (name_value or "")
         name_le = QLineEdit(display_name_value)
         self._std_widen(name_le)
         name_le.setMaximumWidth(UI_STD_FIELD_MIN_WIDTH + 80)
-        if editing and not can_edit_identity:
+        if editing:
             name_le.setReadOnly(True)
+            name_le.setStyleSheet("background: #f0f0f0; color: #666;")
+            name_le.setToolTip(self.messages.get(
+                "identity.immutable",
+                "Name, species, full birth date, origin, and IPID cannot be "
+                "changed after the animal has been created.",
+            ))
         else:
             name_le.setPlaceholderText(self.messages.get("form.placeholder.name", "Name"))
 
@@ -5566,8 +5501,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         species_cb.currentIndexChanged.connect(_sync_species_font)
         _sync_species_font(species_cb.currentIndex())
 
-        if editing and normalized_species and not can_edit_identity:
+        if editing and normalized_species:
             species_cb.setEnabled(False)
+            species_cb.setStyleSheet("background: #f0f0f0; color: #666;")
+            species_cb.setToolTip(name_le.toolTip())
 
         row.addWidget(name_le, 0)
         row.addWidget(species_label, 0)
@@ -5606,7 +5543,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             chip_le.setStyleSheet("min-width: 0;")
 
-        conventions = load_conventions(conventions_path(APP_BASE_DIR))
+        conventions = self._load_identity_conventions()
         origins = [str(value) for value in conventions.get("animal_origins", []) if str(value).strip()]
         origin_le = ControlledCatalogCombo()
         for value in origins:
@@ -5620,9 +5557,23 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             origin_le.setCurrentIndex(0)
         origin_le.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         origin_le.setMinimumWidth(50)
-        if not self._master_can('core.edit_animal_immutable'):
+        identity_is_established = bool(
+            rec.get("ipid")
+            or (
+                rec.get("name")
+                and rec.get("species")
+                and rec.get("birth_date")
+                and current_origin
+            )
+        )
+        if identity_is_established or not self._master_can('core.edit_animal_immutable'):
             origin_le.setEnabled(False)
             origin_le.setStyleSheet('min-width: 0; background: #f0f0f0; color: #666;')
+            origin_le.setToolTip(self.messages.get(
+                "identity.immutable",
+                "Name, species, full birth date, origin, and IPID cannot be "
+                "changed after the animal has been created.",
+            ))
         else:
             origin_le.setStyleSheet("min-width: 0;")
 
@@ -7443,17 +7394,39 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return f"{base_desc} + {sick_desc}"
         
         return status_map.get(status, status)
+
+    def _status_icon_ids(self, status: str, animal: Mapping[str, Any]) -> List[str]:
+        """Translate legacy internal status tokens into packaged UI assets."""
+        if DECEASED_STATUS_SYMBOL in status:
+            return ["status.deceased"]
+        result: List[str] = []
+        if "☉?" in status:
+            result.append("status.pregnant_possible")
+        elif "☉" in status:
+            result.append("status.pregnant_confirmed")
+        elif "Oo" in status:
+            result.append("status.has_young_offspring")
+        elif self._animal_role_value(dict(animal)) == Role.AMME.value:
+            result.append("status.not_pregnant")
+        if "!" in status:
+            result.append("status.abnormal")
+        if "+" in status:
+            result.append("status.sick")
+        if "♥" in status:
+            result.append("status.partner")
+        return result
+
+    @staticmethod
+    def _status_text_without_icon_tokens(status: str) -> str:
+        text = str(status or "")
+        for token in (DECEASED_STATUS_SYMBOL, "☉?", "☉", "Oo", "!", "+", "♥"):
+            text = text.replace(token, " ")
+        text = re.sub(r"\s+", " ", text).strip(" |")
+        return text
     
     def _load_project_names(self) -> list:
-        """Return sorted list of project names from Projects_Track/project_data.json."""
-        try:
-            import json as _json
-            from pathlib import Path as _Path
-            p = _Path(__file__).parent / 'Plugins' / 'Projects_Track' / 'project_data.json'
-            d = _json.loads(p.read_text(encoding='utf-8'))
-            return sorted(d.get('projects', {}).keys())
-        except Exception:
-            return []
+        """Return sorted project names from backend project records."""
+        return sorted(self._load_project_records_for_visibility())
 
     def _project_names_for_species(self, species: str) -> List[str]:
         """Return visible projects whose configured species matches exactly."""
@@ -7507,17 +7480,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             species_widget.textChanged.connect(rebuild)
 
     def _load_project_records_for_visibility(self) -> Dict[str, Dict[str, Any]]:
-        try:
-            import json as _json
-            p = Path(__file__).parent / 'Plugins' / 'Projects_Track' / 'project_data.json'
-            if not p.exists():
-                return {}
-            data = _json.loads(p.read_text(encoding='utf-8'))
-            projects = data.get('projects', {}) if isinstance(data, dict) else {}
-            return {str(k): v for k, v in projects.items() if isinstance(v, dict)}
-        except Exception as exc:
-            logging.warning(f"Could not load project visibility records: {exc}")
-            return {}
+        data = self.backend.records.get("projects", "catalog", default={})
+        projects = data.get("projects", {}) if isinstance(data, dict) else {}
+        return {str(k): v for k, v in projects.items() if isinstance(v, dict)}
 
     def _project_visibility_scope(self) -> tuple[bool, set[str]]:
         mt = getattr(self, 'master_track', None)
@@ -7598,6 +7563,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         deleted_values = previous_values - next_values
         try:
             registry.save_roles(roles_for_save)
+            try:
+                role_payload = json.loads(
+                    registry.path.read_text(encoding="utf-8")
+                )
+            except (OSError, json.JSONDecodeError):
+                role_payload = {
+                    "schema_version": 1,
+                    "roles": registry.roles(),
+                }
+            self.backend.records.put(
+                "configuration", "animal-roles", role_payload
+            )
             self._save_role_label_overrides(registry.roles())
             self._merge_user_messages()
             if hasattr(self, "category_tab"):
@@ -8917,7 +8894,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         default_date: str = "",
     ) -> Optional[Dict[str, str]]:
         """Collect the required exit date and controlled reason in one modal."""
-        conventions = load_conventions(conventions_path(APP_BASE_DIR))
+        conventions = self._load_identity_conventions()
         reasons = [
             str(item).strip()
             for item in conventions.get("experiment_exit_reasons", [])
@@ -9338,7 +9315,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         death_date = str(record.get("death_date") or "").strip()
         if not death_date or death_date == str(previous.get("death_date") or "").strip():
             return True
-        conventions = load_conventions(conventions_path(APP_BASE_DIR))
+        conventions = self._load_identity_conventions()
         causes = [
             str(item) for item in conventions.get("death_causes", [])
             if str(item).strip()
@@ -10368,12 +10345,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if timer is not None:
             timer.stop()
 
-        report_file = (
-            Path(__file__).parent
-            / "Plugins" / "Animal_Reports" / "animal_report_data.json"
+        all_data = copy.deepcopy(
+            self.backend.records.get("reports", "animal-reports", default={})
         )
-        report_cache = self._get_report_json_mtime_cache()
-        all_data = copy.deepcopy(report_cache.load(report_file))
 
         current_animal = getattr(self, 'report_current_animal', None)
         if current_animal:
@@ -10405,9 +10379,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             animal_data['edits'] = edits
 
         if changed or current_animal:
-            with open(report_file, 'w', encoding='utf-8') as f:
-                json.dump(all_data, f, indent=2, ensure_ascii=False)
-            report_cache.update_after_write(report_file, all_data)
+            self.backend.records.put("reports", "animal-reports", all_data)
 
         if current_animal in all_data:
             current_data = all_data[current_animal]
@@ -10434,11 +10406,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         animal_name = self.report_current_animal
         
-        report_file = Path(__file__).parent / "Plugins" / "Animal_Reports" / "animal_report_data.json"
-        # Shallow-copy the cached top-level mapping; the current animal entry
-        # is replaced below, so cached entries for other animals stay immutable.
-        report_cache = self._get_report_json_mtime_cache()
-        all_data = dict(report_cache.load(report_file))
+        all_data = dict(
+            self.backend.records.get("reports", "animal-reports", default={})
+        )
         
         # Update data for this animal
         all_data[animal_name] = {
@@ -10446,15 +10416,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             'edits': copy.deepcopy(self.report_edits)
         }
         
-        # Save
-        with open(report_file, 'w', encoding='utf-8') as f:
-            json.dump(all_data, f, indent=2, ensure_ascii=False)
-        report_cache.update_after_write(report_file, all_data)
+        self.backend.records.put("reports", "animal-reports", all_data)
     
     def _load_report_data(self, animal_name: str) -> None:
         """Load report data for a specific animal."""
-        report_file = Path(__file__).parent / "Plugins" / "Animal_Reports" / "animal_report_data.json"
-        all_data = self._get_report_json_mtime_cache().load(report_file)
+        all_data = self.backend.records.get(
+            "reports", "animal-reports", default={}
+        )
         
         animal_data = copy.deepcopy(all_data.get(animal_name, {}))
         self.report_locked_dates = set(animal_data.get('locked_dates', []))
@@ -10714,11 +10682,23 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             name_label.setToolTip(identity_label)
             h.addWidget(name_label)
             
-            # Add the status label
-            status_lbl = QLabel(status or "")
-            status_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             h.addStretch()
-            h.addWidget(status_lbl)
+            for semantic_id in self._status_icon_ids(status, data):
+                status_icon = ui_icon(semantic_id)
+                if status_icon.isNull():
+                    continue
+                icon_label = QLabel()
+                icon_label.setPixmap(status_icon.pixmap(18, 18))
+                icon_label.setToolTip(self._get_status_description(status))
+                h.addWidget(icon_label)
+            remaining_status = self._status_text_without_icon_tokens(status)
+            if remaining_status:
+                status_lbl = QLabel(remaining_status)
+                status_lbl.setAlignment(
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                )
+                status_lbl.setToolTip(self._get_status_description(status))
+                h.addWidget(status_lbl)
             h.setContentsMargins(4, 2, 4, 2)
             row_widget.setLayout(h)
             
@@ -14918,6 +14898,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.style_settings_action = QAction(self.messages.get("menu.program.style_settings", "Style"), self)
         self.style_settings_action.triggered.connect(self._show_style_settings)
         program_menu.addAction(self.style_settings_action)
+        branding_action = QAction(
+            self.messages.get(
+                "menu.program.institution_branding", "Institution branding"
+            ),
+            self,
+        )
+        branding_action.triggered.connect(self._show_institution_branding)
+        program_menu.addAction(branding_action)
 
 
     def _on_language_changed(self, action):
@@ -14967,6 +14955,30 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Refresh the plot to show new colors/styles
             if hasattr(self, 'selected_animals') and self.selected_animals:
                 self._plot_selected()
+
+    def _show_institution_branding(self):
+        mt = getattr(self, "master_track", None)
+        role = str(getattr(mt, "current_role", "") or "")
+        jobs = set(getattr(mt, "get_assigned_jobs", lambda: [])() or [])
+        permitted = role in {"lord", "master"} or "manager" in jobs
+        if not permitted:
+            QMessageBox.warning(
+                self,
+                self.messages.get("title.warning", "Warning"),
+                self.messages.get(
+                    "master_track.warn.no_permission",
+                    "You don't have permission to access this feature.",
+                ),
+            )
+            return
+        from Plugins.core.institution_branding import InstitutionBrandingDialog
+
+        actor = str(
+            getattr(mt, "current_username", "") or "installation-admin"
+        )
+        InstitutionBrandingDialog(
+            self.backend.branding, actor, authorized=True, parent=self
+        ).exec()
 
     def _reload_user_style_settings(self):
         """Reload style settings for the current user."""
@@ -16928,11 +16940,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
             if not editing and not self._validate_identity_species_for_save(selected_species):
                 return
+            origin = origin_le.currentText().strip()
             if editing and not self._validate_existing_identity_for_save(
-                    name, new_name, selected_species, birth_date):
+                    name, new_name, selected_species, birth_date, origin):
                 return
             if self._name_species_conflict(
-                    new_name, selected_species, birth_date,
+                    new_name, selected_species, birth_date, origin,
                     exclude_key=name if editing else None):
                 self._show_message("error.name_exists", self.messages.get("dialog.partner.error.name_exists", "Name already exists."))
                 return
@@ -16941,7 +16954,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             _orig_name = new_name
-            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
+            new_name = self._resolve_animal_key(
+                new_name, selected_species, birth_date, origin
+            )
             self._save_trace(
                 "partner.save.identity_resolved",
                 new_name=new_name,
@@ -16981,7 +16996,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['rolle']             = Role.PARTNER.value
             rec_obj['id']                = id_le.text().strip()
             rec_obj['chip_nr']           = chip_le.text().strip()
-            rec_obj['origin']            = origin_le.text().strip()
+            rec_obj['origin']            = origin_le.currentText().strip()
             rec_obj['project']           = project_le.currentText().strip()
             rec_obj['severity']          = severity_cb.currentData()
             rec_obj['death_date']        = death_date_le.text().strip()
@@ -17534,11 +17549,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
             if not editing and not self._validate_identity_species_for_save(selected_species):
                 return
+            origin = origin_le.currentText().strip()
             if editing and not self._validate_existing_identity_for_save(
-                    name, new_name, selected_species, birth_date):
+                    name, new_name, selected_species, birth_date, origin):
                 return
             if self._name_species_conflict(
-                    new_name, selected_species, birth_date,
+                    new_name, selected_species, birth_date, origin,
                     exclude_key=name if editing else None):
                 self._show_message(
                     self.messages.get("error.title", "Error"),
@@ -17551,7 +17567,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             _orig_name = new_name
-            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
+            new_name = self._resolve_animal_key(
+                new_name, selected_species, birth_date, origin
+            )
             self._save_trace(
                 "sperm_donor.save.identity_resolved",
                 new_name=new_name,
@@ -17607,7 +17625,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['rolle'] = Role.SAMENSP.value
             rec_obj['id'] = id_le.text().strip()
             rec_obj['chip_nr'] = chip_le.text().strip()
-            rec_obj['origin'] = origin_le.text().strip()
+            rec_obj['origin'] = origin_le.currentText().strip()
             rec_obj['project'] = project_le.currentText().strip()
             rec_obj['severity'] = severity_cb.currentData()
             rec_obj['death_date'] = death_date_le.text().strip()
@@ -17902,13 +17920,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             def update_id_preview(*_args) -> None:
                 if bool(id_le.property("_manual_id_override")):
                     return
-                conventions = load_conventions(conventions_path(APP_BASE_DIR))
+                conventions = self._load_identity_conventions()
                 preview = preview_animal_id(
                     conventions.get("animal_id_components", []),
                     name=name_le.text(),
                     species=self._species_from_combo(species_cb),
                     birth_date=birth_date_le.text(),
                     sex=str(sex_cb.currentData() or ""),
+                    origin=origin_le.currentText(),
                 )
                 id_le.setProperty("_auto_id_preview", preview)
                 id_le.setText(preview)
@@ -17917,6 +17936,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             species_cb.currentIndexChanged.connect(update_id_preview)
             birth_date_le.textChanged.connect(update_id_preview)
             sex_cb.currentIndexChanged.connect(update_id_preview)
+            origin_le.currentTextChanged.connect(update_id_preview)
             update_id_preview()
 
         # Max special measurements
@@ -18214,11 +18234,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
             if not editing and not self._validate_identity_species_for_save(selected_species):
                 return
+            origin = origin_le.currentText().strip()
             if editing and not self._validate_existing_identity_for_save(
-                    name, new_name, selected_species, birth_date):
+                    name, new_name, selected_species, birth_date, origin):
                 return
             if self._name_species_conflict(
-                    new_name, selected_species, birth_date,
+                    new_name, selected_species, birth_date, origin,
                     exclude_key=name if editing else None):
                 QMessageBox.critical(
                     self,
@@ -18231,7 +18252,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             _orig_name = new_name
-            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
+            new_name = self._resolve_animal_key(
+                new_name, selected_species, birth_date, origin
+            )
             self._save_trace("offspring.save.identity_resolved", new_name=new_name, selected_species=selected_species)
 
             # collect fields
@@ -18239,7 +18262,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['rolle']       = Role.OFFSPRING.value
             rec_obj['id']          = id_le.text().strip()
             rec_obj['chip_nr']     = chip_le.text().strip()
-            rec_obj['origin']      = origin_le.text().strip()
+            rec_obj['origin']      = origin_le.currentText().strip()
             rec_obj['project']     = project_le.currentText().strip()
             rec_obj['severity']    = severity_cb.currentData()
             rec_obj['death_date']       = death_date_le.text().strip()
@@ -18250,7 +18273,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec_obj, new_name, _orig_name, selected_species, birth_date)
             rec_obj['sex']              = sex_cb.currentData() or sex_cb.currentText()
             rec_obj['genotype']         = genotype_le.text().strip()
-            conventions = load_conventions(conventions_path(APP_BASE_DIR))
+            conventions = self._load_identity_conventions()
             old_record = self.animals.get(name, {}) if editing else {}
             entered_id = id_le.text().strip()
             entered_id_is_preview = (
@@ -18264,6 +18287,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     species=selected_species,
                     birth_date=birth_date,
                     sex=str(rec_obj["sex"]),
+                    origin=str(rec_obj["origin"]),
                     existing_ids=(
                         record.get("id", "") for record in self.animals.values()
                     ),
@@ -18275,7 +18299,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     conventions.get("yearly_sequences", {}).get(short_year, 0))
                 rec_obj["generated_id_absolute_sequence"] = int(
                     conventions.get("absolute_sequence", 0))
-                save_conventions(conventions_path(APP_BASE_DIR), conventions)
+                self._save_identity_conventions(conventions)
             elif editing and old_record.get("generated_id_sequence"):
                 if entered_id and entered_id != str(old_record.get("id") or ""):
                     rec_obj["id"] = entered_id
@@ -18926,11 +18950,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
             if not editing and not self._validate_identity_species_for_save(selected_species):
                 return
+            origin = origin_le.currentText().strip()
             if editing and not self._validate_existing_identity_for_save(
-                    name, new_name, selected_species, birth_date):
+                    name, new_name, selected_species, birth_date, origin):
                 return
             if self._name_species_conflict(
-                    new_name, selected_species, birth_date,
+                    new_name, selected_species, birth_date, origin,
                     exclude_key=name if editing else None):
                 QMessageBox.critical(
                     self,
@@ -18943,7 +18968,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             _orig_name = new_name
-            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
+            new_name = self._resolve_animal_key(
+                new_name, selected_species, birth_date, origin
+            )
             self._save_trace("zuchttier.save.identity_resolved", new_name=new_name, selected_species=selected_species)
             
             # Collect fields
@@ -18951,7 +18978,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['rolle'] = Role.ZUCHTTIER.value
             rec_obj['id'] = id_le.text().strip()
             rec_obj['chip_nr'] = chip_le.text().strip()
-            rec_obj['origin'] = origin_le.text().strip()
+            rec_obj['origin'] = origin_le.currentText().strip()
             rec_obj['project'] = project_le.currentText().strip()
             rec_obj['severity'] = severity_cb.currentData()
             self._apply_identity_fields_to_record(
@@ -19516,11 +19543,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
             if not editing and not self._validate_identity_species_for_save(selected_species):
                 return
+            origin = origin_le.currentText().strip()
             if editing and not self._validate_existing_identity_for_save(
-                    name, new_name, selected_species, birth_date):
+                    name, new_name, selected_species, birth_date, origin):
                 return
             if self._name_species_conflict(
-                    new_name, selected_species, birth_date,
+                    new_name, selected_species, birth_date, origin,
                     exclude_key=name if editing else None):
                 self._show_message_raw(
                     self.messages.get('error.title', 'Error'),
@@ -19530,7 +19558,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     species_cb, initial_species, selected_species):
                 return
             _orig_name = new_name
-            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
+            new_name = self._resolve_animal_key(
+                new_name, selected_species, birth_date, origin
+            )
             self._save_trace("versuchstier.save.identity_resolved", new_name=new_name, selected_species=selected_species)
             try:
                 ref_w = float(ref_w_le.text()) if ref_w_le.text() else DEFAULT_REF_WEIGHT
@@ -19560,7 +19590,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['rolle']            = Role.EXPERIMENTAL.value
             rec_obj['id']               = id_le.text().strip()
             rec_obj['chip_nr']          = chip_le.text().strip()
-            rec_obj['origin']           = origin_le.text().strip()
+            rec_obj['origin']           = origin_le.currentText().strip()
             rec_obj['project']          = project_le.currentText().strip()
             rec_obj['severity']         = severity_cb.currentData()
             self._apply_identity_fields_to_record(
@@ -19742,7 +19772,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             id_le = QLineEdit(str(rec.get("id", "")))
             chip_le = QLineEdit(str(rec.get("chip_nr", "")))
-            origin_le = QLineEdit(str(rec.get("origin", "")))
+            origin_le = ControlledCatalogCombo()
+            current_origin = str(rec.get("origin", ""))
+            if current_origin:
+                origin_le.addItem(current_origin, current_origin)
 
         project_cb = None
         current_project = rec.get("project", "")
@@ -19903,14 +19936,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             death_date = self._normalize_identity_birth_for_save(death_date_le.text(), required=False)
             if death_date is None:
                 return
+            origin = origin_le.currentText().strip()
             if not creating and not self._validate_existing_identity_for_save(
-                name, base_name, selected_species, birth_date
+                name, base_name, selected_species, birth_date, origin
             ):
                 return
             if self._name_species_conflict(
                 base_name,
                 selected_species,
                 birth_date,
+                origin,
                 exclude_key=name if not creating else None,
             ):
                 self._show_message_raw(
@@ -19925,7 +19960,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             try:
-                new_key = self._resolve_animal_key(base_name, selected_species, birth_date)
+                new_key = self._resolve_animal_key(
+                    base_name, selected_species, birth_date, origin
+                )
             except ValueError as exc:
                 self._show_message_raw(self.messages.get("error.title", "Error"), str(exc), "error")
                 return
@@ -19943,7 +19980,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 "rolle": role_value,
                 "id": id_le.text().strip(),
                 "chip_nr": chip_le.text().strip(),
-                "origin": origin_le.text().strip(),
+                "origin": origin_le.currentText().strip(),
                 "project": project_cb.currentText().strip() if project_cb is not None else current_project,
                 "birth_date": birth_date,
                 "death_date": death_date if "lifecycle" in enabled_blocks else rec.get("death_date", ""),
@@ -20521,11 +20558,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
             if creating and not self._validate_identity_species_for_save(selected_species):
                 return
+            origin = origin_le.currentText().strip()
             if not creating and not self._validate_existing_identity_for_save(
-                    name, new_name, selected_species, birth_date):
+                    name, new_name, selected_species, birth_date, origin):
                 return
             if self._name_species_conflict(
-                    new_name, selected_species, birth_date,
+                    new_name, selected_species, birth_date, origin,
                     exclude_key=None if creating else name):
                 self._show_message(
                     self.messages.get('error.title', 'Error'),
@@ -20538,7 +20576,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
 
             _orig_name = new_name
-            new_name = self._resolve_animal_key(new_name, selected_species, birth_date)
+            new_name = self._resolve_animal_key(
+                new_name, selected_species, birth_date, origin
+            )
             self._save_trace(
                 "female_like.save.identity_resolved",
                 new_name=new_name,
@@ -20584,7 +20624,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 logging.info(f"Saving animal: id='{id_text}', project='{project_text}'")
                 rec['id'] = id_text
                 rec['chip_nr'] = chip_le.text().strip()
-                rec['origin'] = origin_le.text().strip()
+                rec['origin'] = origin_le.currentText().strip()
                 rec['project'] = project_text
                 rec['severity'] = severity_cb.currentData()
                 rec['death_date'] = death_date_le.text().strip()
@@ -21006,38 +21046,78 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         idx = self.category_tab.currentIndex()
 
         if idx == 1:
-            self._dlg_samenspender(name, read_only=read_only)
+            self._open_animal_editor_with_lease(
+                name, self._dlg_samenspender, read_only
+            )
             return
 
         if idx == 2:
-            self._dlg_offspring(name, read_only=read_only)
+            self._open_animal_editor_with_lease(name, self._dlg_offspring, read_only)
             return
 
         if idx == 3:
-            self._dlg_partner(name, read_only=read_only)
+            self._open_animal_editor_with_lease(name, self._dlg_partner, read_only)
             return
 
         if idx == 4:
-            self._dlg_zuchttier(name, read_only=read_only)
+            self._open_animal_editor_with_lease(name, self._dlg_zuchttier, read_only)
             return
 
         if idx == 5:
-            self._dlg_versuchstier(name, read_only=read_only)
+            self._open_animal_editor_with_lease(
+                name, self._dlg_versuchstier, read_only
+            )
             return
 
         all_idx = self._all_category_tab_index()
         if idx == all_idx:
-            self._dlg_change_sort(name)
+            self._open_animal_editor_with_lease(
+                name, lambda animal, read_only=False: self._dlg_change_sort(animal),
+                read_only,
+            )
             return
         custom_idx = idx - 6
         custom_values = getattr(self, "_category_custom_role_values", [])
         if 0 <= custom_idx < len(custom_values):
             editor = self._dialog_for_role_value(custom_values[custom_idx])
-            editor(name, read_only=read_only)
+            self._open_animal_editor_with_lease(name, editor, read_only)
             return
 
         # idx == 0 → female editor
-        self._dlg_female_animal(name, read_only=read_only)
+        self._open_animal_editor_with_lease(name, self._dlg_female_animal, read_only)
+
+    def _open_animal_editor_with_lease(
+        self, animal_name: str, opener: Callable[..., Any], read_only: bool
+    ) -> None:
+        if read_only:
+            opener(animal_name, read_only=True)
+            return
+        mt = getattr(self, "master_track", None)
+        login = str(getattr(mt, "current_username", "") or "local-user")
+        display = str(getattr(mt, "current_display_name", "") or login)
+        lease = None
+        try:
+            lease = self.backend.leases.acquire(
+                "animal",
+                animal_name,
+                owner_login=login,
+                owner_display=display,
+            )
+        except LockConflictError as exc:
+            self._show_message_raw(
+                self.messages.get("title.warning", "Warning"),
+                str(exc),
+                "warning",
+            )
+            opener(animal_name, read_only=True)
+            return
+        try:
+            opener(animal_name, read_only=False)
+        finally:
+            if lease:
+                self.backend.leases.release(
+                    "animal", animal_name, lease["token"]
+                )
 
     # ------------------------
     # 7.24 Print Data Dialog
@@ -21061,7 +21141,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ):
             self._show_permission_denied()
             return
-        self._reset_import_identity_prompt_cache()
         path, _ = QFileDialog.getOpenFileName(
             self, "Excel laden", "", "Excel-Dateien (*.xlsx *.xls)"
         )
@@ -21174,7 +21253,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     logging.warning(f"Invalid name skipped: {raw_name}")
                     skipped += 1
                     continue
-                name = self._resolve_import_animal_key(row, create_missing=True)
+                name = self._resolve_import_animal_key(row)
                 if not name:
                     skipped += 1
                     continue
@@ -21240,7 +21319,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     logging.warning(f"Invalid name skipped: {raw_name}")
                     skipped += 1
                     continue
-                name = self._resolve_import_animal_key(row, create_missing=True)
+                name = self._resolve_import_animal_key(row)
                 if not name:
                     skipped += 1
                     continue
@@ -21363,6 +21442,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         rec['species'] = identity_parts[1]
                     if not rec.get('birth_date'):
                         rec['birth_date'] = normalize_birth_date(identity_parts[2], required=False)
+                    if not rec.get('origin'):
+                        rec['origin'] = identity_parts[3]
                 else:
                     logging.error(
                         "Animal key is not an IPID identity key and is unsupported: %s",
@@ -21581,7 +21662,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ):
             self._show_permission_denied()
             return
-        self._reset_import_identity_prompt_cache()
         path, _ = QFileDialog.getOpenFileName(
             self, "PdG-Daten laden", "", "Excel-Dateien (*.xlsx *.xls)"
         )
@@ -21621,7 +21701,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         added = 0
         _st_urine_pairs: list = []
         for _, r in df.dropna(subset=['Name','Datum','PdG (µg/mg Cr)']).iterrows():
-            name = self._resolve_import_animal_key(r, create_missing=True)
+            name = self._resolve_import_animal_key(r)
             if not name:
                 continue
             datum = r['Datum']
@@ -21673,7 +21753,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ):
             self._show_permission_denied()
             return
-        self._reset_import_identity_prompt_cache()
         path, _ = QFileDialog.getOpenFileName(
             self, "Gewichte laden", "", "Excel-Dateien (*.xlsx *.xls)"
         )
@@ -21712,7 +21791,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         df = df.drop_duplicates(subset=['Name', 'Datum', 'Gewicht'])
         added = 0
         for _, row in df.iterrows():
-            name = self._resolve_import_animal_key(row, create_missing=True)
+            name = self._resolve_import_animal_key(row)
             if not name:
                 continue
             dt   = row['Datum']
@@ -21751,7 +21830,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ):
             self._show_permission_denied()
             return
-        self._reset_import_identity_prompt_cache()
         path, _ = QFileDialog.getOpenFileName(
             self, "Spermawerte laden", "", "Excel-Dateien (*.xlsx *.xls)"
         )
@@ -21796,7 +21874,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if pd.isna(row["Name"]) or pd.isna(row["Datum"]):
                 continue  # skip invalid rows
 
-            name = self._resolve_import_animal_key(row, create_missing=True)
+            name = self._resolve_import_animal_key(row)
             if not name:
                 continue
             date_val = row["Datum"]
@@ -21959,7 +22037,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not archived_names:
             self._show_message("error.archive.no_selection")
             return
-        conventions = load_conventions(conventions_path(APP_BASE_DIR))
+        conventions = self._load_identity_conventions()
         living = [
             name for name in archived_names
             if not (

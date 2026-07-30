@@ -3,7 +3,7 @@
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack Launcher 0.1.2
+# Part of: ProgTrack Launcher 0.2.1
 # Module: Portable Windows launcher for external ProgTrack payload scripts.
 # Default target: first ProgTrack.v.*.py script in the launcher directory.
 
@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 
 DEFAULT_SCRIPT_PATTERN = "ProgTrack.v.*.py"
-LAUNCHER_VERSION = "0.1.2"
+LAUNCHER_VERSION = "0.2.1"
 LAUNCHER_BUILD_NOTE = "Portable launcher for ProgTrack."
 LOG_DIR_NAME = "logs"
 ERROR_LOG_NAME = "launcher_error.log"
@@ -30,9 +30,40 @@ _FAULT_LOG_HANDLE = None
 _LOG_DIR = None
 
 
-def _runtime_state_dir(launcher_dir: Path) -> Path:
-    internal_dir = launcher_dir / "_internal"
-    return internal_dir if internal_dir.exists() else launcher_dir
+def _directory_is_writable(path: Path) -> bool:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / f".progtrack-launcher-probe-{os.getpid()}"
+        probe.write_bytes(b"")
+        probe.unlink()
+        return True
+    except OSError:
+        return False
+
+
+def _runtime_roots(launcher_dir: Path) -> tuple[Path, Path]:
+    """Return state and cache roots without writing beside packaged code."""
+    portable_requested = os.environ.get("PROGTRACK_PORTABLE", "").lower() in {
+        "1", "true", "yes", "on",
+    }
+    if portable_requested and _directory_is_writable(launcher_dir):
+        portable = launcher_dir / "ProgTrackData"
+        return portable / "state", portable / "cache"
+    if sys.platform.startswith("win"):
+        local = Path(
+            os.environ.get("LOCALAPPDATA")
+            or Path.home() / "AppData" / "Local"
+        ) / "ProgTrack"
+        return local / "state", local / "cache"
+    state = Path(
+        os.environ.get("XDG_STATE_HOME")
+        or Path.home() / ".local" / "state"
+    ) / "ProgTrack"
+    cache = Path(
+        os.environ.get("XDG_CACHE_HOME")
+        or Path.home() / ".cache"
+    ) / "ProgTrack"
+    return state, cache
 
 
 def setup_environment() -> Path:
@@ -55,7 +86,7 @@ def setup_environment() -> Path:
     else:
         launcher_dir = Path(__file__).resolve().parent
 
-    runtime_state_dir = _runtime_state_dir(launcher_dir)
+    runtime_state_dir, runtime_cache_dir = _runtime_roots(launcher_dir)
 
     _LOG_DIR = runtime_state_dir / LOG_DIR_NAME
     try:
@@ -69,7 +100,7 @@ def setup_environment() -> Path:
     except OSError:
         pass
 
-    mpl_config_dir = runtime_state_dir / MPL_CONFIG_DIR_NAME
+    mpl_config_dir = runtime_cache_dir / MPL_CONFIG_DIR_NAME
     try:
         mpl_config_dir.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("MPLCONFIGDIR", str(mpl_config_dir))

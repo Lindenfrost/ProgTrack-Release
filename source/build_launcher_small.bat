@@ -68,7 +68,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-"%PYTHON_EXE%" -c "import importlib.util, sys; mods=['PyInstaller','PyQt6','matplotlib','numpy','pandas','scipy','openpyxl','reportlab','PIL','numexpr']; missing=[m for m in mods if importlib.util.find_spec(m) is None]; print('Missing packages: '+', '.join(missing) if missing else 'Required packages already importable.'); sys.exit(1 if missing else 0)"
+"%PYTHON_EXE%" -c "import importlib.util, sys; mods=['PyInstaller','PyQt6','matplotlib','numpy','pandas','scipy','openpyxl','reportlab','PIL','numexpr','pypdf','psycopg','psycopg_binary','psycopg_pool']; missing=[m for m in mods if importlib.util.find_spec(m) is None]; print('Missing packages: '+', '.join(missing) if missing else 'Required packages already importable.'); sys.exit(1 if missing else 0)"
 if errorlevel 1 (
     echo Installing required build/runtime packages...
     "%PYTHON_EXE%" -m pip install --upgrade pip setuptools wheel
@@ -84,7 +84,10 @@ if errorlevel 1 (
         reportlab==4.4.10 ^
         Pillow==11.1.0 ^
         numexpr==2.10.2 ^
-        pyqtgraph
+        pyqtgraph ^
+        pypdf==6.14.2 ^
+        "psycopg[binary]==3.3.4" ^
+        psycopg_pool==3.3.1
     if errorlevel 1 exit /b 1
 )
 
@@ -94,10 +97,23 @@ if errorlevel 1 (
     exit /b 1
 )
 
+set "PSYCOPG_IMPL=binary"
+"%PYTHON_EXE%" -c "import psycopg, psycopg_pool; from psycopg import pq; assert pq.__impl__ == 'binary', pq.__impl__; print('Psycopg', psycopg.__version__, 'pool', psycopg_pool.__version__, 'libpq', pq.version())"
+if errorlevel 1 (
+    echo ERROR: The Windows build must use the pinned Psycopg binary implementation.
+    exit /b 1
+)
+
 echo.
 echo Building PyInstaller runtime...
 "%PYTHON_EXE%" -m PyInstaller --noconfirm --clean "%SPEC_FILE%"
 if errorlevel 1 exit /b 1
+
+"%PYTHON_EXE%" "%PROJECT_DIR%\generate_component_inventory.py" "%DIST_DIR%"
+if errorlevel 1 (
+    echo ERROR: Frozen component inventory validation failed.
+    exit /b 1
+)
 
 echo.
 echo Build complete:

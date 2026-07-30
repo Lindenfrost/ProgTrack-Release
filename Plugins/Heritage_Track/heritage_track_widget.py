@@ -57,6 +57,7 @@ from Plugins.core.animal_identity import (
     split_animal_identity_key,
 )
 from Plugins.core.animal_roles import ROLE_VALUE_AMME, ROLE_VALUE_SAMENSP, ROLE_VALUE_SPENDER, canonical_role_value
+from Plugins.core.ui_icons import apply_icon
 
 from .display_context import DisplayContext, DisplayContextBuilder
 from .display_strategies import AllAnimalsStrategy, SelectedAnimalsStrategy
@@ -495,7 +496,8 @@ class HeritageTrackWidget(QWidget):
         top.addWidget(self.gen_spin)
         top.addWidget(self.gen_inc_btn)
 
-        self.refresh_btn = QPushButton("🔄")
+        self.refresh_btn = QPushButton()
+        apply_icon(self.refresh_btn, "action.refresh", fallback="Refresh")
         self.add_placeholder_btn = QPushButton("🫥")
         self.settings_btn = QPushButton("⚙")
 
@@ -3779,7 +3781,7 @@ class HeritageTrackPlugin:
         self.app = app
         self.messages = getattr(app, "messages", {}) or {}
         self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        self.store = HeritageStore(self.plugin_dir)
+        self.store = HeritageStore(self.plugin_dir, app.backend)
         self.store.load()
         self._engine_cache = PedigreeEngineCache()
 
@@ -3970,6 +3972,7 @@ class HeritageTrackPlugin:
         sex: str,
         species: str = "",
         birth_date: str = "",
+        origin: str = "Heritage Track",
         explicit_custom_parents: Optional[Set[str]] = None,
     ) -> bool:
         raw_name = str(name or "").strip()
@@ -3985,16 +3988,18 @@ class HeritageTrackPlugin:
             if raw_birth_date:
                 try:
                     birth_date = normalize_birth_date(raw_birth_date, required=True)
-                    key = animal_identity_key(base_name, species_value, birth_date)
+                    key = animal_identity_key(
+                        base_name, species_value, birth_date, origin
+                    )
                 except ValueError:
                     return False
             else:
                 birth_date = ""
-                key = f"{base_name} | {species_value} | undated"
+                key = f"{base_name} | {species_value} | undated | {origin}"
                 review_required = True
                 review_reason = "Heritage-only placeholder is intentionally undated."
         else:
-            base_name, species_value, birth_date = parts
+            base_name, species_value, birth_date, origin = parts
             key = raw_name
             if str(birth_date).strip().casefold() == "undated":
                 birth_date = ""

@@ -1,5 +1,5 @@
 {
-  "app.title": "ProgTrack v.0.1.2",
+  "app.title": "ProgTrack v.0.2.1",
   "menu.program": "Impostazioni",
   "menu.program.language_settings": "Lingua",
   "menu.program.language_settings.english": "Inglese",
@@ -1782,5 +1782,13 @@
   "status.reproduction.sterile": "Sterile",
   "status.reproduction.castrated": "Castrato",
   "import.identity.archived_id": "L'ID animale {animal_id} appartiene a un animale archiviato e non può ricevere nuove misurazioni.",
-  "import.identity.conflicting_id": "Questo nome, specie e data di nascita appartengono già a un animale con un ID diverso. Controllare l'ID importato."
+  "import.identity.conflicting_id": "Questo nome, specie e data di nascita appartengono già a un animale con un ID diverso. Controllare l'ID importato.",
+  "import.preview.summary.existing_only": "{rows} righe: {existing} righe di animali esistenti possono essere importate; {skipped} righe saranno ignorate.",
+  "import.preview.unknown_manager_warning": "Animali sconosciuti rilevati: {animals}. Saranno importati solo i dati degli animali esistenti. Chiedere a un Manager di aggiungerli prima.",
+  "import.preview.status.existing": "Animale esistente — sarà importato",
+  "import.preview.status.unknown": "Animale sconosciuto — sarà ignorato",
+  "import.preview.status.archived": "Animale archiviato — sarà ignorato",
+  "import.preview.status.ambiguous": "ID animale ambiguo — sarà ignorato",
+  "import.preview.status.invalid": "Identità non valida — sarà ignorata",
+  "menu.program.institution_branding": "Identità dell'istituzione"
 }

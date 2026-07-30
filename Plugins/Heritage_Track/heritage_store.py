@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_roles import ROLE_VALUE_AMME, ROLE_VALUE_SAMENSP, ROLE_VALUE_SPENDER, canonical_role_value
+from Plugins.core.backend_store import BackendJsonStore
 
 PARENT_KEYS = ("egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father")
 
@@ -31,11 +32,12 @@ class HeritageStore:
     data is migrated from heritage.json on the first load.
     """
 
-    def __init__(self, plugin_dir: str):
+    def __init__(self, plugin_dir: str, backend: Any):
         self.plugin_dir = plugin_dir
         self.file_path = os.path.join(plugin_dir, "heritage_animals.json")
         self.settings_path = os.path.join(plugin_dir, "heritage_settings.json")
         self._legacy_path = os.path.join(plugin_dir, "heritage.json")
+        self.backend_store = BackendJsonStore(backend, "heritage", "graph")
         self._data: Optional[Dict[str, Any]] = None
 
     def _default_settings(self) -> Dict[str, Any]:
@@ -161,12 +163,8 @@ class HeritageStore:
         return self._normalize_and_cache(raw)
 
     def _load_raw(self) -> Optional[Dict[str, Any]]:
-        """Load raw data from the split files or fall back to legacy heritage.json."""
-        if os.path.exists(self.file_path):
-            return self._load_split()
-        if os.path.exists(self._legacy_path):
-            return self._migrate_from_legacy()
-        return None
+        """Load the combined Heritage record from the shared backend."""
+        return self.backend_store.load(self._default_data())
 
     def _load_split(self) -> Dict[str, Any]:
         """Load animals from heritage_animals.json and settings from heritage_settings.json."""
@@ -382,24 +380,7 @@ class HeritageStore:
         now = datetime.utcnow().isoformat() + "Z"
         data["updated_at"] = now
 
-        if animals:
-            animals_payload = {
-                "version": data.get("version", "1.0.0"),
-                "updated_at": now,
-                "animals": data.get("animals", {}),
-                "genotype_colors": data.get("genotype_colors", {}),
-            }
-            self._atomic_write(self.file_path, animals_payload, self.plugin_dir)
-
-        if settings:
-            settings_payload = {
-                "version": data.get("version", "1.0.0"),
-                "updated_at": now,
-                "settings": data.get("settings", self._default_settings()),
-                "node_positions": data.get("node_positions", {}),
-                "collapsed_families": data.get("collapsed_families", []),
-            }
-            self._atomic_write(self.settings_path, settings_payload, self.plugin_dir)
+        self.backend_store.save(data)
 
     def _save_animals(self) -> None:
         """Persist only animal records and genotype colours."""

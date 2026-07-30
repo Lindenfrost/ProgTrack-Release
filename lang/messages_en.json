@@ -1,5 +1,5 @@
 {
-  "app.title": "ProgTrack v.0.1.2",
+  "app.title": "ProgTrack v.0.2.1",
   "menu.program": "Settings",
   "menu.program.language_settings": "Language",
   "menu.program.language_settings.english": "English",
@@ -1846,5 +1846,13 @@
   "status.reproduction.sterile": "Sterile",
   "status.reproduction.castrated": "Castrated",
   "import.identity.archived_id": "Animal ID {animal_id} belongs to an archived animal and cannot receive new measurements.",
-  "import.identity.conflicting_id": "This name, species, and birth date already belong to an animal with a different Animal ID. Check the imported ID."
+  "import.identity.conflicting_id": "This name, species, and birth date already belong to an animal with a different Animal ID. Check the imported ID.",
+  "import.preview.summary.existing_only": "{rows} rows: {existing} existing-animal rows can be imported; {skipped} rows will be skipped.",
+  "import.preview.unknown_manager_warning": "Unknown animal(s) detected: {animals}. Only existing animals' data will be imported. Ask a Manager to add them first.",
+  "import.preview.status.existing": "Existing animal — will import",
+  "import.preview.status.unknown": "Unknown animal — will skip",
+  "import.preview.status.archived": "Archived animal — will skip",
+  "import.preview.status.ambiguous": "Ambiguous Animal ID — will skip",
+  "import.preview.status.invalid": "Invalid identity — will skip",
+  "menu.program.institution_branding": "Institution branding"
 }

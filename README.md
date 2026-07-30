@@ -1,11 +1,11 @@
-# ProgTrack 0.1.2
+# ProgTrack 0.2.1 (development)
 
 <p align="center">
   <img src="icons/Splash.png" alt="ProgTrack splash">
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.1.2-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.2.1--development-blue">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-portable%20Python-green">
   <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue">
@@ -16,8 +16,8 @@ research workflows. It brings hormone measurements, reproductive events,
 animal roles, medical history, cage placement, pedigree data, sample tracking,
 project assignment, reports, and planning tools into one Windows bundle.
 
-> 🌱 **Release status:** `0.1.2` is a Phase 1 testing release.
-> It is meant for evaluation, feedback, bug reports, and workflow testing.
+> 🌱 **Development status:** `0.2.1` is the Phase 2B backend branch.
+> Published Phase 1 release `0.1.2` remains available for evaluation.
 
 ## 💡 Why ProgTrack?
 
@@ -87,7 +87,7 @@ In practical terms, ProgTrack is meant to provide:
    [GitHub Releases](https://github.com/Lindenfrost/ProgTrack-Release/releases).**
 2. **Extract the complete folder and keep the folder structure intact.**
 3. **Start ProgTrack with `Launcher.exe`.**
-4. **Use `File -> Save Database` after larger editing or import sessions.**
+4. **ProgTrack saves accepted changes transactionally in the selected backend.**
 5. **Open the user guide in `manual/` for detailed workflows.**
 
 ### 🔑 Starter Login Accounts
@@ -127,12 +127,12 @@ This release combines two layers:
 
 The editable application payload:
 
-- `ProgTrack.v.0.1.2.py`
+- `ProgTrack.v.0.2.1.py`
 - `Plugins/`
 - `icons/`
 - `lang/`
 - `manual/`
-- local JSON data files
+- the versioned sample-data seed under `Resources/Seed/`
 
 ### 🚀 ProgTrack Launcher
 
@@ -164,7 +164,7 @@ temporary directory.
 To launch a specific script manually:
 
 ```text
-Launcher.exe --script ProgTrack.v.0.1.2.py
+Launcher.exe --script ProgTrack.v.0.2.1.py
 ```
 
 > 💡 The ProgTrack application is **not compiled into** `Launcher.exe`.  
@@ -176,12 +176,12 @@ Launcher.exe --script ProgTrack.v.0.1.2.py
 | --- | --- |
 | `Launcher.exe` | 🚀 Portable Windows launcher. |
 | `_internal/` | 🧰 Bundled Python runtime and third-party libraries. |
-| `ProgTrack.v.0.1.2.py` | 🧬 Main ProgTrack application script. |
+| `ProgTrack.v.0.2.1.py` | 🧬 Main ProgTrack application script. |
 | `Plugins/` | 🔌 ProgTrack modules and plugin data. |
 | `icons/` | 🎨 Icons and visual resources. |
 | `lang/` | 🌍 User-interface translation files. |
 | `manual/` | 📖 HTML user guides. |
-| `progtrack_daten.json` | 💾 Main animal and measurement database. |
+| `Resources/Seed/progtrack_seed.ptdb` | 💾 Versioned sample-data package used only to initialise an empty backend. |
 | `Username + 123456 password.png` | 🔑 Starter-account reference image. |
 | `LICENSE` | ⚖️ GPL license text. |
 | `LICENSE_NOTICE.md` | 🧾 ProgTrack copyright and license notice. |
@@ -260,10 +260,12 @@ Excel imports expect exact column names.
 The supplied templates also keep a separate `Sample ID` column. `Animal ID`
 matches measurements to an existing animal; `Sample ID` identifies the
 individual sample and remains optional where no sample number exists. If an
-unknown Animal ID is detected, ProgTrack opens an additional identity dialog
-and requires the animal's species and full birth date before any rows are
-imported. Species and birth date therefore do not belong in the standard
-measurement templates.
+unknown Animal ID is detected, the preview marks every affected row as skipped
+and warns the user to ask a Manager to create that animal first. Confirming the
+preview imports only valid rows belonging to existing active animals. A
+measurement import never creates an animal and never opens an identity dialog.
+Species and birth date therefore do not belong in the standard measurement
+templates.
 
 ### 🔎 Plot Exploration
 
@@ -368,25 +370,41 @@ Use `Settings -> Style` to configure:
 - 🔘 markers;
 - 〰️ line styles.
 
+Lord, Master, and Manager users can configure the optional institution name
+and PNG/JPEG logo under `Settings -> Institution branding`. When enabled, a
+compact aspect-ratio-preserving header is added to every page of generated PDF
+reports. Large source images are automatically reduced to the header area.
+
 ## 💾 Data And Backups
 
-ProgTrack 0.1.2 stores data locally in JSON files.
+Phase 2 supports two backend profiles behind the same application services:
 
-Important files include:
+- **Standalone SQLite** is the installation-free profile for exactly one local
+  workstation and for testing. Its writable database must remain on local,
+  non-synchronized storage.
+- **Shared PostgreSQL** is the network and multi-workstation profile. A small
+  synchronous Psycopg 3 connection pool is used by the desktop application.
 
-- `progtrack_daten.json`
-- `progtrack_settings.json`
-- plugin-specific JSON files inside `Plugins/`
+Operational data, users, projects, plugin records, configuration, locks, and
+audit events belong to the selected backend. PDFs and other managed documents
+remain in managed storage belonging to that backend; the database stores their
+safe path, ownership metadata, and checksum.
 
-Recommended backup routine:
+The bundled database starts from one deterministic, entirely fictional
+full-installation seed in `Resources/Seed/`. Legacy JSON files beside the
+program are not imported during the Phase 2 cutover. The canonical
+interchange package carries database records and managed payloads together and
+is the future-facing route for backend transfer and source adapters.
 
-1. Close ProgTrack.
-2. Copy the complete ProgTrack folder, or at least the main JSON data files, to
-   a protected backup location.
-3. Reopen ProgTrack.
+Mutable runtime files never need to be written beside application code in an
+installed/read-only deployment. Windows uses the user profile application
+data directories; Linux uses the corresponding XDG data, config, cache, and
+state roots. Explicit portable mode remains available only when its local
+application folder is writable.
 
-> ⚠️ Do not edit JSON files manually unless you know exactly what you are
-> changing. Prefer the ProgTrack user interface.
+> ⚠️ Do not copy a live SQLite file or managed directory as an ad-hoc backup.
+> Use the complete backend interchange/backup workflow so records and managed
+> payloads stay consistent.
 
 ## 🛠️ Troubleshooting
 
@@ -401,7 +419,7 @@ Also confirm that these are still in the same folder:
 
 - `Launcher.exe`
 - `_internal/`
-- `ProgTrack.v.0.1.2.py`
+- `ProgTrack.v.0.2.1.py`
 - `Plugins/`
 - `icons/`
 - `lang/`
@@ -463,6 +481,8 @@ beside `Launcher.exe`.
 
 | Version | Focus |
 | --- | --- |
+| `0.2.1` | Phase 2B shared backend, deterministic sample seed, runtime paths, icons, and PDF branding. |
+| `0.2.0` | Phase 2A backend discovery and approved architecture. |
 | `0.1.2` | Phase 1 caretaker, manager, veterinarian, and tester feedback. |
 | `0.1.1` | Phase 0 stabilization and release hardening. |
 | `0.1.0` | Initial public testing package. |
@@ -503,7 +523,7 @@ Project tracking now preserves and displays previous project history more reliab
 
 The release also improves day-to-day UI stability: lazy-loaded tabs no longer flash unrelated module content, Cage Track avoids unnecessary refresh work during ordinary navigation, and Heritage Track now requires a deliberate double-click to clear the current graph selection from empty space.
 
-The launcher/runtime package was refreshed for this release. The new `0.1.1-log-menu` launcher records its version, supports the updated technical-log workflow, includes the ReportLab runtime imports needed for report export, and keeps the portable Windows structure: `Launcher.exe`, `_internal/`, the editable ProgTrack script, plugins, manuals, language files, demo data, icons, and license notices.
+The launcher/runtime package uses neutral `0.2.1` product and file metadata, supports the technical-log workflow, includes the report and database runtime dependencies, and keeps the portable Windows structure: `Launcher.exe`, `_internal/`, the editable ProgTrack script, plugins, manuals, language files, seed data, icons, and license notices.
 
 The published `0.1.1` package was replaced after release testing with an updated build under the same version number. This replacement keeps the `0.1.1` version, but fixes portable startup packaging by keeping the PyInstaller runtime archive `_internal/base_library.zip`, and routes technical logs, launcher logs, Matplotlib cache files, and Master Track audit logs into `_internal/` runtime folders instead of creating top-level runtime folders.
 

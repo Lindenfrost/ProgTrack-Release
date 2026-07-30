@@ -204,29 +204,15 @@
   </ul>
   <div class="hint"><strong>Tipp:</strong> Wenn die Anwendung nicht startet, prüfen Sie <code>launcher_error.log</code> und <code>launcher_fault.log</code> im Launcher-Ordner.</div>
   
-  <h3>2.2 Daten- und Einstellungsdateien</h3>
-  <p>ProgTrack speichert Daten in JSON-Dateien im Programm- oder
-    Arbeitsverzeichnis:</p>
+  <h3>2.2 Backend-Profile und verwaltete Daten</h3>
+  <p>ProgTrack verwendet eine gemeinsame Datenzugriffsschicht mit zwei Profilen:</p>
   <table class="basic">
-    <tr><th>Datei</th><th>Zweck</th></tr>
-    <tr><td><code>progtrack_daten.json</code></td><td>Hauptdatenbank für
-      Tiere und Messungen.</td></tr>
-    <tr><td><code>progtrack_settings.json</code></td><td>Einstellungen der
-      Benutzeroberfläche und der Plots (Sprache, Farben, Stile usw.).</td></tr>
+    <tr><th>Profil</th><th>Verwendung</th></tr>
+    <tr><td><strong>Standalone SQLite</strong></td><td>Genau ein lokaler Arbeitsplatz oder Tests; nur lokaler, nicht synchronisierter Speicher.</td></tr>
+    <tr><td><strong>Shared PostgreSQL</strong></td><td>Netzwerk- und Mehrarbeitsplatzbetrieb mit gemeinsamem Backend.</td></tr>
   </table>
-
-  <div class="warning">
-    <strong>Bearbeiten Sie diese JSON-Dateien nicht von Hand</strong>,
-    außer Sie wissen genau, was Sie tun. Verwenden Sie stattdessen die
-    ProgTrack-Oberfläche.
-  </div>
-
-  <div class="hint">
-    <strong>Tipp:</strong> Für sichere manuelle Backups ProgTrack schließen
-    und dann <code>progtrack_daten.json</code>,
-    <code>progtrack_settings.json</code> oder den gesamten ProgTrack-Ordner
-    an einen geschützten Ort kopieren.
-  </div>
+  <p>Dokumente liegen im verwalteten Speicher des aktiven Backends; die Datenbank hält Eigentümer-, Pfad- und Prüfsummenangaben. Schreibgeschützte Installationen verwenden Benutzerprofil- bzw. XDG-Verzeichnisse. Eine saubere Beispielinstallation wird aus dem einzigen deterministischen, vollständig fiktiven Paket unter <code>Resources/Seed</code> aufgebaut.</p>
+  <div class="warning"><strong>Standalone SQLite niemals auf Netzlaufwerken oder in Cloud-Synchronisationsordnern verwenden.</strong> Für Sicherung/Übertragung den vollständigen Interchange-Weg benutzen.</div>
 
   <h3>2.3 Beispiel-Excel-Dateien</h3>
   <p>
@@ -349,9 +335,9 @@
   <h3>5.3 Import aus Excel</h3>
   <p>Excel-Importe basieren auf exakten Spaltennamen. Verwenden Sie die zum Datentyp passende Import-Schaltfläche und bereinigen Sie ungültige Datumswerte, leere Namen oder nicht-numerische Werte vor dem Import.</p>
   <table class="basic"><tr><th>Schaltfläche</th><th>Erforderliche Spalten</th></tr><tr><td><strong>📈 Blutwerte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Urinwerte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Gewichte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Spermawerte laden</strong></td><td><code>Datum</code>, <code>Name</code>, <code>Animal ID</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
-  <p>Nach Auswahl einer gültigen Datei öffnet ProgTrack eine schreibgeschützte Vorschau, <strong>bevor Tiere oder Messwerte geschrieben werden</strong>. Sie zeigt die Gesamtzahl der Zeilen, alle importierten Spalten und bis zu 200 erste Zeilen. Die zusätzliche Spalte Tierstatus kennzeichnet jede Vorschauzeile als bestehendes oder neues Tier; neue Tiere sind hervorgehoben.</p>
-  <p>Prüfen Sie Animal ID, Name, Datumsangaben, Sample ID und Messwerte in dieser Vorschau. <strong>Abbrechen</strong> lässt die Datenbank unverändert; <strong>Importieren</strong> setzt den Vorgang fort. Identitätsdialoge für unbekannte Tiere erscheinen erst nach Bestätigung der Vorschau.</p>
-  <p><code>Animal ID</code> ordnet Messwerte bestehenden Tieren zu. Spezies und Geburtsdatum stehen bewusst nicht in den Standardvorlagen. Erkennt ProgTrack eine unbekannte Animal ID, müssen Spezies und vollständiges Geburtsdatum in einem Zusatzdialog angegeben werden, bevor Daten importiert werden.</p>
+  <p>Nach Auswahl einer gültigen Datei öffnet ProgTrack eine schreibgeschützte Vorschau, <strong>bevor Tiere oder Messwerte geschrieben werden</strong>. Sie zählt die vollständige Datei, zeigt bis zu 200 Zeilen und klassifiziert jede Zeile als vorhanden, unbekannt, archiviert, mehrdeutig oder ungültig.</p>
+  <p>Prüfen Sie Animal ID, Name, Datumsangaben, Sample ID und Messwerte. <strong>Abbrechen</strong> lässt das Backend unverändert; <strong>Importieren</strong> schreibt nur zulässige Zeilen vorhandener aktiver Tiere.</p>
+  <p><code>Animal ID</code> ist für die Zuordnung maßgeblich. Unbekannte Tiere bleiben als übersprungene Zeilen sichtbar; die Warnung fordert dazu auf, sie zuerst durch einen Manager anlegen zu lassen. Ein Messwertimport legt niemals Tiere an und öffnet keinen Identitätsdialog.</p>
   <p><code>Sample ID</code> ist eine getrennte Vorlagenspalte für die einzelne Probe und darf leer bleiben, wenn keine Probennummer existiert. Sie ersetzt niemals die <code>Animal ID</code>.</p>
 
   
@@ -487,22 +473,12 @@
   <h2 id="saving-export">8. Speichern &amp; Export</h2>
 
   <h3>8.1 Datenbank speichern</h3>
-  <p>
-    Verwenden Sie <strong>Datei → Datenbank speichern</strong>, um den
-    aktuellen Stand explizit in <code>progtrack_daten.json</code>
-    zu schreiben. Automatisches Speichern kann bei bestimmten Aktionen
-    ebenfalls erfolgen, dennoch empfiehlt sich ein manuelles Speichern nach
-    umfangreichen Bearbeitungssitzungen.
-  </p>
+  <p><strong>Datei → Datenbank speichern</strong> schreibt den aktuellen Stand transaktional über das aktive Backend. Für Sicherung und Übertragung verwenden Sie das vollständige Interchange-/Backup-Verfahren, damit Datenbank und verwaltete Dokumente zusammenbleiben.</p>
 
-  <div class="hint">
-    <strong>Tipp:</strong> Gewöhnen Sie sich an, vor größeren Importen oder
-    komplexen Plugin-Aktionen (z.B. dem OP Planner) zu speichern. Falls
-    etwas Unerwartetes geschieht, können Sie auf das letzte bekannte
-    JSON-Backup zurückgehen.
-  </div>
+  <h3>8.2 Einrichtungsbranding für PDFs</h3>
+  <p>Lord, Master und Manager öffnen <strong>Einstellungen → Einrichtungsbranding</strong>, hinterlegen Einrichtungsname und optional ein PNG-/JPEG-Logo und aktivieren den Kopf. Jede PDF-Seite erhält einen kompakten Kopf; übergroße Bilder werden unter Beibehaltung des Seitenverhältnisses verkleinert.</p>
 
-  <h3>8.2 Excel-Export</h3>
+  <h3>8.3 Excel-Export</h3>
   <p>
     <strong>Datei → Berichte exportieren (.xlsx)</strong> öffnet einen Dialog, in dem
     Sie:
@@ -588,8 +564,7 @@
       bearbeiten; importieren Sie Daten nach Möglichkeit in Batches.</li>
     <li>Verwenden Sie <strong>Datei → Datenbank speichern</strong>
       regelmäßig.</li>
-    <li>Sichern Sie <code>progtrack_daten.json</code> regelmäßig im Rahmen
-      Ihrer üblichen Backup-Verfahren.</li>
+    <li>Sichern Sie Datenbank und verwaltete Dokumente gemeinsam über das vorgesehene Backend-Verfahren.</li>
   </ul>
   <h3>10.4 Technische Logs</h3>
   <p>

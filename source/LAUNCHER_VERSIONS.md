@@ -1,5 +1,14 @@
 # ProgTrack Launcher Versions
 
+## 0.2.1
+
+Date: 2026-07-30
+
+- Neutral public launcher metadata for the Phase 2 backend release.
+- Embedded Windows version metadata:
+  - FileVersion: `0.2.1.0`
+  - ProductVersion: `0.2.1`
+
 ## 0.1.2
 
 Date: 2026-07-29

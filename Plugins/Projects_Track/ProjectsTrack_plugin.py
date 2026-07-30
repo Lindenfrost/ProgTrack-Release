@@ -16,6 +16,8 @@ from PyQt6.QtCore import Qt, QRect, QSize, QTimer
 from PyQt6.QtGui import QColor, QPainter, QFont
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.project_visibility import animal_visible_by_project_scope
+from Plugins.core.backend_store import BackendJsonStore
+from Plugins.core.ui_icons import apply_icon
 
 
 class ProjectTabButton(QPushButton):
@@ -133,29 +135,24 @@ class _SidebarToggleButton(QPushButton):
 class HistoryStore:
     FILENAME = "projects_history.json"
 
-    def __init__(self, plugin_dir: str):
+    def __init__(self, plugin_dir: str, backend):
         self.path = os.path.join(plugin_dir, self.FILENAME)
+        self._store = BackendJsonStore(backend, "projects", "history")
         self._data: dict = {"version": 1, "projects": {}}
         self._load()
 
     def _load(self):
-        if os.path.isfile(self.path):
-            try:
-                with open(self.path, 'r', encoding='utf-8') as f:
-                    d = json.load(f)
-                if isinstance(d, dict):
-                    self._data = d
-                    self._data.setdefault("version", 1)
-                    self._data.setdefault("projects", {})
-            except Exception as exc:
-                logging.warning("HistoryStore: failed to load %s: %s", self.path, exc)
+        d = self._store.load({"version": 1, "projects": {}})
+        if isinstance(d, dict):
+            self._data = d
+            self._data.setdefault("version", 1)
+            self._data.setdefault("projects", {})
 
     def _save(self):
         try:
-            with open(self.path, 'w', encoding='utf-8') as f:
-                json.dump(self._data, f, indent=2, ensure_ascii=False)
+            self._store.save(self._data)
         except Exception as exc:
-            logging.warning("HistoryStore: failed to save %s: %s", self.path, exc)
+            logging.warning("HistoryStore: backend save failed: %s", exc)
 
     def _proj(self, name: str) -> dict:
         p = self._data["projects"]
@@ -352,11 +349,18 @@ class ProjectsTrackPlugin:
         self._project_ui_refresh_pending = False
 
         # History store for project membership tracking
-        self._history = HistoryStore(os.path.dirname(__file__))
+        self._history = HistoryStore(os.path.dirname(__file__), app.backend)
 
         # Load cached projects, species, and last session state
         self._load_projects()
         self._discover_species()
+
+    def _cache_store(self, identity: Optional[str] = None) -> BackendJsonStore:
+        return BackendJsonStore(
+            self.app.backend,
+            "project-cache",
+            identity or self._cache_identity(),
+        )
 
     def _cache_identity(self) -> str:
         """Return the identity whose sidebar state may be cached.
@@ -388,7 +392,6 @@ class ProjectsTrackPlugin:
             'project_assignment_cache',
             self._safe_cache_identity(identity),
         )
-        os.makedirs(cache_dir, exist_ok=True)
         return os.path.join(cache_dir, 'projects_cache.json')
 
     def _cache_file_for_current_user(self) -> str:
@@ -423,23 +426,19 @@ class ProjectsTrackPlugin:
     def _load_projects(self, force_discovery: bool = False):
         """Load projects from cache or discover from animals, and restore session state."""
         current_context = self._cache_context()
-        if os.path.exists(self.cache_file):
-            try:
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    cached = json.load(f)
-                    cached_context = cached.get('context') or {}
-                    if cached_context.get('identity') == current_context['identity']:
-                        # Selection is per identity and remains safe even when
-                        # the discoverable project list was invalidated.
-                        self.current_project = cached.get('active_project', 'All') or 'All'
-                        self.active_species = cached.get('active_species') or None
-                    if cached.get('invalidated') or cached_context != current_context:
-                        raise ValueError('stale project cache context')
-                    if not force_discovery:
-                        self.all_projects = cached.get('projects', [])
-                        return
-            except Exception:
-                pass
+        try:
+            cached = self._cache_store().load({})
+            cached_context = cached.get('context') or {}
+            if cached_context.get('identity') == current_context['identity']:
+                self.current_project = cached.get('active_project', 'All') or 'All'
+                self.active_species = cached.get('active_species') or None
+            if cached.get('invalidated') or cached_context != current_context:
+                raise ValueError('stale project cache context')
+            if not force_discovery and cached:
+                self.all_projects = cached.get('projects', [])
+                return
+        except Exception:
+            pass
         self._discover_projects()
 
     def _visibility_scope(self) -> Optional[tuple[bool, set[str]]]:
@@ -496,37 +495,26 @@ class ProjectsTrackPlugin:
     def _save_cache(self):
         """Save current project list to cache file, preserving existing session-state keys."""
         try:
-            existing: dict = {}
-            if os.path.exists(self.cache_file):
-                try:
-                    with open(self.cache_file, 'r', encoding='utf-8') as f:
-                        existing = json.load(f)
-                except Exception:
-                    pass
+            existing = self._cache_store().load({})
             existing['projects'] = self.all_projects
             existing['version'] = self.version
             existing['active_project'] = self.current_project
             existing['active_species'] = self.active_species
             existing['context'] = self._cache_context()
             existing['invalidated'] = False
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(existing, f, indent=2, ensure_ascii=False)
+            self._cache_store().save(existing)
         except Exception:
             pass
 
     def _save_session_state(self) -> None:
         """Persist active project and species selections to the cache file."""
         try:
-            cached: dict = {}
-            if os.path.exists(self.cache_file):
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    cached = json.load(f)
+            cached = self._cache_store().load({})
             cached['active_project'] = self.current_project
             cached['active_species'] = self.active_species
             cached['context'] = self._cache_context()
             cached['invalidated'] = False
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cached, f, indent=2, ensure_ascii=False)
+            self._cache_store().save(cached)
         except Exception:
             pass
 
@@ -538,17 +526,13 @@ class ProjectsTrackPlugin:
             identity = str(identity or '').strip()
             if not identity:
                 continue
-            path = self._cache_path_for_identity(identity)
-            if not os.path.isfile(path):
-                continue
             try:
-                with open(path, 'r', encoding='utf-8') as handle:
-                    cached = json.load(handle)
+                store = self._cache_store(identity)
+                cached = store.load({})
                 if not isinstance(cached, dict):
                     cached = {}
                 cached['invalidated'] = True
-                with open(path, 'w', encoding='utf-8') as handle:
-                    json.dump(cached, handle, indent=2, ensure_ascii=False)
+                store.save(cached)
             except Exception:
                 logging.exception(
                     "ProjectsTrack: failed to invalidate cache for %s", identity)
@@ -664,7 +648,8 @@ class ProjectsTrackPlugin:
         proj_content_layout.addWidget(self._proj_scroll, 1)
 
         # Refresh button inside project content
-        self.refresh_btn = QPushButton('🔄')
+        self.refresh_btn = QPushButton()
+        apply_icon(self.refresh_btn, "action.refresh", fallback="Refresh")
         self.refresh_btn.setToolTip(
             self.app.messages.get('projects.tooltip.refresh', 'Refresh project list'))
         self.refresh_btn.setFixedSize(28, 20)
@@ -1079,19 +1064,15 @@ class ProjectsTrackPlugin:
                     rec['modified_at'] = now_str
                     pt_w._save_data()
             else:
-                # Widget not loaded yet - write directly to JSON file
-                data_path = os.path.join(os.path.dirname(__file__), 'project_data.json')
-                project_data = {'version': 1, 'projects': {}}
-                if os.path.isfile(data_path):
-                    try:
-                        with open(data_path, 'r', encoding='utf-8') as f:
-                            d = json.load(f)
-                            if isinstance(d, dict):
-                                project_data = d
-                                project_data.setdefault('version', 1)
-                                project_data.setdefault('projects', {})
-                    except Exception:
-                        pass
+                # Widget not loaded yet - update the same backend record.
+                project_store = BackendJsonStore(
+                    self.app.backend, "projects", "catalog"
+                )
+                project_data = project_store.load(
+                    {'version': 1, 'projects': {}}
+                )
+                project_data.setdefault('version', 1)
+                project_data.setdefault('projects', {})
                 if project not in project_data['projects']:
                     project_data['projects'][project] = {}
                 rec = project_data['projects'][project]
@@ -1101,8 +1082,7 @@ class ProjectsTrackPlugin:
                     rec['modified_by'] = sig
                     rec['modified_at'] = now_str
                     try:
-                        with open(data_path, 'w', encoding='utf-8') as f:
-                            json.dump(project_data, f, indent=2, ensure_ascii=False)
+                        project_store.save(project_data)
                     except Exception as e:
                         logging.warning("Failed to save project metadata: %s", e)
         self._schedule_project_ui_refresh()

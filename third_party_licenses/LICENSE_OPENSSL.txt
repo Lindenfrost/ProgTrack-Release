@@ -1,0 +1,8 @@
+The OpenSSL 3 libraries redistributed by the Windows Psycopg binary wheel are
+licensed under the Apache License, Version 2.0.
+
+Official license text:
+https://www.apache.org/licenses/LICENSE-2.0
+
+OpenSSL licensing information:
+https://www.openssl.org/source/license.html

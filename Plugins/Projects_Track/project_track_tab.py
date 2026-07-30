@@ -32,6 +32,8 @@ from Plugins.core.animal_roles import (
 from Plugins.core.project_visibility import diff_project_associated_users
 from Plugins.core.project_species import remove_mismatched_assignments
 from Plugins.core.platform_helpers import open_local_path
+from Plugins.core.backend_store import BackendJsonStore
+from Plugins.core.ui_icons import apply_icon
 logger = logging.getLogger(__name__)
 _DOCS_SUBDIR   = "documents"
 _SOP_SUBDIR    = "sop"
@@ -107,7 +109,12 @@ class CollapsibleSection(QWidget):
         outer = QVBoxLayout(self); outer.setContentsMargins(0,0,0,0); outer.setSpacing(0)
         outer.addWidget(self._btn); outer.addWidget(self._content)
     def _set_title(self, title, expanded):
-        self._btn.setText(("▼  " if expanded else "▶  ") + title)
+        self._btn.setText(title)
+        apply_icon(
+            self._btn,
+            "toggle.collapse" if expanded else "toggle.expand",
+            fallback=title,
+        )
     def content_layout(self): return self._content_lay
     def is_expanded(self): return self._btn.isChecked()
     def set_title(self, title):
@@ -325,6 +332,7 @@ class ProjectTrackTab(QWidget):
     def __init__(self, app, messages, history_store, parent=None):
         super().__init__(parent)
         self._app=app; self._messages=messages; self._history=history_store
+        self._store = BackendJsonStore(app.backend, "projects", "catalog")
         self._current_project=None
         self._data_path=os.path.join(os.path.dirname(__file__), _DATA_FILENAME)
         self._docs_base=os.path.join(os.path.dirname(__file__), _DOCS_SUBDIR)
@@ -333,19 +341,15 @@ class ProjectTrackTab(QWidget):
         self._load_data(); self._build_ui()
 
     def _load_data(self):
-        if os.path.isfile(self._data_path):
-            try:
-                with open(self._data_path,'r',encoding='utf-8') as f: d=json.load(f)
-                if isinstance(d,dict):
-                    self._project_data=d
-                    self._project_data.setdefault('version',1)
-                    self._project_data.setdefault('projects',{})
-            except Exception as exc: logger.warning("ProjectTrackTab load: %s", exc)
+        d = self._store.load({"version": 1, "projects": {}})
+        if isinstance(d, dict):
+            self._project_data = d
+            self._project_data.setdefault('version', 1)
+            self._project_data.setdefault('projects', {})
 
     def _save_data(self):
         try:
-            with open(self._data_path,'w',encoding='utf-8') as f:
-                json.dump(self._project_data,f,indent=2,ensure_ascii=False)
+            self._store.save(self._project_data)
         except Exception as exc: logger.warning("ProjectTrackTab save: %s", exc)
 
     def _project_record(self, name):
@@ -771,7 +775,7 @@ class ProjectTrackTab(QWidget):
         sec_sop._btn.toggled.connect(lambda on: self._refresh_sops(name) if on else None)
         cl_sop = sec_sop.content_layout()
         self._sops_list = QListWidget(); self._sops_list.setMaximumHeight(180)
-        self._sops_list.itemDoubleClicked.connect(lambda it: self._on_sop_open(name, it.text()))
+        self._sops_list.itemDoubleClicked.connect(lambda it: self._on_sop_open(name, it))
         cl_sop.addWidget(self._sops_list)
         can_up = self._can('project.upload_sop'); can_del = self._can('project.delete_sop')
         sop_btn_w = QWidget(); sop_btn_h = QHBoxLayout(sop_btn_w); sop_btn_h.setContentsMargins(0, 4, 0, 0)
@@ -790,7 +794,7 @@ class ProjectTrackTab(QWidget):
         sec_d._btn.toggled.connect(lambda on: self._refresh_docs(name) if on else None)
         cl5 = sec_d.content_layout()
         self._docs_list = QListWidget(); self._docs_list.setMaximumHeight(180)
-        self._docs_list.itemDoubleClicked.connect(lambda it: self._on_doc_open(name, it.text()))
+        self._docs_list.itemDoubleClicked.connect(lambda it: self._on_doc_open(name, it))
         cl5.addWidget(self._docs_list)
         can_up = self._can('project.upload_document'); can_del = self._can('project.delete_document')
         doc_btn_w = QWidget(); doc_btn_h = QHBoxLayout(doc_btn_w); doc_btn_h.setContentsMargins(0, 4, 0, 0)
@@ -1096,26 +1100,36 @@ class ProjectTrackTab(QWidget):
     def _refresh_docs(self, name):
         if not hasattr(self, '_docs_list'): return
         self._docs_list.clear()
-        doc_dir = self._doc_dir(name)
-        if os.path.isdir(doc_dir):
-            for fname in sorted(os.listdir(doc_dir)):
-                self._docs_list.addItem(f"{_doc_icon(fname)}  {fname}")
+        for record in self._app.backend.documents.list_for_owner(
+            "project-document", name
+        ):
+            item = QListWidgetItem(str(record["original_name"]))
+            item.setData(Qt.ItemDataRole.UserRole, str(record["document_id"]))
+            self._docs_list.addItem(item)
 
-    def _on_doc_open(self, name, display_text):
-        fname = display_text.split('  ', 1)[-1] if '  ' in display_text else display_text
-        path = os.path.join(self._doc_dir(name), fname)
-        if os.path.isfile(path):
-            if not open_local_path(path):
-                logger.error('doc open failed: %s', path)
+    def _on_doc_open(self, name, item):
+        document_id = item.data(Qt.ItemDataRole.UserRole)
+        try:
+            record = self._app.backend.documents.get(str(document_id))
+            path = self._app.backend.documents.payload_path(record)
+        except (KeyError, OSError):
+            return
+        if not open_local_path(path):
+            logger.error('doc open failed: %s', path)
 
     def _on_doc_upload(self, name):
         if not self._can('project.upload_document'):
             return
         files,_=QFileDialog.getOpenFileNames(self,_m(self._messages,"project.docs.upload_dialog","Select Documents"),"",_ALL_DOC_FILTER)
         if not files: return
-        doc_dir=self._doc_dir(name); os.makedirs(doc_dir,exist_ok=True)
         for fp in files:
-            try: shutil.copy2(fp,doc_dir)
+            try:
+                self._app.backend.documents.add(
+                    fp,
+                    owner_type="project-document",
+                    owner_id=name,
+                    actor=self._current_sig(),
+                )
             except Exception as exc: logger.error("doc upload: %s",exc)
         self._refresh_docs(name)
 
@@ -1124,13 +1138,15 @@ class ProjectTrackTab(QWidget):
             return
         item = self._docs_list.currentItem()
         if not item: return
-        display = item.text()
-        fname = display.split('  ', 1)[-1] if '  ' in display else display
+        fname = item.text()
         tmpl = _m(self._messages, "project.docs.delete_confirm", "Delete '{name}'?")
         if QMessageBox.question(self, "", tmpl.replace('{name}', fname),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
-        try: Path(os.path.join(self._doc_dir(name), fname)).unlink(missing_ok=True)
+        try:
+            self._app.backend.documents.remove(
+                str(item.data(Qt.ItemDataRole.UserRole))
+            )
         except Exception as exc: logger.error('doc delete: %s', exc)
         self._refresh_docs(name)
 
@@ -1141,26 +1157,36 @@ class ProjectTrackTab(QWidget):
     def _refresh_sops(self, name):
         if not hasattr(self, '_sops_list'): return
         self._sops_list.clear()
-        sop_dir = self._sop_dir(name)
-        if os.path.isdir(sop_dir):
-            for fname in sorted(os.listdir(sop_dir)):
-                self._sops_list.addItem(f"{_doc_icon(fname)}  {fname}")
+        for record in self._app.backend.documents.list_for_owner(
+            "project-sop", name
+        ):
+            item = QListWidgetItem(str(record["original_name"]))
+            item.setData(Qt.ItemDataRole.UserRole, str(record["document_id"]))
+            self._sops_list.addItem(item)
 
-    def _on_sop_open(self, name, display_text):
-        fname = display_text.split('  ', 1)[-1] if '  ' in display_text else display_text
-        path = os.path.join(self._sop_dir(name), fname)
-        if os.path.isfile(path):
-            if not open_local_path(path):
-                logger.error('sop open failed: %s', path)
+    def _on_sop_open(self, name, item):
+        document_id = item.data(Qt.ItemDataRole.UserRole)
+        try:
+            record = self._app.backend.documents.get(str(document_id))
+            path = self._app.backend.documents.payload_path(record)
+        except (KeyError, OSError):
+            return
+        if not open_local_path(path):
+            logger.error('sop open failed: %s', path)
 
     def _on_sop_upload(self, name):
         if not self._can('project.upload_sop'):
             return
         files,_=QFileDialog.getOpenFileNames(self,_m(self._messages,"project.sops.upload_dialog","Select SOPs"),"",_ALL_DOC_FILTER)
         if not files: return
-        sop_dir=self._sop_dir(name); os.makedirs(sop_dir,exist_ok=True)
         for fp in files:
-            try: shutil.copy2(fp,sop_dir)
+            try:
+                self._app.backend.documents.add(
+                    fp,
+                    owner_type="project-sop",
+                    owner_id=name,
+                    actor=self._current_sig(),
+                )
             except Exception as exc: logger.error("sop upload: %s",exc)
         self._refresh_sops(name)
 
@@ -1169,13 +1195,15 @@ class ProjectTrackTab(QWidget):
             return
         item = self._sops_list.currentItem()
         if not item: return
-        display = item.text()
-        fname = display.split('  ', 1)[-1] if '  ' in display else display
+        fname = item.text()
         tmpl = _m(self._messages, "project.sops.delete_confirm", "Delete '{name}'?")
         if QMessageBox.question(self, "", tmpl.replace('{name}', fname),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
-        try: Path(os.path.join(self._sop_dir(name), fname)).unlink(missing_ok=True)
+        try:
+            self._app.backend.documents.remove(
+                str(item.data(Qt.ItemDataRole.UserRole))
+            )
         except Exception as exc: logger.error('sop delete: %s', exc)
         self._refresh_sops(name)
 

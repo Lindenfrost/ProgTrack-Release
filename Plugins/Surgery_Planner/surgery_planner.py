@@ -55,6 +55,26 @@ from PyQt6.QtWidgets import (
 
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_roles import ROLE_VALUE_AMME, ROLE_VALUE_SPENDER, canonical_role_value
+from Plugins.core.backend_store import BackendJsonStore
+
+
+_SURGERY_BACKEND = None
+
+
+def _backend_load(record_id: str, default):
+    if _SURGERY_BACKEND is None:
+        return default
+    return BackendJsonStore(
+        _SURGERY_BACKEND, "surgery-planner", record_id
+    ).load(default)
+
+
+def _backend_save(record_id: str, payload) -> None:
+    if _SURGERY_BACKEND is None:
+        raise RuntimeError("Surgery Planner requires the ProgTrack backend.")
+    BackendJsonStore(
+        _SURGERY_BACKEND, "surgery-planner", record_id
+    ).save(payload)
 
 
 def _animal_role_value(animal: Dict[str, Any]) -> str:
@@ -219,11 +239,7 @@ def load_block_days() -> list[BlockDay]:
     warning.
     """
     try:
-        if not os.path.exists(BLOCK_DAYS_FILE):
-            logger.warning(f"Block days file {BLOCK_DAYS_FILE} not found")
-            return []
-        with open(BLOCK_DAYS_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        data = _backend_load("block-days", {"block_days": []})
         items: list = []
         if isinstance(data, dict):
             raw = data.get('block_days', [])
@@ -258,13 +274,8 @@ def load_block_days() -> list[BlockDay]:
 
 def save_block_days(days: list[BlockDay]) -> None:
     try:
-        # load existing raw JSON
-        if os.path.exists(BLOCK_DAYS_FILE):
-            with open(BLOCK_DAYS_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            raw = data.get('block_days', []) if isinstance(data, dict) else []
-        else:
-            raw = []
+        data = _backend_load("block-days", {"block_days": []})
+        raw = data.get('block_days', []) if isinstance(data, dict) else []
         # build a map date→name from disk
         on_disk = {item['date']: item.get('name', '') for item in raw if 'date' in item}
         # update map with our in-memory days (add or override), using DATE_FORMAT
@@ -278,10 +289,8 @@ def save_block_days(days: list[BlockDay]) -> None:
             for dt in on_disk
             if dt in keep
         ]
-        # write back only those we still want
-        with open(BLOCK_DAYS_FILE, 'w', encoding='utf-8') as f:
-            json.dump({'block_days': cleaned}, f, ensure_ascii=False, indent=2)
-        logger.debug(f"Persisted {len(cleaned)} block days to {BLOCK_DAYS_FILE}")
+        _backend_save("block-days", {'block_days': cleaned})
+        logger.debug(f"Persisted {len(cleaned)} block days to backend")
     except Exception as e:
         logger.error(f"Failed to save block days: {e}")
 
@@ -299,51 +308,44 @@ def load_animals_readonly():
         return []
 
 def save_schedule_to_plugin(entries: list[ScheduleEntry]) -> None:
-    """Save schedule to plugin file only - NO ProgTrack modification."""
-    schedule_file = os.path.join(PLUGIN_DIR, 'surgery_planner.schedule.json')
+    """Publish the schedule through the shared backend."""
     try:
         # Convert entries to dict format for JSON serialization
         schedule_data = []
         for entry in entries:
             schedule_data.append(schedule_entry_to_dict(entry, date_format="iso"))
         
-        with open(schedule_file, 'w', encoding='utf-8') as f:
-            json.dump(schedule_data, f, indent=2, ensure_ascii=False)
-        logger.info(f"Schedule saved to {schedule_file}")
+        _backend_save("schedule", {'schedule': schedule_data})
+        logger.info("Schedule saved to backend")
     except Exception as e:
         logger.error(f"Failed to save schedule: {e}")
 
 def load_plugin_settings() -> dict:
-    """Load plugin settings from surgery_planner.config.json."""
-    config_file = os.path.join(PLUGIN_DIR, 'surgery_planner.config.json')
+    """Load plugin settings from the shared backend."""
     try:
-        if os.path.exists(config_file):
-            with open(config_file, 'r', encoding='utf-8') as f:
-                settings = json.load(f)
-            logger.info(f"Settings loaded from {config_file}")
+        settings = _backend_load("settings", {})
+        if settings:
+            logger.info("Settings loaded from backend")
             return settings
-        else:
-            # Default settings if file doesn't exist
-            default_settings = {
-                'donors_per_surgery': 2,
-                'surrogates_per_transfer': 2,
-                'transfer_offset_days': 6,
-                'recovery_op': 60,
-                'recovery_transfer': 30,
-                'cycle_active_days': 60,
-                'cycle_break_days': 30,
-                'surgery_weekdays': [0, 1, 2, 3, 4],  # Monday-Friday
-                'transfer_weekdays': [0, 1, 2, 3, 4],  # Monday-Friday
-            }
-            logger.info("Using default plugin settings")
-            return default_settings
+        default_settings = {
+            'donors_per_surgery': 2,
+            'surrogates_per_transfer': 2,
+            'transfer_offset_days': 6,
+            'recovery_op': 60,
+            'recovery_transfer': 30,
+            'cycle_active_days': 60,
+            'cycle_break_days': 30,
+            'surgery_weekdays': [0, 1, 2, 3, 4],
+            'transfer_weekdays': [0, 1, 2, 3, 4],
+        }
+        logger.info("Using default plugin settings")
+        return default_settings
     except Exception as e:
         logger.error(f"Failed to load settings: {e}")
         return {}
 
 def save_plugin_settings(settings: dict) -> None:
-    """Save plugin settings to surgery_planner.config.json."""
-    config_file = os.path.join(PLUGIN_DIR, 'surgery_planner.config.json')
+    """Save plugin settings to the shared backend."""
     try:
         # Convert sets to lists for JSON serialization
         serializable_settings = {}
@@ -353,9 +355,8 @@ def save_plugin_settings(settings: dict) -> None:
             else:
                 serializable_settings[key] = value
         
-        with open(config_file, 'w', encoding='utf-8') as f:
-            json.dump(serializable_settings, f, indent=2, ensure_ascii=False)
-        logger.info(f"Settings saved to {config_file}")
+        _backend_save("settings", serializable_settings)
+        logger.info("Settings saved to backend")
     except Exception as e:
         logger.error(f"Failed to save settings: {e}")
 
@@ -391,6 +392,8 @@ class GanttWidget(QDialog):
         localized strings for the UI.
         """
         super().__init__(parent)
+        global _SURGERY_BACKEND
+        _SURGERY_BACKEND = getattr(parent, "backend", None)
         
         # Initialize instance variables
         self.planned = []  # List of scheduled events
@@ -1208,20 +1211,12 @@ class GanttWidget(QDialog):
             return False
 
     def load_schedule_on_startup(self):
-        """Load main schedule file only if it exists."""
-        schedule_file = os.path.join(PLUGIN_DIR, 'surgery_planner.schedule.json')
-        # Also check for the pre-planner temp file if main doesn't exist
-        if not os.path.exists(schedule_file):
-            temp_file = os.path.join(PLUGIN_DIR, 'Surgery_Pre_Planner.schedule.json')
-            if os.path.exists(temp_file):
-                schedule_file = temp_file
-                logger.info(f"Main schedule not found, loading from temp file: {temp_file}")
-        
-        if os.path.exists(schedule_file):
+        """Load the published schedule, or the current draft, from the backend."""
+        data = _backend_load("schedule", None)
+        if data is None:
+            data = _backend_load("draft-schedule", None)
+        if data is not None:
             try:
-                with open(schedule_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
                 # Handle both formats: direct list [...] or wrapped {"schedule": [...]}
                 if isinstance(data, dict):
                     items = data.get('schedule', [])
@@ -1256,18 +1251,17 @@ class GanttWidget(QDialog):
                     saved.append(entry)
                 if saved:
                     self.planned = saved
-                    logger.info(f"Loaded {len(saved)} schedule entries from {schedule_file}")
+                    logger.info(f"Loaded {len(saved)} schedule entries from backend")
             except Exception as e:
                 logger.error(f"Failed to load schedule: {e}")
                 self.planned = []
         else:
-            logger.info("No existing schedule file found - starting fresh")
+            logger.info("No existing backend schedule found - starting fresh")
             self.planned = []
 
     def generate_new_schedule_workflow(self):
         """Two-stage schedule generation with proper file handling."""
         # Stage 1: generate the editable staging schedule.
-        temp_file = os.path.join(PLUGIN_DIR, 'Surgery_Pre_Planner.schedule.json')
         self._generate_schedule_to_memory()  # Generate schedule in memory first
         
         # Save generated schedule to the staging file.
@@ -1276,18 +1270,16 @@ class GanttWidget(QDialog):
             for entry in self.planned:
                 schedule_data.append(schedule_entry_to_dict(entry, date_format="iso"))
             
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                json.dump(schedule_data, f, indent=2, ensure_ascii=False)
-            logger.info(f"Staging schedule saved to {temp_file}")
+            _backend_save("draft-schedule", {'schedule': schedule_data})
+            logger.info("Staging schedule saved to backend")
         except Exception as e:
             logger.error(f"Failed to save staging schedule: {e}")
             return False
         
         # Stage 2: publish the staging schedule to the main schedule file.
-        main_file = os.path.join(PLUGIN_DIR, 'surgery_planner.schedule.json')
         try:
-            shutil.copy2(temp_file, main_file)
-            logger.info(f"Schedule copied from {temp_file} to {main_file}")
+            _backend_save("schedule", {'schedule': schedule_data})
+            logger.info("Staging schedule published in backend")
             
             # Load the new schedule
             self.load_schedule_on_startup()
@@ -1318,24 +1310,16 @@ class GanttWidget(QDialog):
         logger.info(f"Generated schedule with {len(self.planned)} entries")
 
     def _load_saved_schedule(self) -> None:
-        """Load and render an existing schedule on startup, if present."""
+        """Load and render an existing backend schedule, if present."""
         try:
-            # Prefer the editable staging schedule; fall back to the published schedule.
-            if os.path.exists(TEMP_SCHEDULE_JSON_FILE):
-                sched_file = TEMP_SCHEDULE_JSON_FILE
-            elif os.path.exists(SCHEDULE_JSON_FILE):
-                # Copy published schedule into staging and load from there.
-                sched_file = TEMP_SCHEDULE_JSON_FILE
-                try:
-                    shutil.copyfile(SCHEDULE_JSON_FILE, TEMP_SCHEDULE_JSON_FILE)
-                    logger.debug(f"Copied published schedule to staging for load: "
-                                 f"{TEMP_SCHEDULE_JSON_FILE}")
-                except Exception as e:
-                    logger.error(f"Failed to copy published schedule to staging: {e}")
-            else:
+            data = _backend_load(
+                "draft-schedule", _backend_load("schedule", None)
+            )
+            if data is None:
                 return
-            with open(sched_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            if isinstance(data, list):
+                data = {"schedule": data}
+            if isinstance(data, dict):
                 saved = []
                 for item in data.get('schedule', []):
                     # parse date in dd.mm.yyyy
@@ -1546,14 +1530,12 @@ class GanttWidget(QDialog):
         )
 
     def _persist_temp_schedule(self):
-        """Helper to write current `self.planned` (with fixed flags) to TEMP_SCHEDULE_JSON_FILE."""
+        """Persist the editable schedule draft in the backend."""
         try:
             temp_out = {'schedule': []}
             for entry in getattr(self, 'planned', []):
                 temp_out['schedule'].append(schedule_entry_to_dict(entry, date_format=DATE_FORMAT))
-                # write out our new plan
-                with open(TEMP_SCHEDULE_JSON_FILE, 'w', encoding='utf-8') as f:
-                    json.dump(temp_out, f, ensure_ascii=False, indent=2)
+            _backend_save("draft-schedule", temp_out)
             logger.debug(f"Persisted {len(temp_out['schedule'])} events to temp schedule")
         except Exception as ex:
             logger.error(f"Failed to persist temp schedule: {ex}")
@@ -2530,9 +2512,8 @@ class GanttWidget(QDialog):
                 temp_out = {'schedule': []}
                 for entry in planned:
                     temp_out['schedule'].append(schedule_entry_to_dict(entry, date_format=DATE_FORMAT))
-                with open(TEMP_SCHEDULE_JSON_FILE, 'w', encoding='utf-8') as f:
-                    json.dump(temp_out, f, ensure_ascii=False, indent=2)
-                logger.debug(f"Saved staging schedule ({len(planned)} entries) to {TEMP_SCHEDULE_JSON_FILE}")
+                _backend_save("draft-schedule", temp_out)
+                logger.debug(f"Saved staging schedule ({len(planned)} entries) to backend")
             except Exception as e:
                 logger.error(f"Failed to save staging schedule: {e}")
 
@@ -2720,8 +2701,7 @@ class GanttWidget(QDialog):
                     temp_out = {'schedule': []}
                     for e in self.planned:
                         temp_out['schedule'].append(schedule_entry_to_dict(e, date_format=DATE_FORMAT))
-                    with open(TEMP_SCHEDULE_JSON_FILE, 'w', encoding='utf-8') as f:
-                        json.dump(temp_out, f, ensure_ascii=False, indent=2)
+                    _backend_save("draft-schedule", temp_out)
                 except Exception as ex:
                     logger.error(f"Failed to save temp schedule after edit: {ex}")
 
@@ -3212,21 +3192,20 @@ class GanttWidget(QDialog):
         if filename:
             try:
                 save_schedule_to_plugin(self.planned)
-                # Copy the plugin schedule file to the user-selected location
-                plugin_schedule_file = os.path.join(PLUGIN_DIR, 'surgery_planner.schedule.json')
-                if os.path.exists(plugin_schedule_file):
-                    import shutil
-                    shutil.copy2(plugin_schedule_file, filename)
-                    QMessageBox.information(self, 
-                        tr(self.messages, 'surgery_planner.info.export_success', 'Export Success'),
-                        tr(self.messages, 'surgery_planner.message.export_success', 'Schedule exported successfully to {filename}').format(filename=filename)
-                    )
-                    logger.info(f"Schedule exported to JSON: {filename}")
-                else:
-                    QMessageBox.warning(self, 
-                        tr(self.messages, 'surgery_planner.warning.no_schedule_file', 'No Schedule File'),
-                        tr(self.messages, 'surgery_planner.message.save_schedule_first', 'Please save the schedule first before exporting.')
-                    )
+                out = {
+                    "schedule": [
+                        schedule_entry_to_dict(entry, date_format="iso")
+                        for entry in self.planned
+                    ]
+                }
+                with open(filename, "w", encoding="utf-8") as handle:
+                    json.dump(out, handle, ensure_ascii=False, indent=2)
+                QMessageBox.information(
+                    self,
+                    tr(self.messages, 'surgery_planner.info.export_success', 'Export Success'),
+                    tr(self.messages, 'surgery_planner.message.export_success', 'Schedule exported successfully to {filename}').format(filename=filename)
+                )
+                logger.info(f"Schedule exported to JSON: {filename}")
             except Exception as e:
                 QMessageBox.critical(self, 
                     tr(self.messages, 'surgery_planner.error.export_failed', 'Export Failed'),
@@ -3237,7 +3216,7 @@ class GanttWidget(QDialog):
     def _save_schedule(self):
         """
         Persist the currently generated schedule entries to
-        Surgery_Planner.schedule.json alongside this plugin.
+        the selected ProgTrack backend.
         """
         try:
             # Ensure we've generated a schedule
@@ -3254,16 +3233,14 @@ class GanttWidget(QDialog):
             for entry in self.planned:
                 out['schedule'].append(schedule_entry_to_dict(entry, date_format=DATE_FORMAT))
 
-            # Write JSON file
-            with open(SCHEDULE_JSON_FILE, 'w', encoding='utf-8') as f:
-                json.dump(out, f, ensure_ascii=False, indent=2)
+            _backend_save("schedule", out)
 
             QMessageBox.information(
                 self, 
                 self.messages.get('op_planner.info.save_schedule', 'Save Schedule'),
-                f"{self.messages.get('op_planner.info.schedule_saved_to', 'Schedule saved to')} {os.path.basename(SCHEDULE_JSON_FILE)}"
+                f"{self.messages.get('op_planner.info.schedule_saved_to', 'Schedule saved to')} backend"
             )
-            logger.debug(f"Saved schedule ({len(self.planned)} entries) to {SCHEDULE_JSON_FILE}")
+            logger.debug(f"Saved schedule ({len(self.planned)} entries) to backend")
             # reload & re-highlight calendar events whenever user saves a new schedule
             self._load_schedule_events()
             self._update_calendar_format()
@@ -3289,10 +3266,11 @@ class GanttWidget(QDialog):
                 self._update_calendar_format()
                 return
                 
-            # Fall back to loading from JSON file
-            if os.path.exists(SCHEDULE_JSON_FILE):
-                with open(SCHEDULE_JSON_FILE, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+            # Fall back to the published backend schedule.
+            data = _backend_load("schedule", None)
+            if data is not None:
+                if isinstance(data, list):
+                    data = {"schedule": data}
                 for item in data.get('schedule', []):
                     try:
                         dt = datetime.strptime(item.get('date', ''), DATE_FORMAT).date()

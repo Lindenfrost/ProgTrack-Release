@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from PyQt6.QtCore import Qt, QSettings, QSize, QStringListModel, QTimer
+from Plugins.core.backend_store import BackendJsonStore
 from PyQt6.QtGui import QColor, QPainter, QFont, QTransform, QIcon
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
@@ -30,6 +31,7 @@ from Plugins.core.animal_identity import (
     split_animal_identity_key,
 )
 from Plugins.core.platform_helpers import default_export_directory
+from Plugins.core.ui_icons import apply_icon
 
 logger = logging.getLogger(__name__)
 
@@ -363,10 +365,18 @@ def _is_other_row_meaningful(data: Dict) -> bool:
 # ---------------------------------------------------------------------------
 
 class JsonStore:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, backend=None, record_id: str = ""):
         self._path = path
+        self._store = (
+            BackendJsonStore(backend, "samples", record_id)
+            if backend is not None and record_id
+            else None
+        )
 
     def read(self) -> List[Dict[str, Any]]:
+        if self._store is not None:
+            value = self._store.load([])
+            return value if isinstance(value, list) else []
         if not self._path.exists():
             return []
         try:
@@ -381,6 +391,9 @@ class JsonStore:
 
     def write(self, rows: List[Dict[str, Any]]) -> None:
         try:
+            if self._store is not None:
+                self._store.save(rows)
+                return
             self._path.parent.mkdir(parents=True, exist_ok=True)
             with open(self._path, "w", encoding="utf-8") as fh:
                 json.dump(rows, fh, ensure_ascii=False, indent=2)
@@ -2357,7 +2370,7 @@ class OrganSamplesTab(QWidget):
 
         # -- "Filter by age" toggle button (collapsed by default) --
         _age_lbl_text = _msg(m, "sample_track.header.filter_by_age", "Filter by age:")
-        self._age_toggle_btn = QPushButton("▶  " + _age_lbl_text)
+        self._age_toggle_btn = QPushButton(_age_lbl_text)
         self._age_toggle_btn.setFlat(True)
         self._age_toggle_btn.setCheckable(True)
         self._age_toggle_btn.setChecked(False)
@@ -2365,6 +2378,7 @@ class OrganSamplesTab(QWidget):
             "QPushButton { font-weight: bold; color: #555; text-align: left; "
             "border: none; padding: 0px; margin: 0px; }")
         self._age_toggle_btn.setFixedHeight(16)
+        apply_icon(self._age_toggle_btn, "toggle.expand", fallback=_age_lbl_text)
 
         # -- Age fields row (hidden until toggle is expanded) --
         self._age_row = QWidget()
@@ -2420,8 +2434,12 @@ class OrganSamplesTab(QWidget):
         # Wire toggle: show/hide age row and flip arrow
         def _on_age_toggle(checked: bool, _lbl=_age_lbl_text):
             self._age_row.setVisible(checked)
-            self._age_toggle_btn.setText(
-                ("▼  " if checked else "▶  ") + _lbl)
+            self._age_toggle_btn.setText(_lbl)
+            apply_icon(
+                self._age_toggle_btn,
+                "toggle.collapse" if checked else "toggle.expand",
+                fallback=_lbl,
+            )
             self._apply_filters()
         self._age_toggle_btn.toggled.connect(_on_age_toggle)
 
@@ -2856,13 +2874,14 @@ class OtherSamplesTab(QWidget):
         header_vl.setContentsMargins(2, 2, 2, 0)
         header_vl.setSpacing(0)
         _date_lbl_text = _msg(m, "sample_track.header.filter_by_date", "Filter by collection date:")
-        self._date_toggle_btn = QPushButton("▶  " + _date_lbl_text)
+        self._date_toggle_btn = QPushButton(_date_lbl_text)
         self._date_toggle_btn.setFlat(True)
         self._date_toggle_btn.setCheckable(True)
         self._date_toggle_btn.setChecked(False)
         self._date_toggle_btn.setStyleSheet(
             "QPushButton { font-weight: bold; color: #555; text-align: left; "
             "border: none; padding: 1px 0px; }")
+        apply_icon(self._date_toggle_btn, "toggle.expand", fallback=_date_lbl_text)
 
         # -- Date fields row (hidden until toggle expanded) --
         self._date_row = QWidget()
@@ -2890,8 +2909,12 @@ class OtherSamplesTab(QWidget):
 
         def _on_date_toggle(checked: bool, _lbl=_date_lbl_text):
             self._date_row.setVisible(checked)
-            self._date_toggle_btn.setText(
-                ("▼  " if checked else "▶  ") + _lbl)
+            self._date_toggle_btn.setText(_lbl)
+            apply_icon(
+                self._date_toggle_btn,
+                "toggle.collapse" if checked else "toggle.expand",
+                fallback=_lbl,
+            )
             self._apply_filters()
         self._date_toggle_btn.toggled.connect(_on_date_toggle)
 
@@ -3448,6 +3471,8 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
             story.append(tbl)
 
         doc.build(story)
+        from Plugins.core.institution_branding import brand_generated_pdf
+        brand_generated_pdf(app, path)
         QMessageBox.information(
             parent_widget,
             "PDF",
@@ -3521,8 +3546,12 @@ class SampleTrackPlugin:
         self.app = app
         self.plugin_dir = PLUGIN_DIR
         self._window: Optional[SampleTrackWindow] = None
-        self._organ_store = JsonStore(PLUGIN_DIR / "organs.json")
-        self._other_store = JsonStore(PLUGIN_DIR / "other.json")
+        self._organ_store = JsonStore(
+            PLUGIN_DIR / "organs.json", app.backend, "organs"
+        )
+        self._other_store = JsonStore(
+            PLUGIN_DIR / "other.json", app.backend, "other"
+        )
 
     @property
     def _messages(self) -> Dict:

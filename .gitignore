@@ -15,6 +15,7 @@ source/dist/
 source/*.log
 matplotlib_cache/
 runtime_plot_test.*
+ProgTrackData/
 .windsurf/
 ProgTrack.v.0.1.0.zip
 progtrack_daten.lock
@@ -23,6 +24,7 @@ tmp/
 outputs/
 .pytest_cache/
 .ruff_cache/
+Depricated.md
 *.bak
 Plugins/Projects_Track/project_assignment_cache/
 # The encrypted starter-user database is intentional release data. Keep it

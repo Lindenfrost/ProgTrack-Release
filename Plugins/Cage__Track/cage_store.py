@@ -15,6 +15,7 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from Plugins.core.animal_identity import animal_base_name
+from Plugins.core.backend_store import BackendJsonStore
 
 
 UNASSIGNED_CAGE_ID = "cage_unassigned"
@@ -23,9 +24,13 @@ UNASSIGNED_CAGE_ID = "cage_unassigned"
 class CageStore:
     """Owns plugin-specific storage in cage.json."""
 
-    def __init__(self, plugin_dir: str):
+    def __init__(self, plugin_dir: str, backend: Any):
         self.plugin_dir = plugin_dir
         self.file_path = os.path.join(plugin_dir, "cage.json")
+        self.backend_store = BackendJsonStore(backend, "housing", "cage")
+        self.inspection_store = BackendJsonStore(
+            backend, "housing", "inspections"
+        )
         self._data: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------
@@ -112,17 +117,8 @@ class CageStore:
         if self._data is not None:
             return self._data
 
-        if not os.path.exists(self.file_path):
-            self._data = self._default_data()
-            self.save_data()
-            return self._data
-
-        try:
-            with open(self.file_path, "r", encoding="utf-8") as f:
-                raw = json.load(f)
-            if not isinstance(raw, dict):
-                raw = self._default_data()
-        except Exception:
+        raw = self.backend_store.load(self._default_data())
+        if not isinstance(raw, dict):
             raw = self._default_data()
 
         # Ensure all top-level keys exist
@@ -180,18 +176,7 @@ class CageStore:
 
     def save_data(self) -> None:
         data = self.load_data()
-        os.makedirs(self.plugin_dir, exist_ok=True)
-        fd, temp_path = tempfile.mkstemp(prefix="cage_", suffix=".json", dir=self.plugin_dir)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as tmp:
-                json.dump(data, tmp, indent=2, ensure_ascii=False)
-            os.replace(temp_path, self.file_path)
-        finally:
-            if os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
+        self.backend_store.save(data)
 
     # ------------------------------------------------------------------
     # Structure CRUD

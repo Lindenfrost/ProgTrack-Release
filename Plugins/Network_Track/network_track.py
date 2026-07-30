@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QCheckBox, QSpinBox, QGroupBox, QDialogButtonBox, QMenu,
     QGridLayout, QToolButton, QTextEdit
 )
+from Plugins.core.backend_store import BackendJsonStore
 
 # QtMultimedia is optional - plugin works without sound
 try:
@@ -36,8 +37,6 @@ except ImportError:
 PLUGIN_DIR = Path(__file__).resolve().parent
 ROOT_DIR = PLUGIN_DIR.parent.parent
 ICON_DIR = ROOT_DIR / "icons"
-CHAT_LOG_FILE = PLUGIN_DIR / "chat_log.txt"
-SETTINGS_FILE = PLUGIN_DIR / "network_track_settings.json"
 NOTIFICATION_SOUND = PLUGIN_DIR / "notification.wav"
 
 # Configure logging
@@ -190,6 +189,11 @@ class NetworkTrackWidget(QMainWindow):
         super().__init__(parent)
         self.messages = messages or {}
         self.app = app
+        backend = getattr(app or parent, "backend", None)
+        self._settings_store = BackendJsonStore(
+            backend, "configuration", "network-track"
+        )
+        self._chat_store = BackendJsonStore(backend, "network-track", "chat")
         self.settings = self._load_settings()
         self.last_line_count = 0
         self.sound_effect = None
@@ -212,9 +216,6 @@ class NetworkTrackWidget(QMainWindow):
         icon_path = ICON_DIR / 'progtrack_icon.ico'
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
-        
-        # Initialize chat log file
-        self._init_chat_log()
         
         # Initialize UI
         self._init_ui()
@@ -240,34 +241,28 @@ class NetworkTrackWidget(QMainWindow):
             'default_name': ''
         }
         
-        if SETTINGS_FILE.exists():
-            try:
-                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
-                    loaded = json.load(f)
-                    default_settings.update(loaded)
-            except Exception as e:
-                logger.error(f"Error loading settings: {e}")
+        try:
+            loaded = self._settings_store.load({})
+            if isinstance(loaded, dict):
+                default_settings.update(loaded)
+        except Exception as e:
+            logger.error(f"Error loading settings: {e}")
         
         return default_settings
     
     def _save_settings(self):
         """Save settings to JSON file."""
         try:
-            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self.settings, f, indent=2)
+            self._settings_store.save(self.settings)
         except Exception as e:
             logger.error(f"Error saving settings: {e}")
-    
-    def _init_chat_log(self):
-        """Initialize chat log file if it doesn't exist."""
-        if not CHAT_LOG_FILE.exists():
-            try:
-                CHAT_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-                CHAT_LOG_FILE.touch()
-                logger.info(f"Created chat log file: {CHAT_LOG_FILE}")
-            except Exception as e:
-                logger.error(f"Error creating chat log file: {e}")
+
+    def _chat_lines(self) -> list[str]:
+        payload = self._chat_store.load([])
+        return [str(line) for line in payload] if isinstance(payload, list) else []
+
+    def _save_chat_lines(self, lines: list[str]) -> None:
+        self._chat_store.save([str(line).rstrip("\n") for line in lines][-1000:])
     
     def _init_ui(self):
         """Initialize the user interface."""
@@ -533,16 +528,9 @@ class NetworkTrackWidget(QMainWindow):
     def _load_chat_log(self):
         """Load and display the last 100 lines of the chat log."""
         try:
-            if not CHAT_LOG_FILE.exists():
-                self.chat_table.setRowCount(0)
-                return
-            
-            with open(CHAT_LOG_FILE, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-            
-            # Get last 100 lines
-            lines = lines[-100:]
-            self.last_line_count = len(lines)
+            all_lines = self._chat_lines()
+            self.last_line_count = len(all_lines)
+            lines = all_lines[-100:]
             
             # Clear and populate table
             self.chat_table.setRowCount(0)
@@ -694,30 +682,22 @@ class NetworkTrackWidget(QMainWindow):
                                  edit_ts: str = "") -> None:
         """Rewrite the chat log file replacing one matching line."""
         try:
-            if not CHAT_LOG_FILE.exists():
-                return
-            with open(CHAT_LOG_FILE, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
+            lines = self._chat_lines()
             suffix = f" [edited {edit_ts}]" if edit_ts else " [edited]"
-            new_line = f"{ts}\t{author}\t{new_text}{suffix}\n"
+            new_line = f"{ts}\t{author}\t{new_text}{suffix}"
             for i, line in enumerate(lines):
                 stored = line.rstrip('\n')
                 if stored == f"{ts}\t{author}\t{old_text}":
                     lines[i] = new_line
                     break
-            with open(CHAT_LOG_FILE, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
+            self._save_chat_lines(lines)
         except Exception as exc:
             logger.error("Failed to rewrite chat log for edit: %s", exc)
 
     def _check_for_updates(self):
         """Check if the chat log file has been updated."""
         try:
-            if not CHAT_LOG_FILE.exists():
-                return
-            
-            with open(CHAT_LOG_FILE, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
+            lines = self._chat_lines()
             
             current_count = len(lines)
             
@@ -785,11 +765,10 @@ class NetworkTrackWidget(QMainWindow):
             timestamp = datetime.now().strftime("%d/%m/%y %H:%M")
             
             # Format: timestamp\tname\tmessage
-            chat_line = f"{timestamp}\t{name}\t{message}\n"
-            
-            # Append to chat log file
-            with open(CHAT_LOG_FILE, 'a', encoding='utf-8') as f:
-                f.write(chat_line)
+            chat_line = f"{timestamp}\t{name}\t{message}"
+            lines = self._chat_lines()
+            lines.append(chat_line)
+            self._save_chat_lines(lines)
             
             # Clear message input
             self.message_input.clear()

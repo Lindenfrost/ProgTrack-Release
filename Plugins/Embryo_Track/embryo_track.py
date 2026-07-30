@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QTableWidget, QTableWidgetItem, QGroupBox, QFormLayout,
     QComboBox, QFileDialog, QMessageBox, QTextEdit
 )
+from Plugins.core.backend_store import BackendJsonStore
 
 # Marmoset gestation period (days) - standard range 143-148 days
 # Using conservative upper estimate for due date calculation
@@ -96,6 +97,11 @@ class EmbryoTrackerWidget(QDialog):
     def __init__(self, messages: Optional[dict] = None, parent=None):
         super().__init__(parent)
         self.messages = messages or {}
+        self._reference_store = BackendJsonStore(
+            getattr(parent, "backend", None),
+            "embryo-track",
+            "cranimetry-reference",
+        )
         self.reference_data = {}
         self.prediction_models = {}
         
@@ -217,11 +223,10 @@ class EmbryoTrackerWidget(QDialog):
         
         
     def _load_reference_data(self):
-        """Load reference data from JSON file."""
+        """Load reference data from the shared backend."""
         try:
-            if os.path.exists(REFERENCE_DATA_FILE):
-                with open(REFERENCE_DATA_FILE, 'r', encoding='utf-8') as f:
-                    self.reference_data = json.load(f)
+            self.reference_data = self._reference_store.load({})
+            if self.reference_data:
                 self._build_prediction_models()
                 logger.info("Reference data loaded successfully")
             else:
@@ -680,8 +685,7 @@ class EmbryoTrackerWidget(QDialog):
             
             # Auto-save the loaded data
             try:
-                with open(REFERENCE_DATA_FILE, 'w', encoding='utf-8') as f:
-                    json.dump(self.reference_data, f, indent=2, ensure_ascii=False)
+                self._reference_store.save(self.reference_data)
             except Exception as save_error:
                 logger.warning(f"Could not auto-save reference data: {save_error}")
             

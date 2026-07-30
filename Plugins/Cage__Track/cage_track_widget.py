@@ -48,6 +48,7 @@ from matplotlib.patches import FancyBboxPatch, Rectangle
 import matplotlib.colors as mcolors
 
 from .cage_store import CageStore, UNASSIGNED_CAGE_ID
+from Plugins.core.ui_icons import apply_icon
 from .cage_engine import CageEngine
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_roles import (
@@ -368,6 +369,8 @@ class MovementHistoryDialog(QDialog):
             fig.tight_layout()
             with _PdfPages(path) as pdf:
                 pdf.savefig(fig)
+            from Plugins.core.institution_branding import brand_generated_pdf
+            brand_generated_pdf(self, path)
             QMessageBox.information(
                 self,
                 self.messages.get("cage_track.history.export_pdf", "Export PDF"),
@@ -744,6 +747,8 @@ class CageSettingsDialog(QDialog):
             try:
                 with PdfPages(path) as pdf:
                     pdf.savefig(pw.figure, bbox_inches="tight")
+                from Plugins.core.institution_branding import brand_generated_pdf
+                brand_generated_pdf(self, path)
             finally:
                 pw.ax.set_xlim(old_xlim)
                 pw.ax.set_ylim(old_ylim)
@@ -1007,6 +1012,8 @@ class InspectionPDFExportDialog(QDialog):
             fig.tight_layout()
             with PdfPages(path) as pdf:
                 pdf.savefig(fig)
+            from Plugins.core.institution_branding import brand_generated_pdf
+            brand_generated_pdf(self, path)
 
             QMessageBox.information(
                 self,
@@ -1098,7 +1105,10 @@ class CageTrackWidget(QWidget):
         self.add_btn.setToolTip(self.messages.get("cage_track.toolbar.add", "Add"))
         self.add_btn.clicked.connect(self._on_add)
 
-        self.refresh_assignments_btn = QPushButton("🔄")
+        self.refresh_assignments_btn = QPushButton()
+        apply_icon(
+            self.refresh_assignments_btn, "action.refresh", fallback="Refresh"
+        )
         self.refresh_assignments_btn.setToolTip(
             self.messages.get(
                 "cage_track.toolbar.refresh_assignments",
@@ -2431,21 +2441,12 @@ class CageTrackWidget(QWidget):
         return os.path.join(self.store.plugin_dir, "inspection.json")
 
     def _load_inspections(self) -> List[Dict[str, Any]]:
-        path = self._get_inspection_path()
-        if not os.path.exists(path):
-            return []
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return data.get("records", [])
-        except Exception:
-            return []
+        data = self.store.inspection_store.load({"records": []})
+        return data.get("records", []) if isinstance(data, dict) else []
 
     def _save_inspections(self, records: List[Dict[str, Any]]) -> None:
-        path = self._get_inspection_path()
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump({"records": records}, f, indent=2, ensure_ascii=False)
+            self.store.inspection_store.save({"records": records})
         except Exception as e:
             logger.error(f"Failed to save inspections: {e}")
 
@@ -2665,7 +2666,7 @@ class CageTrackPlugin:
         self.app = app
         self.messages: Dict[str, Any] = getattr(app, "messages", {}) or {}
         self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        self.store = CageStore(self.plugin_dir)
+        self.store = CageStore(self.plugin_dir, app.backend)
         self.store.load_data()
 
         self.widget: Optional[CageTrackWidget] = None

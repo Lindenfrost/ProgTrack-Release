@@ -18,18 +18,28 @@ logger = logging.getLogger(__name__)
 class SessionManager:
     """Load / save per-user session files under ``sessions/``."""
 
-    def __init__(self, plugin_dir: str):
+    def __init__(self, plugin_dir: str, backend=None):
         self.sessions_dir = os.path.join(plugin_dir, "sessions")
-        os.makedirs(self.sessions_dir, exist_ok=True)
+        self.backend = backend
 
     def _path(self, username: str) -> str:
         safe = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in username)
         return os.path.join(self.sessions_dir, f"{safe}.json")
 
     def exists(self, username: str) -> bool:
+        if self.backend is not None:
+            marker = object()
+            return self.backend.records.get(
+                "sessions", username, default=marker
+            ) is not marker
         return os.path.isfile(self._path(username))
 
     def load(self, username: str) -> Dict[str, Any]:
+        if self.backend is not None:
+            value = self.backend.records.get(
+                "sessions", username, default=self._defaults(username)
+            )
+            return value if isinstance(value, dict) else self._defaults(username)
         path = self._path(username)
         if not os.path.isfile(path):
             return self._defaults(username)
@@ -43,6 +53,9 @@ class SessionManager:
 
     def save(self, username: str, data: Dict[str, Any]) -> None:
         data["username"] = username
+        if self.backend is not None:
+            self.backend.records.put("sessions", username, data)
+            return
         path = self._path(username)
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -51,6 +64,9 @@ class SessionManager:
             logger.error("Failed to save session for %s: %s", username, exc)
 
     def delete(self, username: str) -> None:
+        if self.backend is not None:
+            self.backend.records.delete("sessions", username)
+            return
         path = self._path(username)
         if os.path.isfile(path):
             try:

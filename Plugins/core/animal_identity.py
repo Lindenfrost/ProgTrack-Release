@@ -27,12 +27,12 @@ def normalize_species(value: Any) -> str:
     return _clean(value)
 
 
-def split_animal_identity_key(value: Any) -> tuple[str, str, str] | None:
+def split_animal_identity_key(value: Any) -> tuple[str, str, str, str] | None:
     text = _clean(value)
     parts = [part.strip() for part in text.split(IDENTITY_SEPARATOR)]
-    if len(parts) != 3 or not all(parts):
+    if len(parts) != 4 or not all(parts):
         return None
-    return parts[0], parts[1], parts[2]
+    return parts[0], parts[1], parts[2], parts[3]
 
 
 def normalize_birth_date(value: Any, *, required: bool = False) -> str:
@@ -60,17 +60,26 @@ def _reject_separator(value: str, field_name: str) -> None:
         raise ValueError(f"{field_name} must not contain '|'.")
 
 
-def animal_identity_key(name: Any, species: Any, birth_date: Any) -> str:
+def animal_identity_key(
+    name: Any,
+    species: Any,
+    birth_date: Any,
+    origin: Any,
+) -> str:
     base_name = normalize_name(name)
     species_name = normalize_species(species)
     birth = normalize_birth_date(birth_date, required=True)
+    origin_name = _clean(origin)
     if not base_name:
         raise ValueError("Animal name is required.")
     if not species_name:
         raise ValueError("Species is required for animal identity.")
+    if not origin_name:
+        raise ValueError("Origin is required for animal identity.")
     _reject_separator(base_name, "Animal name")
     _reject_separator(species_name, "Species")
-    return IDENTITY_SEPARATOR.join((base_name, species_name, birth))
+    _reject_separator(origin_name, "Origin")
+    return IDENTITY_SEPARATOR.join((base_name, species_name, birth, origin_name))
 
 
 def animal_base_name(key: Any, record: Mapping[str, Any] | None = None) -> str:
@@ -89,13 +98,14 @@ def animal_identity_label(key: Any, record: Mapping[str, Any] | None = None) -> 
     if isinstance(record, Mapping):
         base = animal_base_name(key, record)
         species = normalize_species(record.get("species"))
+        origin = _clean(record.get("origin"))
         try:
             birth = normalize_birth_date(record.get("birth_date"), required=False)
         except ValueError:
             birth = ""
-        if base and species and birth:
+        if base and species and birth and origin:
             try:
-                return animal_identity_key(base, species, birth)
+                return animal_identity_key(base, species, birth, origin)
             except ValueError:
                 return normalize_name(key)
     return normalize_name(key)
@@ -158,50 +168,62 @@ def resolve_animal_reference_text(
     return text, {}, "missing"
 
 
-def animal_identity_tuple(name: Any, species: Any, birth_date: Any) -> tuple[str, str, str]:
+def animal_identity_tuple(
+    name: Any,
+    species: Any,
+    birth_date: Any,
+    origin: Any,
+) -> tuple[str, str, str, str]:
     return (
         normalize_name(name).casefold(),
         normalize_species(species).casefold(),
         normalize_birth_date(birth_date, required=False),
+        _clean(origin).casefold(),
     )
 
 
-def record_identity_tuple(key: Any, record: Mapping[str, Any] | None) -> tuple[str, str, str]:
+def record_identity_tuple(
+    key: Any,
+    record: Mapping[str, Any] | None,
+) -> tuple[str, str, str, str]:
     if not isinstance(record, Mapping):
         parts = split_animal_identity_key(key)
         if parts is None:
-            return animal_identity_tuple(key, "", "")
+            return animal_identity_tuple(key, "", "", "")
         try:
             return animal_identity_tuple(*parts)
         except ValueError:
-            return animal_identity_tuple(parts[0], parts[1], "")
+            return animal_identity_tuple(parts[0], parts[1], "", parts[3])
 
     base = animal_base_name(key, record)
     species = normalize_species(record.get("species"))
+    origin = _clean(record.get("origin"))
     try:
         birth = normalize_birth_date(record.get("birth_date"), required=False)
     except ValueError:
         birth = ""
-    if not species or not birth:
+    if not species or not birth or not origin:
         parts = split_animal_identity_key(key)
         if parts is not None:
             base = base or parts[0]
             species = species or parts[1]
+            origin = origin or parts[3]
             try:
                 birth = birth or normalize_birth_date(parts[2], required=False)
             except ValueError:
                 pass
-    return animal_identity_tuple(base, species, birth)
+    return animal_identity_tuple(base, species, birth, origin)
 
 
 def identity_conflict(
     name: Any,
     species: Any,
     birth_date: Any,
+    origin: Any,
     *collections: Mapping[str, Mapping[str, Any]],
     exclude_key: str | None = None,
 ) -> bool:
-    wanted = animal_identity_tuple(name, species, birth_date)
+    wanted = animal_identity_tuple(name, species, birth_date, origin)
     for collection in collections:
         for key, record in collection.items():
             if exclude_key is not None and key == exclude_key:

@@ -1,5 +1,5 @@
 {
-  "app.title": "ProgTrack v.0.1.2",
+  "app.title": "ProgTrack v.0.2.1",
   "menu.program": "Настройки",
   "menu.program.language_settings": "Язык",
   "menu.program.style_settings": "Соглашения",
@@ -1838,5 +1838,13 @@
   "status.reproduction.sterile": "Стерильное",
   "status.reproduction.castrated": "Кастрированное",
   "import.identity.archived_id": "ID животного {animal_id} принадлежит архивному животному; новые измерения добавить нельзя.",
-  "import.identity.conflicting_id": "Такая комбинация имени, вида и даты рождения уже принадлежит животному с другим ID. Проверьте импортируемый ID."
+  "import.identity.conflicting_id": "Такая комбинация имени, вида и даты рождения уже принадлежит животному с другим ID. Проверьте импортируемый ID.",
+  "import.preview.summary.existing_only": "{rows} строк: можно импортировать {existing} строк существующих животных; {skipped} строк будут пропущены.",
+  "import.preview.unknown_manager_warning": "Обнаружены неизвестные животные: {animals}. Будут импортированы только данные существующих животных. Попросите менеджера сначала добавить их.",
+  "import.preview.status.existing": "Существующее животное — будет импортировано",
+  "import.preview.status.unknown": "Неизвестное животное — будет пропущено",
+  "import.preview.status.archived": "Архивное животное — будет пропущено",
+  "import.preview.status.ambiguous": "Неоднозначный ID — будет пропущен",
+  "import.preview.status.invalid": "Недействительная идентификация — будет пропущена",
+  "menu.program.institution_branding": "Фирменное оформление учреждения"
 }

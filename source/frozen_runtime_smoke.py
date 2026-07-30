@@ -23,8 +23,11 @@ import pandas
 import pyqtgraph
 import reportlab
 import scipy
+import psycopg
+import psycopg_pool
 from PIL import Image
 from PyQt6 import QtCore, QtGui, QtWidgets
+from psycopg import pq
 from scipy import stats as scipy_stats
 from scipy.interpolate import interp1d
 from scipy.optimize import minimize
@@ -66,7 +69,15 @@ def main() -> int:
         "pyqtgraph_version": pyqtgraph.__version__,
         "pillow_module": Image.__name__,
         "qt_modules": [QtGui.__name__, QtWidgets.__name__],
+        "psycopg_version": psycopg.__version__,
+        "psycopg_pool_version": psycopg_pool.__version__,
+        "psycopg_implementation": pq.__impl__,
+        "libpq_version": pq.version(),
     }
+    if pq.__impl__ != "binary":
+        raise RuntimeError(
+            f"Windows frozen runtime requires Psycopg binary, got {pq.__impl__}"
+        )
     result_json = json.dumps(result, ensure_ascii=False, sort_keys=True)
     result_path = os.environ.get("PROGTRACK_SMOKE_RESULT")
     if result_path:

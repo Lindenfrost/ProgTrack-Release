@@ -14,6 +14,11 @@ PyQt6.QtWidgets
 ctypes
 sqlite3
 ssl
+psycopg
+psycopg.pq
+psycopg.rows
+psycopg_binary
+psycopg_pool
 matplotlib.artist
 matplotlib.backends.backend_qt
 matplotlib.backends.backend_qt5agg
@@ -32,6 +37,7 @@ matplotlib.transforms
 matplotlib.widgets
 openpyxl
 pandas
+pypdf
 pyqtgraph
 reportlab
 reportlab.pdfbase.ttfonts

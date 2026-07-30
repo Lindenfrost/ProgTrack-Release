@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.2",
+    [string]$Version = "0.2.1",
     [string]$Commit = "HEAD",
     [string]$RuntimeDirectory = (Join-Path $PSScriptRoot "dist\ProgTrack_small"),
     [string]$OutputDirectory = (Join-Path $PSScriptRoot "release")
@@ -104,7 +104,6 @@ $payloadPaths = @(
     "info_en.json",
     "info_it.json",
     "info_ru.json",
-    "progtrack_daten.json",
     "README.md",
     "LICENSE",
     "LICENSE_NOTICE.md",
@@ -120,6 +119,7 @@ Expand-Archive -LiteralPath $payloadArchive -DestinationPath $packageRoot -Force
 
 Copy-Item -LiteralPath (Join-Path $runtime "Launcher.exe") -Destination $packageRoot
 Copy-Item -LiteralPath (Join-Path $runtime "_internal") -Destination $packageRoot -Recurse
+Copy-Item -LiteralPath (Join-Path $runtime "component_inventory.json") -Destination $packageRoot
 
 foreach ($excludedRuntimePath in @(
     (Join-Path $packageRoot "_internal\logs"),
@@ -129,8 +129,8 @@ foreach ($excludedRuntimePath in @(
     Remove-GeneratedPath -Path $excludedRuntimePath
 }
 
-if (-not (Test-Path -LiteralPath (Join-Path $packageRoot "Plugins\Master_Track\users.enc"))) {
-    throw "The committed starter-user database is missing from the release package."
+if (-not (Test-Path -LiteralPath (Join-Path $packageRoot "Resources\Seed\progtrack_seed.ptdb"))) {
+    throw "The committed Phase 2 sample-data seed is missing from the release package."
 }
 
 & tar -a -c -f $releaseArchive -C $stagingRoot $releaseName
@@ -151,7 +151,8 @@ foreach ($requiredEntry in @(
     "$releaseName/_internal/_multiprocessing.pyd",
     "$releaseName/_internal/_sqlite3.pyd",
     "$releaseName/_internal/PyQt6/QtCore.pyd",
-    "$releaseName/Plugins/Master_Track/users.enc"
+    "$releaseName/Resources/Seed/progtrack_seed.ptdb",
+    "$releaseName/component_inventory.json"
 )) {
     if ($requiredEntry -notin $archiveEntries) {
         throw "Release archive is missing: $requiredEntry"

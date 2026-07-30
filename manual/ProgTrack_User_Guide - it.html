@@ -206,30 +206,15 @@
   </ul>
   <div class="hint"><strong>Suggerimento:</strong> Se l'applicazione non parte, controllare <code>launcher_error.log</code> e <code>launcher_fault.log</code> nella cartella del launcher.</div>
   
-  <h3>2.2 File di dati e impostazioni</h3>
-  <p>ProgTrack memorizza i dati in file JSON nella cartella del
-    programma o di lavoro:</p>
+  <h3>2.2 Profili backend e dati gestiti</h3>
+  <p>ProgTrack usa un unico livello di accesso ai dati con due profili:</p>
   <table class="basic">
-    <tr><th>File</th><th>Scopo</th></tr>
-    <tr><td><code>progtrack_daten.json</code></td><td>Database
-      principale di animali e misurazioni.</td></tr>
-    <tr><td><code>progtrack_settings.json</code></td><td>Impostazioni
-      dell'interfaccia utente e dei grafici (lingua, colori, stili,
-      ecc.).</td></tr>
+    <tr><th>Profilo</th><th>Uso</th></tr>
+    <tr><td><strong>Standalone SQLite</strong></td><td>Una sola workstation locale o test; solo memoria locale non sincronizzata.</td></tr>
+    <tr><td><strong>Shared PostgreSQL</strong></td><td>Uso in rete e multi-workstation con backend condiviso.</td></tr>
   </table>
-
-  <div class="warning">
-    <strong>Non modificate questi file JSON a mano</strong> a meno che
-    non sappiate esattamente cosa state facendo. Utilizzate invece
-    l'interfaccia di ProgTrack.
-  </div>
-
-  <div class="hint">
-    <strong>Suggerimento:</strong> Per backup manuali sicuri, chiudete
-    ProgTrack e copiate quindi <code>progtrack_daten.json</code>,
-    <code>progtrack_settings.json</code> o l'intera cartella ProgTrack in
-    una posizione protetta.
-  </div>
+  <p>I documenti restano nello spazio gestito del backend attivo; il database conserva proprietario, percorso sicuro e checksum. Le installazioni di sola lettura usano le directory del profilo utente/XDG. Un'installazione dimostrativa pulita nasce dall'unico pacchetto deterministico e interamente fittizio in <code>Resources/Seed</code>.</p>
+  <div class="warning"><strong>Non usare Standalone SQLite su unità di rete o cartelle cloud sincronizzate.</strong> Usare il pacchetto interchange completo per backup e trasferimento.</div>
 
   <h3>2.3 File Excel di esempio</h3>
   <p>
@@ -353,9 +338,9 @@
   <h3>5.3 Importazione da Excel</h3>
   <p>Le importazioni Excel si basano su nomi colonna esatti. Usare il pulsante di importazione corrispondente al tipo di dato e correggere date non valide, nomi vuoti o valori non numerici prima dell’importazione.</p>
   <table class="basic"><tr><th>Pulsante</th><th>Colonne richieste</th></tr><tr><td><strong>📈 Carica valori sangue</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Carica valori urina</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Carica pesi</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Carica valori sperma</strong></td><td><code>Animal ID</code>, <code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
-  <p>Dopo aver scelto un file valido, ProgTrack apre un'anteprima di sola lettura <strong>prima di scrivere animali o misurazioni</strong>. Mostra il numero totale di righe, tutte le colonne importate e fino alle prime 200 righe. La colonna aggiuntiva Stato animale indica per ogni riga Animale esistente o Nuovo animale; i nuovi animali sono evidenziati.</p>
-  <p>Controllare Animal ID, Nome, date, Sample ID e valori di misura nell'anteprima. Scegliere <strong>Annulla</strong> per lasciare invariato il database oppure <strong>Importa</strong> per proseguire. Le finestre d'identità per animali sconosciuti appaiono soltanto dopo aver accettato l'anteprima.</p>
-  <p><code>Animal ID</code> associa ogni riga a un animale esistente. I modelli standard omettono volutamente specie e data di nascita. Se l'ID animale non è ancora noto, prima dell'importazione una finestra aggiuntiva richiede specie e data di nascita completa per creare l'animale in modo univoco.</p>
+  <p>Dopo aver scelto un file valido, ProgTrack apre un'anteprima di sola lettura <strong>prima di scrivere animali o misurazioni</strong>. Conta l'intero file, mostra fino a 200 righe e classifica ogni riga come esistente, sconosciuta, archiviata, ambigua o non valida.</p>
+  <p>Controllare Animal ID, Nome, date, Sample ID e valori. <strong>Annulla</strong> lascia invariato il backend; <strong>Importa</strong> scrive solo le righe consentite per animali attivi esistenti.</p>
+  <p><code>Animal ID</code> è determinante per l'abbinamento. Gli animali sconosciuti restano visibili come righe ignorate e l'avviso chiede di farli creare prima da un Manager. L'importazione di misurazioni non crea mai un animale e non apre una finestra d'identità.</p>
   <p><code>Sample ID</code> è una colonna separata e facoltativa per identificare il campione. Non sostituisce mai <code>Animal ID</code>.</p>
 
   
@@ -492,21 +477,12 @@
   <h2 id="saving-export">8. Salvataggio ed esportazione</h2>
 
   <h3>8.1 Salvataggio del database</h3>
-  <p>
-    Usare <strong>File → Salva database</strong> per scrivere
-    esplicitamente lo stato corrente in <code>progtrack_daten.json</code>.
-    Un salvataggio automatico può avvenire durante alcune operazioni,
-    ma è consigliato eseguire un salvataggio manuale dopo sessioni di
-    modifica estese.
-  </p>
+  <p><strong>File → Salva database</strong> scrive lo stato corrente in una transazione del backend attivo. Per backup e trasferimento usare il flusso interchange completo, mantenendo insieme database e documenti gestiti.</p>
 
-  <div class="hint">
-    <strong>Suggerimento:</strong> Abituatevi a salvare prima di importi
-    massivi o operazioni complesse dei plugin (ad es. OP Planner). Se
-    qualcosa va storto, potete tornare all'ultimo backup JSON affidabile.
-  </div>
+  <h3>8.2 Intestazione istituzionale dei PDF</h3>
+  <p>Lord, Master e Manager aprono <strong>Impostazioni → Identità dell'istituzione</strong>, inseriscono il nome e un logo PNG/JPEG facoltativo e attivano l'intestazione. Ogni pagina PDF riceve un'intestazione compatta; le immagini grandi vengono ridotte mantenendo le proporzioni.</p>
 
-  <h3>8.2 Esportazione Excel</h3>
+  <h3>8.3 Esportazione Excel</h3>
   <p>
     <strong>File → Esporta report (.xlsx)</strong> apre una finestra in cui
     è possibile:
@@ -591,9 +567,7 @@
     <li>Evitare di modificare file Excel molto grandi in una sola
       volta; se possibile, importate i dati a lotti.</li>
     <li>Usare regolarmente <strong>File → Salva database</strong>.</li>
-    <li>Eseguire periodicamente il backup di
-      <code>progtrack_daten.json</code> tramite le normali procedure di
-      backup dei file.</li>
+    <li>Eseguire il backup congiunto del database e dei documenti gestiti tramite la procedura backend prevista.</li>
   </ul>
   <h3>10.4 Log tecnici</h3>
   <p>

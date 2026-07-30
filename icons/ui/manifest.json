@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "size": 32,
+  "icons": {
+    "action.add": {"file": "action_add.png", "fallback": "+", "usage": "Create/add action"},
+    "action.edit": {"file": "action_edit.png", "fallback": "Edit", "usage": "Edit action"},
+    "action.refresh": {"file": "action_refresh.png", "fallback": "Refresh", "usage": "Refresh/reload"},
+    "toggle.expand": {"file": "toggle_expand.png", "fallback": ">", "usage": "Expand"},
+    "toggle.collapse": {"file": "toggle_collapse.png", "fallback": "v", "usage": "Collapse"},
+    "status.pregnant_confirmed": {"file": "status_pregnant.png", "fallback": "Pregnant", "usage": "Confirmed pregnancy"},
+    "status.pregnant_possible": {"file": "status_possible.png", "fallback": "Pregnant?", "usage": "Possible pregnancy"},
+    "status.has_young_offspring": {"file": "status_offspring.png", "fallback": "Offspring", "usage": "Young offspring"},
+    "status.not_pregnant": {"file": "status_not_pregnant.png", "fallback": "Not pregnant", "usage": "No current pregnancy"},
+    "status.pregnant": {"file": "status_pregnant.png", "fallback": "Pregnant", "usage": "Compatibility alias"},
+    "status.possibly_pregnant": {"file": "status_possible.png", "fallback": "Pregnant?", "usage": "Compatibility alias"},
+    "status.offspring": {"file": "status_offspring.png", "fallback": "Offspring", "usage": "Compatibility alias"},
+    "status.sick": {"file": "status_sick.png", "fallback": "+", "usage": "Sick/recovery"},
+    "status.abnormal": {"file": "status_abnormal.png", "fallback": "!", "usage": "Abnormal"},
+    "status.deceased": {"file": "status_deceased.png", "fallback": "✝", "usage": "Deceased"},
+    "status.partner": {"file": "status_partner.png", "fallback": "♥", "usage": "Partner"}
+  }
+}

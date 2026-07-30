@@ -38,8 +38,8 @@ class MasterTrackPlugin:
     def __init__(self, app: Any):
         self.app = app
         self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        self.user_db = UserDB(self.plugin_dir)
-        self.session_mgr = SessionManager(self.plugin_dir)
+        self.user_db = UserDB(self.plugin_dir, app.backend)
+        self.session_mgr = SessionManager(self.plugin_dir, app.backend)
 
         self._current_username: Optional[str] = None
         self._current_role: str = ROLE_GUEST
@@ -70,33 +70,25 @@ class MasterTrackPlugin:
         return os.path.join(self.plugin_dir, "jobs.json")
 
     def _load_settings(self) -> Dict[str, Any]:
-        import json
-        path = self._settings_path()
-        if os.path.isfile(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception:
-                pass
-        return {"timeout_minutes": 30}
+        value = self.app.backend.records.get(
+            "configuration", "master-track", default={"timeout_minutes": 30}
+        )
+        return value if isinstance(value, dict) else {"timeout_minutes": 30}
 
     def _save_settings(self) -> None:
-        import json
         try:
-            with open(self._settings_path(), "w", encoding="utf-8") as f:
-                json.dump(self._settings, f, indent=2)
+            self.app.backend.records.put(
+                "configuration", "master-track", self._settings
+            )
         except Exception as exc:
             logger.error("Failed to save Master_Track settings: %s", exc)
 
     def _load_job_bundles(self) -> None:
-        """Load custom job bundle overrides from jobs.json if it exists."""
-        import json
-        path = self._jobs_path()
-        if not os.path.isfile(path):
-            return
+        """Load custom job bundle overrides from the backend."""
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                raw = json.load(f)
+            raw = self.app.backend.records.get(
+                "configuration", "job-bundles", default={}
+            )
             if isinstance(raw, dict):
                 known_permissions = set(ALL_PERMISSIONS)
                 for job_name, perms in raw.items():
@@ -113,12 +105,12 @@ class MasterTrackPlugin:
             logger.error("Failed to load jobs.json: %s", exc)
 
     def save_job_bundles(self) -> None:
-        """Persist current JOB_BUNDLES to jobs.json."""
-        import json
+        """Persist current job bundles through the backend."""
         try:
             serializable = {k: sorted(v) for k, v in JOB_BUNDLES.items()}
-            with open(self._jobs_path(), "w", encoding="utf-8") as f:
-                json.dump(serializable, f, indent=2, ensure_ascii=False)
+            self.app.backend.records.put(
+                "configuration", "job-bundles", serializable
+            )
         except Exception as exc:
             logger.error("Failed to save jobs.json: %s", exc)
 

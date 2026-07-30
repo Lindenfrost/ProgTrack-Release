@@ -1,5 +1,5 @@
 {
-  "app.title": "ProgTrack v.0.1.2",
+  "app.title": "ProgTrack v.0.2.1",
   "menu.program": "Einstellungen",
   "menu.program.language_settings": "Sprache",
   "menu.program.language_settings.english": "Englisch",
@@ -1844,5 +1844,13 @@
   "status.reproduction.sterile": "Steril",
   "status.reproduction.castrated": "Kastriert",
   "import.identity.archived_id": "Die Tier-ID {animal_id} gehört zu einem archivierten Tier und kann keine neuen Messwerte erhalten.",
-  "import.identity.conflicting_id": "Diese Kombination aus Name, Spezies und Geburtsdatum gehört bereits zu einem Tier mit einer anderen Tier-ID. Bitte die importierte ID prüfen."
+  "import.identity.conflicting_id": "Diese Kombination aus Name, Spezies und Geburtsdatum gehört bereits zu einem Tier mit einer anderen Tier-ID. Bitte die importierte ID prüfen.",
+  "import.preview.summary.existing_only": "{rows} Zeilen: {existing} Zeilen vorhandener Tiere können importiert werden; {skipped} Zeilen werden übersprungen.",
+  "import.preview.unknown_manager_warning": "Unbekannte Tiere erkannt: {animals}. Nur Daten vorhandener Tiere werden importiert. Bitten Sie einen Manager, die Tiere zuerst anzulegen.",
+  "import.preview.status.existing": "Vorhandenes Tier — wird importiert",
+  "import.preview.status.unknown": "Unbekanntes Tier — wird übersprungen",
+  "import.preview.status.archived": "Archiviertes Tier — wird übersprungen",
+  "import.preview.status.ambiguous": "Mehrdeutige Tier-ID — wird übersprungen",
+  "import.preview.status.invalid": "Ungültige Identität — wird übersprungen",
+  "menu.program.institution_branding": "Einrichtungsbranding"
 }
