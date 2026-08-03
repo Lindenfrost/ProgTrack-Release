@@ -13,6 +13,10 @@ if (-not $OutputPath) {
 }
 
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path.TrimEnd("\")
+$LegacyArchiveRoot = Join-Path (Split-Path -Parent $RepoRoot) "Archive\ProgTrack-legacy-json"
+if (-not (Test-Path -LiteralPath $LegacyArchiveRoot)) {
+    throw "Legacy JSON archive is required for this historical audit: $LegacyArchiveRoot"
+}
 $OutputPath = [IO.Path]::GetFullPath($OutputPath)
 if ($OutputPath.StartsWith($RepoRoot, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Audit output must be outside the ProgTrack repository."
@@ -171,7 +175,7 @@ foreach ($rootRel in $managedRoots) {
 }
 Stage "Managed payload inventory completed."
 
-$corePath = Join-Path $RepoRoot "progtrack_daten.json"
+$corePath = Join-Path $LegacyArchiveRoot "progtrack_daten.json"
 $core = Read-Json $corePath
 $animalMap = @{}
 foreach ($storeName in @("animals", "archived_animals")) {
@@ -224,7 +228,7 @@ foreach ($pair in @(
     @("Plugins\Sample_Track\organs.json", "organs"),
     @("Plugins\Sample_Track\other.json", "other")
 )) {
-    $rows = Read-Json (Join-Path $RepoRoot $pair[0])
+    $rows = Read-Json (Join-Path $LegacyArchiveRoot $pair[0])
     for ($i = 0; $i -lt $rows.Count; $i++) {
         $sampleReferences += [pscustomobject]@{
             store = $pair[1]
@@ -235,7 +239,7 @@ foreach ($pair in @(
     }
 }
 
-$projectHistory = Read-Json (Join-Path $RepoRoot "Plugins\Projects_Track\projects_history.json")
+$projectHistory = Read-Json (Join-Path $LegacyArchiveRoot "Plugins\Projects_Track\projects_history.json")
 $projectReferences = New-Object System.Collections.ArrayList
 function Walk-ProjectReferences($Value, [string]$Path) {
     if ($null -eq $Value) { return }
@@ -289,7 +293,10 @@ foreach ($language in Get-ObjectPropertyNames $labels) {
         unknown_label_permissions = @($keys | Where-Object { $permissionIds -notcontains $_ })
     }
 }
-$jobs = Read-Json (Join-Path $RepoRoot "Plugins\Master_Track\jobs.json")
+# jobs.json is a historical mutable role/permission store.  It is archived
+# with the other legacy inputs and must not be treated as a repository/runtime
+# authority by this audit.
+$jobs = Read-Json (Join-Path $LegacyArchiveRoot "Plugins\Master_Track\jobs.json")
 $jobUnknownPermissions = @()
 foreach ($job in Get-ObjectPropertyNames $jobs) {
     foreach ($permission in @($jobs.PSObject.Properties[$job].Value)) {

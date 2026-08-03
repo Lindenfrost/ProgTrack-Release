@@ -71,7 +71,15 @@ from Plugins.core.runtime_paths import (
     resolve_runtime_paths,
 )
 from Plugins.core.backend import LockConflictError, ProgTrackBackend
-from Plugins.core.ui_icons import icon as ui_icon
+from Plugins.core.backend_configuration import (
+    BackendConfigurationPermissionError,
+    BackendConfigurationService,
+    BackendConfigurationValidationError,
+    PostgreSQLSettings,
+    configured_postgres_dsn,
+)
+from Plugins.core.ui_icons import apply_icon, icon as ui_icon
+from Plugins.core.dialog_geometry import install_dialog_geometry_guard
 from Plugins.core.animal_identity import (
     animal_base_name,
     animal_identity_key,
@@ -83,9 +91,7 @@ from Plugins.core.animal_identity import (
 )
 from Plugins.core.animal_reference_rewrite import (
     backfill_reference_display_names,
-    move_medi_document_folder,
     replace_exact_animal_reference,
-    rewrite_animal_reference_file,
 )
 from Plugins.core.animal_roles import (
     ALL_DIALOG_BLOCKS,
@@ -114,7 +120,6 @@ from Plugins.core.identity_conventions import (
     relationship_candidates,
     relationship_display_label,
     regenerated_id_for_edit,
-    save_conventions,
 )
 from Plugins.core.lifecycle_events import (
     add_lifecycle_event,
@@ -142,6 +147,7 @@ APP_RUNTIME_DIR = (
     else APP_BASE_DIR
 )
 RUNTIME_PATHS = resolve_runtime_paths(APP_BASE_DIR)
+BACKEND_CONFIGURATION = BackendConfigurationService(RUNTIME_PATHS)
 LOG_DIR = RUNTIME_PATHS.logs
 APP_LOG_PATH = LOG_DIR / "progtrack.log"
 MPL_CONFIG_DIR = RUNTIME_PATHS.cache_root / "matplotlib"
@@ -232,7 +238,6 @@ logging.getLogger('PIL').setLevel(logging.WARNING)
 # # 3. Constants and Enums                                             #
 # # ================================================================ #
 DATEN_DATEI = str(RUNTIME_PATHS.database_path or "shared_postgresql")
-SETTINGS_FILE = str(RUNTIME_PATHS.config_root / "progtrack_settings.json")
 LOCK_FILE = str(RUNTIME_PATHS.runtime / "standalone.lock")
 DATE_FORMAT = "%d.%m.%Y"
 PHASESCHWELLE = 10.0
@@ -998,7 +1003,7 @@ class StyleSettingsDialog(QDialog):
         self._role_setup_editable = self.parent_app._can_configure_animal_roles()
         self._accepted_role_definitions = None
         self._role_block_preset_registry = RoleBlockPresetRegistry(
-            self.parent_app._role_block_presets_runtime_path()
+            self.parent_app.backend
         )
         self._custom_role_block_presets = (
             self._role_block_preset_registry.presets()
@@ -2472,7 +2477,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.lock_handle = None
             self.read_only_mode = False
             self.lock_retry_timer = None
-            self.backend = ProgTrackBackend(RUNTIME_PATHS)
+            postgres_dsn = configured_postgres_dsn(RUNTIME_PATHS)
+            pool_min, pool_max = BACKEND_CONFIGURATION.effective_pool_sizes()
+            self.backend = ProgTrackBackend(
+                RUNTIME_PATHS,
+                postgres_dsn=postgres_dsn,
+                postgres_pool_min=pool_min,
+                postgres_pool_max=pool_max,
+            )
             logger.info(
                 "Backend initialized: %s",
                 json.dumps(backend_diagnostics(RUNTIME_PATHS), ensure_ascii=False),
@@ -2529,7 +2541,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # Expose Role enum for plugin access
         self.Role = Role
-        role_path = RUNTIME_PATHS.preferences / "animal_roles.json"
         role_payload = self.backend.records.get(
             "configuration", "animal-roles", default=None
         )
@@ -2544,12 +2555,43 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.backend.records.put(
                 "configuration", "animal-roles", role_payload
             )
-        role_path.parent.mkdir(parents=True, exist_ok=True)
-        role_path.write_text(
-            json.dumps(role_payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
+        semantic_icon_migration = {
+            "♀": "role.female",
+            "☉": "role.female",
+            "♂": "role.male",
+            "👶": "role.offspring",
+            "🐾": "role.partner",
+            "⚤": "role.breeding",
+            "💡": "role.experimental",
+            "?": "",
+        }
+        migrated_roles = False
+        for role in role_payload.get("roles", []) if isinstance(role_payload.get("roles"), list) else []:
+            if not isinstance(role, dict):
+                continue
+            legacy_icon = str(role.get("icon") or "")
+            if legacy_icon in semantic_icon_migration:
+                role["icon"] = semantic_icon_migration[legacy_icon]
+                migrated_roles = True
+        if migrated_roles:
+            self.backend.records.put("configuration", "animal-roles", role_payload)
+        self.animal_role_registry = AnimalRoleRegistry(
+            self.backend, initial_payload=role_payload
         )
-        self.animal_role_registry = AnimalRoleRegistry(role_path)
+        preset_payload = self.backend.records.get(
+            "configuration", "role-block-presets", default=None
+        )
+        if not isinstance(preset_payload, dict):
+            bundled_presets = role_block_presets_path(APP_BASE_DIR)
+            try:
+                preset_payload = json.loads(
+                    bundled_presets.read_text(encoding="utf-8")
+                )
+            except (OSError, json.JSONDecodeError):
+                preset_payload = {"schema_version": 1, "presets": []}
+            self.backend.records.put(
+                "configuration", "role-block-presets", preset_payload
+            )
         
         # Import Qt components that are needed immediately
         global QIcon, QMainWindow
@@ -3705,27 +3747,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ——————————————————————————————————————————————
     # 7.0 Language persistence & bundle‐loading
     # ——————————————————————————————————————————————
-    def _get_user_style_settings_file(self, username=None):
-        """Get the path to the user-specific style settings file."""
-        if username is None:
-            # Use current logged-in user or 'guest' as fallback
-            username = getattr(self, 'master_track', None)
-            if username and username.is_logged_in:
-                username = username.current_username
-            else:
-                username = 'guest'
-        
-        # Create user-specific settings directory if it doesn't exist
-        user_settings_dir = str(RUNTIME_PATHS.preferences / "users")
-        os.makedirs(user_settings_dir, exist_ok=True)
-        
-        return os.path.join(user_settings_dir, f"{username}_style.json")
-
     def _load_user_style_settings(self, username=None):
         """Load style settings for a specific user.
 
-        If Master Track is active and user is logged in, load from session.
-        Otherwise fall back to file-based storage.
+        Logged-in users use their backend-backed Master Track session.  Guest
+        and standalone preferences are also stored in the configured backend;
+        there is no file-based preference fallback.
         """
         # Check if Master Track is active
         mt = getattr(self, 'master_track', None)
@@ -3751,8 +3778,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _save_user_style_settings(self, settings, username=None):
         """Save style settings for a specific user.
 
-        If Master Track is active and user is logged in, save to session.
-        Otherwise fall back to file-based storage.
+        Logged-in users use their backend-backed Master Track session.  Guest
+        and standalone preferences are written to the configured backend.
         """
         # Check if Master Track is active
         mt = getattr(self, 'master_track', None)
@@ -3764,8 +3791,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Don't save for guests when Master Track is active
             return
 
-        # Fall back to file-based storage for non-Master Track setups
-        # Get username if not provided
+        # Persist non-session preferences in the configured backend.
         if username is None:
             username = 'default_user'
 
@@ -3843,10 +3869,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.messages = json.load(f)
         self._merge_user_messages(lang_code)
 
-    def _user_messages_path(self, lang_code: Optional[str] = None) -> Path:
-        lang_code = lang_code or getattr(self, "lang", "de") or "de"
-        return RUNTIME_PATHS.preferences / "language" / f"messages_{lang_code}.json"
-
     def _load_identity_conventions(self) -> Dict[str, Any]:
         bundled = load_conventions(conventions_path(APP_BASE_DIR))
         value = self.backend.records.get(
@@ -3872,51 +3894,23 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             dict(conventions),
         )
 
-    def _role_block_presets_runtime_path(self) -> Path:
-        path = RUNTIME_PATHS.preferences / "role_block_presets.json"
-        payload = self.backend.records.get(
-            "configuration", "role-block-presets", default=None
-        )
-        if not isinstance(payload, dict):
-            bundled_path = role_block_presets_path(APP_BASE_DIR)
-            try:
-                payload = json.loads(bundled_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                payload = {"schema_version": 1, "presets": []}
-            self.backend.records.put(
-                "configuration", "role-block-presets", payload
-            )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        return path
-
     def _merge_user_messages(self, lang_code: Optional[str] = None) -> None:
-        path = self._user_messages_path(lang_code)
-        if not path.is_file():
-            return
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                overrides = json.load(handle)
-        except (OSError, json.JSONDecodeError) as exc:
-            logging.warning("Failed to load user language overrides from %s: %s", path, exc)
-            return
+        lang_code = lang_code or getattr(self, "lang", "de") or "de"
+        overrides = self.backend.records.get(
+            "configuration", f"user-message-overrides:{lang_code}", default={}
+        )
         if isinstance(overrides, dict):
             self.messages.update({str(key): str(value) for key, value in overrides.items()})
 
     def _save_role_label_overrides(self, roles: List[Dict[str, Any]]) -> None:
-        path = self._user_messages_path()
-        existing: Dict[str, str] = {}
-        if path.is_file():
-            try:
-                with path.open("r", encoding="utf-8") as handle:
-                    loaded = json.load(handle)
-                    if isinstance(loaded, dict):
-                        existing = {str(key): str(value) for key, value in loaded.items()}
-            except (OSError, json.JSONDecodeError) as exc:
-                logging.warning("Failed to read user language overrides from %s: %s", path, exc)
+        lang_code = getattr(self, "lang", "de") or "de"
+        existing = self.backend.records.get(
+            "configuration", f"user-message-overrides:{lang_code}", default={}
+        )
+        if not isinstance(existing, dict):
+            existing = {}
+        else:
+            existing = {str(key): str(value) for key, value in existing.items()}
 
         changed = False
         for role in roles:
@@ -3933,10 +3927,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not changed:
             return
 
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8") as handle:
-            json.dump(existing, handle, indent=2, ensure_ascii=False)
-            handle.write("\n")
+        self.backend.records.put(
+            "configuration", f"user-message-overrides:{lang_code}", existing
+        )
         self.messages.update(existing)
     
     def _init_all_plugins_deferred(self, _step=0):
@@ -4314,6 +4307,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.animals: Dict[str, Dict[str, Any]] = {}
         self.archived: Dict[str, Dict[str, Any]] = {}
         self.selected_animals: List[str] = []
+        self._plot_selection_order: List[str] = []
+        self._plot_x_viewport: Optional[Tuple[float, float]] = None
+        self._plot_axes: List[Any] = []
         self.phase_filter: str = Phase.ALLE.value
         self.current_figure: Optional[plt.Figure] = None
         self.current_canvas: Optional[FigureCanvas] = None
@@ -4513,9 +4509,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _backfill_reference_display_names(value: Any, animal_key: str, base_name: str) -> None:
         backfill_reference_display_names(value, animal_key, base_name)
 
-    def _rewrite_animal_reference_file(self, path: Path, old_key: str, new_key: str, base_name: str) -> None:
-        rewrite_animal_reference_file(path, old_key, new_key, base_name)
-
     def _rewrite_animal_references_after_identity_change(
         self,
         old_key: str,
@@ -4529,24 +4522,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._backfill_reference_display_names(self.animals, new_key, base_name)
         self._backfill_reference_display_names(self.archived, new_key, base_name)
 
-        base = Path(__file__).resolve().parent
-        for rel_path in (
-            "Plugins/Medi_Track/medi_history.json",
-            "Plugins/Cage__Track/cage.json",
-            "Plugins/Heritage_Track/heritage_animals.json",
-            "Plugins/Animal_Reports/animal_report_data.json",
-            "Plugins/Flow_Track/flowtrack_daten.json",
-            "Plugins/Flow_Track/flowtrack_config.json",
-            "Plugins/Projects_Track/projects_history.json",
-            "Plugins/Projects_Track/project_data.json",
-            "Plugins/Sample_Track/organs.json",
-            "Plugins/Sample_Track/other.json",
-            "Plugins/Surgery_Planner/Surgery_Planner.schedule.json",
-            "Plugins/Surgery_Planner/Surgery_Pre_Planner.schedule.json",
-            "Plugins/PdG_converter/data/models.json",
-        ):
-            self._rewrite_animal_reference_file(base / rel_path, old_key, new_key, base_name)
-        move_medi_document_folder(base, old_key, new_key)
         reason = str(getattr(self, "_pending_identity_change_reason", "") or "")
         old_public_id = str(
             getattr(self, "_pending_identity_old_public_id", "") or old_key
@@ -4939,6 +4914,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         buttons.accepted.connect(dlg.accept)
         buttons.rejected.connect(dlg.reject)
         layout.addWidget(buttons)
+        install_dialog_geometry_guard(dlg, minimum=QSize(620, 320))
         return dlg.exec() == QDialog.DialogCode.Accepted
 
     def _display_name(self, key: str) -> str:
@@ -5323,6 +5299,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                        dlg.sizeHint().height())
         except Exception:
             pass
+        install_dialog_geometry_guard(dlg, minimum=QSize(UI_STD_DIALOG_WIDTH, 260))
         # enforce uniform minimum width for all common inputs in this dialog
         dlg.setStyleSheet(f"""
             QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit, QTextEdit {{
@@ -5912,20 +5889,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _category_tab_categories(self) -> Tuple[List[Tuple[str, str]], List[str]]:
         role_tooltips = self._category_tab_tooltips()
         categories: List[Tuple[str, str]] = [
-            ("♀", role_tooltips[0]),
-            ("♂", role_tooltips[1]),
-            ("👶", role_tooltips[2]),
-            ("🐾", role_tooltips[3]),
-            ("⚤", role_tooltips[4]),
-            ("💡", role_tooltips[5]),
+            ("", role_tooltips[0]),
+            ("", role_tooltips[1]),
+            ("", role_tooltips[2]),
+            ("", role_tooltips[3]),
+            ("", role_tooltips[4]),
+            ("", role_tooltips[5]),
         ]
         custom_values: List[str] = []
         registry = getattr(self, "animal_role_registry", None)
         for role in self._custom_category_roles():
             value = str(role.get("value") or "")
-            icon = str(role.get("icon") or "●").strip() or "●"
             label = registry.display_for_value(value, self.messages) if registry else self._get_localized_role(value)
-            categories.append((icon, label))
+            categories.append((label, label))
             custom_values.append(value)
         categories.append((self.messages["sidebar.filter.all"], role_tooltips[6]))
         return categories, custom_values
@@ -5939,8 +5915,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         tab.blockSignals(True)
         while tab.count():
             tab.removeTab(0)
+        built_in_icons = (
+            "role.female", "role.male", "role.offspring", "role.partner",
+            "role.breeding", "role.experimental",
+        )
         for idx, (label, tip) in enumerate(categories):
-            tab.addTab(label)
+            semantic_id = built_in_icons[idx] if idx < len(built_in_icons) else ""
+            resolved_icon = ui_icon(semantic_id) if semantic_id else QIcon()
+            tab.addTab(resolved_icon, "" if not resolved_icon.isNull() else label)
             tab.setTabToolTip(idx, tip)
         self._category_custom_role_values = custom_values
         tab.setCurrentIndex(min(max(previous_idx, 0), max(tab.count() - 1, 0)))
@@ -6023,10 +6005,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         # Sidebar action buttons with dynamic visibility
         self.btn_new = QPushButton(self.messages["button.sidebar.new_animal"])
+        apply_icon(self.btn_new, "action.add", fallback="New Animal")
+        self.btn_new.setIconSize(QSize(20, 20))
         self.btn_new.clicked.connect(self._dlg_new_animal)
         sidebar.addWidget(self.btn_new)
 
         self.btn_edit = QPushButton(self.messages["button.sidebar.edit_animal"])
+        apply_icon(self.btn_edit, "action.edit", fallback="Edit")
+        self.btn_edit.setIconSize(QSize(20, 20))
         # Defer wiring to _on_category_selected to avoid duplicate receivers
         try:
             self.btn_edit.clicked.disconnect()
@@ -6037,32 +6023,44 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         self.btn_edit_animal = QPushButton(self.messages.get(
             "button.sidebar.edit_animal", "\u270f\ufe0f    Edit"))
+        apply_icon(self.btn_edit_animal, "action.edit", fallback="Edit")
+        self.btn_edit_animal.setIconSize(QSize(20, 20))
         self.btn_edit_animal.setEnabled(False)
         self.btn_edit_animal.setVisible(False)
         self.btn_edit_animal.clicked.connect(self._on_edit_animal_from_all_tab)
         sidebar.addWidget(self.btn_edit_animal)
 
         self.btn_load_blood = QPushButton(self.messages["button.sidebar.load_blood_values"])
+        apply_icon(self.btn_load_blood, "measure.blood", fallback="Load Blood Values")
+        self.btn_load_blood.setIconSize(QSize(20, 20))
         self.btn_load_blood.clicked.connect(self._import_excel)
         sidebar.addWidget(self.btn_load_blood)
 
         # Load urine values button - only if PdG plugin present
         if self.has_pdg_plugin:
             self.btn_load_urine = QPushButton(self.messages["button.sidebar.load_urine_values"])
+            apply_icon(self.btn_load_urine, "measure.urine", fallback="Load Urine Values")
+            self.btn_load_urine.setIconSize(QSize(20, 20))
             self.btn_load_urine.clicked.connect(self._import_pdg)
             sidebar.addWidget(self.btn_load_urine)
 
         self.btn_load_weights = QPushButton(self.messages["button.sidebar.load_weights"])
+        apply_icon(self.btn_load_weights, "measure.weight", fallback="Load Weights")
+        self.btn_load_weights.setIconSize(QSize(20, 20))
         self.btn_load_weights.clicked.connect(self._import_weights)
         sidebar.addWidget(self.btn_load_weights)
 
         # Samenspender-only import button (hidden until ♂ tab)
         self.btn_load_sperm = QPushButton(self.messages["button.sidebar.load_sperm_values"])
+        apply_icon(self.btn_load_sperm, "measure.sperm", fallback="Load Sperm Values")
+        self.btn_load_sperm.setIconSize(QSize(20, 20))
         self.btn_load_sperm.clicked.connect(self._import_sperm_values)
         self.btn_load_sperm.setVisible(False)
         sidebar.addWidget(self.btn_load_sperm)
 
         self.btn_archive = QPushButton(self.messages["button.sidebar.archive"])
+        apply_icon(self.btn_archive, "action.archive", fallback="Archive")
+        self.btn_archive.setIconSize(QSize(20, 20))
         self.btn_archive.clicked.connect(self._archive_current)
         sidebar.addWidget(self.btn_archive)
         self.chk_show_archived = QCheckBox(self.messages.get("sidebar.show_archived", "Show Archived"))
@@ -6074,6 +6072,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         arch_actions = QHBoxLayout(); arch_actions.setContentsMargins(0,0,0,3)
         self.btn_restore = QPushButton(self.messages["button.sidebar.restore"], clicked=self._restore_archived)
         self.btn_delete = QPushButton(self.messages["button.sidebar.delete"], clicked=self._delete_archived)
+        apply_icon(self.btn_restore, "action.restore", fallback="Restore")
+        apply_icon(self.btn_delete, "action.delete", fallback="Delete")
+        self.btn_restore.setIconSize(QSize(20, 20))
+        self.btn_delete.setIconSize(QSize(20, 20))
         arch_actions.addWidget(self.btn_restore)
         arch_actions.addWidget(self.btn_delete)
         sidebar.addLayout(arch_actions)
@@ -6612,6 +6614,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ctrl_hbox.setSpacing(12)
         ctrl_hbox.addWidget(box_chk, 0, Qt.AlignmentFlag.AlignTop)
         ctrl_hbox.addWidget(box_rad, 0, Qt.AlignmentFlag.AlignTop)
+        self.btn_plot_recent = QPushButton(
+            self.messages.get("plot.recent_30_days", "Recent 30 days")
+        )
+        self.btn_plot_recent.setToolTip(
+            self.messages.get(
+                "plot.recent_30_days.tooltip",
+                "Reset all plots to the latest 30 days of the first selected animal.",
+            )
+        )
+        self.btn_plot_recent.clicked.connect(self._reset_plot_recent_window)
+        self.btn_plot_recent.setEnabled(False)
+        ctrl_hbox.addWidget(
+            self.btn_plot_recent, 0, Qt.AlignmentFlag.AlignTop
+        )
         ctrl_hbox.addStretch(1)
         self.dlay.addLayout(ctrl_hbox)
 
@@ -7004,10 +7020,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             from PyQt6.QtGui import QShortcut, QKeySequence
             sb = QStatusBar(self)
             self.setStatusBar(sb)
+            self._master_status_icon_label = QLabel()
+            self._master_status_icon_label.setFixedSize(22, 22)
             self._master_status_label = _ClickableLabel()
             self._master_status_label.setStyleSheet(
                 "QLabel { padding: 0 8px; font-weight: bold; cursor: pointer; }")
             self._master_status_label.clicked.connect(self._show_master_quick_menu)
+            sb.addPermanentWidget(self._master_status_icon_label)
             sb.addPermanentWidget(self._master_status_label)
             self._update_master_status_bar()
 
@@ -7416,6 +7435,27 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             result.append("status.partner")
         return result
 
+    def _status_icon_tooltip(self, semantic_id: str) -> str:
+        """Return the localized meaning of one semantic animal-status icon."""
+        message_keys = {
+            "status.pregnant_confirmed": ("status.pregnant", "Pregnant"),
+            "status.pregnant_possible": (
+                "status.possibly_pregnant", "Possibly pregnant"
+            ),
+            "status.has_young_offspring": (
+                "status.has_offspring", "Has young offspring"
+            ),
+            "status.not_pregnant": ("status.not_pregnant", "Not pregnant"),
+            "status.sick": ("status.sick", "Sick / In recovery"),
+            "status.abnormal": ("status.abnormal", "Abnormal"),
+            "status.deceased": ("status.deceased", "Deceased"),
+            "status.partner": ("status.partner", "Partner"),
+        }
+        key, fallback = message_keys.get(
+            semantic_id, ("status.normal", "Normal")
+        )
+        return str(self.messages.get(key, fallback))
+
     @staticmethod
     def _status_text_without_icon_tokens(status: str) -> str:
         text = str(status or "")
@@ -7563,18 +7603,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         deleted_values = previous_values - next_values
         try:
             registry.save_roles(roles_for_save)
-            try:
-                role_payload = json.loads(
-                    registry.path.read_text(encoding="utf-8")
-                )
-            except (OSError, json.JSONDecodeError):
-                role_payload = {
-                    "schema_version": 1,
-                    "roles": registry.roles(),
-                }
-            self.backend.records.put(
-                "configuration", "animal-roles", role_payload
-            )
             self._save_role_label_overrides(registry.roles())
             self._merge_user_messages()
             if hasattr(self, "category_tab"):
@@ -7744,15 +7772,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.btn_edit.setVisible(True)
         if is_all_tab:
             self.btn_edit.setText(self.messages.get(
-                "button.sidebar.edit_role", "🫥    Edit Role"))
+                "button.sidebar.edit_role", "Edit Role"))
+            apply_icon(self.btn_edit, "action.edit_role", fallback="Edit Role")
             self.btn_edit.clicked.connect(self._on_edit_in_all_tab)
             if hasattr(self, 'btn_edit_animal'):
                 self.btn_edit_animal.setVisible(True)
                 self.btn_edit_animal.setText(self.messages.get(
-                    "button.sidebar.edit_animal", "✏️    Edit"))
+                    "button.sidebar.edit_animal", "Edit"))
+                apply_icon(self.btn_edit_animal, "action.edit", fallback="Edit")
         else:
             self.btn_edit.setText(self.messages.get(
-                "button.sidebar.edit_animal", "✏️    Edit"))
+                "button.sidebar.edit_animal", "Edit"))
+            apply_icon(self.btn_edit, "action.edit", fallback="Edit")
             self.btn_edit.clicked.connect(self._dlg_edit_animal)
             if hasattr(self, 'btn_edit_animal'):
                 self.btn_edit_animal.setVisible(False)
@@ -9492,6 +9523,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             'embryo_transfer': messages.get('plot.event.embryo_transfer', 'Embryo'),
             'surgery': messages.get('plot.event.operation', messages.get('daily.surgery', 'Surgery')),
             'pregnancy': messages.get('plot.event.pregnancy', 'Pregnancy'),
+            'pregnancy_verification': messages.get(
+                'plot.event.pregnancy_verification', 'Pregnancy verification'
+            ),
             'abortion': messages.get('plot.event.abort', 'Abort'),
             'birth': messages.get('plot.event.birth', 'Birth'),
             'fsh': messages.get('plot.event.fsh', 'FSH'),
@@ -10689,7 +10723,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     continue
                 icon_label = QLabel()
                 icon_label.setPixmap(status_icon.pixmap(18, 18))
-                icon_label.setToolTip(self._get_status_description(status))
+                icon_tooltip = self._status_icon_tooltip(semantic_id)
+                icon_label.setToolTip(icon_tooltip)
+                icon_label.setAccessibleName(icon_tooltip)
                 h.addWidget(icon_label)
             remaining_status = self._status_text_without_icon_tokens(status)
             if remaining_status:
@@ -11051,7 +11087,24 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 base = txt.rsplit(" (", 1)[0] if " (" in txt and txt.endswith(")") else txt
                 it.setSelected(base in still_ok)
 
-        self.selected_animals = selected_names
+        previous_plot_order = list(
+            getattr(self, "_plot_selection_order", [])
+        )
+        selected_set = set(selected_names)
+        ordered_names = [
+            name for name in previous_plot_order if name in selected_set
+        ]
+        ordered_names.extend(
+            name for name in selected_names if name not in ordered_names
+        )
+        previous_primary = previous_plot_order[0] if previous_plot_order else None
+        new_primary = ordered_names[0] if ordered_names else None
+        if new_primary != previous_primary:
+            self._plot_x_viewport = None
+        if not ordered_names:
+            self._plot_x_viewport = None
+        self._plot_selection_order = ordered_names
+        self.selected_animals = ordered_names
         logging.info(f"Selected animals: {self.selected_animals}")
 
         if hasattr(self, 'category_tab') and hasattr(self, 'btn_load_sperm'):
@@ -11500,6 +11553,90 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # 7.18 Plot Selected Animals
     #     Render the selected animals' data on the Matplotlib canvas.
     # ------------------------
+    @staticmethod
+    def _plot_record_datetime(value: Any) -> Optional[datetime]:
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, np.datetime64):
+            try:
+                return value.astype("datetime64[ms]").tolist()
+            except (TypeError, ValueError):
+                return None
+        text = str(value or "").strip()
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%d.%m.%Y"):
+            try:
+                return datetime.strptime(text[:19], fmt)
+            except ValueError:
+                continue
+        return None
+
+    def _actual_plot_dates(self, animal_name: str) -> List[datetime]:
+        """Return real entered dates that can anchor the Plots viewport."""
+        animal = self.animals.get(animal_name, {})
+        dates: List[datetime] = []
+        for field in (
+            "daten", "pdg", "gewicht", "sperm", "events", "pgf", "op",
+            "embryo",
+        ):
+            values = animal.get(field, [])
+            if not isinstance(values, list):
+                continue
+            for value in values:
+                raw = (
+                    value.get("datum") or value.get("date")
+                    if isinstance(value, Mapping)
+                    else value
+                )
+                parsed = self._plot_record_datetime(raw)
+                if parsed is not None:
+                    dates.append(parsed)
+        return dates
+
+    def _recent_plot_window(self) -> Optional[Tuple[float, float]]:
+        for animal_name in self.selected_animals:
+            dates = self._actual_plot_dates(animal_name)
+            if dates:
+                endpoint = max(dates)
+                return (
+                    float(mdates.date2num(endpoint - timedelta(days=30))),
+                    float(mdates.date2num(endpoint)),
+                )
+        return None
+
+    def _apply_shared_plot_viewport(
+        self,
+        viewport: Tuple[float, float],
+        axes: Optional[Iterable[Any]] = None,
+    ) -> None:
+        targets = list(axes if axes is not None else self._plot_axes)
+        if not targets:
+            return
+        x_min, x_max = viewport
+        if not np.isfinite(x_min) or not np.isfinite(x_max) or x_min >= x_max:
+            return
+        for plot_axis in targets:
+            plot_axis.set_xlim(x_min, x_max)
+            self._clamp_xlims(plot_axis)
+        effective = targets[0].get_xlim()
+        self._plot_x_viewport = (float(effective[0]), float(effective[1]))
+
+    def _reset_plot_recent_window(self) -> None:
+        viewport = self._recent_plot_window()
+        if viewport is None:
+            if hasattr(self, "statusBar"):
+                self.statusBar().showMessage(
+                    self.messages.get(
+                        "plot.no_dated_data",
+                        "No dated plot data are available for the selection.",
+                    ),
+                    4000,
+                )
+            return
+        self._apply_shared_plot_viewport(viewport)
+        canvas = getattr(self, "current_canvas", None)
+        if canvas is not None:
+            canvas.draw_idle()
+
     def _plot_selected(self) -> None:
 
         # Initialize storage for sperm hover overlay dots
@@ -11517,6 +11654,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._clear_matplotlib()
 
         has_selection = bool(self.selected_animals)
+        if hasattr(self, "btn_plot_recent"):
+            self.btn_plot_recent.setEnabled(has_selection)
         # Show / hide “Anzeigen” and “Linien-Stil” boxes
         if hasattr(self, "box_chk") and hasattr(self, "box_rad"):
             self.box_chk.setVisible(has_selection)
@@ -11708,6 +11847,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.dlay.addWidget(img_label, alignment=Qt.AlignmentFlag.AlignCenter)
             self.dlay.addStretch(1)
             self.last_plotted_animals = []
+            self._plot_axes = []
             return
 
         # ------------------------
@@ -11719,6 +11859,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.current_figure = fig
         if n == 1:
             axes = [axes]
+        self._plot_axes = list(axes)
 
         # ------------------------
         # 7.18.9 Initialize hover_data and conversion flag
@@ -12287,6 +12428,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     'embryo_transfer': getattr(self, 'embryo_color', QColor('#000000')).name(), 
                     'surgery': getattr(self, 'op_color', QColor('#0000FF')).name(),
                     'pregnancy': getattr(self, 'pregnancy_color', QColor('#008000')).name(), 
+                    'pregnancy_verification': getattr(
+                        self, 'pregnancy_color', QColor('#008000')
+                    ).name(),
                     'abortion': getattr(self, 'abort_color', QColor('#FF00FF')).name(), 
                     'birth': getattr(self, 'birth_color', QColor('#000000')).name(),
                     'fsh': getattr(self, 'fsh_color', QColor('#000000')).name(), 
@@ -12298,6 +12442,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     'embryo_transfer': self.messages.get('plot.event.embryo_transfer', 'Embryo'),
                     'surgery': self.messages.get('plot.event.operation', 'OP'),
                     'pregnancy': self.messages.get('plot.event.pregnancy', 'Pregnancy'),
+                    'pregnancy_verification': self.messages.get(
+                        'plot.event.pregnancy_verification',
+                        'Pregnancy verification',
+                    ),
                     'abortion': self.messages.get('plot.event.abort', 'Abort'),
                     'birth': self.messages.get('plot.event.birth', 'Birth'),
                     'fsh': self.messages.get('plot.event.fsh', 'FSH'),
@@ -12318,6 +12466,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     'surgery': a.get('max_op', '?'),
                     'birth': a.get('max_geburten', '?'),
                     'pregnancy': a.get('max_pregnancies', '?'),
+                    'pregnancy_verification': a.get('max_pregnancies', '?'),
                     'abortion': a.get('max_geburten', '?'),
                     'special_measurement': a.get('max_special', '?'),
                     'fsh': a.get('max_fsh', '?'),
@@ -12400,6 +12549,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._apply_mode()
             # and apply urine scaling (if in urine mode)
             self._apply_urine_scale()
+            if self._plot_x_viewport is None:
+                self._plot_x_viewport = self._recent_plot_window()
+            if self._plot_x_viewport is not None:
+                self._apply_shared_plot_viewport(
+                    self._plot_x_viewport, axes
+                )
         self.last_plotted_animals = list(self.selected_animals)
 
         # ------------------------
@@ -12428,9 +12583,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     return
                 new_min = xdata - (xdata - x_min) * factor
                 new_max = xdata + (x_max - xdata) * factor
-                ax.set_xlim(new_min, new_max)
-                # Clamp x-limits to a safe date range to avoid DateLocator overflow
-                self._clamp_xlims(ax)
+                self._apply_shared_plot_viewport(
+                    (float(new_min), float(new_max)), axes
+                )
                 event.canvas.draw_idle()
                 # guard: end scroll handler here; prevent stray code from running
                 return
@@ -12535,9 +12690,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     delta_x = _pan_start_x - event.xdata
                     x_min, x_max = _pan_axis.get_xlim()
                     # Apply horizontal pan
-                    _pan_axis.set_xlim(x_min + delta_x, x_max + delta_x)
-                    # Clamp to safe date range
-                    self._clamp_xlims(_pan_axis)
+                    self._apply_shared_plot_viewport(
+                        (
+                            float(x_min + delta_x),
+                            float(x_max + delta_x),
+                        ),
+                        axes,
+                    )
                     event.canvas.draw_idle()
                     # Update start position for smooth continuous panning
                     _pan_start_x = event.xdata
@@ -14659,6 +14818,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 bis_date=bis_date,
                 messages=report_messages,
                 include_signatures=include_signatures,
+                branding_owner=self,
             )
             
         except ImportError as e:
@@ -14759,24 +14919,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _collect_plugin_backup_files(self, plugin_dir: Path, app_root: Path) -> List[Path]:
         """Collect plugin-associated data files for backup.
 
-        Sources:
-        1) manifest.json -> data_files entries (supports glob patterns)
-        2) plugin-local data-like files (json/db/sqlite/txt/enc/csv)
-        3) app-root data-like files heuristically matching plugin name
+        Sources are manifest-declared packaged resources plus the retained
+        static craniometry reference. Mutable domain records are backend
+        records and are never collected from plugin JSON/text files.
         """
         manifest = self._load_plugin_manifest(plugin_dir / "manifest.json")
         files = set()
 
         plugin_key = re.sub(r"[^a-z0-9]+", "", plugin_dir.name.lower())
-        if plugin_key in {"networktrack", "networtrack"}:
-            chat_log = (plugin_dir / "chat_log.txt").resolve()
-            return [chat_log] if chat_log.is_file() else []
         if plugin_key == "embryotrack":
             craniometry = (plugin_dir / "cranimetry_reference.json").resolve()
             return [craniometry] if craniometry.is_file() else []
-
-        def _normalize_token(value: str) -> str:
-            return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
 
         # 1) Manifest-declared files
         raw_data_files = manifest.get("data_files", [])
@@ -14797,51 +14950,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         for nested in match.rglob("*"):
                             if nested.is_file():
                                 files.add(nested.resolve())
-
-        allowed_exts = {".json", ".db", ".sqlite", ".sqlite3", ".txt", ".enc", ".csv"}
-
-        # 2) Plugin-local fallback files
-        for local_file in plugin_dir.rglob("*"):
-            if not local_file.is_file():
-                continue
-            rel_parts = [part.lower() for part in local_file.relative_to(plugin_dir).parts]
-            if rel_parts:
-                head = rel_parts[0]
-                if head == "__pycache__" or head.startswith("arch"):
-                    continue
-            if local_file.suffix.lower() not in allowed_exts:
-                continue
-            if local_file.name.lower() == "manifest.json":
-                continue
-            files.add(local_file.resolve())
-
-        # 3) App-root fallback files
-        name_tokens = set()
-        for raw_name in [manifest.get("name", ""), plugin_dir.name]:
-            token = _normalize_token(str(raw_name))
-            if token:
-                name_tokens.add(token)
-                if token.endswith("s") and len(token) > 1:
-                    name_tokens.add(token[:-1])
-
-        excluded_root_files = {
-            DATEN_DATEI.lower(),
-            SETTINGS_FILE.lower(),
-            LOCK_FILE.lower(),
-            "disabled_plugins.json",
-            "progtrack_config.json",
-        }
-        for root_file in app_root.iterdir():
-            if not root_file.is_file():
-                continue
-            if root_file.name.lower() in excluded_root_files:
-                continue
-            if root_file.suffix.lower() not in allowed_exts:
-                continue
-
-            normalized_stem = _normalize_token(root_file.stem)
-            if any(token and token in normalized_stem for token in name_tokens):
-                files.add(root_file.resolve())
 
         return sorted(files, key=lambda p: str(p).lower())
 
@@ -14898,6 +15006,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.style_settings_action = QAction(self.messages.get("menu.program.style_settings", "Style"), self)
         self.style_settings_action.triggered.connect(self._show_style_settings)
         program_menu.addAction(self.style_settings_action)
+        self.backend_settings_action = QAction(
+            self.messages.get("menu.program.backend", "Backend"), self
+        )
+        self.backend_settings_action.triggered.connect(
+            self._show_backend_configuration
+        )
+        self.backend_settings_action.setEnabled(self._is_lord_session())
+        program_menu.addAction(self.backend_settings_action)
         branding_action = QAction(
             self.messages.get(
                 "menu.program.institution_branding", "Institution branding"
@@ -14979,6 +15095,63 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         InstitutionBrandingDialog(
             self.backend.branding, actor, authorized=True, parent=self
         ).exec()
+
+    def _is_lord_session(self) -> bool:
+        mt = getattr(self, "master_track", None)
+        return bool(
+            mt
+            and getattr(mt, "is_logged_in", False)
+            and str(getattr(mt, "current_role", "") or "").casefold() == "lord"
+        )
+
+    def _show_backend_configuration(self) -> None:
+        authorized = self._is_lord_session()
+        if not authorized:
+            QMessageBox.warning(
+                self,
+                self.messages.get("title.warning", "Warning"),
+                self.messages.get(
+                    "backend.permission.denied",
+                    "Only a Lord account may configure the backend.",
+                ),
+            )
+            return
+        from Plugins.core.backend_configuration_dialog import (
+            BackendConfigurationDialog,
+        )
+
+        actor = str(
+            getattr(getattr(self, "master_track", None), "current_username", "")
+            or "installation-admin"
+        )
+
+        def audit(payload: Dict[str, Any]) -> None:
+            self.backend.audit.append(
+                actor_login=actor,
+                category="configuration",
+                action="backend_profile_saved",
+                entity_type="installation",
+                entity_id="backend",
+                payload=payload,
+            )
+
+        try:
+            BackendConfigurationDialog(
+                BACKEND_CONFIGURATION,
+                self.messages,
+                authorized=authorized,
+                audit_callback=audit,
+                parent=self,
+            ).exec()
+        except BackendConfigurationPermissionError:
+            QMessageBox.warning(
+                self,
+                self.messages.get("title.warning", "Warning"),
+                self.messages.get(
+                    "backend.permission.denied",
+                    "Only a Lord account may configure the backend.",
+                ),
+            )
 
     def _reload_user_style_settings(self):
         """Reload style settings for the current user."""
@@ -15444,6 +15617,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if self.has_pdg_plugin and hasattr(self, 'chk_mode_urin'):
             self.chk_mode_urin.setText(self.messages.get("mode.urine", "Urine (PdG)"))
         self.box_rad.setTitle(self.messages["group.line_style.title"])
+        if hasattr(self, "btn_plot_recent"):
+            self.btn_plot_recent.setText(
+                self.messages.get("plot.recent_30_days", "Recent 30 days")
+            )
+            self.btn_plot_recent.setToolTip(
+                self.messages.get(
+                    "plot.recent_30_days.tooltip",
+                    "Reset all plots to the latest 30 days of the first selected animal.",
+                )
+            )
         
         # Combined toggle - conditional on plugin
         if self.has_pdg_plugin and hasattr(self, 'rb_combined_on'):
@@ -15487,12 +15670,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # btn_edit text depends on active category tab (All = Edit Role, others = Edit)
         _cat_idx = self.category_tab.currentIndex() if hasattr(self, 'category_tab') else -1
         if _cat_idx == self._all_category_tab_index():
-            self.btn_edit.setText(self.messages.get("button.sidebar.edit_role", "\U0001fae5    Edit Role"))
+            self.btn_edit.setText(self.messages.get("button.sidebar.edit_role", "Edit Role"))
+            apply_icon(self.btn_edit, "action.edit_role", fallback="Edit Role")
         else:
             self.btn_edit.setText(self.messages["button.sidebar.edit_animal"])
+            apply_icon(self.btn_edit, "action.edit", fallback="Edit")
         if hasattr(self, 'btn_edit_animal'):
             self.btn_edit_animal.setText(self.messages.get(
-                "button.sidebar.edit_animal", "\u270f\ufe0f    Edit"))
+                "button.sidebar.edit_animal", "Edit"))
+            apply_icon(self.btn_edit_animal, "action.edit", fallback="Edit")
         self.btn_load_blood.setText(self.messages["button.sidebar.load_blood_values"])
         if self.has_pdg_plugin and hasattr(self, 'btn_load_urine'):
             self.btn_load_urine.setText(self.messages["button.sidebar.load_urine_values"])
@@ -15926,15 +16112,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         lbl = getattr(self, '_master_status_label', None)
         if lbl is None:
             return
+        icon_label = getattr(self, '_master_status_icon_label', None)
         if mt.is_logged_in:
             user = mt.user_db.get_user(mt.current_username)
             display = user.get("display_name", mt.current_username) if user else mt.current_username
-            role_icon = "👑" if mt.current_role == "lord" else "👤"
+            semantic_id = "account.lord" if mt.current_role == "lord" else "account.user"
             jobs = user.get("jobs", []) if user else []
             jobs_str = f" [{', '.join(jobs)}]" if jobs else ""
-            lbl.setText(f" {role_icon} {display}{jobs_str} ")
+            lbl.setText(f" {display}{jobs_str} ")
         else:
-            lbl.setText(f" 🔒 {self.messages.get('master_track.status.guest', 'Guest')} ")
+            semantic_id = "account.guest_locked"
+            lbl.setText(f" {self.messages.get('master_track.status.guest', 'Guest')} ")
+        if icon_label is not None:
+            icon_label.setPixmap(ui_icon(semantic_id).pixmap(QSize(18, 18)))
         self._update_master_window_title()
 
     def _update_master_window_title(self):
@@ -16005,6 +16195,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if hasattr(self, 'style_settings_action'):
             can_style = mt.can("core.style_settings") if mt else True
             self.style_settings_action.setEnabled(can_style)
+        if hasattr(self, "backend_settings_action"):
+            self.backend_settings_action.setEnabled(self._is_lord_session())
 
     def _freeze_dialog_inputs(self, root) -> None:
         """Disable all interactive input widgets inside *root* (read-only mode).
@@ -16089,20 +16281,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             }
             # 4) restore ProgTrack’s defaults for all subsequent plotting
             rcdefaults()
-
-            # Pass the current ProgTrack data file and settings file to the
-            # plugin so it reads the same data as the main application.
-            try:
-                # The plugin defines DATA_FILE and SETTINGS_FILE at module level.
-                # Point plugin module variables to the active data file and
-                # settings file.  Absolute paths are robust against
-                # working‑directory changes.
-                surgery_planner.DATA_FILE = os.path.abspath(DATEN_DATEI)
-                surgery_planner.SETTINGS_FILE = os.path.abspath(SETTINGS_FILE)
-            except Exception:
-                # Even if updating fails, the plugin will fall back to its own
-                # relative paths.  We log but do not crash in this case.
-                logging.warning('Could not override surgery planner data paths')
 
             GanttWidget = getattr(surgery_planner, 'GanttWidget', None)
             if GanttWidget is None:

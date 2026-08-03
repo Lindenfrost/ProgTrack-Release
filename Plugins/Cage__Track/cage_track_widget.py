@@ -14,7 +14,7 @@ from datetime import datetime
 from textwrap import wrap
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from PyQt6.QtCore import Qt, QDate, QTimer
+from PyQt6.QtCore import Qt, QDate, QTimer, QSize
 from PyQt6.QtGui import QColor, QCursor
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -49,6 +49,7 @@ import matplotlib.colors as mcolors
 
 from .cage_store import CageStore, UNASSIGNED_CAGE_ID
 from Plugins.core.ui_icons import apply_icon
+from Plugins.core.dialog_geometry import install_dialog_geometry_guard
 from .cage_engine import CageEngine
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_roles import (
@@ -298,6 +299,7 @@ class MovementHistoryDialog(QDialog):
         close_btn.clicked.connect(self.reject)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
+        install_dialog_geometry_guard(self, minimum=QSize(520, 280))
 
     def _export_pdf(self) -> None:
         if self._table is None:
@@ -821,6 +823,7 @@ class InspectionDialog(QDialog):
         close_btn.clicked.connect(self.reject)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
+        install_dialog_geometry_guard(self, minimum=QSize(620, 320))
 
     def set_records(self, records: List[Dict[str, Any]]) -> None:
         """Refresh the viewer table without closing the inspection dialog."""
@@ -928,6 +931,7 @@ class InspectionPDFExportDialog(QDialog):
             "cage_track.inspection.export_pdf", "Export PDF"))
         export_btn.clicked.connect(self._do_export)
         layout.addWidget(export_btn)
+        install_dialog_geometry_guard(self, minimum=QSize(380, 300))
 
     # ------------------------------------------------------------------ #
 
@@ -1122,7 +1126,9 @@ class CageTrackWidget(QWidget):
             self.messages.get("cage_track.toolbar.inspection", "Inspection"))
         self.inspection_btn.clicked.connect(self._on_inspection)
 
-        self.settings_btn = QPushButton("⚙")
+        self.settings_btn = QPushButton()
+        apply_icon(self.settings_btn, "action.settings", fallback="Settings")
+        self.settings_btn.setIconSize(QSize(20, 20))
         self.settings_btn.setToolTip(self.messages.get("cage_track.toolbar.settings", "Settings"))
         self.settings_btn.setFixedSize(28, 28)
         self.settings_btn.clicked.connect(self._on_settings)
@@ -2436,9 +2442,6 @@ class CageTrackWidget(QWidget):
     # ------------------------------------------------------------------
     # Inspection helpers
     # ------------------------------------------------------------------
-
-    def _get_inspection_path(self) -> str:
-        return os.path.join(self.store.plugin_dir, "inspection.json")
 
     def _load_inspections(self) -> List[Dict[str, Any]]:
         data = self.store.inspection_store.load({"records": []})

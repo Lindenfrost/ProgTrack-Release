@@ -7,11 +7,6 @@
 
 from __future__ import annotations
 
-import json
-import os
-import shutil
-import tempfile
-import time
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
@@ -23,20 +18,15 @@ PARENT_KEYS = ("egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father
 
 
 class HeritageStore:
-    """Owns plugin-specific storage split across heritage_animals.json and heritage_settings.json.
+    # Runtime persistence is backend-only; the legacy JSON description below
+    # is retained solely as historical context and is not an active contract.
+    """Owns the Heritage graph in the shared backend.
 
-    Animals and genotype colors → heritage_animals.json
-    Node positions, collapsed families, and UI settings → heritage_settings.json
-
-    Backward compat: if heritage_animals.json is missing but the old heritage.json exists,
-    data is migrated from heritage.json on the first load.
+    The legacy split-file layout is archived.  Runtime graph data, positions,
+    collapse state, and settings are read from the configured backend record.
     """
 
     def __init__(self, plugin_dir: str, backend: Any):
-        self.plugin_dir = plugin_dir
-        self.file_path = os.path.join(plugin_dir, "heritage_animals.json")
-        self.settings_path = os.path.join(plugin_dir, "heritage_settings.json")
-        self._legacy_path = os.path.join(plugin_dir, "heritage.json")
         self.backend_store = BackendJsonStore(backend, "heritage", "graph")
         self._data: Optional[Dict[str, Any]] = None
 
@@ -165,45 +155,6 @@ class HeritageStore:
     def _load_raw(self) -> Optional[Dict[str, Any]]:
         """Load the combined Heritage record from the shared backend."""
         return self.backend_store.load(self._default_data())
-
-    def _load_split(self) -> Dict[str, Any]:
-        """Load animals from heritage_animals.json and settings from heritage_settings.json."""
-        try:
-            with open(self.file_path, "r", encoding="utf-8") as f:
-                animals_raw = json.load(f)
-            if not isinstance(animals_raw, dict):
-                animals_raw = {}
-        except Exception:
-            animals_raw = {}
-
-        try:
-            with open(self.settings_path, "r", encoding="utf-8") as f:
-                settings_raw = json.load(f)
-            if not isinstance(settings_raw, dict):
-                settings_raw = {}
-        except Exception:
-            settings_raw = {}
-
-        merged = self._default_data()
-        merged["animals"] = animals_raw.get("animals", {})
-        merged["genotype_colors"] = animals_raw.get("genotype_colors", {})
-        merged["settings"] = settings_raw.get("settings", merged["settings"])
-        merged["node_positions"] = settings_raw.get("node_positions", {})
-        merged["collapsed_families"] = settings_raw.get("collapsed_families", [])
-        if "version" in animals_raw:
-            merged["version"] = animals_raw["version"]
-        return merged
-
-    def _migrate_from_legacy(self) -> Dict[str, Any]:
-        """Read the old heritage.json and return its data (split saved on next save())."""
-        try:
-            with open(self._legacy_path, "r", encoding="utf-8") as f:
-                raw = json.load(f)
-            if not isinstance(raw, dict):
-                return self._default_data()
-            return raw
-        except Exception:
-            return self._default_data()
 
     def _normalize_and_cache(self, raw: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize a raw combined dict, populate self._data, and trigger save."""
@@ -337,42 +288,8 @@ class HeritageStore:
         return self._data
     # end _normalize_and_cache
 
-    @staticmethod
-    def _atomic_write(path: str, payload: Dict[str, Any], plugin_dir: str) -> None:
-        """Write *payload* to *path* atomically using a temp file.
-
-        Falls back to a direct shutil.move on Windows paths where os.replace
-        may raise PermissionError (e.g., network shares, antivirus locks).
-        """
-        os.makedirs(plugin_dir, exist_ok=True)
-        fd, temp_path = tempfile.mkstemp(prefix="heritage_", suffix=".json", dir=plugin_dir)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as tmp:
-                json.dump(payload, tmp, indent=2, ensure_ascii=False)
-            # First attempt: atomic os.replace
-            try:
-                os.replace(temp_path, path)
-                return  # success
-            except PermissionError:
-                pass
-            # Retry once after a brief pause (antivirus / index service lock)
-            time.sleep(0.05)
-            try:
-                os.replace(temp_path, path)
-                return
-            except PermissionError:
-                pass
-            # Final fallback: shutil.move (works across devices and Windows shares)
-            shutil.move(temp_path, path)
-        finally:
-            if os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
-
     def _save_sections(self, *, animals: bool, settings: bool) -> None:
-        """Persist the requested split-store sections with one timestamp."""
+        """Persist the requested backend sections with one timestamp."""
         if not animals and not settings:
             return
 
@@ -953,7 +870,7 @@ class HeritageStore:
             changed = True
 
         # Import from core only when creating a missing heritage entry.
-        # Existing entries are authoritative in heritage.json.
+        # Existing entries in the backend graph are authoritative.
         allow_core_backfill = not entry_exists
 
         for parent_key, core_key in core_parent_map.items():
@@ -961,7 +878,7 @@ class HeritageStore:
                 continue
             value = self._normalize_text(record.get(core_key, ""))
             current = self._normalize_text(entry.get(parent_key, ""))
-            # Only import from core for missing values; keep heritage.json edits.
+            # Only import from core for missing values; keep graph edits.
             if allow_core_backfill and not current and value:
                 entry[parent_key] = value
                 changed = True

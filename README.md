@@ -385,6 +385,16 @@ Phase 2 supports two backend profiles behind the same application services:
 - **Shared PostgreSQL** is the network and multi-workstation profile. A small
   synchronous Psycopg 3 connection pool is used by the desktop application.
 
+Only a logged-in Lord can open `Settings -> Backend`. The dialog keeps
+Standalone SQLite inside the local application-data database folder and
+provides PostgreSQL host, port, database, user, password, TLS, timeout,
+managed-storage, and connection-pool settings. PostgreSQL credentials are kept
+in the operating-system credential store, never in `backend.json`. `Test
+connection` is non-mutating. Saving selects the profile for the next clean
+restart and does not transfer data; use the canonical export/import workflow
+for a backend transfer. Explicit deployment environment variables retain
+priority for headless administration.
+
 Operational data, users, projects, plugin records, configuration, locks, and
 audit events belong to the selected backend. PDFs and other managed documents
 remain in managed storage belonging to that backend; the database stores their

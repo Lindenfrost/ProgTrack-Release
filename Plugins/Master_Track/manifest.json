@@ -11,12 +11,7 @@
     "PyQt6"
   ],
   "data_files": [
-    "users.enc",
-    "settings.json",
-    "jobs.json",
-    "permissions_labels.json",
-    "sessions/*.json",
-    "audit_*.log"
+    "permissions_labels.json"
   ],
   "min_progtrack_version": "RC 0.1.0",
   "menu_location": "Tools",

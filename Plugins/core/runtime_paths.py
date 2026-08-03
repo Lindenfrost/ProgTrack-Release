@@ -156,12 +156,15 @@ def resolve_runtime_paths(
 ) -> RuntimePaths:
     env = dict(os.environ if environ is None else environ)
     app_root = Path(application_root).resolve()
-    portable_requested = str(env.get("PROGTRACK_PORTABLE", "")).lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    portable_value = env.get("PROGTRACK_PORTABLE")
+    # A writable release folder is portable by default.  Set
+    # PROGTRACK_PORTABLE=0/false/off to opt into the platform user-data roots;
+    # read-only installation folders still fall back automatically below.
+    portable_requested = (
+        str(portable_value).lower() not in {"0", "false", "no", "off"}
+        if portable_value is not None
+        else True
+    )
     # A read-only application folder always selects installed/user-profile
     # roots, even if portable mode was requested.
     portable = portable_requested and application_directory_is_writable(app_root)

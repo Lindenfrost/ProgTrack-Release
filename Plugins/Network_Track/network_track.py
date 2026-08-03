@@ -3,7 +3,7 @@
 # Part of: ProgTrack 0.1.0 RC
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
-# Module: Network Track file-based team chat.
+# Module: Network Track backend-backed team chat.
 
 import os
 import sys
@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QGridLayout, QToolButton, QTextEdit
 )
 from Plugins.core.backend_store import BackendJsonStore
+from Plugins.core.ui_icons import apply_icon
 
 # QtMultimedia is optional - plugin works without sound
 try:
@@ -233,7 +234,7 @@ class NetworkTrackWidget(QMainWindow):
         self._start_monitoring()
         
     def _load_settings(self) -> Dict:
-        """Load settings from JSON file."""
+        """Load settings from the configured backend."""
         default_settings = {
             'bring_to_front': True,
             'play_sound': True,
@@ -320,7 +321,8 @@ class NetworkTrackWidget(QMainWindow):
         
         # Icon picker button
         self.icon_button = QToolButton()
-        self.icon_button.setText("☺")
+        apply_icon(self.icon_button, "network.insert_symbol", fallback="Insert symbol")
+        self.icon_button.setIconSize(QSize(20, 20))
         self.icon_button.setToolTip("Insert icon")
         self.icon_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.icon_button.setMenu(self._create_icon_menu())
@@ -518,15 +520,15 @@ class NetworkTrackWidget(QMainWindow):
             self.sound_effect = None
     
     def _start_monitoring(self):
-        """Start monitoring the chat log file for changes."""
+        """Poll the backend chat record for changes."""
         self.monitor_timer = QTimer(self)
         self.monitor_timer.timeout.connect(self._check_for_updates)
         interval_ms = self.settings.get('polling_interval', 10) * 1000
         self.monitor_timer.start(interval_ms)
-        logger.info(f"File monitoring started (interval: {interval_ms}ms)")
+        logger.info(f"Backend chat polling started (interval: {interval_ms}ms)")
     
     def _load_chat_log(self):
-        """Load and display the last 100 lines of the chat log."""
+        """Load and display the last 100 backend chat messages."""
         try:
             all_lines = self._chat_lines()
             self.last_line_count = len(all_lines)

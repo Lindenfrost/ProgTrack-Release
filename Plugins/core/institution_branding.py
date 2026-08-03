@@ -109,7 +109,14 @@ class InstitutionBrandingService:
             return None
 
     def apply_to_pdf(self, pdf_path: str | Path) -> bool:
-        """Overlay a compact name/logo header on every existing PDF page."""
+        """Overlay a compact, right-aligned name/logo header on every page.
+
+        The exported document remains the primary content.  Branding occupies
+        only a bounded top-right header region: the logo is the rightmost
+        element and the facility name is right-aligned immediately to its
+        left.  The available logo width is reduced before the font is reduced
+        so long facility names remain readable without clipping or overlap.
+        """
         config = self.load()
         if not config.get("enabled"):
             return False
@@ -119,6 +126,7 @@ class InstitutionBrandingService:
             return False
 
         from pypdf import PdfReader, PdfWriter
+        from reportlab.pdfbase.pdfmetrics import stringWidth
         from reportlab.lib.utils import ImageReader
         from reportlab.pdfgen import canvas
 
@@ -132,26 +140,62 @@ class InstitutionBrandingService:
             layer = canvas.Canvas(overlay_bytes, pagesize=(width, height))
             margin = 18.0
             header_h = min(34.0, max(24.0, height * 0.04))
-            x = margin
+            gap = 8.0
+            right_edge = width - margin
+            center_y = height - margin - header_h / 2.0
+            logo_size: tuple[float, float] | None = None
             if logo is not None:
                 with Image.open(logo) as image:
                     iw, ih = image.size
                 max_w, max_h = 72.0, header_h - 4.0
                 scale = min(max_w / max(iw, 1), max_h / max(ih, 1))
-                draw_w, draw_h = iw * scale, ih * scale
+                logo_size = (iw * scale, ih * scale)
+            if facility:
+                # Fit the name and logo into the bounded right header.  The
+                # normal 8pt font is retained whenever possible; only very
+                # long names reduce the logo width/font size, never the page
+                # content area or the right-edge alignment.
+                font_name = "Helvetica-Bold"
+                font_size = 8.0
+                available = max(36.0, width - 2.0 * margin)
+                for candidate in (8.0, 7.5, 7.0, 6.5, 6.0, 5.5):
+                    text_width = stringWidth(facility, font_name, candidate)
+                    logo_width = logo_size[0] if logo_size else 0.0
+                    if text_width + (gap if logo_size else 0.0) + logo_width <= available:
+                        font_size = candidate
+                        break
+                    font_size = candidate
+                text_width = stringWidth(facility, font_name, font_size)
+                if logo_size:
+                    allowed_logo_width = max(
+                        24.0,
+                        available - text_width - gap,
+                    )
+                    if logo_size[0] > allowed_logo_width:
+                        logo_w, logo_h = logo_size
+                        logo_size = (
+                            allowed_logo_width,
+                            logo_h * allowed_logo_width / max(logo_w, 1.0),
+                        )
+                logo_left = right_edge - (logo_size[0] if logo_size else 0.0)
+                text_right = logo_left - gap if logo_size else right_edge
+                layer.setFont(font_name, font_size)
+                layer.drawRightString(
+                    text_right,
+                    center_y - font_size * 0.35,
+                    facility,
+                )
+            if logo_size:
+                draw_w, draw_h = logo_size
                 layer.drawImage(
                     ImageReader(str(logo)),
-                    x,
-                    height - margin - draw_h,
+                    right_edge - draw_w,
+                    center_y - draw_h / 2.0,
                     width=draw_w,
                     height=draw_h,
                     preserveAspectRatio=True,
                     mask="auto",
                 )
-                x += draw_w + 8.0
-            if facility:
-                layer.setFont("Helvetica-Bold", 8)
-                layer.drawString(x, height - margin - header_h / 2.0, facility)
             layer.save()
             overlay_bytes.seek(0)
             page.merge_page(PdfReader(overlay_bytes).pages[0])

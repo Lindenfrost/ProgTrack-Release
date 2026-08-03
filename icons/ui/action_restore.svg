@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <style>
+    .line{fill:none;stroke:#25364a;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+    .light{fill:#f7fafc;stroke:#25364a;stroke-width:4;stroke-linejoin:round}
+    .green{fill:#4caf82;stroke:#25364a;stroke-width:4;stroke-linejoin:round}
+    .amber{fill:#f4b942;stroke:#25364a;stroke-width:4;stroke-linejoin:round}
+  </style>
+  <path class="amber" d="M10 23h44v30H10z"/>
+  <path class="light" d="M7 15h50v10H7z"/>
+  <path d="M25 35h14" class="line"/>
+  <path class="green" d="M43 53V34h-6l10-12 10 12h-6v19z"/>
+</svg>

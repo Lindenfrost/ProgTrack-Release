@@ -11,9 +11,7 @@
     "PyQt6",
     "matplotlib"
   ],
-  "data_files": [
-    "cage.json"
-  ],
+  "data_files": [],
   "min_progtrack_version": "RC 0.1.0",
   "menu_location": "Tab",
   "icon": "progtrack_icon.ico",

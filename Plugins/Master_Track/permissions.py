@@ -200,7 +200,7 @@ ALL_PERMISSIONS: List[str] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Default job bundle definitions (may be overridden by jobs.json)
+# Default job bundle definitions (may be overridden by backend configuration)
 # ---------------------------------------------------------------------------
 
 DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
@@ -270,7 +270,7 @@ DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
     },
 }
 
-# Runtime-overridable job bundles (loaded from jobs.json by plugin.py)
+# Runtime-overridable job bundles (loaded from backend configuration by plugin.py)
 JOB_BUNDLES: Dict[str, Set[str]] = {k: set(v) for k, v in DEFAULT_JOB_BUNDLES.items()}
 
 # ---------------------------------------------------------------------------

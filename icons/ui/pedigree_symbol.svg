@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="64"
+   height="64"
+   viewBox="0 0 64 64"
+   version="1.1"
+   id="svg3"
+   sodipodi:docname="pedigree_symbol.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs3" />
+  <sodipodi:namedview
+     id="namedview3"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="12.609375"
+     inkscape:cx="31.960347"
+     inkscape:cy="32"
+     inkscape:window-width="1440"
+     inkscape:window-height="829"
+     inkscape:window-x="1912"
+     inkscape:window-y="174"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg3" />
+  <style
+     id="style1">
+    .line{
+      fill:none;
+      stroke:#25364a;
+      stroke-width:4;
+      stroke-linecap:round;
+      stroke-linejoin:round
+    }
+    .blue{
+      fill:#2f80ed;
+      stroke:#25364a;
+      stroke-width:4;
+      stroke-linejoin:round
+    }
+    .red{
+      fill:#df5b5b;
+      stroke:#25364a;
+      stroke-width:4;
+      stroke-linejoin:round
+    }
+  </style>
+  <!-- connectors -->
+  <path
+     class="line"
+     d="M32 19v8M16 27h32M16 27v10M48 27v10"
+     id="path1" />
+  <!-- upper triangle -->
+  <path
+     class="blue"
+     d="M32 5L23 21h18Z"
+     id="path2" />
+  <!-- lower triangle -->
+  <path
+     class="blue"
+     d="M16 36L7 53h18Z"
+     id="path3" />
+  <!-- lower circle -->
+  <circle
+     class="red"
+     cx="48"
+     cy="45"
+     r="9"
+     id="circle3"
+     style="fill:#e7539f;fill-opacity:1" />
+</svg>

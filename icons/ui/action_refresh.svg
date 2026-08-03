@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <style>
+    .arrow{
+      fill:#2f80ed;
+      stroke:#25364a;
+      stroke-width:4;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+  </style>
+
+  <!-- Upper recycling-style arrow -->
+  <path class="arrow" d="
+    M13 30
+    C15.5 20.5 23 15 32.5 15
+    H39
+    V10
+    L51 20
+    L39 30
+    V25
+    H32.5
+    C27.5 25 23.5 27 21 31
+    Z"/>
+
+  <!-- Lower recycling-style arrow -->
+  <path class="arrow" d="
+    M51 34
+    C48.5 43.5 41 49 31.5 49
+    H25
+    V54
+    L13 44
+    L25 34
+    V39
+    H31.5
+    C36.5 39 40.5 37 43 33
+    Z"/>
+</svg>

@@ -8,7 +8,6 @@ name; the preset body lives in this registry.
 
 from __future__ import annotations
 
-import json
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
@@ -51,11 +50,17 @@ def normalize_preset(raw: Dict[str, Any]) -> Dict[str, Any]:
 
 
 class RoleBlockPresetRegistry:
-    """Read and atomically write shared custom block presets."""
+    """Read and write shared custom block presets in the backend.
 
-    def __init__(self, path: Path | str):
-        self.path = Path(path)
-        self._presets = self._read()
+    The bundled preset JSON is a static bootstrap catalog only.  Facility
+    edits are mutable configuration and therefore have no JSON-file fallback.
+    """
+
+    def __init__(self, backend: Any, *, initial_payload: Dict[str, Any] | None = None):
+        if backend is None or not hasattr(backend, "records"):
+            raise RuntimeError("RoleBlockPresetRegistry requires a configured backend.")
+        self.backend = backend
+        self._presets = self._read(initial_payload)
 
     def reload(self) -> None:
         self._presets = self._read()
@@ -82,21 +87,19 @@ class RoleBlockPresetRegistry:
 
         normalized.sort(key=lambda preset: preset["name"].casefold())
         payload = {"schema_version": SCHEMA_VERSION, "presets": normalized}
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        temporary_path = self.path.with_suffix(self.path.suffix + ".tmp")
-        with temporary_path.open("w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, ensure_ascii=False)
-            handle.write("\n")
-        temporary_path.replace(self.path)
+        self.backend.records.put("configuration", "role-block-presets", payload)
         self._presets = normalized
 
-    def _read(self) -> List[Dict[str, Any]]:
-        if not self.path.is_file():
-            return []
-        try:
-            with self.path.open("r", encoding="utf-8") as handle:
-                payload = json.load(handle)
-        except (OSError, json.JSONDecodeError):
+    def payload(self) -> Dict[str, Any]:
+        return {"schema_version": SCHEMA_VERSION, "presets": self.presets()}
+
+    def _read(self, initial_payload: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
+        payload = initial_payload
+        if not isinstance(payload, dict):
+            payload = self.backend.records.get(
+                "configuration", "role-block-presets", default=None
+            )
+        if not isinstance(payload, dict):
             return []
         raw_presets = payload.get("presets", []) if isinstance(payload, dict) else []
         if not isinstance(raw_presets, list):

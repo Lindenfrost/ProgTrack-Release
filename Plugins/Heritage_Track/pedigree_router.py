@@ -277,6 +277,32 @@ class PedigreeRouter:
             labels,
             show_inbreeding,
         )
+        if all(
+            isinstance(labels.get(node, node), str)
+            for node in plan.animal_positions
+        ):
+            obstacle_items = sorted(
+                animal_obstacles.items(), key=lambda item: item[0].casefold()
+            )
+            for index, (first_node, first_rect) in enumerate(obstacle_items):
+                for second_node, second_rect in obstacle_items[index + 1 :]:
+                    if (
+                        _ranges_overlap(
+                            first_rect.left,
+                            first_rect.right,
+                            second_rect.left,
+                            second_rect.right,
+                        )
+                        and _ranges_overlap(
+                            first_rect.bottom,
+                            first_rect.top,
+                            second_rect.bottom,
+                            second_rect.top,
+                        )
+                    ):
+                        problems.append(
+                            f"{first_node}/{second_node}: animal markers or labels overlap"
+                        )
 
         for family_id, endpoint_routes in plan.routes.items():
             family = families.get(family_id, {})
@@ -385,6 +411,12 @@ class PedigreeRouter:
                 self._deoverlap_row(adjusted, row, labels, protected, show_inbreeding)
             if not protected:
                 self._restore_single_child_axes(
+                    adjusted,
+                    families,
+                    labels,
+                    show_inbreeding,
+                )
+                self._solve_horizontal_constraints(
                     adjusted,
                     families,
                     labels,
@@ -1128,7 +1160,7 @@ class PedigreeRouter:
         # More than one pass is useful for equal-date families whose stable
         # lexical order is not their ancestry order.  A DAG converges quickly;
         # the hard bound protects unusual consanguineous data.
-        for _pass in range(max(2, min(len(ordered) + 1, 12))):
+        for _pass in range(max(2, min(len(ordered) + 1, 64))):
             changed = False
             for family_id in ordered:
                 family = families[family_id]
@@ -1161,6 +1193,139 @@ class PedigreeRouter:
                     changed = True
             if not changed:
                 break
+
+    def _solve_horizontal_constraints(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        show_inbreeding: bool,
+    ) -> None:
+        """Resolve row collisions while retaining every one-child family axis."""
+        if len(positions) < 2:
+            return
+        try:
+            import numpy as np
+        except ImportError:
+            for row in self._cluster_rows(positions):
+                self._deoverlap_row(
+                    positions, row, labels, set(), show_inbreeding
+                )
+            return
+
+        nodes = sorted(positions, key=str.casefold)
+        index = {node: offset for offset, node in enumerate(nodes)}
+        initial = np.asarray([positions[node][0] for node in nodes], dtype=float)
+        obstacles = self.node_obstacles(positions, labels, show_inbreeding)
+        equality_rows: List[np.ndarray] = []
+        collision_pairs: List[Tuple[int, int, float]] = []
+
+        # Preserve the visual left-to-right order while separating any pair
+        # whose complete marker/name/detail rectangles share vertical space.
+        for left_offset, first in enumerate(nodes):
+            for second in nodes[left_offset + 1 :]:
+                first_rect = obstacles[first]
+                second_rect = obstacles[second]
+                if not _ranges_overlap(
+                    first_rect.bottom,
+                    first_rect.top,
+                    second_rect.bottom,
+                    second_rect.top,
+                ):
+                    continue
+                required = (
+                    (first_rect.right - first_rect.left) / 2.0
+                    + (second_rect.right - second_rect.left) / 2.0
+                    + self.node_gap
+                )
+                collision_pairs.append(
+                    (index[first], index[second], required)
+                )
+
+        # A direct one-child connection must be perpendicular.  This equality
+        # is exactly x(child) == mean(x(parents)); the router then places the
+        # family junction at that same x coordinate.
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            parents = [
+                parent for parent in self._parents(family)
+                if parent in index
+            ]
+            children = [
+                child for child in self._children(family)
+                if child in index
+            ]
+            if not parents or len(children) != 1:
+                continue
+            vector = np.zeros(len(nodes), dtype=float)
+            vector[index[children[0]]] = 1.0
+            parent_share = -1.0 / len(parents)
+            for parent in parents:
+                vector[index[parent]] += parent_share
+            equality_rows.append(vector)
+
+        if not equality_rows and not collision_pairs:
+            return
+        if equality_rows:
+            equality_matrix = np.vstack(equality_rows)
+            _u, singular_values, vh = np.linalg.svd(
+                equality_matrix, full_matrices=True
+            )
+            tolerance = (
+                max(equality_matrix.shape)
+                * (singular_values[0] if singular_values.size else 0.0)
+                * np.finfo(float).eps
+            )
+            rank = int(np.sum(singular_values > tolerance))
+            basis = vh[rank:].T.copy()
+            feasible_origin = (
+                basis @ (basis.T @ initial)
+                if basis.shape[1]
+                else np.zeros(len(nodes), dtype=float)
+            )
+        else:
+            feasible_origin = initial.copy()
+            basis = np.eye(len(nodes), dtype=float)
+        if basis.shape[1] == 0:
+            candidate = feasible_origin
+        else:
+            candidate = feasible_origin.copy()
+            projector = basis @ basis.T
+            # Alternating projections keep every family-axis equality exact
+            # while pushing colliding label rectangles apart.  The initial
+            # direction is stable, but a zero-distance pair can still choose
+            # the direction with the greater feasible movement.
+            for _pass in range(96):
+                worst_deficit = 0.0
+                changed = False
+                for first, second, required in collision_pairs:
+                    difference = candidate[second] - candidate[first]
+                    deficit = required - abs(difference)
+                    worst_deficit = max(worst_deficit, deficit)
+                    if deficit <= 1e-7:
+                        continue
+                    preferred = (
+                        1.0
+                        if difference > 0.0
+                        else -1.0
+                        if difference < 0.0
+                        else 1.0
+                        if initial[second] >= initial[first]
+                        else -1.0
+                    )
+                    raw = np.zeros(len(nodes), dtype=float)
+                    raw[first] = -preferred
+                    raw[second] = preferred
+                    movement = projector @ raw
+                    gain = float(np.dot(raw, movement))
+                    if gain <= 1e-10:
+                        continue
+                    candidate += movement * ((deficit * 1.002) / gain)
+                    changed = True
+                if not changed or worst_deficit <= 1e-7:
+                    break
+        for node, x in zip(nodes, candidate):
+            positions[node] = (round(float(x), 10), positions[node][1])
 
     def _shift_automatic_components_from_locks(
         self,

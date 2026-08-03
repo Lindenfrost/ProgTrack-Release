@@ -5,9 +5,7 @@
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Projects Track sidebar-filter plugin implementation.
 
-import json
 import logging
-import os
 from typing import Any, Callable, Dict, List, Optional
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLabel, QButtonGroup, QFrame, QScrollArea,
@@ -133,10 +131,9 @@ class _SidebarToggleButton(QPushButton):
 
 
 class HistoryStore:
-    FILENAME = "projects_history.json"
-
     def __init__(self, plugin_dir: str, backend):
-        self.path = os.path.join(plugin_dir, self.FILENAME)
+        # ``plugin_dir`` is retained for constructor compatibility.  History
+        # is stored exclusively in the shared backend.
         self._store = BackendJsonStore(backend, "projects", "history")
         self._data: dict = {"version": 1, "projects": {}}
         self._load()
@@ -313,15 +310,6 @@ class ProjectsTrackPlugin:
             app: The main ProgTrackApp instance
         """
         self.app = app
-        self.plugin_dir = os.path.dirname(__file__)
-        # ``projects_cache.json`` used to be shared by Guest and every user
-        # with ``project.view_all``.  Apart from leaking the previous user's
-        # selection, that made a privileged login able to reuse a stale list
-        # produced in a different session.  Keep the old path only for read
-        # compatibility; all new session state is isolated below.
-        self.global_cache_file = os.path.join(self.plugin_dir, 'projects_cache.json')
-        self.cache_file = self._cache_file_for_current_user()
-        
         # UI references (set by create_sidebar_tabs)
         self.tabs_container = None          # The scroll area containing tabs
         self.tabs_inner_widget = None       # Inner widget with buttons
@@ -349,7 +337,7 @@ class ProjectsTrackPlugin:
         self._project_ui_refresh_pending = False
 
         # History store for project membership tracking
-        self._history = HistoryStore(os.path.dirname(__file__), app.backend)
+        self._history = HistoryStore("", app.backend)
 
         # Load cached projects, species, and last session state
         self._load_projects()
@@ -378,24 +366,6 @@ class ProjectsTrackPlugin:
     def _uses_global_project_cache(self) -> bool:
         """Compatibility hook retained for callers; shared caches are unsafe."""
         return False
-
-    @staticmethod
-    def _safe_cache_identity(identity: str) -> str:
-        return ''.join(
-            ch if ch.isalnum() or ch in ('-', '_') else '_'
-            for ch in identity
-        ) or 'guest'
-
-    def _cache_path_for_identity(self, identity: str) -> str:
-        cache_dir = os.path.join(
-            self.plugin_dir,
-            'project_assignment_cache',
-            self._safe_cache_identity(identity),
-        )
-        return os.path.join(cache_dir, 'projects_cache.json')
-
-    def _cache_file_for_current_user(self) -> str:
-        return self._cache_path_for_identity(self._cache_identity())
 
     def _cache_context(self) -> Dict[str, Any]:
         """Describe the permission scope represented by the current cache."""
@@ -737,7 +707,6 @@ class ProjectsTrackPlugin:
 
     def on_user_login(self) -> None:
         """Reload per-user sidebar toggle state after login/logout."""
-        self.cache_file = self._cache_file_for_current_user()
         self._sidebar_visible = self._load_sidebar_visibility()
         if self._proj_content_w:
             self._proj_content_w.setVisible(self._sidebar_visible)
@@ -819,7 +788,6 @@ class ProjectsTrackPlugin:
         refreshes discovery, both sidebar columns, the tab list and registered
         scope callbacks as one operation.
         """
-        self.cache_file = self._cache_file_for_current_user()
         self._load_projects(force_discovery=force_discovery)
         self._discover_species()
         desired_project = self.current_project

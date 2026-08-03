@@ -361,44 +361,30 @@ def _is_other_row_meaningful(data: Dict) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# JSON persistence layer
+# Backend persistence layer
 # ---------------------------------------------------------------------------
 
 class JsonStore:
+    """Backend-owned sample rows.
+
+    The path argument is retained only for source compatibility with older
+    callers; it is deliberately ignored. Sample rows are backend-only.
+    """
+
     def __init__(self, path: Path, backend=None, record_id: str = ""):
-        self._path = path
-        self._store = (
-            BackendJsonStore(backend, "samples", record_id)
-            if backend is not None and record_id
-            else None
-        )
+        if backend is None or not record_id:
+            raise RuntimeError("Sample Track requires a backend record store.")
+        self._store = BackendJsonStore(backend, "samples", record_id)
 
     def read(self) -> List[Dict[str, Any]]:
-        if self._store is not None:
-            value = self._store.load([])
-            return value if isinstance(value, list) else []
-        if not self._path.exists():
-            return []
-        try:
-            with open(self._path, encoding="utf-8") as fh:
-                data = json.load(fh)
-            if isinstance(data, list):
-                return data
-            return []
-        except Exception as exc:
-            logger.error("JsonStore.read %s: %s", self._path, exc)
-            return []
+        value = self._store.load([])
+        return value if isinstance(value, list) else []
 
     def write(self, rows: List[Dict[str, Any]]) -> None:
         try:
-            if self._store is not None:
-                self._store.save(rows)
-                return
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._path, "w", encoding="utf-8") as fh:
-                json.dump(rows, fh, ensure_ascii=False, indent=2)
+            self._store.save(rows)
         except Exception as exc:
-            logger.error("JsonStore.write %s: %s", self._path, exc)
+            logger.error("Sample backend write failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -3546,12 +3532,8 @@ class SampleTrackPlugin:
         self.app = app
         self.plugin_dir = PLUGIN_DIR
         self._window: Optional[SampleTrackWindow] = None
-        self._organ_store = JsonStore(
-            PLUGIN_DIR / "organs.json", app.backend, "organs"
-        )
-        self._other_store = JsonStore(
-            PLUGIN_DIR / "other.json", app.backend, "other"
-        )
+        self._organ_store = JsonStore(None, app.backend, "organs")
+        self._other_store = JsonStore(None, app.backend, "other")
 
     @property
     def _messages(self) -> Dict:

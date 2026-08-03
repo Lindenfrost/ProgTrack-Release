@@ -7,72 +7,38 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
 
 class SessionManager:
-    """Load / save per-user session files under ``sessions/``."""
+    """Load/save per-user session records in the configured backend."""
 
     def __init__(self, plugin_dir: str, backend=None):
-        self.sessions_dir = os.path.join(plugin_dir, "sessions")
+        if backend is None:
+            raise RuntimeError("Master Track sessions require the configured ProgTrack backend.")
         self.backend = backend
 
-    def _path(self, username: str) -> str:
-        safe = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in username)
-        return os.path.join(self.sessions_dir, f"{safe}.json")
-
     def exists(self, username: str) -> bool:
-        if self.backend is not None:
-            marker = object()
-            return self.backend.records.get(
-                "sessions", username, default=marker
-            ) is not marker
-        return os.path.isfile(self._path(username))
+        marker = object()
+        return self.backend.records.get(
+            "sessions", username, default=marker
+        ) is not marker
 
     def load(self, username: str) -> Dict[str, Any]:
-        if self.backend is not None:
-            value = self.backend.records.get(
-                "sessions", username, default=self._defaults(username)
-            )
-            return value if isinstance(value, dict) else self._defaults(username)
-        path = self._path(username)
-        if not os.path.isfile(path):
-            return self._defaults(username)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return data
-        except Exception as exc:
-            logger.error("Failed to load session for %s: %s", username, exc)
-            return self._defaults(username)
+        value = self.backend.records.get(
+            "sessions", username, default=self._defaults(username)
+        )
+        return value if isinstance(value, dict) else self._defaults(username)
 
     def save(self, username: str, data: Dict[str, Any]) -> None:
         data["username"] = username
-        if self.backend is not None:
-            self.backend.records.put("sessions", username, data)
-            return
-        path = self._path(username)
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-        except Exception as exc:
-            logger.error("Failed to save session for %s: %s", username, exc)
+        self.backend.records.put("sessions", username, data)
 
     def delete(self, username: str) -> None:
-        if self.backend is not None:
-            self.backend.records.delete("sessions", username)
-            return
-        path = self._path(username)
-        if os.path.isfile(path):
-            try:
-                os.remove(path)
-            except OSError:
-                pass
+        self.backend.records.delete("sessions", username)
 
     @staticmethod
     def _defaults(username: str) -> Dict[str, Any]:

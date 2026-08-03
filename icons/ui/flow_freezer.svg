@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <style>
+    .circle {
+      fill: #2f80ed;
+      stroke: #25364a;
+      stroke-width: 4;
+    }
+    .flake {
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 3.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  </style>
+
+  <circle class="circle" cx="32" cy="32" r="22"/>
+
+  <g class="flake">
+    <!-- three main axes create six equal arms -->
+    <path d="M32 16v32"/>
+    <path d="M18.14 24l27.72 16"/>
+    <path d="M18.14 40l27.72-16"/>
+
+    <!-- top branches -->
+    <path d="M32 22l-5-5"/>
+    <path d="M32 22l5-5"/>
+
+    <!-- bottom branches -->
+    <path d="M32 42l-5 5"/>
+    <path d="M32 42l5 5"/>
+
+    <!-- upper-right branches -->
+    <path d="M40.66 27l1.83-6.83"/>
+    <path d="M40.66 27l6.83-1.83"/>
+
+    <!-- lower-right branches -->
+    <path d="M40.66 37l6.83 1.83"/>
+    <path d="M40.66 37l1.83 6.83"/>
+
+    <!-- lower-left branches -->
+    <path d="M23.34 37l-1.83 6.83"/>
+    <path d="M23.34 37l-6.83 1.83"/>
+
+    <!-- upper-left branches -->
+    <path d="M23.34 27l-6.83-1.83"/>
+    <path d="M23.34 27l-1.83-6.83"/>
+  </g>
+</svg>

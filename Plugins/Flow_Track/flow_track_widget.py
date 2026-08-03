@@ -18,6 +18,7 @@ from Plugins.core.animal_roles import canonical_role_value
 from Plugins.core.platform_helpers import default_save_path
 from Plugins.core.backend_store import BackendJsonStore
 from Plugins.core.ui_icons import apply_icon
+from Plugins.core.dialog_geometry import install_dialog_geometry_guard
 
 # Set up paths
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -80,6 +81,7 @@ class FlowTrackWidget:
         
         # Access Qt modules via parent_app LazyLoader
         QtWidgets = parent_app.QtWidgets
+        QtCore = parent_app.QtCore
         
         # Create main widget (for tab integration, not a dialog)
         self.widget = QtWidgets.QWidget()
@@ -240,13 +242,17 @@ class FlowTrackWidget:
         toolbar_layout.addWidget(self.fit_btn)
         
         # Freezer toggle button (Flow_Track 3.0)
-        self.freezer_btn = QtWidgets.QPushButton("❄️")
+        self.freezer_btn = QtWidgets.QPushButton()
+        apply_icon(self.freezer_btn, "flow.freezer", fallback="Freezer")
+        self.freezer_btn.setIconSize(QtCore.QSize(20, 20))
         self.freezer_btn.setToolTip(self.messages.get("flow_track.button.freezer", "Show/Hide Freezer"))
         self.freezer_btn.clicked.connect(self._toggle_freezer_visibility)
         toolbar_layout.addWidget(self.freezer_btn)
         
         # Settings button (store reference for language updates)
-        self.settings_btn = QtWidgets.QPushButton("⚙")
+        self.settings_btn = QtWidgets.QPushButton()
+        apply_icon(self.settings_btn, "action.settings", fallback="Settings")
+        self.settings_btn.setIconSize(QtCore.QSize(20, 20))
         self.settings_btn.setToolTip(self.messages.get("flow_track.button.settings", "Settings"))
         self.settings_btn.clicked.connect(self._open_settings_dialog)
         toolbar_layout.addWidget(self.settings_btn)
@@ -377,7 +383,7 @@ class FlowTrackWidget:
             self._render_timeline_chart()
     
     def _load_settings(self):
-        """Load plugin settings from flowtrack_config.json (Flow_Track 3.0 schema)."""
+        """Load plugin settings from the configured backend (Flow_Track 3.0 schema)."""
         config = self._settings_store.load({})
         self.settings = config.get('settings', self._get_default_settings())
         self.ui_preferences = config.get('ui_preferences', {})
@@ -408,7 +414,7 @@ class FlowTrackWidget:
         }
     
     def _save_settings(self):
-        """Save settings to flowtrack_config.json (Flow_Track 3.0 schema)."""
+        """Save settings to the configured backend (Flow_Track 3.0 schema)."""
         try:
             config = {
                 'settings': self.settings,
@@ -440,9 +446,10 @@ class FlowTrackWidget:
             dialog.setMaximumSize(max_width, max_height)
             if dialog.width() > max_width or dialog.height() > max_height:
                 dialog.resize(min(dialog.width(), max_width), min(dialog.height(), max_height))
+        install_dialog_geometry_guard(dialog)
     
     def _load_flow_track_data(self):
-        """Load flowtrack_daten.json (Flow_Track 3.0 schema)."""
+        """Load Flow Track records from the configured backend (3.0 schema)."""
         try:
             data = self._data_store.load({
                 "version": "3.0",
@@ -469,7 +476,7 @@ class FlowTrackWidget:
             
             logger.info("Flow Track data loaded through backend (v%s)", version)
         except Exception as e:
-            logger.error(f"Failed to load flowtrack_daten.json: {e}")
+            logger.error(f"Failed to load Flow Track records from backend: {e}")
             self.manual_data = {
                 'sperm_donors': {},
                 'egg_donors': {},
@@ -541,7 +548,7 @@ class FlowTrackWidget:
             self.parent_app._show_permission_denied()
 
     def _save_flow_track_data(self):
-        """Save flowtrack_daten.json (Flow_Track 3.0 schema with validations)."""
+        """Save Flow Track records to the configured backend (3.0 schema with validations)."""
         if not self._can('edit'):
             self._deny()
             return
@@ -568,7 +575,7 @@ class FlowTrackWidget:
             self._data_store.save(data)
             logger.info("Flow Track data saved through backend (v3.0)")
         except Exception as e:
-            logger.error(f"Failed to save flowtrack_daten.json: {e}")
+            logger.error(f"Failed to save Flow Track records to backend: {e}")
             QtWidgets = self.parent_app.QtWidgets
             QtWidgets.QMessageBox.warning(
                 self.widget,
@@ -631,6 +638,11 @@ class FlowTrackWidget:
     @staticmethod
     def _safe_identity_token(value: str) -> str:
         token = animal_base_name(value) or "UNKNOWN"
+        # Legacy references may omit the origin component while still using
+        # the human-readable ``name | species | birth`` form.  Embryo IDs must
+        # remain short and stable; never embed the complete identity string.
+        if " | " in token:
+            token = token.split(" | ", 1)[0].strip()
         token = re.sub(r"[^A-Za-z0-9._-]+", "_", token).strip("_")
         return token or "UNKNOWN"
 
@@ -1982,7 +1994,7 @@ class FlowTrackWidget:
                         # Add snowflake symbol if cryopreserved
                         if cryopreserved:
                             snowflake_color = 'white' if implanted else 'blue'
-                            self.ax.text(x, embryo_y, '❄', ha='center', va='center',
+                            self.ax.text(x, embryo_y, 'Frozen', ha='center', va='center',
                                         fontsize=8, color=snowflake_color,
                                         weight='bold', zorder=16, clip_on=False)
                         
@@ -5473,8 +5485,8 @@ class FlowTrackWidget:
                     
                     egg = self._animal_export_name(embryo.get('egg_donor_name', '?'))
                     sperm = self._animal_export_name(embryo.get('sperm_donor_name', '?'))
-                    implanted = "✓" if embryo.get('implanted', embryo.get('pregnant', False)) else "✗"
-                    cryo = "✓" if embryo.get('cryopreserved', False) else "✗"
+                    implanted = "Yes" if embryo.get('implanted', embryo.get('pregnant', False)) else "No"
+                    cryo = "Yes" if embryo.get('cryopreserved', False) else "No"
                     
                     # Build localized tooltip
                     embryo_label = self.messages.get('flow_track.tooltip.embryo', 'Embryo')

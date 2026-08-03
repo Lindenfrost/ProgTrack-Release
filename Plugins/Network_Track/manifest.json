@@ -11,8 +11,6 @@
     "PyQt6"
   ],
   "data_files": [
-    "chat_log.txt",
-    "network_track_settings.json",
     "notification.wav"
   ],
   "min_progtrack_version": "RC 0.1.0",

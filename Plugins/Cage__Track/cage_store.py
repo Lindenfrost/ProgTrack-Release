@@ -3,13 +3,10 @@
 # Part of: ProgTrack 0.1.0 RC
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
-# Module: Cage Track persistence layer for cage.json.
+# Module: Cage Track persistence layer for backend housing records.
 
 from __future__ import annotations
 
-import json
-import os
-import tempfile
 import uuid
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
@@ -22,11 +19,10 @@ UNASSIGNED_CAGE_ID = "cage_unassigned"
 
 
 class CageStore:
-    """Owns plugin-specific storage in cage.json."""
+    """Owns Cage Track storage in backend housing records."""
 
     def __init__(self, plugin_dir: str, backend: Any):
         self.plugin_dir = plugin_dir
-        self.file_path = os.path.join(plugin_dir, "cage.json")
         self.backend_store = BackendJsonStore(backend, "housing", "cage")
         self.inspection_store = BackendJsonStore(
             backend, "housing", "inspections"
@@ -737,7 +733,7 @@ class CageStore:
         room_id: Optional[str],
         cage_id: Optional[str],
     ) -> None:
-        """Validate and persist dialog selection to cage.json only."""
+        """Validate and persist the dialog selection in the backend only."""
         key = occupant_id.strip()
         data = self.load_data()
 

@@ -7,42 +7,13 @@
 
 from __future__ import annotations
 
-import base64
 import hashlib
-import json
 import logging
 import os
-import uuid
 from datetime import date
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Base64 obfuscation (replaces cryptography package)
-# ---------------------------------------------------------------------------
-
-def _derive_key() -> bytes:
-    """Derive an obfuscation key from a fixed app secret + machine id."""
-    secret = b"ProgTrack_Master_Track_v1"
-    machine = str(uuid.getnode()).encode()
-    # Simple xor-style obfuscation key (not secure, just hiding)
-    raw = hashlib.sha256(secret + machine).digest()
-    return base64.urlsafe_b64encode(raw)
-
-
-def _encrypt(data: bytes) -> bytes:
-    """Encrypt data using base64 obfuscation."""
-    key = _derive_key()
-    return base64.urlsafe_b64encode(key + data)
-
-
-def _decrypt(token: bytes) -> bytes:
-    """Decrypt data from base64 obfuscation."""
-    raw = base64.urlsafe_b64decode(token)
-    key = _derive_key()
-    return raw[len(key):]
-
 
 # ---------------------------------------------------------------------------
 # Password hashing
@@ -67,10 +38,17 @@ def verify_password(password: str, stored_hash: str, stored_salt: str) -> bool:
 # ---------------------------------------------------------------------------
 
 class UserDB:
-    """Backend-owned user database with PBKDF2 password hashes."""
+    """Backend-owned user database with PBKDF2 password hashes.
+
+    User records are never read from or written to a file.  The backend is
+    mandatory so an installation cannot silently fall back to the archived
+    The former users.enc example store is archived; runtime users are loaded
+    exclusively from the backend security namespace.
+    """
 
     def __init__(self, plugin_dir: str, backend=None):
-        self.path = os.path.join(plugin_dir, "users.enc")
+        if backend is None:
+            raise RuntimeError("Master Track requires the configured ProgTrack backend.")
         self.backend = backend
         self._users: List[Dict[str, Any]] = []
         self._loaded = False
@@ -78,40 +56,16 @@ class UserDB:
     # -- persistence --------------------------------------------------------
 
     def exists(self) -> bool:
-        if self.backend is not None:
-            return bool(
-                self.backend.records.get("security", "users", default=[])
-            )
-        return os.path.isfile(self.path)
+        return bool(self.backend.records.get("security", "users", default=[]))
 
     def load(self) -> List[Dict[str, Any]]:
-        if self.backend is not None:
-            value = self.backend.records.get("security", "users", default=[])
-            self._users = value if isinstance(value, list) else []
-            self._loaded = True
-            return self._users
-        if not self.exists():
-            self._users = []
-            self._loaded = True
-            return self._users
-        try:
-            with open(self.path, "rb") as f:
-                raw = _decrypt(f.read())
-            self._users = json.loads(raw.decode("utf-8"))
-        except Exception as exc:
-            logger.error("Failed to load user database: %s", exc)
-            self._users = []
+        value = self.backend.records.get("security", "users", default=[])
+        self._users = value if isinstance(value, list) else []
         self._loaded = True
         return self._users
 
     def save(self) -> None:
-        if self.backend is not None:
-            self.backend.records.put("security", "users", self._users)
-            return
-        raw = json.dumps(self._users, indent=2).encode("utf-8")
-        enc = _encrypt(raw)
-        with open(self.path, "wb") as f:
-            f.write(enc)
+        self.backend.records.put("security", "users", self._users)
 
     @property
     def users(self) -> List[Dict[str, Any]]:

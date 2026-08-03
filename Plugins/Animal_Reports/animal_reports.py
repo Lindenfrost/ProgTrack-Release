@@ -7,7 +7,6 @@
 
 import os
 import sys
-import json
 import logging
 from typing import Dict, Optional, Any
 from dataclasses import dataclass, field
@@ -75,10 +74,8 @@ class AnimalReportsWidget(QMainWindow):
     
     # Class variables
     _instances = {}
-    DATA_FILE = None  # Will be set by the main application or standalone mode
-    LOCKED_ENTRIES_FILE = 'animal_reports_locked.json'  # File to store locked entries
-    
-    def __init__(self, animal_name: str = None, parent=None, messages: Dict = None, data_file: str = None):
+
+    def __init__(self, animal_name: str = None, parent=None, messages: Dict = None):
         """
         Initialize the Animal Reports widget.
         
@@ -86,13 +83,8 @@ class AnimalReportsWidget(QMainWindow):
             animal_name: Name of the animal to display. If None, shows the first animal.
             parent: Parent widget
             messages: Dictionary of UI messages for localization
-            data_file: Path to the data file. If None, uses the class variable
         """
         super().__init__(parent)
-        
-        # Set the data file if provided
-        if data_file:
-            AnimalReportsWidget.DATA_FILE = data_file
         
         # Initialize instance variables
         self.animal_name = animal_name
@@ -339,71 +331,6 @@ class AnimalReportsWidget(QMainWindow):
             return True
         except (ValueError, TypeError):
             return False
-
-    def _load_progtrack_data(self):
-        """Load and validate data from progtrack_daten.json."""
-        try:
-            # Try to find the data file in the parent directory
-            data_file = os.path.abspath(os.path.join(
-                os.path.dirname(__file__), 
-                '..', '..', 'progtrack_daten.json'
-            ))
-            
-            if not os.path.exists(data_file):
-                # Try alternative location for standalone execution
-                data_file = os.path.abspath(os.path.join(
-                    os.path.dirname(__file__), 
-                    'progtrack_daten.json'
-                ))
-                if not os.path.exists(data_file):
-                    logger.error(f"Data file not found at: {data_file}")
-                    QMessageBox.warning(
-                        self,
-                        self._get_message('error.data_file_not_found', 'Data File Not Found'),
-                        self._get_message('error.data_file_not_found_details',
-                                       f'Could not find data file at: {data_file}')
-                    )
-                    return {'animals': {}, 'archived': {}}
-            
-            logger.info(f"Loading data from: {data_file}")
-            
-            with open(data_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                
-                # Ensure the data has the expected structure
-                if not isinstance(data, dict):
-                    raise ValueError("Invalid data format: expected a dictionary")
-                    
-                # Ensure we have the required top-level keys
-                if 'animals' not in data:
-                    data['animals'] = {}
-                if 'archived' not in data:
-                    data['archived'] = {}
-                    
-                logger.info(f"Loaded data for {len(data.get('animals', {}))} active and {len(data.get('archived', {}))} archived animals")
-                return data
-                
-        except json.JSONDecodeError as e:
-            error_msg = f"Invalid JSON in data file: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            QMessageBox.critical(
-                self,
-                self._get_message('error.invalid_data', 'Invalid Data'),
-                self._get_message('error.invalid_data_details',
-                               f'Error in data file: {str(e)}')
-            )
-            return {'animals': {}, 'archived': {}}
-            
-        except Exception as e:
-            error_msg = f"Error loading progtrack data: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            QMessageBox.critical(
-                self,
-                self._get_message('error.load_failed', 'Load Failed'),
-                self._get_message('error.load_failed_details',
-                               f'Failed to load data: {str(e)}')
-            )
-            return {'animals': {}, 'archived': {}}
 
     def _format_date(self, date_str):
         """Convert date from YYYY-MM-DD to DD.MM.YYYY format."""
@@ -1050,14 +977,14 @@ class AnimalReportsWidget(QMainWindow):
     
     def _aggregate_animal_data(self, animal_name: str, animal_data: dict) -> dict:
         """
-        Aggregate data for a single animal from progtrack_daten.json format.
+        Aggregate data for a single animal from the backend core snapshot.
         
         Args:
             animal_name: Name of the animal
-            animal_data: Raw animal data from progtrack_daten.json
+            animal_data: Raw animal data from the backend core snapshot
             
         Returns:
-            Dictionary with aggregated data in the format for animal_report_data.json
+            Dictionary with aggregated data for the backend report record
         """
         logger.debug(f"Aggregating data for animal: {animal_name}")
         
@@ -1812,7 +1739,7 @@ class AnimalReportsWidget(QMainWindow):
             super().closeEvent(event)
 
 
-def launch_animal_reports(animal_name=None, parent=None, messages=None, data_file=None):
+def launch_animal_reports(animal_name=None, parent=None, messages=None):
     """
     Launch the Animal Reports plugin.
     
@@ -1820,7 +1747,6 @@ def launch_animal_reports(animal_name=None, parent=None, messages=None, data_fil
         animal_name: Name of the animal to display. If None, shows the first animal.
         parent: Parent widget
         messages: Dictionary of UI messages for localization
-        data_file: Path to the data file. If None, will try to find it automatically
     """
     # Check if we already have a window for this animal
     if animal_name and animal_name in AnimalReportsWidget._instances:
@@ -1836,7 +1762,6 @@ def launch_animal_reports(animal_name=None, parent=None, messages=None, data_fil
         animal_name=animal_name, 
         parent=parent, 
         messages=messages,
-        data_file=data_file
     )
     widget.show()
     return widget
@@ -1853,37 +1778,12 @@ def main():
     # Create application
     app = QApplication(sys.argv)
     
-    # Try to find the data file in common locations
-    data_file = None
-    possible_paths = [
-        'progtrack_daten.json',
-        os.path.expanduser('~/.progtrack/progtrack_daten.json'),
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'progtrack_daten.json')
-    ]
-    
-    for path in possible_paths:
-        if os.path.exists(path):
-            data_file = os.path.abspath(path)
-            break
-    
-    # If no data file found, show error and exit
-    if not data_file:
-        error_msg = (
-            "Could not find ProgTrack data file.\n\n"
-            "Please ensure you have a valid 'progtrack_daten.json' file in one of these locations:\n"
-            f"- {os.path.abspath('.')}\n"
-            f"- {os.path.expanduser('~/.progtrack/')}\n"
-            f"- {os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}"
-        )
-        QMessageBox.critical(
-            None,
-            "Error - ProgTrack Animal Reports",
-            error_msg
-        )
-        return 1
-    
-    # Set the data file as a class variable so it's available to all instances
-    AnimalReportsWidget.DATA_FILE = data_file
+    QMessageBox.critical(
+        None,
+        "Animal Reports",
+        "Animal Reports must be opened from ProgTrack with its configured backend.",
+    )
+    return 1
     
     # Load test messages (in a real standalone version, these would be loaded from language files)
     messages = {
@@ -1954,31 +1854,10 @@ def main():
         'error.title': 'Error',
         'error.load_data': 'Failed to load data: {error}',
         'error.save_data': 'Failed to save data: {error}',
-        'error.export_failed': 'Failed to export report: {error}',
-        'error.data_file_not_found': 'Could not find data file: {path}'
+        'error.export_failed': 'Failed to export report: {error}'
     }
     
-    try:
-        # Launch the plugin with the found data file
-        launch_animal_reports(
-            animal_name=sys.argv[1] if len(sys.argv) > 1 else None,
-            messages=messages,
-            data_file=data_file
-        )
-        
-        # Set application style to match the system
-        app.setStyle('Fusion')
-        
-        # Run the application
-        return app.exec()
-    except Exception as e:
-        QMessageBox.critical(
-            None,
-            "Fatal Error - ProgTrack Animal Reports",
-            f"An unexpected error occurred:\n\n{str(e)}\n\nPlease check the logs for more details."
-        )
-        logging.exception("Fatal error in Animal Reports")
-        return 1
+    return 1
 
 
 def _clean_html_for_reportlab(html_text: str) -> str:
@@ -2088,6 +1967,7 @@ def create_monthly_report(
     messages: dict = None,
     *,
     include_signatures: bool = True,
+    branding_owner=None,
 ) -> None:
     """
     Create a PDF report for one animal for one month.
@@ -2504,8 +2384,9 @@ def create_monthly_report(
         
         # Build PDF
         doc.build(elements)
-        from Plugins.core.institution_branding import brand_generated_pdf
-        brand_generated_pdf(self, output_path)
+        if branding_owner is not None:
+            from Plugins.core.institution_branding import brand_generated_pdf
+            brand_generated_pdf(branding_owner, output_path)
         logger.info(f"Successfully created PDF report: {output_path}")
         
     except ImportError as e:

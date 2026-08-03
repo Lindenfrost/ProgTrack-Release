@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="64"
+   height="64"
+   viewBox="0 0 64 64"
+   version="1.1"
+   id="svg2"
+   sodipodi:docname="pedigree_pair_64.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="namedview2"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.78808594"
+     inkscape:cx="-335.6233"
+     inkscape:cy="138.94424"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg2" />
+  <style
+     id="style1">
+    .line{
+      fill:none;
+      stroke:#25364a;
+      stroke-width:4;
+      stroke-linecap:round;
+      stroke-linejoin:round
+    }
+    .blue{
+      fill:#2f80ed;
+      stroke:#25364a;
+      stroke-width:4;
+      stroke-linejoin:round
+    }
+    .red{
+      fill:#e7539f;
+      stroke:#25364a;
+      stroke-width:4;
+      stroke-linejoin:round
+    }
+  </style>
+  <!-- connector -->
+  <path
+     class="line"
+     d="M 16,18 H 27.598513 M 16,18 V 28 M 36.423792,17.996283 h 11.459727 m 0,0 V 27.45477 M 27.3829,21.978935 l 4.639405,-8.48575 m 2.229244,8.468402 4.639405,-8.48575"
+     id="path1"
+     sodipodi:nodetypes="cccccccccccc" />
+  <!-- left triangle -->
+  <path
+     class="blue"
+     d="M16 29L7 46h18Z"
+     id="path2" />
+  <!-- right circle -->
+  <circle
+     class="red"
+     id="circle2"
+     cy="37.348206"
+     cx="47.762081"
+     r="9" />
+</svg>

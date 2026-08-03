@@ -247,12 +247,24 @@ def create_adapter(
     paths: RuntimePaths,
     *,
     postgres_dsn: str = "",
+    postgres_pool_min: int | None = None,
+    postgres_pool_max: int | None = None,
     acquire_process_lock: bool = True,
 ) -> SQLiteAdapter | PostgreSQLAdapter:
     if paths.profile is BackendProfile.STANDALONE_SQLITE:
         return SQLiteAdapter(paths, acquire_process_lock=acquire_process_lock)
     return PostgreSQLAdapter(
         postgres_dsn or os.environ.get("PROGTRACK_POSTGRES_DSN", ""),
-        min_size=int(os.environ.get("PROGTRACK_POSTGRES_POOL_MIN", "1")),
-        max_size=int(os.environ.get("PROGTRACK_POSTGRES_POOL_MAX", "4")),
+        min_size=int(
+            os.environ.get(
+                "PROGTRACK_POSTGRES_POOL_MIN",
+                str(postgres_pool_min if postgres_pool_min is not None else 1),
+            )
+        ),
+        max_size=int(
+            os.environ.get(
+                "PROGTRACK_POSTGRES_POOL_MAX",
+                str(postgres_pool_max if postgres_pool_max is not None else 4),
+            )
+        ),
     )

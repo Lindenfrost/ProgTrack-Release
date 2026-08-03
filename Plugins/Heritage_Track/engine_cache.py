@@ -70,7 +70,8 @@ class PedigreeEngineCache:
         Args:
             animals: Dictionary of animal records from ProgTrack
             parent_lookup: Function to look up parentage for an animal
-            heritage_entries: Heritage-only entries from heritage_animals.json
+            heritage_entries: Heritage-only entries from the backend graph
+                (the former heritage_animals.json store is archived).
             
         Returns:
             PedigreeEngine instance (cached or newly built)

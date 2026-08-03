@@ -406,15 +406,15 @@ class EmbryoTrackerWidget(QDialog):
             warnings = []
             if col_value is not None:
                 if col_value < COL_MIN_RELIABLE:
-                    warnings.append(self.messages.get("embryo_track.warn.col_too_small", "⚠ COL measurement ({value} mm) is very small.\nEarly-stage embryos cannot be reliably measured via ultrasound.\nPrediction accuracy is LOW.").format(value=col_value))
+                    warnings.append(self.messages.get("embryo_track.warn.col_too_small", "COL measurement ({value} mm) is very small.\nEarly-stage embryos cannot be reliably measured via ultrasound.\nPrediction accuracy is LOW.").format(value=col_value))
                 elif col_value > COL_MAX_RELIABLE:
-                    warnings.append(self.messages.get("embryo_track.warn.col_too_large", "⚠ COL measurement ({value} mm) exceeds normal range.\nThis is beyond typical marmoset gestation measurements.\nPlease verify the measurement or check for measurement errors.").format(value=col_value))
+                    warnings.append(self.messages.get("embryo_track.warn.col_too_large", "COL measurement ({value} mm) exceeds normal range.\nThis is beyond typical marmoset gestation measurements.\nPlease verify the measurement or check for measurement errors.").format(value=col_value))
 
             if ttl_value is not None:
                 if ttl_value < TTL_MIN_RELIABLE:
-                    warnings.append(self.messages.get("embryo_track.warn.ttl_too_small", "⚠ TTL measurement ({value} mm) is very small.\nEarly-stage embryos cannot be reliably measured via ultrasound.\nPrediction accuracy is LOW.").format(value=ttl_value))
+                    warnings.append(self.messages.get("embryo_track.warn.ttl_too_small", "TTL measurement ({value} mm) is very small.\nEarly-stage embryos cannot be reliably measured via ultrasound.\nPrediction accuracy is LOW.").format(value=ttl_value))
                 elif ttl_value > TTL_MAX_RELIABLE:
-                    warnings.append(self.messages.get("embryo_track.warn.ttl_too_large", "⚠ TTL measurement ({value} mm) exceeds normal range.\nThis is beyond typical marmoset gestation measurements.\nPlease verify the measurement or check for measurement errors.").format(value=ttl_value))
+                    warnings.append(self.messages.get("embryo_track.warn.ttl_too_large", "TTL measurement ({value} mm) exceeds normal range.\nThis is beyond typical marmoset gestation measurements.\nPlease verify the measurement or check for measurement errors.").format(value=ttl_value))
 
             # Track if we're using a fallback model (no correction needed)
             using_fallback = embryo_count != 2 and baseline_models == self.prediction_models.get(embryo_count, {})
@@ -832,7 +832,7 @@ class EmbryoTrackerWidget(QDialog):
                         "• Triple embryos: Share resources → grow SLOWER\n"
                         "  → reach same size LATER → ADD 4 days\n"))
                     summary_lines.append(self.messages.get("embryo_track.diagnostics.summary_expected_pattern",
-                        "\n✓ EXPECTED PATTERN for same COL measurement:\n"
+                        "\nEXPECTED PATTERN for same COL measurement:\n"
                         "  Single < Twin < Triplet (gestation days)\n\n"
                         "For COL={value}mm: Check that {low:.1f} < {baseline:.1f} < {high:.1f}\n"
                     ).format(value=col_value, low=baseline_pred-6, baseline=baseline_pred, high=baseline_pred+4))

@@ -11,13 +11,7 @@
     "PyQt6",
     "pyqtgraph"
   ],
-  "data_files": [
-    "Surgery_Planner.block-days.json",
-    "Surgery_Pre_Planner.schedule.json",
-    "Surgery_Planner.schedule.json",
-    "surgery_planner.config.json",
-    "surgery_planner.schedule.json"
-  ],
+  "data_files": [],
   "min_progtrack_version": "RC 0.1.0",
   "menu_location": "Tools",
   "icon": "progtrack_icon.ico",

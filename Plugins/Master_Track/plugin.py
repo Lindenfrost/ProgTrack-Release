@@ -56,18 +56,12 @@ class MasterTrackPlugin:
         self._idle_warning_dialog: Optional[Any] = None
         self._idle_warning_countdown: Optional[Any] = None
 
-        # Load job bundle overrides from jobs.json (if a Lord has edited them)
+        # Load job-bundle overrides from the configured backend.
         self._load_job_bundles()
 
     # ------------------------------------------------------------------
     # Settings persistence
     # ------------------------------------------------------------------
-
-    def _settings_path(self) -> str:
-        return os.path.join(self.plugin_dir, "settings.json")
-
-    def _jobs_path(self) -> str:
-        return os.path.join(self.plugin_dir, "jobs.json")
 
     def _load_settings(self) -> Dict[str, Any]:
         value = self.app.backend.records.get(
@@ -102,7 +96,7 @@ class MasterTrackPlugin:
                             )
                         JOB_BUNDLES[job_name] = {p for p in perms if p in known_permissions}
         except Exception as exc:
-            logger.error("Failed to load jobs.json: %s", exc)
+            logger.error("Failed to load Master Track job bundles from backend: %s", exc)
 
     def save_job_bundles(self) -> None:
         """Persist current job bundles through the backend."""
@@ -112,7 +106,7 @@ class MasterTrackPlugin:
                 "configuration", "job-bundles", serializable
             )
         except Exception as exc:
-            logger.error("Failed to save jobs.json: %s", exc)
+            logger.error("Failed to save Master Track job bundles to backend: %s", exc)
 
     # ------------------------------------------------------------------
     # Public API

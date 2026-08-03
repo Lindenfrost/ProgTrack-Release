@@ -13,7 +13,6 @@
     "pathlib"
   ],
   "data_files": [
-    "medi_history.json",
     "lang/conditions_*.json"
   ],
   "min_progtrack_version": "RC 0.1.0",

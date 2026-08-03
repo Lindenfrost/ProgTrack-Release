@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import QSize, Qt, QTimer
 from PyQt6.QtGui import QColor, QPixmap
 from PyQt6.QtWidgets import (
     QDialog,
@@ -473,7 +473,9 @@ class HeritageTrackWidget(QWidget):
 
         # Generation limit control
         gen_label = QLabel(self.messages.get("heritage_track.label.gen_limit", "Ancestors:"))
-        self.gen_dec_btn = QPushButton("↓")
+        self.gen_dec_btn = QPushButton()
+        apply_icon(self.gen_dec_btn, "control.decrement", fallback="Decrease")
+        self.gen_dec_btn.setIconSize(QSize(18, 18))
         self.gen_dec_btn.setFixedWidth(28)
         self.gen_spin = QSpinBox()
         self.gen_spin.setMinimum(1)
@@ -484,7 +486,9 @@ class HeritageTrackWidget(QWidget):
         self.gen_spin.setToolTip(
             self.messages.get("heritage_track.tooltip.gen_limit",
                               "Max ancestor generations shown in no-selection mode"))
-        self.gen_inc_btn = QPushButton("↑")
+        self.gen_inc_btn = QPushButton()
+        apply_icon(self.gen_inc_btn, "control.increment", fallback="Increase")
+        self.gen_inc_btn.setIconSize(QSize(18, 18))
         self.gen_inc_btn.setFixedWidth(28)
         self.gen_dec_btn.clicked.connect(lambda: self.gen_spin.setValue(
             max(1, self.gen_spin.value() - 1)))
@@ -498,8 +502,12 @@ class HeritageTrackWidget(QWidget):
 
         self.refresh_btn = QPushButton()
         apply_icon(self.refresh_btn, "action.refresh", fallback="Refresh")
-        self.add_placeholder_btn = QPushButton("🫥")
-        self.settings_btn = QPushButton("⚙")
+        self.add_placeholder_btn = QPushButton()
+        self.settings_btn = QPushButton()
+        apply_icon(self.add_placeholder_btn, "heritage.placeholder_animal", fallback="Placeholder animal")
+        apply_icon(self.settings_btn, "action.settings", fallback="Settings")
+        self.add_placeholder_btn.setIconSize(QSize(20, 20))
+        self.settings_btn.setIconSize(QSize(20, 20))
 
         self.add_placeholder_btn.setToolTip(
             self.messages.get("heritage_track.tooltip.add_placeholder", "Placeholder animal")
@@ -2747,14 +2755,15 @@ class HeritageTrackWidget(QWidget):
 
         for family_id, (fx, fy) in family_positions.items():
             family_fill = "black" if family_id in collapsed_family_nodes else "white"
-            self.ax.scatter(
+            self.ax.plot(
                 [fx],
                 [fy],
-                s=70,
+                linestyle="None",
                 marker="o",
-                edgecolors="black",
-                facecolors=family_fill,
-                linewidths=1.1,
+                markersize=8.4,
+                markeredgecolor="black",
+                markerfacecolor=family_fill,
+                markeredgewidth=1.1,
                 zorder=2.5,
             )
             family = families.get(family_id, {})
@@ -2835,14 +2844,15 @@ class HeritageTrackWidget(QWidget):
                 text_color = "black"
                 lw = 3.0 if node in self.selected_nodes else 1.5
 
-            marker_artist = self.ax.scatter(
+            marker_artist, = self.ax.plot(
                 [x],
                 [y],
-                s=280,
+                linestyle="None",
                 marker=shape,
-                edgecolors=node_edge_color,
-                facecolors=node_face_color,
-                linewidths=lw,
+                markersize=16.7,
+                markeredgecolor=node_edge_color,
+                markerfacecolor=node_face_color,
+                markeredgewidth=lw,
                 zorder=3,
             )
             label_artist = self.ax.annotate(
@@ -3275,7 +3285,10 @@ class HeritageTrackWidget(QWidget):
         y: float,
     ) -> None:
         marker, label, f_artist, undated_artist = (*artists, None)[:4]
-        marker.set_offsets([[x, y]])
+        if hasattr(marker, "set_offsets"):
+            marker.set_offsets([[x, y]])
+        else:
+            marker.set_data([x], [y])
         label.xy = (x, y)
         label.set_position((0, -14))
         if f_artist is not None:

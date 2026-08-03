@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <style>
+    .outlined{stroke:#25364a;stroke-width:4;stroke-linejoin:round}
+    .blue{fill:#2f80ed}
+  </style>
+  <circle class="outlined blue" cx="32" cy="23" r="11"/>
+  <path class="outlined blue" d="M13 54c2-16 36-16 38 0z"/>
+  <path d="M21.5 14.8Q32 12.8 42.5 14.8L41.4 21Q32 19.2 22.6 21Z"
+        fill="#e6edf3" stroke="#25364a" stroke-width="4" stroke-linejoin="round"/>
+</svg>

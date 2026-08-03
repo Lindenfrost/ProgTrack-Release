@@ -22,12 +22,16 @@ class ProgTrackBackend:
         paths: RuntimePaths,
         *,
         postgres_dsn: str = "",
+        postgres_pool_min: int | None = None,
+        postgres_pool_max: int | None = None,
         acquire_process_lock: bool = True,
     ):
         self.paths = paths
         self.adapter = create_adapter(
             paths,
             postgres_dsn=postgres_dsn,
+            postgres_pool_min=postgres_pool_min,
+            postgres_pool_max=postgres_pool_max,
             acquire_process_lock=acquire_process_lock,
         )
         self.adapter.migrate()

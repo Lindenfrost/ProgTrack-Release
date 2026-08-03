@@ -1,21 +1,36 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
 # Part of: ProgTrack 0.1.2
-# Module: shared helpers for rewriting persisted animal references.
+# Module: shared helpers for rewriting backend-resident animal references.
+
+"""Reference rewriting helpers for explicit legacy-archive maintenance.
+
+The application never calls these helpers for runtime persistence: the
+configured backend remains the sole mutable data authority.  The filesystem
+functions are deliberately kept as small, opt-in tools for maintaining an
+external legacy archive and for deterministic seed-authoring tests.
+"""
 
 from __future__ import annotations
 
 import json
-import logging
 import os
 import shutil
-import tempfile
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
 
+def safe_medi_document_folder_name(animal_key: str) -> str:
+    """Return the historical attachment-folder name for an animal key."""
+    text = str(animal_key or "").strip()
+    return "".join(
+        char if char.isalnum() or char in "-_()" else "_"
+        for char in text
+    ).strip("._") or "animal"
+
+
 def replace_exact_animal_reference(value: Any, old_key: str, new_key: str) -> Any:
-    """Recursively replace exact animal-key references in JSON-like data."""
+    """Recursively replace exact animal-key references in a data structure."""
     if isinstance(value, dict):
         replaced: Dict[str, Any] = {}
         for key, child in value.items():
@@ -61,94 +76,70 @@ def backfill_reference_display_names(value: Any, animal_key: str, base_name: str
             backfill_reference_display_names(child, animal_key, base_name)
 
 
-def rewrite_animal_reference_file(path: Path, old_key: str, new_key: str, base_name: str) -> bool:
-    """Rewrite one JSON file if it contains exact old animal references."""
-    if old_key == new_key or not path.is_file():
-        return False
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except Exception as exc:
-        logging.warning("Could not read animal reference file %s: %s", path, exc)
-        return False
-
-    rewritten = replace_exact_animal_reference(data, old_key, new_key)
-    backfill_reference_display_names(rewritten, new_key, base_name)
-    if rewritten == data:
-        return False
-
-    fd, tmp_path = tempfile.mkstemp(prefix=f"{path.stem}_", suffix=".tmp", dir=str(path.parent))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(rewritten, handle, ensure_ascii=False, indent=2)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(tmp_path, path)
-        return True
-    except Exception as exc:
-        logging.warning("Could not rewrite animal reference file %s: %s", path, exc)
-        try:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-        except Exception:
-            pass
-        return False
+def _archive_path(root: Path, relative: str) -> Path:
+    """Resolve an archive-relative path and reject traversal outside *root*."""
+    base = Path(root).resolve()
+    path = (base / relative).resolve()
+    if path != base and base not in path.parents:
+        raise ValueError(f"Archive path escapes root: {relative}")
+    return path
 
 
 def rewrite_animal_reference_files(
-    base_dir: Path,
+    root: Path,
     relative_paths: Iterable[str],
     old_key: str,
     new_key: str,
     base_name: str,
 ) -> int:
+    """Rewrite explicit JSON files in an external legacy archive.
+
+    This is not a runtime fallback and is never used by the UI.  It exists for
+    archive/seed preparation only; callers must provide the files explicitly.
+    The return value is the number of files whose JSON content changed.
+    """
     changed = 0
-    for rel_path in relative_paths:
-        if rewrite_animal_reference_file(base_dir / rel_path, old_key, new_key, base_name):
-            changed += 1
+    for relative in relative_paths:
+        path = _archive_path(Path(root), str(relative))
+        if not path.is_file():
+            continue
+        try:
+            original = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        rewritten = replace_exact_animal_reference(original, old_key, new_key)
+        backfill_reference_display_names(rewritten, new_key, base_name)
+        if rewritten == original:
+            continue
+        path.write_text(
+            json.dumps(rewritten, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        changed += 1
     return changed
 
 
-def safe_medi_document_folder_name(name: str) -> str:
-    """Mirror Medi Track's document-folder sanitization."""
-    safe = str(name).strip()
-    for ch in r'/\:*?"<>|':
-        safe = safe.replace(ch, "_")
-    return safe or "unknown"
-
-
-def move_medi_document_folder(base_dir: Path, old_key: str, new_key: str) -> bool:
-    """Move Medi Track document folders when an animal IPID changes."""
-    if old_key == new_key:
-        return False
-    docs_root = base_dir / "Plugins" / "Medi_Track" / "medi_track"
+def move_medi_document_folder(root: Path, old_key: str, new_key: str) -> bool:
+    """Move one legacy medical-document folder inside an external archive."""
+    docs_root = _archive_path(root, "Plugins/Medi_Track/medi_track")
     old_folder = docs_root / safe_medi_document_folder_name(old_key)
     new_folder = docs_root / safe_medi_document_folder_name(new_key)
     if not old_folder.is_dir():
         return False
-    try:
-        docs_root.mkdir(parents=True, exist_ok=True)
-        if not new_folder.exists():
-            shutil.move(str(old_folder), str(new_folder))
-            return True
-
-        moved_any = False
+    if old_folder == new_folder:
+        return True
+    new_folder.parent.mkdir(parents=True, exist_ok=True)
+    if new_folder.exists():
         for child in old_folder.iterdir():
-            target = new_folder / child.name
-            if target.exists():
-                stem = target.stem
-                suffix = target.suffix
+            destination = new_folder / child.name
+            if destination.exists():
+                stem, suffix = child.stem, child.suffix
                 counter = 1
-                while target.exists():
-                    target = new_folder / f"{stem}_{counter}{suffix}"
+                while (new_folder / f"{stem}_{counter}{suffix}").exists():
                     counter += 1
-            shutil.move(str(child), str(target))
-            moved_any = True
-        try:
-            old_folder.rmdir()
-        except OSError:
-            pass
-        return moved_any
-    except Exception as exc:
-        logging.warning("Could not move Medi Track document folder %s -> %s: %s", old_folder, new_folder, exc)
-        return False
+                destination = new_folder / f"{stem}_{counter}{suffix}"
+            shutil.move(str(child), str(destination))
+        old_folder.rmdir()
+    else:
+        os.replace(old_folder, new_folder)
+    return True

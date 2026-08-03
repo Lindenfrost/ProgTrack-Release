@@ -12,10 +12,7 @@
     "matplotlib",
     "numpy"
   ],
-  "data_files": [
-    "heritage_animals.json",
-    "heritage_settings.json"
-  ],
+  "data_files": [],
   "min_progtrack_version": "RC 0.1.0",
   "menu_location": "Tab",
   "icon": "progtrack_icon.ico",

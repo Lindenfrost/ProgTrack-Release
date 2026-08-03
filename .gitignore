@@ -2,6 +2,16 @@ __pycache__/
 # Native `.pyd` files are generated PyInstaller runtime artifacts too. Release
 # ZIPs must be assembled with `source/package_release.ps1`, not `git archive`.
 *.py[cod]
+# The checked-in root portable bundle intentionally carries its complete
+# native runtime. Keep those extension modules versioned; build outputs under
+# source/dist/ remain ignored by the source-level ignore file.
+!_internal/**/*.pyd
+!_internal/**/*.pyc
+Thumbs.db
+Desktop.ini
+*.db
+*.sqlite
+*.sqlite3
 *.log
 launcher_error.log
 logs/
@@ -12,6 +22,7 @@ source/.build_env*/
 source/.build_tmp/
 source/build/
 source/dist/
+source/release/
 source/*.log
 matplotlib_cache/
 runtime_plot_test.*
@@ -27,8 +38,9 @@ outputs/
 Depricated.md
 *.bak
 Plugins/Projects_Track/project_assignment_cache/
-# The encrypted starter-user database is intentional release data. Keep it
-# versioned even though Master Track also writes to it at runtime.
-!Plugins/Master_Track/users.enc
+# Legacy document folders are not runtime stores; documents are managed by the
+# configured backend and must not be reintroduced into the application bundle.
+Plugins/Projects_Track/documents/
+Plugins/Projects_Track/sop/
+Plugins/Medi_Track/medi_track/
 Plugins/Master_Track/sessions/*.json
-Plugins/Medi_Track/medi_track/Thranduil _ Callitrix jacchus _ 11.02.2021/

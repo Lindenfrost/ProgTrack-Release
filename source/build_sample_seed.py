@@ -1,8 +1,11 @@
 """Build the single fictional ProgTrack 0.2.1 backend seed.
 
-Legacy JSON files are authoring inputs only. The generated interchange package
-is the sole runtime initialization source and is imported through the same
-backend-neutral service used for complete-installation transfers.
+Archived legacy JSON files are optional seed-authoring inputs only. The
+generated interchange package is the sole runtime initialization source and
+is imported through the same backend-neutral service used for complete-
+installation transfers. New sample-data edits should be made directly in the
+backend/seed package; this reader exists only to rebuild a seed from the
+archived baseline when explicitly needed.
 """
 
 from __future__ import annotations
@@ -10,6 +13,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -18,6 +22,12 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+LEGACY_ARCHIVE_ROOT = Path(
+    os.environ.get(
+        "PROGTRACK_LEGACY_JSON_ARCHIVE",
+        str(ROOT.parent / "Archive" / "ProgTrack-legacy-json"),
+    )
+).expanduser().resolve()
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -31,11 +41,79 @@ REPORT = ROOT / "Resources" / "Seed" / "integrity_report.json"
 MATRIX = ROOT / "Resources" / "Seed" / "SCENARIO_COVERAGE.md"
 SEED_CREATED = "2026-07-30T00:00:00+00:00"
 SEED_PACKAGE_ID = "8f99615e-13b0-52c8-b778-d7d51efb8b74"
+ELDARION_BIRTH_DATE = date(2026, 3, 1)
+
+RETRIEVAL_DATES = (
+    date(2024, 12, 1),
+    date(2025, 1, 10),
+    date(2025, 2, 12),
+    date(2025, 3, 15),
+)
+TRANSFER_SCENARIOS = (
+    (0, date(2024, 10, 18), "birth", "boromir"),
+    (1, date(2025, 11, 25), "birth", "faramir"),
+    (2, date(2025, 1, 20), "not-pregnant", ""),
+    (2, date(2025, 4, 20), "not-pregnant", ""),
+    (3, date(2024, 10, 10), "abortion", ""),
+    (3, date(2025, 3, 10), "abortion", ""),
+)
+
+CANONICAL_USERS = (
+    {
+        "username": "Admin", "display_name": "Administrator Administratorson",
+        "role": "lord", "jobs": [], "pronouns": "Mr.",
+        "email": "admin@dpz.eu", "phone": "-000",
+        "mobile": "0176234234234", "unit": "IT",
+        "profession": "Software engineer", "created_at": "2026-04-16",
+    },
+    {
+        "username": "Researcher", "display_name": "Dr. Researcher Sciencedottir",
+        "role": "user", "jobs": ["researcher"], "pronouns": "Mrs.",
+        "email": "res@dpz.eu", "phone": "-111",
+        "mobile": "01753457685634", "unit": "TTS",
+        "profession": "Biologist", "created_at": "2026-04-16",
+    },
+    {
+        "username": "Vet", "display_name": "Dr. Veterinary Medicinsson",
+        "role": "user", "jobs": ["vet"], "pronouns": "Mr.",
+        "email": "vet@dpz.eu", "phone": "-222",
+        "mobile": "0176345345475456", "unit": "HUS",
+        "profession": "Veterinary surgeon", "created_at": "2026-04-16",
+    },
+    {
+        "username": "Manager", "display_name": "Dr. Manager Plansdottir",
+        "role": "user", "jobs": ["manager"], "pronouns": "Ms.",
+        "email": "man@dpz.eu", "phone": "-333",
+        "mobile": "0146234234345235", "unit": "HUS",
+        "profession": "Biologist", "created_at": "2026-04-16",
+    },
+    {
+        "username": "Keeper", "display_name": "Keeper Breedsson",
+        "role": "user", "jobs": ["keeper"], "pronouns": "Mr.",
+        "email": "keep@dpz.eu", "phone": "-444",
+        "mobile": "01782342343463425", "unit": "HUS",
+        "profession": "Animal caretaker", "created_at": "2026-04-16",
+    },
+    {
+        "username": "Tester", "display_name": "Tester Aitisson",
+        "role": "user", "jobs": ["tester"], "pronouns": "Mr.",
+        "email": "test@dpz.eu", "phone": "-999",
+        "mobile": "016745346234234", "unit": "IT",
+        "profession": "Software engineer", "created_at": "2026-04-16",
+    },
+    {
+        "username": "Veti", "display_name": "Dr. Veterinary Medicinsdottir",
+        "role": "animal_welfare_officer", "jobs": ["vet"], "pronouns": "",
+        "email": "veti@dpz.eu", "phone": "", "mobile": "", "unit": "HUS",
+        "profession": "Veterinary Surgeon", "created_at": "2026-07-22",
+    },
+)
 
 
 def load_json(relative: str, default: Any) -> Any:
+    """Read an archived legacy authoring input, never a runtime JSON store."""
     try:
-        return json.loads((ROOT / relative).read_text(encoding="utf-8"))
+        return json.loads((LEGACY_ARCHIVE_ROOT / relative).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return copy.deepcopy(default)
 
@@ -106,6 +184,12 @@ def normalize_core() -> tuple[dict[str, Any], dict[str, str]]:
             record = complete_record(
                 record, name=name, species=species, birth=birth, origin=origin
             )
+            if name == "Olga":
+                for field in ("daten", "pdg"):
+                    record[field] = [
+                        value for value in record.get(field, [])
+                        if not str(value.get("datum", "")).startswith("2026-07-01")
+                    ]
             record["ipid"] = new_key
             record["species"] = species
             output[section][new_key] = record
@@ -172,7 +256,7 @@ def add_reproduction_scenarios(core: dict[str, Any], key_map: dict[str, str]) ->
         key for key in core["animals"] if key.startswith(name + " |")
     )
     elros = find("Elros")
-    invented_parent = add_animal(core, key_map, "Finduilas II", "12.03.2012", "Female", "breeding_animal")
+    invented_parent = add_animal(core, key_map, "Beth", "12.03.2012", "Female", "breeding_animal")
     denethor = add_animal(
         core, key_map, "Denethor", "08.02.2018", "Male", "sperm_donor",
         parent_f=invented_parent, parent_m=elros,
@@ -180,15 +264,15 @@ def add_reproduction_scenarios(core: dict[str, Any], key_map: dict[str, str]) ->
     donors = [
         add_animal(core, key_map, name, birth, "Female", "egg_cell_donor")
         for name, birth in (
-            ("Ioreth", "17.04.2017"), ("Morwen II", "09.06.2018"),
-            ("Nellas", "22.08.2019"), ("Aerin II", "03.10.2019"),
+            ("Tiffany", "17.04.2017"), ("Nicole", "09.06.2018"),
+            ("Megan", "22.08.2019"), ("Lauren", "03.10.2019"),
         )
     ]
     surrogates = [
         add_animal(core, key_map, name, birth, "Female", "surrogate")
         for name, birth in (
-            ("Lalaith II", "14.02.2017"), ("Idril II", "19.05.2018"),
-            ("Melian II", "26.07.2018"), ("Haleth II", "30.09.2019"),
+            ("Rachel", "14.02.2017"), ("Amanda", "19.05.2018"),
+            ("Heather", "26.07.2018"), ("Alaine", "30.09.2019"),
         )
     ]
     boromir = add_animal(
@@ -211,6 +295,75 @@ def add_reproduction_scenarios(core: dict[str, Any], key_map: dict[str, str]) ->
         core["animals"][key]["daten"] = blood
         core["animals"][key]["pdg"] = urine
         core["animals"][key]["events"].extend(events)
+        core["animals"][key]["pgf"] = [
+            event["datum"] for event in events if event["typ"] == "pgf"
+        ]
+    for donor, retrieval_date in zip(donors, RETRIEVAL_DATES):
+        stimulation_start = retrieval_date - timedelta(days=10)
+        core["animals"][donor]["events"].extend(
+            {
+                "typ": "fsh",
+                "datum": (stimulation_start + timedelta(days=day)).isoformat(),
+                "course_id": f"FSH-{retrieval_date.isoformat()}",
+            }
+            for day in range(9)
+        )
+        core["animals"][donor]["events"].append({
+            "typ": "oocyte_retrieval",
+            "datum": retrieval_date.isoformat(),
+            "course_id": f"FSH-{retrieval_date.isoformat()}",
+        })
+
+    donation_date = date(2024, 11, 20)
+    donation_sample = "SP-OTOF-DENETHOR-001"
+    core["animals"][denethor]["sperm"] = [{
+        "datum": donation_date.isoformat(),
+        "sample_id": donation_sample,
+        "motility": 88.0,
+        "progressive": 81.0,
+        "count": 1_240_000_000.0,
+    }]
+    core["animals"][denethor]["events"].append({
+        "typ": "sperm_donation",
+        "datum": donation_date.isoformat(),
+        "sample_id": donation_sample,
+        "project": "OTOF-",
+    })
+
+    for surrogate_index, transfer_date, outcome, offspring_key in TRANSFER_SCENARIOS:
+        surrogate = surrogates[surrogate_index]
+        course_id = f"ET-{surrogate_index + 1}-{transfer_date.isoformat()}"
+        core["animals"][surrogate]["events"].append({
+            "typ": "embryo_transfer",
+            "datum": transfer_date.isoformat(),
+            "course_id": course_id,
+        })
+        result = "negative" if outcome == "not-pregnant" else "positive"
+        core["animals"][surrogate]["events"].append({
+            "typ": "pregnancy_verification",
+            "datum": (transfer_date + timedelta(days=28)).isoformat(),
+            "result": result,
+            "course_id": course_id,
+        })
+        if outcome == "birth":
+            birth_date = datetime.strptime(
+                core["animals"][
+                    boromir if offspring_key == "boromir" else faramir
+                ]["birth_date"],
+                "%d.%m.%Y",
+            ).date()
+            core["animals"][surrogate]["events"].append({
+                "typ": "birth",
+                "datum": birth_date.isoformat(),
+                "course_id": course_id,
+                "offspring": boromir if offspring_key == "boromir" else faramir,
+            })
+        elif outcome == "abortion":
+            core["animals"][surrogate]["events"].append({
+                "typ": "abortion",
+                "datum": (transfer_date + timedelta(days=63)).isoformat(),
+                "course_id": course_id,
+            })
     return {
         "denethor": denethor, "boromir": boromir, "faramir": faramir,
         "donors": donors, "surrogates": surrogates,
@@ -227,6 +380,7 @@ def build_flow(scenario: dict[str, Any]) -> dict[str, Any]:
             "sperm_donors": {
                 denethor: {"donations": {
                     "2024-11-20": {
+                        "sample_id": "SP-OTOF-DENETHOR-001",
                         "applied_to_in_vitro_m2": 20,
                         "fertilized_in_vitro_m2": 14,
                         "embryos_from_in_vitro_m2": 8,
@@ -234,21 +388,21 @@ def build_flow(scenario: dict[str, Any]) -> dict[str, Any]:
                 }}
             },
             "egg_donors": {
-                donors[0]: {"retrievals": {"2024-12-01": {"oocytes": 12, "embryos": 6}}},
-                donors[1]: {"retrievals": {"2025-01-10": {"oocytes": 11, "embryos": 5}}},
-                donors[2]: {"retrievals": {"2025-02-12": {"oocytes": 2, "embryos": 0, "outcome": "poor-yield"}}},
-                donors[3]: {"retrievals": {"2025-03-15": {"oocytes": 13, "embryos": 1, "outcome": "low-development"}}},
+                donors[0]: {"retrievals": {"2024-12-01": {"course_id": "FSH-2024-12-01", "oocytes": 12, "embryos": 6}}},
+                donors[1]: {"retrievals": {"2025-01-10": {"course_id": "FSH-2025-01-10", "oocytes": 11, "embryos": 5}}},
+                donors[2]: {"retrievals": {"2025-02-12": {"course_id": "FSH-2025-02-12", "oocytes": 2, "embryos": 0, "outcome": "poor-yield"}}},
+                donors[3]: {"retrievals": {"2025-03-15": {"course_id": "FSH-2025-03-15", "oocytes": 13, "embryos": 1, "outcome": "low-development"}}},
             },
             "surrogates": {
-                surrogates[0]: {"transfers": {"2024-12-12": {"outcome": "birth", "offspring": scenario["boromir"]}}},
-                surrogates[1]: {"transfers": {"2025-09-20": {"outcome": "birth", "offspring": scenario["faramir"]}}},
+                surrogates[0]: {"transfers": {"2024-10-18": {"course_id": "ET-1-2024-10-18", "verification": "positive", "outcome": "birth", "offspring": scenario["boromir"]}}},
+                surrogates[1]: {"transfers": {"2025-11-25": {"course_id": "ET-2-2025-11-25", "verification": "positive", "outcome": "birth", "offspring": scenario["faramir"]}}},
                 surrogates[2]: {"transfers": {
-                    "2025-01-20": {"outcome": "not-pregnant"},
-                    "2025-04-20": {"outcome": "not-pregnant"},
+                    "2025-01-20": {"course_id": "ET-3-2025-01-20", "verification": "negative", "outcome": "not-pregnant"},
+                    "2025-04-20": {"course_id": "ET-3-2025-04-20", "verification": "negative", "outcome": "not-pregnant"},
                 }},
                 surrogates[3]: {"transfers": {
-                    "2024-10-10": {"outcome": "abortion"},
-                    "2025-03-10": {"outcome": "abortion"},
+                    "2024-10-10": {"course_id": "ET-4-2024-10-10", "verification": "positive", "outcome": "abortion"},
+                    "2025-03-10": {"course_id": "ET-4-2025-03-10", "verification": "positive", "outcome": "abortion"},
                 }},
             },
             "embryo_transfers": {},
@@ -258,30 +412,191 @@ def build_flow(scenario: dict[str, Any]) -> dict[str, Any]:
 
 def seed_users() -> list[dict[str, Any]]:
     users = []
-    for index, (username, role, jobs) in enumerate((
-        ("lord", "lord", []), ("master", "master", []),
-        ("manager", "user", ["manager"]), ("vet", "user", ["veterinarian"]),
-        ("awo", "animal_welfare_officer", []),
-        ("researcher", "user", ["researcher"]), ("keeper", "user", ["keeper"]),
-    )):
+    for profile in CANONICAL_USERS:
+        username = profile["username"]
         salt = hashlib.sha256(f"progtrack-seed:{username}".encode()).digest()[:16]
         password_hash = hashlib.pbkdf2_hmac(
             "sha256", b"123456", salt, 260_000
         ).hex()
         users.append({
-            "username": username,
-            "display_name": f"Fictional {username.title()}",
-            "role": role,
-            "jobs": jobs,
+            **profile,
             "permissions": {"granted": [], "revoked": []},
             "password_hash": password_hash,
             "salt": salt.hex(),
-            "created_at": "2026-01-01",
             "last_login": None,
-            "must_change_password": username != "lord",
-            "unit": "Fictional Animal Facility",
+            "must_change_password": False,
         })
     return users
+
+
+def parse_record_date(value: Any) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value or "").strip()
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(text[:19], fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def normalize_mature_offspring_roles(core: dict[str, Any]) -> list[str]:
+    """Promote non-Callitrix offspring older than one year at Eldarion's birth.
+
+    The fictional seed uses one fixed reference date so role categories remain
+    reproducible.  Callitrix offspring are intentionally excluded because the
+    family/reproduction examples use that role for their own scenarios.
+    """
+    cutoff = ELDARION_BIRTH_DATE.replace(year=ELDARION_BIRTH_DATE.year - 1)
+    changed: list[str] = []
+    all_animals = {
+        **core.get("animals", {}),
+        **core.get("archived_animals", {}),
+    }
+    for ipid, record in all_animals.items():
+        species = str(record.get("species") or "").strip().lower()
+        if species.startswith(("callitrix", "callithrix")):
+            continue
+        if str(record.get("rolle") or "").strip().lower() != "offspring":
+            continue
+        birth = parse_record_date(record.get("birth_date"))
+        if birth is not None and birth < cutoff:
+            record["rolle"] = "breeding_animal"
+            if "role_id" in record:
+                record["role_id"] = "breeding_animal"
+            changed.append(str(ipid))
+    return changed
+
+
+def researcher_record_dates(animal: dict[str, Any]) -> list[date]:
+    """Dates from scientific/clinical fields that researchers can populate."""
+    found: list[date] = []
+    for field in ("daten", "pdg", "gewicht", "sperm", "events", "pgf", "op", "embryo"):
+        values = animal.get(field, [])
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            if isinstance(value, dict):
+                parsed = parse_record_date(
+                    value.get("datum") or value.get("date")
+                )
+            else:
+                parsed = parse_record_date(value)
+            if parsed is not None:
+                found.append(parsed)
+    return found
+
+
+def _stable_weight(value: float, ipid: str, stamp: date) -> float:
+    digest = hashlib.sha256(f"{ipid}:{stamp.isoformat()}".encode()).digest()
+    percent = (digest[0] % 7 - 3) / 100.0
+    return round(max(0.1, value * (1.0 + percent)), 1)
+
+
+def extend_weights_through_latest_data(
+    ipid: str, animal: dict[str, Any]
+) -> None:
+    dates = researcher_record_dates(animal)
+    if not dates:
+        return
+    latest = max(dates)
+    parsed_weights = sorted(
+        (
+            (parse_record_date(value.get("datum")), float(value.get("wert")))
+            for value in animal.get("gewicht", [])
+            if isinstance(value, dict)
+            and parse_record_date(value.get("datum")) is not None
+            and isinstance(value.get("wert"), (int, float))
+        ),
+        key=lambda item: item[0],
+    )
+    if not parsed_weights:
+        animal["gewicht"] = dated_weights(
+            animal["birth_date"], animal["species"], animal.get("sex", "Unknown")
+        )
+        parsed_weights = [
+            (parse_record_date(item["datum"]), float(item["wert"]))
+            for item in animal["gewicht"]
+        ]
+    last_date, last_value = parsed_weights[-1]
+    if last_date >= latest:
+        return
+    cursor = last_date
+    additions: list[dict[str, Any]] = []
+    while cursor + timedelta(days=180) < latest:
+        cursor += timedelta(days=180)
+        last_value = _stable_weight(last_value, ipid, cursor)
+        additions.append({"datum": cursor.isoformat(), "wert": last_value})
+    if cursor < latest:
+        last_value = _stable_weight(last_value, ipid, latest)
+        additions.append({"datum": latest.isoformat(), "wert": last_value})
+    animal.setdefault("gewicht", []).extend(additions)
+
+
+def complete_scientific_histories(core: dict[str, Any]) -> None:
+    all_animals = {**core["animals"], **core["archived_animals"]}
+    for sequence, (ipid, animal) in enumerate(sorted(all_animals.items())):
+        events = animal.setdefault("events", [])
+        existing_event_keys = {
+            (
+                str(event.get("typ") or event.get("type") or ""),
+                str(event.get("datum") or event.get("date") or ""),
+                str(event.get("sample_id") or ""),
+            )
+            for event in events if isinstance(event, dict)
+        }
+
+        # A PGF administration is both a plotted PGF marker and a scientific
+        # intervention event.
+        for pgf_value in animal.get("pgf", []) or []:
+            stamp = (
+                pgf_value.get("datum") if isinstance(pgf_value, dict)
+                else pgf_value
+            )
+            key = ("pgf", str(stamp), "")
+            if parse_record_date(stamp) and key not in existing_event_keys:
+                events.append({"typ": "pgf", "datum": str(stamp)})
+                existing_event_keys.add(key)
+
+        # Every sperm sample is one collection event; measurements from the
+        # sample share the same sample ID.
+        sperm = animal.setdefault("sperm", [])
+        if animal.get("rolle") == "sperm_donor" and not sperm:
+            collection = date(2025, 6, 15) + timedelta(days=sequence % 120)
+            sperm.append({
+                "datum": collection.isoformat(),
+                "sample_id": f"SP-SEED-{sequence + 1:03d}",
+                "motility": float(75 + sequence % 18),
+                "progressive": float(55 + sequence % 24),
+                "count": float(180_000_000 + (sequence % 9) * 55_000_000),
+            })
+        for sample_index, sample in enumerate(sperm):
+            if not isinstance(sample, dict):
+                continue
+            stamp = str(sample.get("datum") or "")
+            if not parse_record_date(stamp):
+                continue
+            sample_id = str(sample.get("sample_id") or "").strip()
+            if not sample_id:
+                sample_id = f"SP-{hashlib.sha256((ipid + stamp).encode()).hexdigest()[:12].upper()}"
+                sample["sample_id"] = sample_id
+            key = ("sperm_donation", stamp, sample_id)
+            if key not in existing_event_keys:
+                events.append({
+                    "typ": "sperm_donation",
+                    "datum": stamp,
+                    "sample_id": sample_id,
+                })
+                existing_event_keys.add(key)
+
+        events.sort(key=lambda event: (
+            str(event.get("datum") or event.get("date") or ""),
+            str(event.get("typ") or event.get("type") or ""),
+        ))
+        extend_weights_through_latest_data(ipid, animal)
 
 
 def complete_housing(
@@ -374,10 +689,10 @@ def add_resolved_histories(
     animals = med.setdefault("animals", {})
     report_data = copy.deepcopy(reports)
     roles = (
-        ("keeper", "Transient appetite reduction", "Routine observation"),
-        ("vet", "Minor superficial injury", "Cleaned; uncomplicated recovery"),
-        ("awo", "Temporary welfare observation", "Reviewed and resolved"),
-        ("researcher", "Short experimental observation", "No continuing finding"),
+        ("Keeper Breedsson", "Transient appetite reduction", "Routine observation"),
+        ("Dr. Veterinary Medicinsson", "Minor superficial injury", "Cleaned; uncomplicated recovery"),
+        ("Dr. Veterinary Medicinsdottir", "Temporary welfare observation", "Reviewed and resolved"),
+        ("Dr. Researcher Sciencedottir", "Short experimental observation", "No continuing finding"),
     )
     for index, (ipid, animal) in enumerate(sorted(core["animals"].items())[:4]):
         actor, condition, note = roles[index]
@@ -389,7 +704,7 @@ def add_resolved_histories(
                 "status_type": "sick" if index < 2 else "abnormal",
                 "condition_label_snapshot": condition,
                 "note": note,
-                "signature": f"Fictional {actor.title()}",
+                "signature": actor,
             },
             {
                 "id": f"seed-med-{index}-resolved",
@@ -398,7 +713,9 @@ def add_resolved_histories(
                 "status_type": "resolved",
                 "condition_label_snapshot": condition,
                 "note": "Resolved without sequelae.",
-                "signature": "Fictional Vet" if index < 2 else f"Fictional {actor.title()}",
+                "signature": (
+                    "Dr. Veterinary Medicinsson" if index < 2 else actor
+                ),
             },
         ]
         animals[ipid] = {
@@ -416,7 +733,7 @@ def add_resolved_histories(
                 f"1{index}.0{index + 1}.2026": {
                     "daily_data": note,
                     "scores": "",
-                    "signatures": f"Fictional {actor.title()}",
+                    "signatures": actor,
                 }
             },
         }
@@ -476,6 +793,20 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
             errors.append(f"invalid IPID: {ipid}")
         if not record.get("gewicht"):
             errors.append(f"missing weight history: {ipid}")
+        weight_dates = [
+            parse_record_date(item.get("datum"))
+            for item in record.get("gewicht", [])
+            if isinstance(item, dict)
+        ]
+        scientific_dates = researcher_record_dates(record)
+        if (
+            scientific_dates
+            and (
+                not any(weight_dates)
+                or max(value for value in weight_dates if value) < max(scientific_dates)
+            )
+        ):
+            errors.append(f"weight history ends before scientific data: {ipid}")
         for field in ("name", "species", "birth_date", "origin", "id", "rolle", "sex"):
             if not str(record.get(field, "")).strip():
                 errors.append(f"missing {field}: {ipid}")
@@ -490,6 +821,105 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         record = all_animals[scenario[offspring]]
         if record.get("samenspender") != scenario["denethor"]:
             errors.append(f"{offspring} father mismatch")
+    cutoff = ELDARION_BIRTH_DATE.replace(year=ELDARION_BIRTH_DATE.year - 1)
+    for ipid, record in all_animals.items():
+        species = str(record.get("species") or "").strip().lower()
+        if species.startswith(("callitrix", "callithrix")):
+            continue
+        birth = parse_record_date(record.get("birth_date"))
+        if (
+            birth is not None
+            and birth < cutoff
+            and str(record.get("rolle") or "").strip().lower() == "offspring"
+        ):
+            errors.append(
+                f"mature non-Callitrix offspring still has offspring role: {ipid}"
+            )
+    for donor, retrieval_date in zip(scenario["donors"], RETRIEVAL_DATES):
+        events = all_animals[donor].get("events", [])
+        course_id = f"FSH-{retrieval_date.isoformat()}"
+        fsh = [
+            event for event in events
+            if event.get("typ") == "fsh" and event.get("course_id") == course_id
+        ]
+        retrievals = [
+            event for event in events
+            if event.get("typ") == "oocyte_retrieval"
+            and event.get("course_id") == course_id
+        ]
+        if len(fsh) != 9 or len(retrievals) != 1:
+            errors.append(f"incomplete FSH/retrieval course: {donor}")
+    for surrogate_index, transfer_date, outcome, _offspring in TRANSFER_SCENARIOS:
+        surrogate = scenario["surrogates"][surrogate_index]
+        course_id = f"ET-{surrogate_index + 1}-{transfer_date.isoformat()}"
+        events = [
+            event for event in all_animals[surrogate].get("events", [])
+            if event.get("course_id") == course_id
+        ]
+        transfers = [event for event in events if event.get("typ") == "embryo_transfer"]
+        verifications = [
+            event for event in events
+            if event.get("typ") == "pregnancy_verification"
+        ]
+        expected_result = "negative" if outcome == "not-pregnant" else "positive"
+        if len(transfers) != 1 or len(verifications) != 1:
+            errors.append(f"incomplete transfer/verification course: {course_id}")
+        elif verifications[0].get("result") != expected_result:
+            errors.append(f"pregnancy result mismatch: {course_id}")
+        if outcome == "birth" and not any(
+            event.get("typ") == "birth" for event in events
+        ):
+            errors.append(f"birth event missing: {course_id}")
+        if outcome == "abortion" and not any(
+            event.get("typ") == "abortion" for event in events
+        ):
+            errors.append(f"abortion event missing: {course_id}")
+    for ipid, record in all_animals.items():
+        sperm_events = {
+            (
+                str(event.get("datum") or ""),
+                str(event.get("sample_id") or ""),
+            )
+            for event in record.get("events", [])
+            if isinstance(event, dict) and event.get("typ") == "sperm_donation"
+        }
+        for sample in record.get("sperm", []) or []:
+            if not isinstance(sample, dict):
+                continue
+            sample_key = (
+                str(sample.get("datum") or ""),
+                str(sample.get("sample_id") or ""),
+            )
+            if not sample_key[1] or sample_key not in sperm_events:
+                errors.append(f"sperm sample without donation event: {ipid}")
+
+    expected_users = {profile["username"]: profile for profile in CANONICAL_USERS}
+    users = records.get(("security", "users"), [])
+    actual_users = {str(user.get("username")): user for user in users}
+    if set(actual_users) != set(expected_users):
+        errors.append(
+            "canonical user set mismatch: "
+            f"{sorted(actual_users)} != {sorted(expected_users)}"
+        )
+    for username, profile in expected_users.items():
+        user = actual_users.get(username, {})
+        for field in (
+            "display_name", "role", "jobs", "pronouns", "email", "phone",
+            "mobile", "unit", "profession",
+        ):
+            if user.get(field) != profile.get(field):
+                errors.append(f"user profile mismatch: {username}.{field}")
+        try:
+            salt = bytes.fromhex(str(user.get("salt") or ""))
+            expected_hash = hashlib.pbkdf2_hmac(
+                "sha256", b"123456", salt, 260_000
+            ).hex()
+        except ValueError:
+            expected_hash = ""
+        if expected_hash != user.get("password_hash"):
+            errors.append(f"example password mismatch: {username}")
+        if user.get("must_change_password"):
+            errors.append(f"unexpected forced password change: {username}")
     housing = records[("housing", "cage")]
     structures = housing.get("structures", {})
     for ipid in core["animals"]:
@@ -516,6 +946,29 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
             "domain_records": len(records),
             "weighted_animals": sum(bool(v.get("gewicht")) for v in all_animals.values()),
             "species": len({v["species"] for v in all_animals.values()}),
+            "canonical_users": len(actual_users),
+            "scientifically_current_weights": sum(
+                bool(researcher_record_dates(value))
+                and max(
+                    parse_record_date(item.get("datum"))
+                    for item in value.get("gewicht", [])
+                    if isinstance(item, dict)
+                    and parse_record_date(item.get("datum")) is not None
+                ) >= max(researcher_record_dates(value))
+                for value in all_animals.values()
+            ),
+            "sperm_donation_events": sum(
+                event.get("typ") == "sperm_donation"
+                for value in all_animals.values()
+                for event in value.get("events", [])
+                if isinstance(event, dict)
+            ),
+            "pregnancy_verifications": sum(
+                event.get("typ") == "pregnancy_verification"
+                for value in all_animals.values()
+                for event in value.get("events", [])
+                if isinstance(event, dict)
+            ),
         },
         "errors": errors,
         "valid": not errors,
@@ -527,6 +980,8 @@ def main() -> int:
     # Rewrite inherited pedigree references before adding new canonical animals.
     core = rewrite_references(core, key_map)
     scenario = add_reproduction_scenarios(core, key_map)
+    normalize_mature_offspring_roles(core)
+    complete_scientific_histories(core)
     records = domain_records(core, key_map, scenario)
     result = validate(core, records, scenario)
     if not result["valid"]:
@@ -570,13 +1025,14 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | Scenario | Coverage |
 |---|---|
 | Complete immutable identity | Every animal; four-block IPID including origin |
-| Weight history | Every active and archived animal |
+| Weight history | Every active and archived animal through its latest researcher-entered scientific/clinical record |
 | Species | Callitrix, Macaca, Papio, Mus |
 | Denethor family | Elros descendant; Boromir and Faramir with distinct donors/surrogates |
-| OTOF- success | Two live-birth paths |
-| OTOF- failure | Poor yield, low embryo development, repeated non-pregnancy, two abortions |
-| Monitoring | Three 28-day cycles; 10–11 day follicular phase; donor PGF decline |
-| Users/roles | Lord, Master, Manager, Vet, AWO, Researcher, Keeper |
+| OTOF- success | Two complete transfer, pregnancy-verification, and live-birth paths |
+| OTOF- failure | Poor yield, low embryo development, repeated negative pregnancy verification, two verified pregnancies followed by abortions |
+| Monitoring | Three 28-day cycles; 10–11 day follicular phase; complete FSH/retrieval and PGF chains |
+| Sperm collection | One donation event per sample ID, including Denethor's OTOF donation |
+| Users/roles | Canonical Admin, Researcher, Vet, Manager, Keeper, Tester, and Veti accounts; password `123456` |
 | Backend parity | One canonical interchange package for both adapters |
 """,
         encoding="utf-8",

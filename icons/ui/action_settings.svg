@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <style>
+    .gear {
+      fill: #2f80ed;
+      stroke: #25364a;
+      stroke-width: 4;
+      stroke-linejoin: round;
+    }
+    .hole {
+      fill: #f7fafc;
+      stroke: #25364a;
+      stroke-width: 4;
+    }
+  </style>
+  <path class="gear" d="M 26.49 12.77 L 27.31 5.41 L 36.69 5.41 L 37.51 12.77 L 41.70 14.51 L 47.49 9.88 L 54.12 16.51 L 49.49 22.30 L 51.23 26.49 L 58.59 27.31 L 58.59 36.69 L 51.23 37.51 L 49.49 41.70 L 54.12 47.49 L 47.49 54.12 L 41.70 49.49 L 37.51 51.23 L 36.69 58.59 L 27.31 58.59 L 26.49 51.23 L 22.30 49.49 L 16.51 54.12 L 9.88 47.49 L 14.51 41.70 L 12.77 37.51 L 5.41 36.69 L 5.41 27.31 L 12.77 26.49 L 14.51 22.30 L 9.88 16.51 L 16.51 9.88 L 22.30 14.51 Z"/>
+  <circle class="hole" cx="32" cy="32" r="9"/>
+</svg>

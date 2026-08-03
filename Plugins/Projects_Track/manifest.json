@@ -10,11 +10,7 @@
   "dependencies": [
     "PyQt6"
   ],
-  "data_files": [
-    "projects_cache.json",
-    "project_data.json",
-    "projects_history.json"
-  ],
+  "data_files": [],
   "min_progtrack_version": "RC 0.1.0",
   "menu_location": "Sidebar",
   "icon": "progtrack_icon.ico",

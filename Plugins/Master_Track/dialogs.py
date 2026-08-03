@@ -1393,14 +1393,13 @@ class AuditLogsDialog(QDialog):
 
     def _load_cage_name_map(self) -> Dict[str, str]:
         names: Dict[str, str] = {}
-        plugins_dir = os.path.dirname(self.plugin_dir)
-        cage_path = os.path.join(plugins_dir, "Cage__Track", "cage.json")
-        if not os.path.isfile(cage_path):
+        app = self.parentWidget()
+        backend = getattr(app, "backend", None)
+        if backend is None:
             return names
 
         try:
-            with open(cage_path, "r", encoding="utf-8") as handle:
-                data = json.load(handle)
+            data = backend.records.get("housing", "cage", default={})
         except Exception:
             return names
 
@@ -1973,7 +1972,7 @@ class AuditLogsDialog(QDialog):
 
         doc.build([table])
         from Plugins.core.institution_branding import brand_generated_pdf
-        brand_generated_pdf(self, path)
+        brand_generated_pdf(self, output_path)
 
     def _apply_filters(self) -> None:
         search_text = self.search_edit.text().strip().lower()

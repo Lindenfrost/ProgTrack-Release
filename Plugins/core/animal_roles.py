@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import re
 from copy import deepcopy
-from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 
@@ -490,11 +488,19 @@ def normalize_role_definition(raw: Dict[str, Any], *, default_order: int = 1000)
 
 
 class AnimalRoleRegistry:
-    """Load, merge, and save configurable animal role definitions."""
+    """Load and save configurable roles in the backend configuration record.
 
-    def __init__(self, path: Path | str):
-        self.path = Path(path)
-        self._roles: List[Dict[str, Any]] = self._read_roles()
+    Role definitions are mutable facility configuration.  They deliberately
+    have no JSON-file fallback: the bundled ``animal_roles.json`` is consumed
+    once as a static bootstrap catalog by the application and the resulting
+    configuration is thereafter owned by the backend.
+    """
+
+    def __init__(self, backend: Any, *, initial_payload: Optional[Dict[str, Any]] = None):
+        if backend is None or not hasattr(backend, "records"):
+            raise RuntimeError("AnimalRoleRegistry requires a configured backend.")
+        self.backend = backend
+        self._roles: List[Dict[str, Any]] = self._read_roles(initial_payload)
 
     def reload(self) -> None:
         self._roles = self._read_roles()
@@ -647,24 +653,27 @@ class AnimalRoleRegistry:
             role_list,
             deleted_builtin_values=deleted_builtin_values,
         )
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "schema_version": SCHEMA_VERSION,
             "deleted_builtin_values": deleted_builtin_values,
             "roles": normalized,
         }
-        with self.path.open("w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, ensure_ascii=False)
-            handle.write("\n")
+        self.backend.records.put("configuration", "animal-roles", payload)
         self._roles = normalized
 
-    def _read_roles(self) -> List[Dict[str, Any]]:
-        if not self.path.is_file():
-            return self._merge_with_defaults([])
-        try:
-            with self.path.open("r", encoding="utf-8") as handle:
-                payload = json.load(handle)
-        except (OSError, json.JSONDecodeError):
+    def payload(self) -> Dict[str, Any]:
+        """Return the normalized backend payload for callers that need it."""
+        return {"schema_version": SCHEMA_VERSION, "roles": self.roles()}
+
+    def _read_roles(
+        self, initial_payload: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        payload = initial_payload
+        if not isinstance(payload, dict):
+            payload = self.backend.records.get(
+                "configuration", "animal-roles", default=None
+            )
+        if not isinstance(payload, dict):
             return self._merge_with_defaults([])
         raw_roles = payload.get("roles", []) if isinstance(payload, dict) else []
         if not isinstance(raw_roles, list):

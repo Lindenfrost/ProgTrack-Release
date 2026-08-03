@@ -213,6 +213,7 @@
     <tr><td><strong>Standalone SQLite</strong></td><td>Una sola workstation locale o test; solo memoria locale non sincronizzata.</td></tr>
     <tr><td><strong>Shared PostgreSQL</strong></td><td>Uso in rete e multi-workstation con backend condiviso.</td></tr>
   </table>
+  <p>Accedere come Lord e aprire <strong>Impostazioni → Backend</strong> per scegliere il profilo usato dopo il prossimo riavvio completo. Standalone SQLite accetta solo un nome file sicuro nella cartella database locale dei dati applicativi. Shared PostgreSQL offre host, porta, database, utente, password, modalità SSL, timeout, archivio documenti gestito e dimensioni del pool. Usare <strong>Verifica connessione</strong> prima di salvare PostgreSQL. La password viene conservata nell'archivio credenziali del sistema operativo e mai in <code>backend.json</code>. Il salvataggio non trasferisce dati; usare il flusso canonico di esportazione/importazione. Le variabili d'ambiente di distribuzione mantengono la priorità per l'amministrazione headless.</p>
   <p>I documenti restano nello spazio gestito del backend attivo; il database conserva proprietario, percorso sicuro e checksum. Le installazioni di sola lettura usano le directory del profilo utente/XDG. Un'installazione dimostrativa pulita nasce dall'unico pacchetto deterministico e interamente fittizio in <code>Resources/Seed</code>.</p>
   <div class="warning"><strong>Non usare Standalone SQLite su unità di rete o cartelle cloud sincronizzate.</strong> Usare il pacchetto interchange completo per backup e trasferimento.</div>
 

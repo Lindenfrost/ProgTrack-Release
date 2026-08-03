@@ -62,7 +62,6 @@ logger = logging.getLogger(__name__)
 
 PLUGIN_DIR = Path(__file__).parent
 ICONS_DIR = Path(__file__).parent.parent.parent / "icons"
-MEDI_HISTORY_FILENAME = "medi_history.json"
 CONDITIONS_SUBDIR = "lang"
 MEDI_DOCS_SUBDIR = "medi_track"
 
@@ -573,15 +572,14 @@ def _snake(label: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MediStore — persistence for medi_history.json
+# MediStore — persistence for backend medical-history records
 # ─────────────────────────────────────────────────────────────────────────────
 
 class MediStore:
-    """Read/write medi_history.json inside the Medi_Track plugin directory."""
+    """Read/write medical-history records in the configured backend."""
 
     def __init__(self, backend: Any) -> None:
         from Plugins.core.backend_store import BackendJsonStore
-        self._path = str(PLUGIN_DIR / MEDI_HISTORY_FILENAME)
         self.backend = backend
         self._backend_store = BackendJsonStore(backend, "medical", "history")
         self._data: Optional[Dict[str, Any]] = None
@@ -1136,13 +1134,21 @@ class MediTrackWidget(QWidget):
                 "Was in experiment",
             ),
         ]
+        filter_icons = {
+            self.FILTER_SICK: "medi_track.filter.current_sick",
+            self.FILTER_EVER_SICK: "medi_track.filter.ever_sick",
+            self.FILTER_ABNORMAL: "medi_track.filter.current_abnormal",
+            self.FILTER_EVER_ABNORMAL: "medi_track.filter.ever_abnormal",
+            self.FILTER_IN_EXPERIMENT: "role.experimental",
+            self.FILTER_EVER_EXPERIMENT: "role.experimental",
+        }
         for fkey, msg_key, fallback in _filters:
             label = _msg(self.messages, msg_key, fallback)
-            if fkey == self.FILTER_IN_EXPERIMENT:
-                label = f"💡  {label}"
-            elif fkey == self.FILTER_EVER_EXPERIMENT:
-                label = f"💬  {label}"
             btn = QPushButton(label)
+            semantic_id = filter_icons.get(fkey)
+            if semantic_id:
+                apply_icon(btn, semantic_id, fallback=label)
+                btn.setIconSize(QSize(18, 18))
             btn.setCheckable(True)
             if fkey in (self.FILTER_IN_EXPERIMENT, self.FILTER_EVER_EXPERIMENT):
                 btn.setToolTip(_msg(self.messages, msg_key, fallback))
@@ -1345,15 +1351,23 @@ class MediTrackWidget(QWidget):
             if fkey in _filter_map:
                 k, fb = _filter_map[fkey]
                 if fkey == self.FILTER_IN_EXPERIMENT:
-                    label = _msg(messages, k, fb)
-                    btn.setText(f"💡  {label}")
+                    btn.setText(_msg(messages, k, fb))
+                    apply_icon(btn, "role.experimental", fallback=fb)
                     btn.setToolTip(_msg(messages, k, "Currently in experiment"))
                 elif fkey == self.FILTER_EVER_EXPERIMENT:
-                    label = _msg(messages, k, fb)
-                    btn.setText(f"💬  {label}")
+                    btn.setText(_msg(messages, k, fb))
+                    apply_icon(btn, "role.experimental", fallback=fb)
                     btn.setToolTip(_msg(messages, k, "Was in experiment"))
                 else:
                     btn.setText(_msg(messages, k, fb))
+                    semantic_id = {
+                        self.FILTER_SICK: "medi_track.filter.current_sick",
+                        self.FILTER_EVER_SICK: "medi_track.filter.ever_sick",
+                        self.FILTER_ABNORMAL: "medi_track.filter.current_abnormal",
+                        self.FILTER_EVER_ABNORMAL: "medi_track.filter.ever_abnormal",
+                    }.get(fkey)
+                    if semantic_id:
+                        apply_icon(btn, semantic_id, fallback=fb)
         # Group box titles
         self._header_group.setTitle(_msg(messages, "medi_track.section.animal_info", "Animal Information"))
         self._hist_group.setTitle(_msg(messages, "medi_track.section.history", "Medical History"))
@@ -1653,6 +1667,12 @@ class MediTrackWidget(QWidget):
         doc = QTextDocument()
         doc.setHtml(html)
         doc.print(printer)
+        # Apply the shared institution header after the Qt PDF has been
+        # written, just like the other PDF-producing plugins.  Medi Track is
+        # often used as the medical-history export path, so it must not be an
+        # unbranded exception when facility branding is enabled.
+        from Plugins.core.institution_branding import brand_generated_pdf
+        brand_generated_pdf(self, output_path)
 
     def _copy_documents_for_export(self, animal_name: str, output_path: str) -> int:
         docs = _document_paths_for_animal(animal_name, self.store)
@@ -2328,7 +2348,7 @@ class MediTrackPlugin:
         return str(lang).lower()[:2] if lang else "en"
 
     def _detect_data_dir(self) -> str:
-        """Return directory that contains progtrack_daten.json (main data dir)."""
+        """Return the configured application data directory for attachments."""
         app_file = getattr(self.app, "__file__", None) or ""
         if app_file:
             return str(Path(app_file).parent)

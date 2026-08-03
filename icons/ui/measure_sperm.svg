@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="64"
+   height="64"
+   viewBox="0 0 64 64"
+   version="1.1"
+   id="svg2"
+   sodipodi:docname="measure_sperm.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="namedview2"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="4.4580873"
+     inkscape:cx="-29.945578"
+     inkscape:cy="31.067135"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg2" />
+  <style
+     id="style1">.line{fill:none;stroke:#25364a;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.light{fill:#f7fafc;stroke:#25364a;stroke-width:4;stroke-linejoin:round}.blue{fill:#2f80ed;stroke:#25364a;stroke-width:4;stroke-linejoin:round}.pink{fill:#ee83ba;stroke:#25364a;stroke-width:4;stroke-linejoin:round}.green{fill:#4caf82;stroke:#25364a;stroke-width:4;stroke-linejoin:round}.amber{fill:#f4b942;stroke:#25364a;stroke-width:4;stroke-linejoin:round}.red{fill:#df5b5b;stroke:#25364a;stroke-width:4;stroke-linejoin:round}.purple{fill:#9b7ad0;stroke:#25364a;stroke-width:4;stroke-linejoin:round}</style>
+  <ellipse
+     class="purple"
+     cx="25"
+     cy="18.457249"
+     id="circle1"
+     rx="11"
+     ry="4.4572492" />
+  <path
+     d="m 37.648079,18.566295 c 12,2 6.729588,25.025951 -2.961586,29.830235 C 27.417596,52 22.415568,41.299621 27.258984,35.197026 c 1.226853,-1.545807 3.781973,-3.401286 7.834154,-1.081869 5.205122,2.979346 8.936895,6.316048 9.475635,15.043455"
+     class="line"
+     id="path1"
+     sodipodi:nodetypes="csssc" />
+  <ellipse
+     cx="20.003717"
+     cy="18.457249"
+     fill="#ffffff"
+     id="circle2"
+     style="stroke-width:1"
+     rx="4"
+     ry="2.2949195" />
+</svg>

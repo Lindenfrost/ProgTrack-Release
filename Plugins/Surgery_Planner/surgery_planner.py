@@ -20,11 +20,6 @@ from typing import Dict, List, Optional, Any, Tuple, Set, Union
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(os.path.dirname(PLUGIN_DIR))  # Go up two levels to get to the root
 
-# File paths
-SCHEDULE_JSON_FILE = os.path.join(PLUGIN_DIR, 'surgery_schedule.json')
-TEMP_SCHEDULE_JSON_FILE = os.path.join(PLUGIN_DIR, '.surgery_schedule.tmp.json')
-BLOCK_DAYS_FILE = os.path.join(PLUGIN_DIR, 'block_days.json')
-
 # Date format for display
 DATE_FORMAT = '%Y-%m-%d'
 
@@ -170,63 +165,20 @@ def schedule_entry_to_dict(entry: ScheduleEntry, *, date_format: str = "iso") ->
 # in Plugins/Surgery_Planner/surgery_planner.py, so the root is two levels up.
 PLUGIN_DIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.abspath(os.path.join(PLUGIN_DIR, '..', '..'))
-DATA_FILE = os.path.join(ROOT_DIR, 'progtrack_daten.json')
-SETTINGS_FILE = os.path.join(ROOT_DIR, 'progtrack_settings.json')
 # Store plugin‐specific data files alongside this plugin.  The block days
 # and schedule definitions are written into the same folder as this file
 # (Plugins/Surgery_Planner) rather than the root.  Exported PNG schedules
 # continue to be written into ROOT_DIR.
-BLOCK_DAYS_FILE       = os.path.join(PLUGIN_DIR, 'Surgery_Planner.block-days.json')
-TEMP_SCHEDULE_JSON_FILE = os.path.join(PLUGIN_DIR, 'Surgery_Pre_Planner.schedule.json')
-SCHEDULE_JSON_FILE    = os.path.join(PLUGIN_DIR, 'Surgery_Planner.schedule.json')
 DATE_FORMAT = '%d.%m.%Y'
 
 def load_animals() -> list[dict]:
+    """Return planner animals supplied by the application backend.
+
+    The standalone helper is retained for plugin API compatibility, but it
+    deliberately never reads a legacy JSON file.  The main application
+    injects the backend records into :class:`SurgeryPlannerWidget`.
     """
-    Load the list of animals from the ProgTrack data file.  The file is
-    expected to be a JSON object with an ``animals`` key containing a list.
-    If the file contains a list directly or is malformed, the function will
-    gracefully return an empty list and log a warning instead of raising
-    exceptions.
-    """
-    try:
-        if not os.path.exists(DATA_FILE):
-            logger.warning(f"Animal data file {DATA_FILE} not found")
-            return []
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        animals: list[dict] = []
-        if isinstance(data, dict):
-            raw = data.get('animals', None)
-            # Newer versions of ProgTrack store animals in a dict keyed by name
-            if isinstance(raw, dict):
-                for name, rec in raw.items():
-                    if not isinstance(rec, dict):
-                        logger.warning(f"Ignoring malformed animal record for {name}: {rec}")
-                        continue
-                    # Make a shallow copy so we don't mutate the original data
-                    rec_copy: dict = rec.copy()
-                    rec_copy['ipid'] = name
-                    rec_copy['name'] = name
-                    rec_copy['display_name'] = animal_base_name(name, rec)
-                    # Normalise max surgery/embryo keys.  Older files use lower‑case keys.
-                    rec_copy.setdefault('OP_max', rec_copy.get('max_op', rec_copy.get('OP_max', 0)))
-                    rec_copy.setdefault('Embryo_max', rec_copy.get('max_embryo', rec_copy.get('Embryo_max', 0)))
-                    animals.append(rec_copy)
-            # Some legacy files store animals directly as a list
-            elif isinstance(raw, list):
-                animals = [a for a in raw if isinstance(a, dict)]
-            else:
-                logger.warning(f"Unexpected animals section in {DATA_FILE}: {type(raw)}")
-        elif isinstance(data, list):
-            animals = [a for a in data if isinstance(a, dict)]
-        else:
-            logger.warning(f"Unexpected format in {DATA_FILE}: {type(data)}")
-        logger.debug(f"Loaded {len(animals)} animals from {DATA_FILE}")
-        return animals
-    except Exception as e:
-        logger.error(f"Failed to load animals: {e}")
-        return []
+    return []
 
 def load_block_days() -> list[BlockDay]:
     """
@@ -247,7 +199,7 @@ def load_block_days() -> list[BlockDay]:
         elif isinstance(data, list):
             items = data
         else:
-            logger.warning(f"Unexpected format in {BLOCK_DAYS_FILE}: {type(data)}")
+            logger.warning(f"Unexpected format in backend block-days record: {type(data)}")
             items = []
         days: list[BlockDay] = []
         for item in items:
@@ -293,19 +245,6 @@ def save_block_days(days: list[BlockDay]) -> None:
         logger.debug(f"Persisted {len(cleaned)} block days to backend")
     except Exception as e:
         logger.error(f"Failed to save block days: {e}")
-
-def load_animals_readonly():
-    """Load animal data from ProgTrack - READ ONLY."""
-    try:
-        if not os.path.exists(DATA_FILE):
-            logger.warning(f"Animal data file {DATA_FILE} not found")
-            return []
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            progtrack_data = json.load(f)
-        return progtrack_data.get('animals', [])  # READ ONLY - no modifications
-    except Exception as e:
-        logger.error(f"Failed to load animal data: {e}")
-        return []
 
 def save_schedule_to_plugin(entries: list[ScheduleEntry]) -> None:
     """Publish the schedule through the shared backend."""
@@ -621,9 +560,11 @@ class GanttWidget(QDialog):
             # Merge plugin settings with current settings (plugin settings take precedence)
             self.settings.update(plugin_settings)
         
-        # Only load animals from file when no list was supplied (READ-ONLY)
+        # Animals are injected from the configured backend by ProgTrack.
+        # An empty list is valid (for example, before the first import); do
+        # not fall back to a legacy JSON file.
         if not self.animals:
-            self.animals = load_animals_readonly()
+            logger.info("No planner animals were supplied by the configured backend")
         self.block_days = load_block_days()
         self.update_animal_table()
 

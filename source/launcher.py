@@ -43,9 +43,12 @@ def _directory_is_writable(path: Path) -> bool:
 
 def _runtime_roots(launcher_dir: Path) -> tuple[Path, Path]:
     """Return state and cache roots without writing beside packaged code."""
-    portable_requested = os.environ.get("PROGTRACK_PORTABLE", "").lower() in {
-        "1", "true", "yes", "on",
-    }
+    portable_value = os.environ.get("PROGTRACK_PORTABLE")
+    portable_requested = (
+        portable_value.lower() not in {"0", "false", "no", "off"}
+        if portable_value is not None
+        else True
+    )
     if portable_requested and _directory_is_writable(launcher_dir):
         portable = launcher_dir / "ProgTrackData"
         return portable / "state", portable / "cache"

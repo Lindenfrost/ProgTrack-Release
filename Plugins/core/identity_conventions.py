@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
@@ -13,8 +15,6 @@ from Plugins.core.resource_catalogs import (
     read_catalog,
     read_genotypes,
     resources_path,
-    write_catalog,
-    write_genotypes,
 )
 
 
@@ -87,22 +87,43 @@ def load_conventions(path: Path) -> Dict[str, Any]:
     return data
 
 
-def save_conventions(path: Path, data: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    merged = dict(DEFAULT_CONVENTIONS)
-    merged.update(dict(data))
-    for catalog_key in (*CATALOG_FILES, "genotypes"):
-        merged.pop(catalog_key, None)
-    path.write_text(
-        json.dumps(merged, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    app_root = Path(path).parents[2]
+def save_conventions(path: Path, conventions: Mapping[str, Any]) -> None:
+    """Persist convention settings while keeping catalogs in text resources.
+
+    Catalog-backed values are written through ``resource_catalogs`` and are
+    intentionally omitted from the JSON settings file.  The helper is used by
+    configuration tooling/tests; runtime domain data still belongs in the
+    configured backend.
+    """
+    path = Path(path)
+    payload = dict(conventions or {})
+    app_root = path.parents[2]
+    catalog_keys = set(CATALOG_FILES) | {"genotypes"}
     for key in CATALOG_FILES:
-        if key in data:
-            write_catalog(app_root, key, data.get(key) or [])
-    if "genotypes" in data and isinstance(data.get("genotypes"), dict):
-        write_genotypes(app_root, data.get("genotypes") or {})
+        if key in payload:
+            from Plugins.core.resource_catalogs import write_catalog
+
+            write_catalog(app_root, key, payload.pop(key) or [])
+    if "genotypes" in payload:
+        from Plugins.core.resource_catalogs import write_genotypes
+
+        write_genotypes(app_root, payload.pop("genotypes") or {})
+    payload = {key: value for key, value in payload.items() if key not in catalog_keys}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(
+        prefix=path.stem + "_", suffix=".tmp", dir=path.parent
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+        os.replace(temporary, path)
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
 
 
 ID_COMPONENT_PATTERNS = {

@@ -37,7 +37,6 @@ from Plugins.core.ui_icons import apply_icon
 logger = logging.getLogger(__name__)
 _DOCS_SUBDIR   = "documents"
 _SOP_SUBDIR    = "sop"
-_DATA_FILENAME = "project_data.json"
 _ALL_DOC_FILTER = "Documents (*.jpg *.jpeg *.png *.pdf *.txt *.md *.xls *.xlsx *.csv)"
 
 def _clean_text(value) -> str:
@@ -334,7 +333,6 @@ class ProjectTrackTab(QWidget):
         self._app=app; self._messages=messages; self._history=history_store
         self._store = BackendJsonStore(app.backend, "projects", "catalog")
         self._current_project=None
-        self._data_path=os.path.join(os.path.dirname(__file__), _DATA_FILENAME)
         self._docs_base=os.path.join(os.path.dirname(__file__), _DOCS_SUBDIR)
         self._sop_base=os.path.join(os.path.dirname(__file__), _SOP_SUBDIR)
         self._project_data={'version':1,'projects':{}}
@@ -385,13 +383,15 @@ class ProjectTrackTab(QWidget):
         left_v.setSpacing(5)
         hdr=QLabel(_m(self._messages,"project.tab.list_header","Projects"))
         hdr.setStyleSheet("font-weight:bold;"); left_v.addWidget(hdr)
-        self._new_project_btn = QPushButton(_m(self._messages, "project.tab.new_btn", "\u2795  New Project"))
+        self._new_project_btn = QPushButton(_m(self._messages, "project.tab.new_btn", "New Project"))
+        apply_icon(self._new_project_btn, "action.add", fallback="New Project")
         self._new_project_btn.setEnabled(self._can('project.create'))
         self._new_project_btn.clicked.connect(self._on_new_project)
         top_btn_row = QHBoxLayout()
         top_btn_row.setContentsMargins(0, 0, 0, 0)
         top_btn_row.setSpacing(4)
-        self._refresh_project_btn = QPushButton('\U0001f504')
+        self._refresh_project_btn = QPushButton()
+        apply_icon(self._refresh_project_btn, "action.refresh", fallback="Refresh")
         self._refresh_project_btn.setToolTip(_m(self._messages, "projects.tooltip.refresh", "Refresh project list"))
         self._refresh_project_btn.clicked.connect(self._on_refresh_clicked)
         top_btn_row.addWidget(self._new_project_btn, 5)
@@ -400,16 +400,19 @@ class ProjectTrackTab(QWidget):
         self._list=QListWidget(); self._list.currentRowChanged.connect(self._on_list_selection)
         left_v.addWidget(self._list,1)
         left_v.addSpacing(2)
-        self._archive_btn = QPushButton(_m(self._messages, "button.sidebar.archive", "\U0001f4e6    Archive"))
+        self._archive_btn = QPushButton(_m(self._messages, "button.sidebar.archive", "Archive"))
+        apply_icon(self._archive_btn, "action.archive", fallback="Archive")
         self._archive_btn.setEnabled(False); self._archive_btn.clicked.connect(self._on_archive)
         left_v.addWidget(self._archive_btn)
         self._show_archived_chk=QCheckBox(_m(self._messages,"project.tab.show_archived","Show archived"))
         self._show_archived_chk.toggled.connect(self._refresh_project_list); left_v.addWidget(self._show_archived_chk)
         arch_row_h = QHBoxLayout()
         arch_row_h.setContentsMargins(0, 0, 0, 0); arch_row_h.setSpacing(2)
-        self._restore_btn = QPushButton(_m(self._messages, "button.sidebar.restore", "\u2934\ufe0f    Restore"))
+        self._restore_btn = QPushButton(_m(self._messages, "button.sidebar.restore", "Restore"))
+        apply_icon(self._restore_btn, "action.restore", fallback="Restore")
         self._restore_btn.setEnabled(False); self._restore_btn.clicked.connect(self._on_restore_project)
-        self._delete_btn = QPushButton(_m(self._messages, "button.sidebar.delete", "\U0001f5d1\ufe0f    Delete"))
+        self._delete_btn = QPushButton(_m(self._messages, "button.sidebar.delete", "Delete"))
+        apply_icon(self._delete_btn, "action.delete", fallback="Delete")
         self._delete_btn.setEnabled(False); self._delete_btn.clicked.connect(self._on_delete_project)
         arch_row_h.addWidget(self._restore_btn); arch_row_h.addWidget(self._delete_btn)
         left_v.addLayout(arch_row_h)
@@ -556,7 +559,7 @@ class ProjectTrackTab(QWidget):
         if QMessageBox.question(self, "", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes: return
         self._project_data['projects'].pop(name, None)
         self._save_data()
-        # Also delete from history (projects_history.json)
+        # Also delete from the backend project history.
         if self._history and hasattr(self._history, 'delete_project'):
             self._history.delete_project(name)
         self._audit_project_action('delete_project', name)

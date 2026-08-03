@@ -1,0 +1,339 @@
+"""Lord-only Qt dialog for restart-only backend profile configuration."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Callable
+
+from PyQt6.QtCore import QUrl
+from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtWidgets import (
+    QButtonGroup,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QRadioButton,
+    QSpinBox,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from .backend_configuration import (
+    BackendConfigurationPermissionError,
+    BackendConfigurationService,
+    BackendConfigurationValidationError,
+    PostgreSQLSettings,
+)
+from .runtime_paths import BackendProfile
+
+
+class BackendConfigurationDialog(QDialog):
+    def __init__(
+        self,
+        service: BackendConfigurationService,
+        messages: dict[str, Any],
+        *,
+        authorized: bool,
+        audit_callback: Callable[[dict[str, Any]], None] | None = None,
+        parent: QWidget | None = None,
+    ):
+        service.require_lord(authorized)
+        super().__init__(parent)
+        self.service = service
+        self.messages = messages
+        self.authorized = authorized
+        self.audit_callback = audit_callback
+        self.setWindowTitle(self._text("backend.dialog.title", "Backend"))
+        self.setMinimumWidth(650)
+        self._build()
+        self._load()
+
+    def _text(self, key: str, fallback: str) -> str:
+        return str(self.messages.get(key, fallback))
+
+    def _build(self) -> None:
+        root = QVBoxLayout(self)
+        intro = QLabel(
+            self._text(
+                "backend.dialog.intro",
+                "Choose the backend used after the next clean restart. "
+                "This does not transfer, copy, overwrite, or delete data.",
+            )
+        )
+        intro.setWordWrap(True)
+        root.addWidget(intro)
+
+        choice_row = QHBoxLayout()
+        self.sqlite_radio = QRadioButton(
+            self._text("backend.profile.sqlite", "Standalone SQLite")
+        )
+        self.postgres_radio = QRadioButton(
+            self._text("backend.profile.postgresql", "Shared PostgreSQL")
+        )
+        self.profile_group = QButtonGroup(self)
+        self.profile_group.addButton(self.sqlite_radio, 0)
+        self.profile_group.addButton(self.postgres_radio, 1)
+        choice_row.addWidget(self.sqlite_radio)
+        choice_row.addWidget(self.postgres_radio)
+        choice_row.addStretch(1)
+        root.addLayout(choice_row)
+
+        self.pages = QStackedWidget(self)
+        root.addWidget(self.pages)
+        self._build_sqlite_page()
+        self._build_postgres_page()
+        self.sqlite_radio.toggled.connect(
+            lambda checked: self.pages.setCurrentIndex(0 if checked else 1)
+        )
+
+        self.override_label = QLabel()
+        self.override_label.setWordWrap(True)
+        root.addWidget(self.override_label)
+
+        note = QLabel(
+            self._text(
+                "backend.dialog.transfer_note",
+                "Backend transfer is a separate canonical export/import workflow. "
+                "Saved changes become active only after restart.",
+            )
+        )
+        note.setWordWrap(True)
+        root.addWidget(note)
+
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        self.buttons.accepted.connect(self._save)
+        self.buttons.rejected.connect(self.reject)
+        root.addWidget(self.buttons)
+
+    def _build_sqlite_page(self) -> None:
+        page = QWidget(self)
+        layout = QVBoxLayout(page)
+        explanation = QLabel(
+            self._text(
+                "backend.sqlite.explanation",
+                "For one local workstation only. Network and synchronized/cloud "
+                "locations are refused.",
+            )
+        )
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
+        form = QFormLayout()
+        self.sqlite_filename = QLineEdit()
+        form.addRow(
+            self._text("backend.sqlite.filename", "Database file name"),
+            self.sqlite_filename,
+        )
+        folder_row = QHBoxLayout()
+        self.sqlite_folder = QLineEdit()
+        self.sqlite_folder.setReadOnly(True)
+        self.open_sqlite_folder = QPushButton(
+            self._text("backend.open_folder", "Open folder")
+        )
+        self.open_sqlite_folder.clicked.connect(
+            lambda: QDesktopServices.openUrl(
+                QUrl.fromLocalFile(self.sqlite_folder.text())
+            )
+        )
+        folder_row.addWidget(self.sqlite_folder, 1)
+        folder_row.addWidget(self.open_sqlite_folder)
+        form.addRow(
+            self._text("backend.sqlite.folder", "Local storage folder"),
+            folder_row,
+        )
+        layout.addLayout(form)
+        self.pages.addWidget(page)
+
+    def _build_postgres_page(self) -> None:
+        page = QWidget(self)
+        form = QFormLayout(page)
+        self.pg_host = QLineEdit()
+        self.pg_port = QSpinBox()
+        self.pg_port.setRange(1, 65535)
+        self.pg_database = QLineEdit()
+        self.pg_user = QLineEdit()
+        self.pg_password = QLineEdit()
+        self.pg_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pg_sslmode = QComboBox()
+        self.pg_sslmode.addItems(BackendConfigurationService.SSL_MODES)
+        self.pg_timeout = QSpinBox()
+        self.pg_timeout.setRange(1, 300)
+        self.pg_managed_root = QLineEdit()
+        self.pg_pool_min = QSpinBox()
+        self.pg_pool_min.setRange(1, 64)
+        self.pg_pool_max = QSpinBox()
+        self.pg_pool_max.setRange(1, 64)
+        fields = (
+            ("backend.postgresql.host", "Host", self.pg_host),
+            ("backend.postgresql.port", "Port", self.pg_port),
+            ("backend.postgresql.database", "Database", self.pg_database),
+            ("backend.postgresql.user", "User", self.pg_user),
+            ("backend.postgresql.password", "Password", self.pg_password),
+            ("backend.postgresql.sslmode", "SSL mode", self.pg_sslmode),
+            ("backend.postgresql.timeout", "Connection timeout (s)", self.pg_timeout),
+            (
+                "backend.postgresql.managed_root",
+                "Managed document storage",
+                self.pg_managed_root,
+            ),
+            ("backend.postgresql.pool_min", "Pool minimum", self.pg_pool_min),
+            ("backend.postgresql.pool_max", "Pool maximum", self.pg_pool_max),
+        )
+        for key, fallback, widget in fields:
+            form.addRow(self._text(key, fallback), widget)
+        self.test_button = QPushButton(
+            self._text("backend.postgresql.test", "Test connection")
+        )
+        self.test_button.clicked.connect(self._test_connection)
+        form.addRow("", self.test_button)
+        self.pages.addWidget(page)
+
+    def _load(self) -> None:
+        document = self.service.load_document()
+        profile = str(
+            document.get("profile") or BackendProfile.STANDALONE_SQLITE.value
+        )
+        self.postgres_radio.setChecked(
+            profile == BackendProfile.SHARED_POSTGRESQL.value
+        )
+        self.sqlite_radio.setChecked(not self.postgres_radio.isChecked())
+        configured_sqlite = Path(
+            str(
+                document.get("sqlite_path")
+                or self.service.paths.database_path
+                or "progtrack.sqlite3"
+            )
+        )
+        self.sqlite_filename.setText(configured_sqlite.name)
+        self.sqlite_folder.setText(
+            str(self.service.paths.data_root / "database")
+        )
+        pg = self.service.saved_postgresql()
+        self.pg_host.setText(pg.host)
+        self.pg_port.setValue(pg.port)
+        self.pg_database.setText(pg.database)
+        self.pg_user.setText(pg.user)
+        self.pg_password.setPlaceholderText(
+            self._text(
+                "backend.postgresql.password.saved",
+                "Stored securely; leave blank to keep",
+            )
+            if self.service.read_password()
+            else ""
+        )
+        self.pg_sslmode.setCurrentText(pg.sslmode)
+        self.pg_timeout.setValue(pg.connect_timeout)
+        self.pg_managed_root.setText(pg.managed_root)
+        self.pg_pool_min.setValue(pg.pool_min)
+        self.pg_pool_max.setValue(pg.pool_max)
+        overrides = self.service.environment_overrides()
+        self.override_label.setText(
+            self._text(
+                "backend.overrides.active",
+                "Deployment environment overrides take priority: {values}",
+            ).replace("{values}", ", ".join(overrides))
+            if overrides
+            else self._text(
+                "backend.overrides.none",
+                "No deployment environment overrides are active.",
+            )
+        )
+
+    def postgresql_settings(self) -> PostgreSQLSettings:
+        return PostgreSQLSettings(
+            host=self.pg_host.text().strip(),
+            port=self.pg_port.value(),
+            database=self.pg_database.text().strip(),
+            user=self.pg_user.text().strip(),
+            sslmode=self.pg_sslmode.currentText(),
+            connect_timeout=self.pg_timeout.value(),
+            managed_root=self.pg_managed_root.text().strip(),
+            pool_min=self.pg_pool_min.value(),
+            pool_max=self.pg_pool_max.value(),
+        )
+
+    def _password(self) -> str:
+        return self.pg_password.text() or self.service.read_password()
+
+    def _test_connection(self) -> None:
+        try:
+            self.service.test_connection(
+                self.postgresql_settings(),
+                password=self._password(),
+                authorized=self.authorized,
+            )
+        except (BackendConfigurationPermissionError, BackendConfigurationValidationError) as exc:
+            QMessageBox.warning(
+                self,
+                self._text("backend.test.failed.title", "Connection failed"),
+                str(exc),
+            )
+            return
+        QMessageBox.information(
+            self,
+            self._text("backend.test.success.title", "Connection successful"),
+            self._text(
+                "backend.test.success",
+                "The PostgreSQL connection succeeded. No profile was changed.",
+            ),
+        )
+
+    def _save(self) -> None:
+        try:
+            pg = self.postgresql_settings()
+            profile = (
+                BackendProfile.SHARED_POSTGRESQL
+                if self.postgres_radio.isChecked()
+                else BackendProfile.STANDALONE_SQLITE
+            )
+            if profile is BackendProfile.SHARED_POSTGRESQL:
+                self.service.test_connection(
+                    pg,
+                    password=self._password(),
+                    authorized=self.authorized,
+                )
+            document = self.service.save(
+                profile=profile,
+                sqlite_filename=self.sqlite_filename.text(),
+                postgresql=pg,
+                password=self.pg_password.text(),
+                authorized=self.authorized,
+            )
+            if self.audit_callback is not None:
+                self.audit_callback(
+                    {
+                        "profile": document["profile"],
+                        "sqlite_filename": Path(document["sqlite_path"]).name,
+                        "postgresql_host": document["postgresql"]["host"],
+                        "postgresql_database": document["postgresql"]["database"],
+                        "sslmode": document["postgresql"]["sslmode"],
+                        "restart_required": True,
+                    }
+                )
+        except (BackendConfigurationPermissionError, BackendConfigurationValidationError) as exc:
+            QMessageBox.warning(
+                self,
+                self._text("backend.save.failed.title", "Cannot save backend"),
+                str(exc),
+            )
+            return
+        QMessageBox.information(
+            self,
+            self._text("backend.save.success.title", "Backend saved"),
+            self._text(
+                "backend.save.success",
+                "The profile was saved. Restart ProgTrack to activate it. "
+                "No data were transferred.",
+            ),
+        )
+        self.accept()
