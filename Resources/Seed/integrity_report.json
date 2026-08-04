@@ -12,7 +12,7 @@
   },
   "errors": [],
   "fictional": true,
-  "package_sha256": "d03e94e593a02bd68d7e5edef62ab0131471e9ea0ce86278c6decff081fb86fc",
+  "package_sha256": "83e69b7ae9eec82b24c681bff14e11d5bec419c58e709947ee1b358da54b3f8a",
   "schema": "progtrack-seed-integrity/1",
   "seed_version": "0.2.1",
   "valid": true

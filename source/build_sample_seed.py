@@ -950,6 +950,234 @@ def add_resolved_histories(
     return med, report_data
 
 
+PROJECT_DATA_PROFILES: dict[str, dict[str, Any]] = {
+    "Anode": {
+        "title": "Anode electrophysiology example study",
+        "species": "Callitrix jacchus",
+        "comment": "Fictional multi-species electrophysiology dataset with a small active cohort and historical comparison animals.",
+        "focus": "Characterise neural response and recovery around anode stimulation.",
+        "unit": "Neural Systems Unit",
+        "protocol": "DPZ-AN-2026-01",
+        "internal": "ANODE-2026",
+        "authorization": "IACUC-AN-2026-01",
+        "start_date": "16.06.2026",
+        "approved_count": 4,
+        "roles": {"experimental_animal": 1, "breeding_animal": 3},
+    },
+    "Backcrossing": {
+        "title": "Callitrix backcrossing and inheritance study",
+        "species": "Callitrix jacchus",
+        "comment": "Fictional pedigree and backcrossing cohort used to exercise inheritance, partner, and offspring workflows.",
+        "focus": "Document inheritance patterns and breeding outcomes across planned backcrosses.",
+        "unit": "Breeding and Genetics Unit",
+        "protocol": "DPZ-BC-2026-02",
+        "internal": "BACKCROSS-2026",
+        "authorization": "IACUC-BC-2026-02",
+        "start_date": "20.04.2026",
+        "approved_count": 15,
+        "roles": {
+            "breeding_animal": 10,
+            "offspring": 2,
+            "egg_cell_donor": 1,
+            "surrogate": 1,
+            "sperm_donor": 1,
+        },
+    },
+    "Crossbreeding": {
+        "title": "Callitrix crossbreeding reference colony",
+        "species": "Callitrix jacchus",
+        "comment": "Fictional reference colony for multigenerational pedigree, family grouping, and breeding management.",
+        "focus": "Maintain a controlled crossbreeding colony and record pedigree continuity.",
+        "unit": "Breeding and Genetics Unit",
+        "protocol": "DPZ-CB-2026-03",
+        "internal": "CROSSBREED-2026",
+        "authorization": "IACUC-CB-2026-03",
+        "start_date": "20.04.2026",
+        "approved_count": 22,
+        "roles": {"breeding_animal": 22},
+    },
+    "OTOF-": {
+        "title": "OTOF reproductive intervention study",
+        "species": "Callitrix jacchus",
+        "comment": "Fictional OTOF project covering donor, surrogate, transfer, sperm-donation, pregnancy, and outcome records.",
+        "focus": "Evaluate reproductive intervention workflows and embryo-transfer outcomes.",
+        "unit": "Reproductive Biology Unit",
+        "protocol": "DPZ-OTOF-2026-04",
+        "internal": "OTOF-2026",
+        "authorization": "IACUC-OTOF-2026-04",
+        "start_date": "20.04.2026",
+        "approved_count": 17,
+        "roles": {
+            "surrogate": 5,
+            "egg_cell_donor": 5,
+            "partner_animal": 3,
+            "sperm_donor": 2,
+            "offspring": 1,
+            "breeding_animal": 1,
+        },
+    },
+    "Oakshield": {
+        "title": "Oakshield Papio welfare and procedure study",
+        "species": "Papio hamadryas anubis",
+        "comment": "Fictional Papio example for experimental assignment, welfare oversight, and severity documentation.",
+        "focus": "Assess a limited experimental procedure with continuous welfare review.",
+        "unit": "Large Primate Research Unit",
+        "protocol": "DPZ-OAK-2026-05",
+        "internal": "OAKSHIELD-2026",
+        "authorization": "IACUC-OAK-2026-05",
+        "start_date": "20.07.2026",
+        "approved_count": 1,
+        "roles": {"experimental_animal": 1},
+    },
+    "Ringbearer": {
+        "title": "Ringbearer mouse colony",
+        "species": "Mus musculus",
+        "comment": "Fictional example project for an experimental mouse cohort housed together in the Mouse House.",
+        "focus": "Demonstrate a complete small-animal experimental workflow with group housing and longitudinal measurements.",
+        "unit": "Mouse House",
+        "protocol": "DPZ-RB-2026-06",
+        "internal": "RINGBEARER-2026",
+        "authorization": "IACUC-RB-2026-06",
+        "start_date": "22.07.2026",
+        "approved_count": 4,
+        "roles": {"experimental_animal": 4},
+    },
+    "Zucht": {
+        "title": "Breeding and husbandry reference colony",
+        "species": "Callitrix jacchus",
+        "comment": "Fictional breeding reference project with Callitrix families and a Mus musculus comparison colony.",
+        "focus": "Maintain breeding records, offspring development, husbandry observations, and colony health history.",
+        "unit": "Breeding and Husbandry Unit",
+        "protocol": "DPZ-ZU-2026-07",
+        "internal": "ZUCHT-2026",
+        "authorization": "IACUC-ZU-2026-07",
+        "start_date": "20.04.2026",
+        "approved_count": 60,
+        "roles": {"breeding_animal": 58, "offspring": 2},
+    },
+}
+
+
+def _project_arrive_fields(profile: dict[str, Any]) -> dict[str, str]:
+    focus = profile["focus"]
+    title = profile["title"]
+    count = profile["approved_count"]
+    return {
+        "study_design": f"Prospective fictional example protocol: {focus}",
+        "sample_size": f"Approved example cohort: {count} animals; actual assignments are visible in Project Track.",
+        "inclusion_exclusion": "Include healthy animals meeting the recorded species, age, role, and welfare criteria. Exclude animals with incompatible health findings or housing constraints.",
+        "randomisation": "Where an experimental comparison is applicable, assign animals using a documented sequence; breeding and husbandry records remain family-based.",
+        "blinding": "Measurement and outcome review should be performed using animal IDs and role context; unblinding is documented when welfare action requires it.",
+        "outcome_measures": f"Record the measurements, reproductive events, welfare observations, and project status needed to evaluate {title}.",
+        "statistical_methods": "Summarise longitudinal measurements descriptively and preserve the full animal-level records for later analysis.",
+        "experimental_animals": f"The approved example cohort contains {count} animals across the configured role groups.",
+        "experimental_procedures": f"Procedures are fictional and limited to those represented by the project's recorded events: {focus.lower()}",
+        "results": "Example dataset: records are intentionally populated for workflow testing; no real scientific conclusion is claimed.",
+        "abstract": f"{title}. This fictional protocol demonstrates complete project metadata, role assignments, welfare oversight, and animal-linked records.",
+        "background": f"The example project provides a controlled context for {focus.lower()}",
+        "objectives": focus,
+        "ethical_statement": "Animal use is fictional seed data. Any real implementation must follow current institutional, legal, and veterinary approvals.",
+        "housing_husbandry": f"Animals are maintained in the configured facility structures for the relevant species and role; husbandry entries remain linked to the animal records.",
+        "animal_care": "Keeper and veterinary staff review routine care, health status, deviations, and welfare observations throughout the project.",
+        "interpretation": "Interpret results together with animal history, role, housing, welfare observations, and protocol deviations; do not infer beyond the recorded example data.",
+        "protocol_registration": f"Internal fictional protocol {profile['protocol']} / {profile['internal']}.",
+        "data_access": "Project-associated investigators can view project-linked animal data; Manager controls project configuration and AWO retains welfare oversight.",
+        "declaration_interests": "No conflicts of interest are recorded for this fictional example protocol.",
+    }
+
+
+def _ensure_project_history(project_history: dict[str, Any], project_name: str,
+                            core: dict[str, Any], start_date: str) -> None:
+    projects = project_history.setdefault("projects", {})
+    record = projects.setdefault(project_name, {"animals": [], "archived": False})
+    entries = record.setdefault("animals", [])
+    known = {
+        str(item.get("ipid") or "")
+        for item in entries
+        if isinstance(item, dict) and item.get("ipid")
+    }
+    all_animals = {
+        **core.get("animals", {}),
+        **core.get("archived_animals", {}),
+    }
+    for ipid, animal in sorted(all_animals.items()):
+        if str(animal.get("project") or "").strip() != project_name:
+            continue
+        ipid = str(ipid)
+        if ipid in known:
+            continue
+        archived = ipid in core.get("archived_animals", {})
+        entries.append({
+            "ipid": ipid,
+            "name": animal.get("name", ""),
+            "date_entered": start_date,
+            "date_left": start_date if archived else None,
+            "status": "former" if archived else "active",
+            "last_severity": None,
+            "had_in_experiment": bool(animal.get("in_experiment")),
+            "previous_in_experiment": False,
+            "previous_project_snapshot": [],
+            "previous_experimental_snapshot": [],
+        })
+        known.add(ipid)
+    record["animals"] = sorted(
+        entries,
+        key=lambda item: (str(item.get("name") or "").casefold(), str(item.get("ipid") or "")),
+    )
+
+
+def _enrich_project_catalog(project_catalog: dict[str, Any],
+                            project_history: dict[str, Any],
+                            core: dict[str, Any]) -> None:
+    """Populate complete, deterministic Project Track example metadata."""
+    projects = project_catalog.setdefault("projects", {})
+    for name, profile in PROJECT_DATA_PROFILES.items():
+        record = projects.setdefault(name, {})
+        record["summary"] = {
+            **(record.get("summary") if isinstance(record.get("summary"), dict) else {}),
+            "title": profile["title"],
+            "species": profile["species"],
+            "comment": profile["comment"],
+            "contact1_login": "Researcher",
+            "contact2_login": "Vet",
+            "contacts_other_logins": ["Manager", "Keeper", "Veti"],
+        }
+        record["iacuc"] = {
+            **(record.get("iacuc") if isinstance(record.get("iacuc"), dict) else {}),
+            "short_title": name,
+            "protocol_id": profile["protocol"],
+            "internal_number": profile["internal"],
+            "authorization_nr": profile["authorization"],
+            "pi_login": "Researcher",
+            "di_login": "Vet",
+            "welfare_login": "Veti",
+            "unit": profile["unit"],
+            "purpose": profile["focus"],
+            "authorized": "04.08.2026",
+            "approved": "04.08.2026",
+        }
+        record["assoc_users"] = {
+            **(record.get("assoc_users") if isinstance(record.get("assoc_users"), dict) else {}),
+            "applicant_login": "Manager",
+            "planning_login": "Researcher",
+            "staff_logins": ["Keeper", "Vet", "Veti"],
+        }
+        record["animals_config"] = {
+            "approved_count": profile["approved_count"],
+            "departed_with_sev_no_legal": 0,
+            "roles": [
+                {"role": role, "count": count}
+                for role, count in profile["roles"].items()
+            ],
+        }
+        record["arrive"] = _project_arrive_fields(profile)
+        record.setdefault("created_at", profile["start_date"] + " 09:00")
+        record.setdefault("created_by", "Dr. Manager Plansdottir")
+        record["modified_at"] = "04.08.2026 14:30"
+        record["modified_by"] = "Dr. Manager Plansdottir"
+        _ensure_project_history(project_history, name, core, profile["start_date"])
+
+
 def domain_records(core: dict[str, Any], key_map: dict[str, str],
                    scenario: dict[str, Any]) -> dict[tuple[str, str], Any]:
     records: dict[tuple[str, str], Any] = {}
@@ -1017,6 +1245,7 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
         ],
         "archived": False,
     }
+    _enrich_project_catalog(project_catalog, project_history, core)
     records[("housing", "cage")] = complete_housing(
         records[("housing", "cage")], core["animals"]
     )
