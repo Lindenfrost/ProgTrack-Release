@@ -9910,7 +9910,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # Partners: build status with reproduction field and partner name
         if role == Role.PARTNER.value:
-            partner_name = (a.get('partner_von') or '').strip()
+            # Relationship fields retain the immutable partner IPID for
+            # unambiguous resolution; compact sidebar status shows only the
+            # partner's base name.
+            partner_name = animal_base_name(a.get('partner_von') or '')
             repro_field = self._localized_reproduction_status(
                 a.get('reproduktionsfeld'), messages)
             parts = []
@@ -11400,7 +11403,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return markers
         # Partners: build status with reproduction field and partner name
         if role == Role.PARTNER.value:
-            partner_name = (a.get('partner_von') or '').strip()
+            # Relationship fields retain the immutable partner IPID for
+            # unambiguous resolution; compact sidebar status shows only the
+            # partner's base name.
+            partner_name = animal_base_name(a.get('partner_von') or '')
             repro_field = self._localized_reproduction_status(
                 a.get('reproduktionsfeld'))
             parts = []
@@ -11537,7 +11543,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 # Genotype is excluded from status - it's shown in a separate field in the UI
                 
                 # Append partner name (like partnertiere)
-                partner = a.get('verpaart_mit', '').strip()
+                # Keep the full IPID in the relationship field, but do not
+                # expose its species/date/origin suffix in the animal list.
+                partner = animal_base_name(a.get('verpaart_mit', ''))
                 if partner:
                     status = f"{status} | ♥ {partner}" if status else f"♥ {partner}"
             else:
