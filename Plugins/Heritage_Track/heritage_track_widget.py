@@ -477,6 +477,10 @@ class HeritageTrackWidget(QWidget):
         apply_icon(self.gen_dec_btn, "control.decrement", fallback="Decrease")
         self.gen_dec_btn.setIconSize(QSize(27, 27))
         self.gen_dec_btn.setFixedWidth(28)
+        # These controls are icon-only symbols; keep the hit area but remove
+        # the platform button chrome/background so the arrows sit cleanly in
+        # the toolbar.
+        self._configure_symbol_button(self.gen_dec_btn)
         self.gen_spin = QSpinBox()
         self.gen_spin.setMinimum(1)
         self.gen_spin.setMaximum(999)
@@ -490,6 +494,7 @@ class HeritageTrackWidget(QWidget):
         apply_icon(self.gen_inc_btn, "control.increment", fallback="Increase")
         self.gen_inc_btn.setIconSize(QSize(27, 27))
         self.gen_inc_btn.setFixedWidth(28)
+        self._configure_symbol_button(self.gen_inc_btn)
         self.gen_dec_btn.clicked.connect(lambda: self.gen_spin.setValue(
             max(1, self.gen_spin.value() - 1)))
         self.gen_inc_btn.clicked.connect(lambda: self.gen_spin.setValue(
@@ -502,6 +507,7 @@ class HeritageTrackWidget(QWidget):
 
         self.refresh_btn = QPushButton()
         apply_icon(self.refresh_btn, "action.refresh", fallback="Refresh")
+        self.refresh_btn.setIconSize(QSize(30, 30))
         self.add_placeholder_btn = QPushButton()
         self.settings_btn = QPushButton()
         apply_icon(self.add_placeholder_btn, "heritage.placeholder_animal", fallback="Placeholder animal")
@@ -563,6 +569,15 @@ class HeritageTrackWidget(QWidget):
         self.add_placeholder_btn.clicked.connect(self._open_create_animal_dialog)
 
         self._refresh_texts_only()
+
+    @staticmethod
+    def _configure_symbol_button(button: QPushButton) -> None:
+        """Render an icon-only toolbar symbol without a button background."""
+        button.setFlat(True)
+        button.setStyleSheet(
+            "QPushButton { background: transparent; border: none; padding: 0px; }"
+            "QPushButton:hover, QPushButton:pressed { background: transparent; }"
+        )
 
     def _on_gen_limit_changed(self, value: int) -> None:
         """Persist the new generation limit (refresh on button click only)."""

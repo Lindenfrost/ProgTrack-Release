@@ -258,6 +258,8 @@ class FlowTrackWidget:
         # Fit Automatically button (store reference for language updates)
         self.fit_btn = QtWidgets.QPushButton()
         apply_icon(self.fit_btn, "action.refresh", fallback="Refresh")
+        # Match the 30px icon treatment used by the adjacent toolbar buttons.
+        self.fit_btn.setIconSize(QtCore.QSize(30, 30))
         self.fit_btn.setToolTip(self.messages.get("flow_track.button.fit_auto", "Fit Automatically"))
         self.fit_btn.clicked.connect(self._fit_automatically)
         toolbar_layout.addWidget(self.fit_btn)
