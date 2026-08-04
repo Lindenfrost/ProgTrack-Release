@@ -5314,6 +5314,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """
         w = int(width) if isinstance(width, int) and width > 0 else UI_STD_DIALOG_WIDTH
         try:
+            # A few compact dialogs (for example the All-tab role/sort
+            # selectors) do not use ``_new_std_dialog``.  Install the same
+            # screen/frame guard here so their title bar is also kept on-screen
+            # when the user resizes or reopens them.
+            if not hasattr(dlg, "_progtrack_geometry_guard"):
+                install_dialog_geometry_guard(dlg, minimum=QSize(w, 220))
             dlg.setMinimumWidth(w)
             dlg.adjustSize()
             dlg.resize(max(w, dlg.sizeHint().width()), dlg.sizeHint().height())
@@ -7518,6 +7524,49 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         text = re.sub(r"\s+", " ", text).strip(" |")
         return text
     
+    def _partner_generated_id(self, record: Mapping[str, Any]) -> str:
+        """Return the generated public ID for a relationship reference.
+
+        Relationship fields store an immutable IPID (or, in older seed data,
+        a short name). The row displays only the short partner name, while
+        hovering it should identify the partner with its generated facility
+        ID. Never expose an unresolved IPID suffix as a tooltip fallback.
+        """
+        if not isinstance(record, Mapping):
+            return ""
+        for field in ("partner_von", "verpaart_mit"):
+            raw = str(record.get(field) or "").strip()
+            if not raw:
+                continue
+            partner = self.animals.get(raw)
+            if not isinstance(partner, Mapping):
+                raw_folded = raw.casefold()
+                for key, candidate in self.animals.items():
+                    if not isinstance(candidate, Mapping):
+                        continue
+                    if str(candidate.get("id") or "").strip().casefold() == raw_folded:
+                        partner = candidate
+                        break
+                if not isinstance(partner, Mapping):
+                    base = animal_base_name(raw).casefold()
+                    matches = [
+                        candidate
+                        for key, candidate in self.animals.items()
+                        if isinstance(candidate, Mapping)
+                        and animal_base_name(key, candidate).casefold() == base
+                    ]
+                    if len(matches) == 1:
+                        partner = matches[0]
+            if isinstance(partner, Mapping):
+                generated_id = str(partner.get("id") or "").strip()
+                if generated_id:
+                    return generated_id
+            # A legacy short-name reference has no generated ID to display;
+            # keep the tooltip safe and readable instead of leaking an IPID.
+            if split_animal_identity_key(raw) is None:
+                return raw
+        return ""
+
     def _load_project_names(self) -> list:
         """Return sorted project names from backend project records."""
         return sorted(self._load_project_records_for_visibility())
@@ -10790,7 +10839,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 status_lbl.setAlignment(
                     Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
                 )
-                status_lbl.setToolTip(self._get_status_description(status))
+                status_tooltip = self._get_status_description(status)
+                if "\u2665" in status:
+                    partner_id = self._partner_generated_id(data)
+                    if partner_id:
+                        status_tooltip = partner_id
+                status_lbl.setToolTip(status_tooltip)
                 h.addWidget(status_lbl)
             h.setContentsMargins(4, 2, 4, 2)
             row_widget.setLayout(h)
@@ -13510,6 +13564,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         bb.accepted.connect(dlg.accept)
         bb.rejected.connect(dlg.reject)
         v.addWidget(bb)
+        self._apply_dialog_width(dlg)
         if dlg.exec() != QDialog.DialogCode.Accepted: return
         chosen = lw.currentRow()
         if 0 <= chosen < len(role_options):

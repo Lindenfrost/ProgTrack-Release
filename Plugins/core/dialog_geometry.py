@@ -45,19 +45,43 @@ class _DialogGeometryGuard(QObject):
                 self.dialog.setMinimumSize(min_width, min_height)
                 return
             available = screen.availableGeometry()
-            max_width = max(1, int(available.width() * 0.95))
-            max_height = max(1, int(available.height() * 0.95))
+            # ``setGeometry`` addresses the client rectangle, while
+            # ``frameGeometry`` includes the native title bar/borders.  The
+            # previous implementation clamped the client origin directly to
+            # the work area, leaving a few pixels of the frame (and therefore
+            # the header) outside the screen.  Account for the frame margins
+            # explicitly so the complete window remains visible.
+            frame = self.dialog.frameGeometry()
+            client = self.dialog.geometry()
+            frame_left = max(0, client.left() - frame.left())
+            frame_top = max(0, client.top() - frame.top())
+            frame_right = max(0, frame.right() - client.right())
+            frame_bottom = max(0, frame.bottom() - client.bottom())
+
+            max_frame_width = max(1, int(available.width() * 0.95))
+            max_frame_height = max(1, int(available.height() * 0.95))
+            max_width = max(1, max_frame_width - frame_left - frame_right)
+            max_height = max(1, max_frame_height - frame_top - frame_bottom)
             min_width = min(min_width, max_width)
             min_height = min(min_height, max_height)
             self.dialog.setMinimumSize(min_width, min_height)
             self.dialog.setMaximumSize(max_width, max_height)
 
-            rect = self.dialog.frameGeometry()
-            width = min(max(rect.width(), min_width), max_width)
-            height = min(max(rect.height(), min_height), max_height)
-            x = max(available.left(), min(rect.x(), available.right() - width + 1))
-            y = max(available.top(), min(rect.y(), available.bottom() - height + 1))
-            self.dialog.setGeometry(QRect(x, y, width, height))
+            width = min(max(client.width(), min_width), max_width)
+            height = min(max(client.height(), min_height), max_height)
+            frame_width = width + frame_left + frame_right
+            frame_height = height + frame_top + frame_bottom
+            frame_x = max(
+                available.left(),
+                min(frame.x(), available.right() - frame_width + 1),
+            )
+            frame_y = max(
+                available.top(),
+                min(frame.y(), available.bottom() - frame_height + 1),
+            )
+            self.dialog.setGeometry(
+                QRect(frame_x + frame_left, frame_y + frame_top, width, height)
+            )
         finally:
             self._busy = False
 
@@ -80,4 +104,3 @@ def install_dialog_geometry_guard(
     dialog.installEventFilter(guard)
     dialog.setSizeGripEnabled(True)
     QTimer.singleShot(0, guard.clamp)
-
