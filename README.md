@@ -30,17 +30,17 @@ partially transparent icon artwork readable in both light and dark viewers.
 
 <table>
   <thead>
-    <tr><th bgcolor="#e0e0e0">Area</th><th>What ProgTrack provides</th></tr>
+    <tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">Area</th><th>What ProgTrack provides</th></tr>
   </thead>
   <tbody>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_offspring.svg" width="28" alt="Animal"><br><strong>Animal records</strong></td><td>Immutable identity, role-specific fields, lifecycle events, archive/restore, and history.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/measure_weight.svg" width="28" alt="Measurements"><br><strong>Measurements</strong></td><td>Weight, blood progesterone, urine PdG, sperm values, and Excel import/export.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/medi_current_sick.svg" width="28" alt="Medical"><br><strong>Medical history</strong></td><td>Diagnoses, treatments, observations, status filters, documents, and exports.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_archive.svg" width="28" alt="Housing"><br><strong>Housing</strong></td><td>Building, unit, room, cage, animal placement, movement history, and inspections.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/pedigree_symbol.svg" width="28" alt="Pedigree"><br><strong>Pedigree</strong></td><td>Parent relationships, family nodes, kinship, inbreeding, and genotype annotations.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_settings.svg" width="28" alt="Projects"><br><strong>Projects and permissions</strong></td><td>Project association, role/job visibility, user sessions, audit events, and locks.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/flow_freezer.svg" width="28" alt="Samples"><br><strong>Samples and flow</strong></td><td>Sample records, linked documents, embryo-flow views, and freezer inventory.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_user.svg" width="28" alt="Portable"><br><strong>Portable operation</strong></td><td><code>Launcher.exe</code>, bundled Python/Qt libraries, a deterministic fictional seed, and backend interchange packages.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_offspring.svg" width="28" alt="Animal"><br><strong>Animal records</strong></td><td>Immutable identity, role-specific fields, lifecycle events, archive/restore, and history.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/measure_weight.svg" width="28" alt="Measurements"><br><strong>Measurements</strong></td><td>Weight, blood progesterone, urine PdG, sperm values, and Excel import/export.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/medi_current_sick.svg" width="28" alt="Medical"><br><strong>Medical history</strong></td><td>Diagnoses, treatments, observations, status filters, documents, and exports.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/action_archive.svg" width="28" alt="Housing"><br><strong>Housing</strong></td><td>Building, unit, room, cage, animal placement, movement history, and inspections.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/pedigree_symbol.svg" width="28" alt="Pedigree"><br><strong>Pedigree</strong></td><td>Parent relationships, family nodes, kinship, inbreeding, and genotype annotations.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/action_settings.svg" width="28" alt="Projects"><br><strong>Projects and permissions</strong></td><td>Project association, role/job visibility, user sessions, audit events, and locks.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/flow_freezer.svg" width="28" alt="Samples"><br><strong>Samples and flow</strong></td><td>Sample records, linked documents, embryo-flow views, and freezer inventory.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_user.svg" width="28" alt="Portable"><br><strong>Portable operation</strong></td><td><code>Launcher.exe</code>, bundled Python/Qt libraries, a deterministic fictional seed, and backend interchange packages.</td></tr>
   </tbody>
 </table>
 
@@ -212,40 +212,40 @@ overview and keeps the role-edit action; measurement-import buttons are shown
 only in role tabs whose configured blocks support them.
 
 <table>
-  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>Current role</th><th>Typical use</th></tr></thead>
+  <thead><tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">UI icon</th><th>Current role</th><th>Typical use</th></tr></thead>
   <tbody>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_female.svg" width="24" alt="Female role"></td><td>Egg cell donor / surrogate</td><td>Steroid, urine, blood, and reproductive workflows.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_male.svg" width="24" alt="Male role"></td><td>Sperm donor</td><td>Sperm measurements and donor events.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_offspring.svg" width="24" alt="Offspring role"></td><td>Offspring</td><td>Young animals and offspring-specific records.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_partner.svg" width="24" alt="Partner role"></td><td>Partner</td><td>Partner animals with the configured basic blocks.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_breeding.svg" width="24" alt="Breeding role"></td><td>Breeding animal</td><td>Mature breeding-colony animals.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_experimental.svg" width="24" alt="Experimental role"></td><td>Experimental animal</td><td>Experimental workflows and configured event blocks.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_female.svg" width="24" alt="Female role"></td><td>Egg cell donor / surrogate</td><td>Steroid, urine, blood, and reproductive workflows.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_male.svg" width="24" alt="Male role"></td><td>Sperm donor</td><td>Sperm measurements and donor events.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_offspring.svg" width="24" alt="Offspring role"></td><td>Offspring</td><td>Young animals and offspring-specific records.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_partner.svg" width="24" alt="Partner role"></td><td>Partner</td><td>Partner animals with the configured basic blocks.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_breeding.svg" width="24" alt="Breeding role"></td><td>Breeding animal</td><td>Mature breeding-colony animals.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_experimental.svg" width="24" alt="Experimental role"></td><td>Experimental animal</td><td>Experimental workflows and configured event blocks.</td></tr>
   </tbody>
 </table>
 
 The common action icons are the same SVGs used by the UI:
 
 <table>
-  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>Action</th></tr></thead>
+  <thead><tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">UI icon</th><th>Action</th></tr></thead>
   <tbody>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_add.svg" width="22" alt="Add"></td><td>Create a new animal where the active role allows it.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_edit.svg" width="22" alt="Edit"></td><td>Open the role-specific editor.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_edit_role.svg" width="22" alt="Edit role"></td><td>Change a role from the <code>All</code> view when permitted.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_archive.svg" width="22" alt="Archive"></td><td>Archive an animal without deleting its history.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_restore.svg" width="22" alt="Restore"></td><td>Restore an archived animal.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_delete.svg" width="22" alt="Delete"></td><td>Permanently delete an archived example record.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/action_add.svg" width="22" alt="Add"></td><td>Create a new animal where the active role allows it.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/action_edit.svg" width="22" alt="Edit"></td><td>Open the role-specific editor.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/action_edit_role.svg" width="22" alt="Edit role"></td><td>Change a role from the <code>All</code> view when permitted.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/action_archive.svg" width="22" alt="Archive"></td><td>Archive an animal without deleting its history.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/action_restore.svg" width="22" alt="Restore"></td><td>Restore an archived animal.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/action_delete.svg" width="22" alt="Delete"></td><td>Permanently delete an archived example record.</td></tr>
   </tbody>
 </table>
 
 ## Measurements, imports, and plots
 
 <table>
-  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>Data stream</th><th>Current use</th></tr></thead>
+  <thead><tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">UI icon</th><th>Data stream</th><th>Current use</th></tr></thead>
   <tbody>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/measure_blood.svg" width="24" alt="Blood"></td><td>Blood progesterone</td><td><code>Progesteron (ng/ml)</code> time series.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/measure_urine.svg" width="24" alt="Urine"></td><td>Urine PdG</td><td><code>PdG</code> time series in the configured unit.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/measure_weight.svg" width="24" alt="Weight"></td><td>Weight</td><td>Body-weight time series in grams.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/measure_sperm.svg" width="24" alt="Sperm"></td><td>Sperm values</td><td>Count, motility, and progressive motility.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/measure_blood.svg" width="24" alt="Blood"></td><td>Blood progesterone</td><td><code>Progesteron (ng/ml)</code> time series.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/measure_urine.svg" width="24" alt="Urine"></td><td>Urine PdG</td><td><code>PdG</code> time series in the configured unit.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/measure_weight.svg" width="24" alt="Weight"></td><td>Weight</td><td>Body-weight time series in grams.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/measure_sperm.svg" width="24" alt="Sperm"></td><td>Sperm values</td><td>Count, motility, and progressive motility.</td></tr>
   </tbody>
 </table>
 
@@ -302,13 +302,13 @@ Master Track separates the immutable account role from configurable job bundles:
 - sessions, passwords, users, and job overrides are stored in the selected backend.
 
 <table>
-  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>Account role</th><th>Meaning</th></tr></thead>
+  <thead><tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">UI icon</th><th>Account role</th><th>Meaning</th></tr></thead>
   <tbody>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_lord.svg" width="26" alt="Lord"></td><td><code>lord</code></td><td>IT administrative role for global settings and installation, with unlimited rights.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_master.svg" width="26" alt="Master"></td><td><code>master</code></td><td>Animal-facility administrative role for user management and ProgTrack fine-tuning.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_awo.svg" width="26" alt="AWO"></td><td><code>AWO</code></td><td>Animal Welfare Officer account for IACUC and welfare assignments. The user overview shows <code>AWO</code>.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_user.svg" width="26" alt="User"></td><td><code>user</code></td><td>Standard account; effective access comes from its baseline, jobs, grants, and revocations.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_guest_locked.svg" width="26" alt="Guest"></td><td><code>guest</code></td><td>Restricted read-oriented fallback account.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_lord.svg" width="26" alt="Lord"></td><td><code>lord</code></td><td>IT administrative role for global settings and installation, with unlimited rights.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_master.svg" width="26" alt="Master"></td><td><code>master</code></td><td>Animal-facility administrative role for user management and ProgTrack fine-tuning.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_awo.svg" width="26" alt="AWO"></td><td><code>AWO</code></td><td>Animal Welfare Officer account for IACUC and welfare assignments. The user overview shows <code>AWO</code>.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_user.svg" width="26" alt="User"></td><td><code>user</code></td><td>Standard account; effective access comes from its baseline, jobs, grants, and revocations.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_guest_locked.svg" width="26" alt="Guest"></td><td><code>guest</code></td><td>Restricted read-oriented fallback account.</td></tr>
   </tbody>
 </table>
 
@@ -318,13 +318,13 @@ configured by authorized administration; there is no runtime `jobs.json`
 authority. Typical responsibilities are:
 
 <table>
-  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>Job</th><th>Typical focus</th></tr></thead>
+  <thead><tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">UI icon</th><th>Job</th><th>Typical focus</th></tr></thead>
   <tbody>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/job_vet.png" width="28" alt="Vet"></td><td><code>vet</code></td><td>Medical review, health status, Medi Track, reports, and welfare-relevant visibility.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/job_keeper.png" width="28" alt="Keeper"></td><td><code>keeper</code></td><td>Housing, cage placement/inspection, animal core data, and permitted measurements.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/job_manager.png" width="28" alt="Manager"></td><td><code>manager</code></td><td>Animal creation, imports, archiving/deletion, projects, cages, documents, and role configuration.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/job_researcher.png" width="28" alt="Researcher"></td><td><code>researcher</code></td><td>Research measurements, imports/exports, reports, PdG, planning, flow, samples, and associated projects.</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/job_tester.png" width="28" alt="Tester"></td><td><code>tester</code></td><td>Restricted verification workflows and selected plugin access.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/job_vet.png" width="28" alt="Vet"></td><td><code>vet</code></td><td>Medical review, health status, Medi Track, reports, and welfare-relevant visibility.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/job_keeper.png" width="28" alt="Keeper"></td><td><code>keeper</code></td><td>Housing, cage placement/inspection, animal core data, and permitted measurements.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/job_manager.png" width="28" alt="Manager"></td><td><code>manager</code></td><td>Animal creation, imports, archiving/deletion, projects, cages, documents, and role configuration.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/job_researcher.png" width="28" alt="Researcher"></td><td><code>researcher</code></td><td>Research measurements, imports/exports, reports, PdG, planning, flow, samples, and associated projects.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/job_tester.png" width="28" alt="Tester"></td><td><code>tester</code></td><td>Restricted verification workflows and selected plugin access.</td></tr>
   </tbody>
 </table>
 
@@ -333,12 +333,12 @@ authority. Typical responsibilities are:
 The interface message catalogs are:
 
 <table>
-  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>File</th><th>Language</th></tr></thead>
+  <thead><tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">UI icon</th><th>File</th><th>Language</th></tr></thead>
   <tbody>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/flag_gb.svg" width="24" alt="English"></td><td><code>lang/messages_en.json</code></td><td>English</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/flag_de.svg" width="24" alt="German"></td><td><code>lang/messages_de.json</code></td><td>Deutsch</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/flag_it.svg" width="24" alt="Italian"></td><td><code>lang/messages_it.json</code></td><td>Italiano</td></tr>
-    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/flag_ru.svg" width="24" alt="Russian"></td><td><code>lang/messages_ru.json</code></td><td>Русский</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/flag_gb.svg" width="24" alt="English"></td><td><code>lang/messages_en.json</code></td><td>English</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/flag_de.svg" width="24" alt="German"></td><td><code>lang/messages_de.json</code></td><td>Deutsch</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/flag_it.svg" width="24" alt="Italian"></td><td><code>lang/messages_it.json</code></td><td>Italiano</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/flag_ru.svg" width="24" alt="Russian"></td><td><code>lang/messages_ru.json</code></td><td>Русский</td></tr>
   </tbody>
 </table>
 
