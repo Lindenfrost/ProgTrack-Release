@@ -14,7 +14,7 @@
   "settings.role_setup.locked": "Nur Lord-, Master- oder Manager-Benutzer k?nnen das Tierrollen-Setup ?ndern.",
   "settings.role_setup.col.active": "Aktiv",
   "settings.role_setup.col.order": "Reihenfolge",
-  "settings.role_setup.col.icon": "Icon-ID",
+  "settings.role_setup.col.icon": "Icon",
   "settings.role_setup.col.label": "Label",
   "settings.role_setup.col.value": "Interne ID",
   "settings.role_setup.col.preset": "Preset",

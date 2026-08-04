@@ -1429,7 +1429,7 @@ class StyleSettingsDialog(QDialog):
         self.role_table.setHorizontalHeaderLabels([
             self.messages.get("settings.role_setup.col.active", "Active"),
             self.messages.get("settings.role_setup.col.order", "Order"),
-            self.messages.get("settings.role_setup.col.icon", "Emoji"),
+            self.messages.get("settings.role_setup.col.icon", "Icon"),
             self.messages.get("settings.role_setup.col.label", "Label"),
             self.messages.get("settings.role_setup.col.value", "Internal ID"),
             self.messages.get("settings.role_setup.col.preset", "Preset"),
@@ -1439,6 +1439,8 @@ class StyleSettingsDialog(QDialog):
         header = self.role_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        self.role_table.setColumnWidth(2, 64)
         for column in (6, 7):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
             self.role_table.setColumnWidth(column, 245)
@@ -1576,6 +1578,135 @@ class StyleSettingsDialog(QDialog):
         self.role_table.setRowCount(0)
         for role in sorted(roles, key=lambda r: (int(r.get("order", 1000)), str(r.get("label", "")).casefold())):
             self._add_role_table_row(role)
+
+    def _role_icon_entries(self):
+        """Return every bundled UI SVG as a selectable role-icon entry.
+
+        Manifest IDs are retained for SVGs already registered by the shared
+        icon registry.  Unregistered SVGs use the explicit ``svg:`` namespace
+        so a role can still select any artwork without inventing a translation
+        key or exposing an absolute filesystem path in the backend.
+        """
+        icon_root = APP_BASE_DIR / "icons" / "ui"
+        if not icon_root.is_dir():
+            return []
+        manifest_by_file = {}
+        try:
+            manifest_path = icon_root / "manifest.json"
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            icons = payload.get("icons", {}) if isinstance(payload, dict) else {}
+            if isinstance(icons, dict):
+                for semantic_id, entry in icons.items():
+                    if isinstance(entry, dict):
+                        filename = str(entry.get("file") or "").strip()
+                        if filename:
+                            manifest_by_file.setdefault(filename, []).append(str(semantic_id))
+        except (OSError, json.JSONDecodeError):
+            manifest_by_file = {}
+
+        entries = []
+        for path in sorted(icon_root.glob("*.svg"), key=lambda candidate: candidate.name.casefold()):
+            semantic_ids = manifest_by_file.get(path.name, [])
+            value = semantic_ids[0] if semantic_ids else f"svg:{path.name}"
+            tooltip = semantic_ids[0] if semantic_ids else path.name
+            entries.append((value, path, tooltip))
+        return entries
+
+    def _role_icon_path(self, icon_value: str):
+        """Resolve a stored semantic or ``svg:`` role icon to its SVG path."""
+        value = str(icon_value or "").strip()
+        if not value:
+            return None
+        icon_root = APP_BASE_DIR / "icons" / "ui"
+        filename = ""
+        if value.startswith("svg:"):
+            filename = value[4:].strip()
+        else:
+            try:
+                payload = json.loads(
+                    (icon_root / "manifest.json").read_text(encoding="utf-8")
+                )
+                icons = payload.get("icons", {}) if isinstance(payload, dict) else {}
+                entry = icons.get(value, {}) if isinstance(icons, dict) else {}
+                filename = str(entry.get("file") or "").strip() if isinstance(entry, dict) else ""
+            except (OSError, json.JSONDecodeError):
+                filename = ""
+            if not filename and value.endswith(".svg"):
+                filename = value
+        path = icon_root / Path(filename).name if filename else None
+        return path if path is not None and path.is_file() and path.suffix.casefold() == ".svg" else None
+
+    def _set_role_icon_button_visual(self, button, icon_value: str) -> None:
+        from PyQt6.QtCore import QSize
+
+        path = self._role_icon_path(icon_value)
+        button.setIcon(QIcon(str(path)) if path is not None else QIcon())
+        button.setIconSize(QSize(42, 42))
+        button.setText("" if path is not None else (str(icon_value or "").strip() or "?"))
+        button.setToolTip(str(icon_value or "No icon selected"))
+
+    def _make_role_icon_picker_cell(self, icon_value: str):
+        button = QPushButton(self.role_table)
+        button.setFixedSize(56, 56)
+        button.setEnabled(self._role_setup_editable)
+        button.setStyleSheet("QPushButton { padding: 2px; }")
+        button.setProperty("roleIconValue", str(icon_value or ""))
+        self._set_role_icon_button_visual(button, str(icon_value or ""))
+        button.clicked.connect(
+            lambda _checked=False, picker=button: self._open_role_icon_picker(picker)
+        )
+        return button
+
+    def _role_icon_row_for_button(self, button) -> int:
+        if self.role_table is None:
+            return -1
+        for row in range(self.role_table.rowCount()):
+            if self.role_table.cellWidget(row, 2) is button:
+                return row
+        return -1
+
+    def _select_role_icon(self, button, icon_value: str, menu) -> None:
+        row = self._role_icon_row_for_button(button)
+        if row < 0:
+            menu.close()
+            return
+        item = self.role_table.item(row, 2)
+        if item is not None:
+            item.setText(str(icon_value))
+        button.setProperty("roleIconValue", str(icon_value))
+        self._set_role_icon_button_visual(button, str(icon_value))
+        menu.close()
+
+    def _open_role_icon_picker(self, button) -> None:
+        """Show the NetworkTrack-style grid picker for all UI SVGs."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtWidgets import QGridLayout, QWidget
+
+        menu = QMenu(self)
+        widget = QWidget(menu)
+        grid = QGridLayout(widget)
+        grid.setSpacing(5)
+        grid.setContentsMargins(5, 5, 5, 5)
+        entries = self._role_icon_entries()
+        for index, (icon_value, path, tooltip) in enumerate(entries):
+            picker = QPushButton(widget)
+            picker.setFixedSize(50, 50)
+            picker.setIcon(QIcon(str(path)))
+            picker.setIconSize(QSize(40, 40))
+            picker.setToolTip(tooltip)
+            picker.setStyleSheet("QPushButton { padding: 0px; }")
+            picker.clicked.connect(
+                lambda _checked=False, value=icon_value: self._select_role_icon(
+                    button, value, menu
+                )
+            )
+            row, column = divmod(index, 6)
+            grid.addWidget(picker, row, column)
+        if entries:
+            action = QWidgetAction(menu)
+            action.setDefaultWidget(widget)
+            menu.addAction(action)
+        menu.exec(button.mapToGlobal(button.rect().bottomLeft()))
 
     def _role_block_preset_options(self):
         m = self.messages
@@ -2028,6 +2159,11 @@ class StyleSettingsDialog(QDialog):
             if immutable or not self._role_setup_editable:
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.role_table.setItem(row, col, item)
+            if col == 2:
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.role_table.setCellWidget(
+                    row, col, self._make_role_icon_picker_cell(value)
+                )
             if col in (6, 7):
                 mode = "new" if col == 6 else "edit"
                 self.role_table.setCellWidget(

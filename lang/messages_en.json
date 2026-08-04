@@ -14,7 +14,7 @@
   "settings.role_setup.locked": "Only Lord, Master or Manager users can change animal role setup.",
   "settings.role_setup.col.active": "Active",
   "settings.role_setup.col.order": "Order",
-  "settings.role_setup.col.icon": "Icon ID",
+  "settings.role_setup.col.icon": "Icon",
   "settings.role_setup.col.label": "Label",
   "settings.role_setup.col.value": "Internal ID",
   "settings.role_setup.col.preset": "Preset",
