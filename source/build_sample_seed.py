@@ -251,7 +251,9 @@ def add_mouse_animal(
     key = animal_identity_key(name, species, birth, origin)
     record = complete_record({
         "rolle": role,
-        "id": f"mm_{birth[-4:]}_{name.lower().replace(' ', '_')}",
+        # Assigned in one deterministic pass after the complete mouse cohort
+        # is known, so archived and active mice share the same yearly counter.
+        "id": "",
         "sex": sex,
         "genotype": "WT/WT",
         "eizellspenderin": parent_f,
