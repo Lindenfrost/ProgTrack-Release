@@ -323,7 +323,54 @@ class _RoleCountList(QWidget):
                 for r in self._rows if r['role_cb'].currentData() or r['role_cb'].currentText()]
     def set_roles(self, roles):
         for r in list(self._rows): self._remove_row(r)
-        for item in (roles or []): self._add_row(item.get('role',''), item.get('count',0))
+        for item in (roles or []):
+            # Older seed/catalog records stored role IDs as bare strings.
+            # Keep those records readable while the next save writes the
+            # canonical ``{"role": ..., "count": ...}`` shape.
+            if isinstance(item, dict):
+                role = item.get('role', '')
+                count = item.get('count', 0)
+            else:
+                role = str(item or '').strip()
+                count = 0
+            self._add_row(role, count)
+
+
+def _project_role_specs(animals_config):
+    """Normalize project role counts from current and legacy catalog shapes."""
+    if not isinstance(animals_config, dict):
+        return []
+    raw_roles = animals_config.get('roles') or []
+    if isinstance(raw_roles, dict):
+        raw_roles = [
+            {'role': role, 'count': count}
+            for role, count in raw_roles.items()
+        ]
+    if not isinstance(raw_roles, (list, tuple)):
+        return []
+    legacy_strings = [item for item in raw_roles if isinstance(item, str) and item.strip()]
+    try:
+        approved_count = max(0, int(animals_config.get('approved_count') or 0))
+    except (TypeError, ValueError):
+        approved_count = 0
+    specs = []
+    for item in raw_roles:
+        if isinstance(item, dict):
+            role = str(item.get('role') or item.get('value') or '').strip()
+            count = item.get('count', 0)
+        else:
+            role = str(item or '').strip()
+            # The old Ringbearer seed had one role string plus an approved
+            # cohort count. Preserve that meaning when displaying it.
+            count = approved_count if len(legacy_strings) == 1 else 0
+        if not role:
+            continue
+        try:
+            count = max(0, int(count or 0))
+        except (TypeError, ValueError):
+            count = 0
+        specs.append({'role': canonical_role_value(role), 'count': count})
+    return specs
 
 # ── ProjectTrackTab ───────────────────────────────────────────────────────────
 
@@ -713,7 +760,7 @@ class ProjectTrackTab(QWidget):
         self._an_approved.setValue(animals_cfg.get('approved_count', 0)); self._an_approved.setEnabled(can_manage)
         form_an.addRow(_m(self._messages, "project.animals.approved_count", "Approved animal count:"), self._an_approved)
         self._an_roles = _RoleCountList(self._messages, can_edit=can_manage)
-        self._an_roles.set_roles(animals_cfg.get('roles', []) or [])
+        self._an_roles.set_roles(_project_role_specs(animals_cfg))
         form_an.addRow(_m(self._messages, "project.animals.roles", "Roles:"), self._an_roles)
         form_an_w = QWidget(); form_an_w.setLayout(form_an)
         cl4.addWidget(form_an_w)
@@ -898,9 +945,11 @@ class ProjectTrackTab(QWidget):
         not_in   = [n for n in active if n not in in_exp]
         m = self._messages
         rec = self._project_record(name)
-        role_max = {canonical_role_value(r.get('role')): r['count']
-                    for r in (rec.get('animals_config', {}).get('roles') or [])
-                    if r.get('role')}
+        role_max = {
+            canonical_role_value(item.get('role')): item.get('count', 0)
+            for item in _project_role_specs(rec.get('animals_config', {}))
+            if item.get('role')
+        }
 
         _ROLE_ORDER = [
             ROLE_VALUE_SPENDER,

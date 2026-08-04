@@ -989,7 +989,7 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
         "animals_config": {
             "approved_count": 4,
             "departed_with_sev_no_legal": 0,
-            "roles": ["experimental_animal"],
+            "roles": [{"role": "experimental_animal", "count": 4}],
         },
         "arrive": {},
         "created_at": "22.07.2026 10:00",
