@@ -6,6 +6,7 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | Scenario | Coverage |
 |---|---|
 | Complete immutable identity | Every animal; four-block IPID including origin |
+| Projects | Only Backcrossing, OTOF-, Oakshield and Ringbearer are seeded; removed legacy project assignments remain unassigned |
 | Weight history | Every active and archived animal through its latest researcher-entered scientific/clinical record |
 | Species | Callitrix, Macaca, Papio, Mus |
 | Mus musculus | Canonical Hobbit-derived genealogy (Drogo + Primula -> Frodo), Italian partner names, realistic mouse weights and connected ancestry |

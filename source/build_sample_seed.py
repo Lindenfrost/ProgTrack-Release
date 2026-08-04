@@ -44,6 +44,23 @@ SEED_CREATED = "2026-07-30T00:00:00+00:00"
 SEED_PACKAGE_ID = "8f99615e-13b0-52c8-b778-d7d51efb8b74"
 ELDARION_BIRTH_DATE = date(2026, 3, 1)
 
+# The fictional seed deliberately contains only the projects that are used by
+# the current example workflows. Obsolete Anode/Crossbreeding/Zucht
+# assignments are cleared instead of leaving orphaned project names in the
+# database; deleting a project must not silently move animals to another one.
+SEED_PROJECTS = frozenset({"Backcrossing", "OTOF-", "Oakshield", "Ringbearer"})
+
+
+def canonical_project_name(value: Any) -> str:
+    """Return a supported project name or an empty assignment.
+
+    Project deletion must not leave dangling names in animal records or the
+    project history. Unknown/removed projects become an unassigned (empty)
+    project value.
+    """
+    name = str(value or "").strip()
+    return name if name in SEED_PROJECTS else ""
+
 RETRIEVAL_DATES = (
     date(2024, 12, 1),
     date(2025, 1, 10),
@@ -222,7 +239,7 @@ def add_animal(core: dict[str, Any], key_map: dict[str, str], name: str,
         "genotype": "WT/WT",
         "eizellspenderin": parent_f,
         "samenspender": parent_m,
-        "project": "OTOF-" if role in {"sperm_donor", "egg_cell_donor", "surrogate"} else "Zucht",
+        "project": "OTOF-" if role in {"sperm_donor", "egg_cell_donor", "surrogate"} else "",
         "in_experiment": role in {"sperm_donor", "egg_cell_donor", "surrogate"},
     }, name=name, species=species, birth=birth, origin=origin)
     record["ipid"] = key
@@ -241,7 +258,7 @@ def add_mouse_animal(
     *,
     parent_f: str = "",
     parent_m: str = "",
-    project: str = "Zucht",
+    project: str = "",
     in_experiment: bool = False,
     partner: str = "",
 ) -> str:
@@ -284,7 +301,7 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
         if str(record.get("species") or "").strip() == "Mus musculus":
             record["rolle"] = "breeding_animal"
             record["role_id"] = "breeding_animal"
-            record["project"] = "Zucht"
+            record["project"] = ""
             record["in_experiment"] = False
 
     # Rebuild the named Hobbit cohort as one canonical family graph.  The
@@ -340,12 +357,12 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
     child_keys: dict[str, str] = {}
     child_specs = [
         # Bilbo is an older generation and is not Frodo's parent.
-        ("Bilbo", "10.01.2021", "Male", "bilbo", "breeding_animal", "Zucht", False),
+        ("Bilbo", "10.01.2021", "Male", "bilbo", "breeding_animal", "", False),
         ("Frodo", "10.01.2024", "Male", "frodo", "experimental_animal", "Ringbearer", True),
         ("Sam", "10.02.2024", "Male", "sam", "experimental_animal", "Ringbearer", True),
         ("Merry", "10.03.2024", "Male", "merry", "experimental_animal", "Ringbearer", True),
         ("Pippin", "10.04.2024", "Male", "pippin", "experimental_animal", "Ringbearer", True),
-        ("Fredegar", "10.05.2024", "Male", "fredegar", "breeding_animal", "Zucht", False),
+        ("Fredegar", "10.05.2024", "Male", "fredegar", "breeding_animal", "", False),
     ]
     for name, birth, sex, pair_name, role, project, in_experiment in child_specs:
         father, mother = parent_keys(pair_name)
@@ -365,11 +382,11 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
     core["animals"][rosie_key]["partner_von"] = sam_key
     child_keys["Elanor"] = add_mouse_animal(
         core, key_map, "Elanor", "10.06.2024", "Female", "breeding_animal",
-        parent_f=rosie_key, parent_m=sam_key, project="Zucht",
+        parent_f=rosie_key, parent_m=sam_key,
     )
     child_keys["Diamond"] = add_mouse_animal(
         core, key_map, "Diamond", "10.07.2024", "Female", "breeding_animal",
-        project="Zucht", partner=child_keys["Pippin"],
+        partner=child_keys["Pippin"],
     )
     core["animals"][child_keys["Pippin"]]["verpaart_mit"] = child_keys["Diamond"]
     core["animals"][child_keys["Diamond"]]["partner_von"] = child_keys["Pippin"]
@@ -385,7 +402,7 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
     for name, birth, sex, paired_name in partner_specs:
         paired_key = child_keys[paired_name]
         partner_key = add_mouse_animal(
-            core, key_map, name, birth, sex, "breeding_animal", project="Zucht",
+            core, key_map, name, birth, sex, "breeding_animal",
         )
         if sex == "Male":
             core["animals"][paired_key]["partner_von"] = partner_key
@@ -402,7 +419,7 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
         ("Luca", "10.04.2024", "Male"),
         ("Elena", "10.07.2024", "Female"),
     ):
-        add_mouse_animal(core, key_map, name, birth, sex, "breeding_animal", project="Zucht")
+        add_mouse_animal(core, key_map, name, birth, sex, "breeding_animal")
 
     return {"experimental": [child_keys[name] for name in ("Frodo", "Sam", "Merry", "Pippin")],
             "bilbo": next(key for key in core["animals"] if key.startswith("Bilbo | Mus musculus |"))}
@@ -1011,19 +1028,6 @@ def add_resolved_histories(
 
 
 PROJECT_DATA_PROFILES: dict[str, dict[str, Any]] = {
-    "Anode": {
-        "title": "Anode electrophysiology example study",
-        "species": "Callitrix jacchus",
-        "comment": "Fictional multi-species electrophysiology dataset with a small active cohort and historical comparison animals.",
-        "focus": "Characterise neural response and recovery around anode stimulation.",
-        "unit": "Neural Systems Unit",
-        "protocol": "DPZ-AN-2026-01",
-        "internal": "ANODE-2026",
-        "authorization": "IACUC-AN-2026-01",
-        "start_date": "16.06.2026",
-        "approved_count": 4,
-        "roles": {"experimental_animal": 1, "breeding_animal": 3},
-    },
     "Backcrossing": {
         "title": "Callitrix backcrossing and inheritance study",
         "species": "Callitrix jacchus",
@@ -1042,19 +1046,6 @@ PROJECT_DATA_PROFILES: dict[str, dict[str, Any]] = {
             "surrogate": 1,
             "sperm_donor": 1,
         },
-    },
-    "Crossbreeding": {
-        "title": "Callitrix crossbreeding reference colony",
-        "species": "Callitrix jacchus",
-        "comment": "Fictional reference colony for multigenerational pedigree, family grouping, and breeding management.",
-        "focus": "Maintain a controlled crossbreeding colony and record pedigree continuity.",
-        "unit": "Breeding and Genetics Unit",
-        "protocol": "DPZ-CB-2026-03",
-        "internal": "CROSSBREED-2026",
-        "authorization": "IACUC-CB-2026-03",
-        "start_date": "20.04.2026",
-        "approved_count": 22,
-        "roles": {"breeding_animal": 22},
     },
     "OTOF-": {
         "title": "OTOF reproductive intervention study",
@@ -1102,19 +1093,6 @@ PROJECT_DATA_PROFILES: dict[str, dict[str, Any]] = {
         "approved_count": 4,
         "roles": {"experimental_animal": 4},
     },
-    "Zucht": {
-        "title": "Breeding and husbandry reference colony",
-        "species": "Callitrix jacchus",
-        "comment": "Fictional breeding reference project with Callitrix families and a Mus musculus comparison colony.",
-        "focus": "Maintain breeding records, offspring development, husbandry observations, and colony health history.",
-        "unit": "Breeding and Husbandry Unit",
-        "protocol": "DPZ-ZU-2026-07",
-        "internal": "ZUCHT-2026",
-        "authorization": "IACUC-ZU-2026-07",
-        "start_date": "20.04.2026",
-        "approved_count": 60,
-        "roles": {"breeding_animal": 58, "offspring": 2},
-    },
 }
 
 
@@ -1144,6 +1122,83 @@ def _project_arrive_fields(profile: dict[str, Any]) -> dict[str, str]:
         "data_access": "Project-associated investigators can view project-linked animal data; Manager controls project configuration and AWO retains welfare oversight.",
         "declaration_interests": "No conflicts of interest are recorded for this fictional example protocol.",
     }
+
+
+def _normalise_project_history_entries(entries: Any) -> list[dict[str, Any]]:
+    """Keep only supported project history entries."""
+    if not isinstance(entries, list):
+        return []
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    for raw in entries:
+        if not isinstance(raw, dict):
+            continue
+        project = canonical_project_name(raw.get("project"))
+        if not project:
+            continue
+        item = copy.deepcopy(raw)
+        item["project"] = project
+        for field in ("previous_project_snapshot", "previous_experimental_snapshot"):
+            if field in item:
+                item[field] = _normalise_project_history_entries(item[field])
+        key = (
+            project,
+            str(item.get("ipid") or item.get("name") or ""),
+            str(item.get("date_entered") or item.get("entry_date") or ""),
+            str(item.get("date_left") or item.get("leave_date") or ""),
+            str(item.get("status") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(item)
+    return result
+
+
+def _normalise_seed_project_assignments(core: dict[str, Any]) -> None:
+    """Remove obsolete project assignments from all seed animal records."""
+    for section in ("animals", "archived_animals"):
+        for record in core.get(section, {}).values():
+            if not isinstance(record, dict):
+                continue
+            record["project"] = canonical_project_name(record.get("project"))
+            if "project_history" in record:
+                record["project_history"] = _normalise_project_history_entries(
+                    record.get("project_history")
+                )
+
+
+def _normalise_project_payload(payload: Any, *, history: bool) -> dict[str, Any]:
+    """Filter a legacy project payload to the supported four projects."""
+    if not isinstance(payload, dict):
+        payload = {"version": 1, "projects": {}}
+    result = {key: copy.deepcopy(value) for key, value in payload.items() if key != "projects"}
+    result.setdefault("version", 1)
+    projects: dict[str, dict[str, Any]] = {}
+    raw_projects = payload.get("projects")
+    if not isinstance(raw_projects, dict):
+        raw_projects = {}
+    for old_name, raw_record in raw_projects.items():
+        name = canonical_project_name(old_name)
+        if not name or not isinstance(raw_record, dict):
+            continue
+        record = copy.deepcopy(raw_record)
+        if history:
+            record["animals"] = _normalise_project_history_entries(
+                record.get("animals")
+            )
+        existing = projects.setdefault(name, {})
+        # Keep supported metadata and merge history entries when a legacy
+        # source contains duplicate records for the same project.
+        for key, value in record.items():
+            if key == "animals" and history:
+                existing[key] = _normalise_project_history_entries(
+                    list(existing.get(key) or []) + list(value or [])
+                )
+            elif key not in existing or not existing[key]:
+                existing[key] = value
+    result["projects"] = projects
+    return result
 
 
 def _ensure_project_history(project_history: dict[str, Any], project_name: str,
@@ -1255,6 +1310,8 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
     for key, value in legacy.items():
         records[key] = rewrite_references(value, key_map)
     project_catalog = records[("projects", "catalog")]
+    project_catalog = _normalise_project_payload(project_catalog, history=False)
+    records[("projects", "catalog")] = project_catalog
     project_catalog.setdefault("projects", {})["Ringbearer"] = {
         "summary": {
             "title": "Ringbearer mouse colony",
@@ -1285,7 +1342,10 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
         "modified_at": "22.07.2026 10:00",
         "modified_by": "Dr. Manager Plansdottir",
     }
-    project_history = records[("projects", "history")]
+    project_history = _normalise_project_payload(
+        records[("projects", "history")], history=True
+    )
+    records[("projects", "history")] = project_history
     project_history.setdefault("projects", {})["Ringbearer"] = {
         "animals": [
             {
@@ -1340,6 +1400,16 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
     all_animals = {**core["animals"], **core["archived_animals"]}
     errors = []
     for ipid, record in all_animals.items():
+        assigned_project = str(record.get("project") or "").strip()
+        if assigned_project and assigned_project not in SEED_PROJECTS:
+            errors.append(f"unsupported project assignment: {ipid} -> {assigned_project}")
+        for history_item in record.get("project_history", []) or []:
+            if isinstance(history_item, dict):
+                project = str(history_item.get("project") or "").strip()
+                if project and project not in SEED_PROJECTS:
+                    errors.append(
+                        f"unsupported project history: {ipid} -> {project}"
+                    )
         if len(ipid.split(" | ")) != 4:
             errors.append(f"invalid IPID: {ipid}")
         if not record.get("gewicht"):
@@ -1400,6 +1470,13 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         ]
         if len(fsh) != 9 or len(retrievals) != 1:
             errors.append(f"incomplete FSH/retrieval course: {donor}")
+    for record_id in ("catalog", "history"):
+        payload = records.get(("projects", record_id), {})
+        project_names = set((payload.get("projects") or {}).keys())
+        if project_names != set(SEED_PROJECTS):
+            errors.append(
+                f"project {record_id} mismatch: {sorted(project_names)}"
+            )
     for surrogate_index, transfer_date, outcome, _offspring in TRANSFER_SCENARIOS:
         surrogate = scenario["surrogates"][surrogate_index]
         course_id = f"ET-{surrogate_index + 1}-{transfer_date.isoformat()}"
@@ -1581,6 +1658,7 @@ def main() -> int:
     scenario = add_reproduction_scenarios(core, key_map)
     scenario["mouse"] = mouse_scenario
     normalize_mature_offspring_roles(core)
+    _normalise_seed_project_assignments(core)
     complete_scientific_histories(core)
     records = domain_records(core, key_map, scenario)
     result = validate(core, records, scenario)
@@ -1625,6 +1703,7 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | Scenario | Coverage |
 |---|---|
 | Complete immutable identity | Every animal; four-block IPID including origin |
+| Projects | Only Backcrossing, OTOF-, Oakshield and Ringbearer are seeded; removed legacy project assignments remain unassigned |
 | Weight history | Every active and archived animal through its latest researcher-entered scientific/clinical record |
 | Species | Callitrix, Macaca, Papio, Mus |
 | Mus musculus | Canonical Hobbit-derived genealogy (Drogo + Primula -> Frodo), Italian partner names, realistic mouse weights and connected ancestry |
