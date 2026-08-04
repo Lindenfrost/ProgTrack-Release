@@ -642,6 +642,8 @@
   "plot.event.special_measurement": "Hearing test",
   "plot.recent_30_days": "Recent 30 days",
   "plot.recent_30_days.tooltip": "Reset all plots to the latest 30 days of the first selected animal.",
+  "plot.unselect_all": "Unselect all",
+  "plot.unselect_all.tooltip": "Clear the current animal selection.",
   "plot.no_dated_data": "No dated plot data are available for the selection.",
   "plot.tooltip.date_label": "Date",
   "plot.tooltip.sample_label": "Sample",

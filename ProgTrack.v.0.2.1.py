@@ -6819,6 +6819,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ctrl_hbox.addWidget(
             self.btn_plot_recent, 0, Qt.AlignmentFlag.AlignTop
         )
+        self.btn_plot_unselect_all = QPushButton(
+            self.messages.get("plot.unselect_all", "Unselect all")
+        )
+        self.btn_plot_unselect_all.setToolTip(
+            self.messages.get(
+                "plot.unselect_all.tooltip",
+                "Clear the current animal selection.",
+            )
+        )
+        self.btn_plot_unselect_all.clicked.connect(self._unselect_all_plots)
+        self.btn_plot_unselect_all.setEnabled(False)
+        ctrl_hbox.addWidget(
+            self.btn_plot_unselect_all, 0, Qt.AlignmentFlag.AlignTop
+        )
         ctrl_hbox.addStretch(1)
         self.dlay.addLayout(ctrl_hbox)
 
@@ -11900,6 +11914,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if canvas is not None:
             canvas.draw_idle()
 
+    def _unselect_all_plots(self) -> None:
+        """Clear the shared animal selection while staying on the Plots tab."""
+        if hasattr(self, "lst") and self.lst is not None:
+            self.lst.blockSignals(True)
+            try:
+                self.lst.clearSelection()
+            finally:
+                self.lst.blockSignals(False)
+        self._selected_heritage_only = []
+        self._selected_archived = []
+        self._plot_selection_order = []
+        self.selected_animals = []
+        self._plot_x_viewport = None
+        self._on_select()
+
     def _plot_selected(self) -> None:
 
         # Initialize storage for sperm hover overlay dots
@@ -11919,6 +11948,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         has_selection = bool(self.selected_animals)
         if hasattr(self, "btn_plot_recent"):
             self.btn_plot_recent.setEnabled(has_selection)
+        if hasattr(self, "btn_plot_unselect_all"):
+            self.btn_plot_unselect_all.setEnabled(has_selection)
         # Show / hide “Anzeigen” and “Linien-Stil” boxes
         if hasattr(self, "box_chk") and hasattr(self, "box_rad"):
             self.box_chk.setVisible(has_selection)
@@ -15893,6 +15924,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.messages.get(
                     "plot.recent_30_days.tooltip",
                     "Reset all plots to the latest 30 days of the first selected animal.",
+                )
+            )
+        if hasattr(self, "btn_plot_unselect_all"):
+            self.btn_plot_unselect_all.setText(
+                self.messages.get("plot.unselect_all", "Unselect all")
+            )
+            self.btn_plot_unselect_all.setToolTip(
+                self.messages.get(
+                    "plot.unselect_all.tooltip",
+                    "Clear the current animal selection.",
                 )
             )
         

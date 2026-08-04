@@ -1048,6 +1048,8 @@
   "plot.event.special_measurement": "Спец. измерение",
   "plot.recent_30_days": "Последние 30 дней",
   "plot.recent_30_days.tooltip": "Сбросить все графики к последним 30 дням первого выбранного животного.",
+  "plot.unselect_all": "Снять выделение со всех",
+  "plot.unselect_all.tooltip": "Очистить текущий выбор животных.",
   "plot.no_dated_data": "Для выбранных животных нет датированных данных графика.",
   "plot.tooltip.date_label": "Дата",
   "plot.tooltip.sample_label": "Проба",

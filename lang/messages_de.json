@@ -751,6 +751,8 @@
   "plot.event.special_measurement": "Gehörmessung",
   "plot.recent_30_days": "Letzte 30 Tage",
   "plot.recent_30_days.tooltip": "Alle Plots auf die letzten 30 Tage des zuerst ausgewählten Tieres zurücksetzen.",
+  "plot.unselect_all": "Alle abwählen",
+  "plot.unselect_all.tooltip": "Aktuelle Tierauswahl aufheben.",
   "plot.no_dated_data": "Für die Auswahl sind keine datierten Plot-Daten vorhanden.",
   "plot.tooltip.date_label": "Datum",
   "plot.tooltip.sample_label": "Probe",

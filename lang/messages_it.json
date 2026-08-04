@@ -598,6 +598,8 @@
   "plot.event.special_measurement": "Misurazione speciale",
   "plot.recent_30_days": "Ultimi 30 giorni",
   "plot.recent_30_days.tooltip": "Reimposta tutti i grafici sugli ultimi 30 giorni del primo animale selezionato.",
+  "plot.unselect_all": "Deseleziona tutto",
+  "plot.unselect_all.tooltip": "Cancella la selezione attuale degli animali.",
   "plot.no_dated_data": "Non sono disponibili dati datati per la selezione.",
   "plot.tooltip.date_label": "Data",
   "plot.tooltip.sample_label": "Campione",
