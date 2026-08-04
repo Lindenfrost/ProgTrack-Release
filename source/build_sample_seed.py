@@ -14,6 +14,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -343,6 +344,51 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
 
     return {"experimental": [child_keys[name] for name in ("Frodo", "Sam", "Merry", "Pippin")],
             "bilbo": next(key for key in core["animals"] if key.startswith("Bilbo | Mus musculus |"))}
+
+
+def normalize_mouse_public_ids(core: dict[str, Any]) -> None:
+    """Apply the configured public-ID shape to every mouse in the seed.
+
+    The mouse scenario was initially authored with ad-hoc ``mm_2021_name``
+    values.  Public IDs follow the same convention as the Callitrix examples:
+    species token, two-digit birth year, four-digit birth-year sequence, sex,
+    and an ID-safe animal name.  Archived mice are included in the sequence so
+    the complete fictional dataset remains deterministic and collision-free.
+    """
+    all_animals = {
+        **core.get("animals", {}),
+        **core.get("archived_animals", {}),
+    }
+    mice = [
+        (ipid, record)
+        for ipid, record in all_animals.items()
+        if str(record.get("species") or "").strip() == "Mus musculus"
+    ]
+    counters: dict[str, int] = {}
+    for _ipid, record in sorted(
+        mice,
+        key=lambda item: (
+            parse_record_date(item[1].get("birth_date")) or date.max,
+            str(item[1].get("name") or "").casefold(),
+            str(item[1].get("sex") or "").casefold(),
+            str(item[0]),
+        ),
+    ):
+        birth = parse_record_date(record.get("birth_date"))
+        if birth is None:
+            continue
+        year = f"{birth.year % 100:02d}"
+        counters[year] = counters.get(year, 0) + 1
+        name_token = re.sub(
+            r"[^A-Za-z0-9]+", "_", str(record.get("name") or "")
+        ).strip("_") or "Animal"
+        sex = str(record.get("sex") or "").strip().casefold()
+        sex_token = (
+            "M" if sex in {"male", "m"}
+            else "F" if sex in {"female", "f"}
+            else "U"
+        )
+        record["id"] = f"mm_{year}_{counters[year]:04d}_{sex_token}_{name_token}"
 
 
 def monitoring(start: date, prefix: str, *, donor: bool) -> tuple[list, list, list]:
@@ -1154,6 +1200,16 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         ipid: record for ipid, record in all_animals.items()
         if str(record.get("species") or "") == "Mus musculus"
     }
+    mouse_id_pattern = re.compile(r"^mm_\d{2}_\d{4}_[MFU]_[A-Za-z0-9_]+$")
+    for ipid, record in mice.items():
+        public_id = str(record.get("id") or "")
+        if not mouse_id_pattern.fullmatch(public_id):
+            errors.append(f"mouse public ID does not follow conventions: {ipid} -> {public_id}")
+            continue
+        sex = str(record.get("sex") or "").strip().casefold()
+        expected_sex = "M" if sex in {"male", "m"} else "F" if sex in {"female", "f"} else "U"
+        if f"_{expected_sex}_" not in public_id:
+            errors.append(f"mouse public ID sex mismatch: {ipid} -> {public_id}")
     active_mice = {
         ipid: record for ipid, record in core["animals"].items()
         if str(record.get("species") or "") == "Mus musculus"
@@ -1230,6 +1286,7 @@ def main() -> int:
     # Rewrite inherited pedigree references before adding new canonical animals.
     core = rewrite_references(core, key_map)
     mouse_scenario = add_mouse_colony(core, key_map)
+    normalize_mouse_public_ids(core)
     scenario = add_reproduction_scenarios(core, key_map)
     scenario["mouse"] = mouse_scenario
     normalize_mature_offspring_roles(core)
