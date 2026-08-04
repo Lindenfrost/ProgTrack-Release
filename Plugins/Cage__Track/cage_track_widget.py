@@ -1128,7 +1128,7 @@ class CageTrackWidget(QWidget):
 
         self.settings_btn = QPushButton()
         apply_icon(self.settings_btn, "action.settings", fallback="Settings")
-        self.settings_btn.setIconSize(QSize(20, 20))
+        self.settings_btn.setIconSize(QSize(30, 30))
         self.settings_btn.setToolTip(self.messages.get("cage_track.toolbar.settings", "Settings"))
         self.settings_btn.setFixedSize(28, 28)
         self.settings_btn.clicked.connect(self._on_settings)

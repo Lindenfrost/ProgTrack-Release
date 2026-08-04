@@ -1148,7 +1148,7 @@ class MediTrackWidget(QWidget):
             semantic_id = filter_icons.get(fkey)
             if semantic_id:
                 apply_icon(btn, semantic_id, fallback=label)
-                btn.setIconSize(QSize(18, 18))
+                btn.setIconSize(QSize(27, 27))
             btn.setCheckable(True)
             if fkey in (self.FILTER_IN_EXPERIMENT, self.FILTER_EVER_EXPERIMENT):
                 btn.setToolTip(_msg(self.messages, msg_key, fallback))

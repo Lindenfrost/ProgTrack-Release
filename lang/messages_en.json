@@ -424,6 +424,8 @@
   "button.sidebar.load_sperm_values": "Load Sperm Values",
   "button.sidebar.load_weights": "Load Weights",
   "button.sidebar.archive": "Archive",
+  "sidebar.archive_controls.expand": "Show archive controls",
+  "sidebar.archive_controls.collapse": "Hide archive controls",
   "button.sidebar.restore": "Restore",
   "button.sidebar.delete": "Delete",
   "button.yes": "Yes",

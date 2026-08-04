@@ -9,7 +9,7 @@ import os
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -46,6 +46,26 @@ logger = logging.getLogger('FlowTrack')
 def _animal_role_value(animal_data: Optional[Dict[str, Any]]) -> str:
     """Return the stable internal role ID for a ProgTrack animal record."""
     return canonical_role_value((animal_data or {}).get('rolle'))
+
+
+def _flow_datetime(value: Any) -> Optional[datetime]:
+    """Normalize backend ISO/date values before Flow Track builds IDs."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        for fmt in ("%d.%m.%Y", "%Y/%m/%d"):
+            try:
+                return datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+    return None
 
 
 class FlowTrackWidget:
@@ -172,6 +192,7 @@ class FlowTrackWidget:
     def _init_ui(self):
         """Initialize the user interface."""
         QtWidgets = self.parent_app.QtWidgets
+        QtCore = self.parent_app.QtCore
         Qt = self.parent_app.QtCore.Qt
         QStackedWidget = self.parent_app.QtWidgets.QStackedWidget
         QLabel = self.parent_app.QtWidgets.QLabel
@@ -244,7 +265,7 @@ class FlowTrackWidget:
         # Freezer toggle button (Flow_Track 3.0)
         self.freezer_btn = QtWidgets.QPushButton()
         apply_icon(self.freezer_btn, "flow.freezer", fallback="Freezer")
-        self.freezer_btn.setIconSize(QtCore.QSize(20, 20))
+        self.freezer_btn.setIconSize(QtCore.QSize(30, 30))
         self.freezer_btn.setToolTip(self.messages.get("flow_track.button.freezer", "Show/Hide Freezer"))
         self.freezer_btn.clicked.connect(self._toggle_freezer_visibility)
         toolbar_layout.addWidget(self.freezer_btn)
@@ -252,7 +273,7 @@ class FlowTrackWidget:
         # Settings button (store reference for language updates)
         self.settings_btn = QtWidgets.QPushButton()
         apply_icon(self.settings_btn, "action.settings", fallback="Settings")
-        self.settings_btn.setIconSize(QtCore.QSize(20, 20))
+        self.settings_btn.setIconSize(QtCore.QSize(30, 30))
         self.settings_btn.setToolTip(self.messages.get("flow_track.button.settings", "Settings"))
         self.settings_btn.clicked.connect(self._open_settings_dialog)
         toolbar_layout.addWidget(self.settings_btn)
@@ -1297,24 +1318,30 @@ class FlowTrackWidget:
                 # From unified events
                 for ev in rec.get('events', []):
                     if ev.get('typ') == 'surgery':
-                        surgery_id = f"surgery_{name}_{ev['datum'].isoformat()}"
+                        event_date = _flow_datetime(ev.get('datum'))
+                        if event_date is None:
+                            continue
+                        surgery_id = f"surgery_{name}_{event_date.isoformat()}"
                         if surgery_id not in detected_surgery_ids:
                             self.egg_surgeries.append({
                                 'id': surgery_id,
                                 'animal_name': name,
-                                'date': ev['datum'],
+                                'date': event_date,
                                 'event_type': 'egg_donation_surgery'
                             })
                             detected_surgery_ids.add(surgery_id)
                 
                 # From legacy 'op' list
                 for dt in rec.get('op', []):
-                    surgery_id = f"surgery_{name}_{dt.isoformat()}"
+                    event_date = _flow_datetime(dt)
+                    if event_date is None:
+                        continue
+                    surgery_id = f"surgery_{name}_{event_date.isoformat()}"
                     if surgery_id not in detected_surgery_ids:
                         self.egg_surgeries.append({
                             'id': surgery_id,
                             'animal_name': name,
-                            'date': dt,
+                            'date': event_date,
                             'event_type': 'egg_donation_surgery'
                         })
                         detected_surgery_ids.add(surgery_id)
@@ -1322,12 +1349,15 @@ class FlowTrackWidget:
             # Sperm donations (SAMENSP role)
             if rolle == Role.SAMENSP.value:
                 for sperm_entry in rec.get('sperm', []):
-                    sperm_id = f"sperm_{name}_{sperm_entry['datum'].isoformat()}"
+                    event_date = _flow_datetime(sperm_entry.get('datum'))
+                    if event_date is None:
+                        continue
+                    sperm_id = f"sperm_{name}_{event_date.isoformat()}"
                     if sperm_id not in detected_sperm_ids:
                         self.sperm_donations.append({
                             'id': sperm_id,
                             'animal_name': name,
-                            'date': sperm_entry['datum'],
+                            'date': event_date,
                             'event_type': 'sperm_donation',
                             'motility': sperm_entry.get('motility'),
                             'progressive': sperm_entry.get('progressive'),
@@ -1340,24 +1370,30 @@ class FlowTrackWidget:
                 # From unified events
                 for ev in rec.get('events', []):
                     if ev.get('typ') == 'embryo_transfer':
-                        transfer_id = f"transfer_{name}_{ev['datum'].isoformat()}"
+                        event_date = _flow_datetime(ev.get('datum'))
+                        if event_date is None:
+                            continue
+                        transfer_id = f"transfer_{name}_{event_date.isoformat()}"
                         if transfer_id not in detected_transfer_ids:
                             self.embryo_transfers.append({
                                 'id': transfer_id,
                                 'animal_name': name,
-                                'date': ev['datum'],
+                                'date': event_date,
                                 'event_type': 'embryo_transfer'
                             })
                             detected_transfer_ids.add(transfer_id)
                 
                 # From legacy 'embryo' list
                 for dt in rec.get('embryo', []):
-                    transfer_id = f"transfer_{name}_{dt.isoformat()}"
+                    event_date = _flow_datetime(dt)
+                    if event_date is None:
+                        continue
+                    transfer_id = f"transfer_{name}_{event_date.isoformat()}"
                     if transfer_id not in detected_transfer_ids:
                         self.embryo_transfers.append({
                             'id': transfer_id,
                             'animal_name': name,
-                            'date': dt,
+                            'date': event_date,
                             'event_type': 'embryo_transfer'
                         })
                         detected_transfer_ids.add(transfer_id)
@@ -1812,8 +1848,14 @@ class FlowTrackWidget:
                             surgeries = []
                             for ev in donor_data.get('events', []):
                                 if ev.get('typ') == 'surgery':
-                                    surgeries.append(ev['datum'])
-                            surgeries.extend(donor_data.get('op', []))
+                                    event_date = _flow_datetime(ev.get('datum'))
+                                    if event_date is not None:
+                                        surgeries.append(event_date)
+                            surgeries.extend(
+                                event_date for event_date in
+                                (_flow_datetime(value) for value in donor_data.get('op', []))
+                                if event_date is not None
+                            )
                             
                             # Find closest surgery before transfer
                             for surg_date in sorted(surgeries, reverse=True):
@@ -1874,8 +1916,14 @@ class FlowTrackWidget:
                                     surgeries = []
                                     for ev in donor_data.get('events', []):
                                         if ev.get('typ') == 'surgery':
-                                            surgeries.append(ev['datum'])
-                                    surgeries.extend(donor_data.get('op', []))
+                                            event_date = _flow_datetime(ev.get('datum'))
+                                            if event_date is not None:
+                                                surgeries.append(event_date)
+                                    surgeries.extend(
+                                        event_date for event_date in
+                                        (_flow_datetime(value) for value in donor_data.get('op', []))
+                                        if event_date is not None
+                                    )
                                     
                                     # Find closest surgery before transfer
                                     for surg_date in sorted(surgeries, reverse=True):

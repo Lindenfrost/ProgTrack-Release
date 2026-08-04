@@ -230,6 +230,121 @@ def add_animal(core: dict[str, Any], key_map: dict[str, str], name: str,
     return key
 
 
+def add_mouse_animal(
+    core: dict[str, Any],
+    key_map: dict[str, str],
+    name: str,
+    birth: str,
+    sex: str,
+    role: str,
+    *,
+    parent_f: str = "",
+    parent_m: str = "",
+    project: str = "Zucht",
+    in_experiment: bool = False,
+    partner: str = "",
+) -> str:
+    """Add one deterministic Mus musculus example record."""
+    species = "Mus musculus"
+    origin = "DPZ"
+    key = animal_identity_key(name, species, birth, origin)
+    record = complete_record({
+        "rolle": role,
+        "id": f"mm_{birth[-4:]}_{name.lower().replace(' ', '_')}",
+        "sex": sex,
+        "genotype": "WT/WT",
+        "eizellspenderin": parent_f,
+        "samenspender": parent_m,
+        "project": project,
+        "in_experiment": bool(in_experiment),
+        "partner_von": partner,
+        "verpaart_mit": partner,
+        "events": [{"typ": "birth", "datum": datetime.strptime(
+            birth, "%d.%m.%Y"
+        ).date().isoformat()}],
+    }, name=name, species=species, birth=birth, origin=origin)
+    record["ipid"] = key
+    core["animals"][key] = record
+    key_map[key] = key
+    return key
+
+
+def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str, Any]:
+    """Extend the seed with a connected, species-appropriate mouse colony.
+
+    Existing Mus musculus sample records remain as disposable examples but are
+    normalized to breeding animals. The new Tolkien-family cohort provides
+    ancestry, partners, the Ringbearer experiment, and a deliberately single
+    Bilbo housing exception for Cage Track.
+    """
+    for record in {**core.get("animals", {}), **core.get("archived_animals", {})}.values():
+        if str(record.get("species") or "").strip() == "Mus musculus":
+            record["rolle"] = "breeding_animal"
+            record["role_id"] = "breeding_animal"
+            record["project"] = "Zucht"
+            record["in_experiment"] = False
+
+    pairs = [
+        ("Bilbo", "10.01.2021", "Male", "Belladonna", "12.01.2021", "Female"),
+        ("Drogo", "01.04.2021", "Male", "Primula", "03.04.2021", "Female"),
+        ("Saradoc", "01.07.2021", "Male", "Esmeralda", "03.07.2021", "Female"),
+        ("Paladin", "01.10.2021", "Male", "Eglantine", "03.10.2021", "Female"),
+        ("Hamfast", "01.12.2021", "Male", "Rosie", "03.12.2021", "Female"),
+        ("Otho", "01.02.2022", "Male", "Lobelia", "03.02.2022", "Female"),
+    ]
+    parents: dict[str, tuple[str, str]] = {}
+    for male, male_birth, _male_sex, female, female_birth, _female_sex in pairs:
+        male_key = add_mouse_animal(core, key_map, male, male_birth, "Male", "breeding_animal")
+        female_key = add_mouse_animal(core, key_map, female, female_birth, "Female", "breeding_animal")
+        core["animals"][male_key]["verpaart_mit"] = female_key
+        core["animals"][female_key]["partner_von"] = male_key
+        parents[male] = (male_key, female_key)
+
+    children = [
+        ("Frodo", "10.01.2024", "Male", "Bilbo", True),
+        ("Sam", "10.02.2024", "Male", "Hamfast", True),
+        ("Merry", "10.03.2024", "Male", "Saradoc", True),
+        ("Pippin", "10.04.2024", "Male", "Paladin", True),
+        ("Fredegar", "10.05.2024", "Male", "Drogo", False),
+        ("Elanor", "10.06.2024", "Female", "Otho", False),
+        ("Diamond", "10.07.2024", "Female", "Otho", False),
+    ]
+    child_keys: dict[str, str] = {}
+    for name, birth, sex, parent_name, experimental in children:
+        father, mother = parents[parent_name]
+        child_keys[name] = add_mouse_animal(
+            core, key_map, name, birth, sex,
+            "experimental_animal" if experimental else "breeding_animal",
+            parent_f=mother,
+            parent_m=father,
+            project="Ringbearer" if experimental else "Zucht",
+            in_experiment=experimental,
+        )
+
+    partner_specs = [
+        ("Giulia", "10.01.2024", "Female", "Frodo"),
+        ("Marco", "10.02.2024", "Male", "Sam"),
+        ("Chiara", "10.03.2024", "Female", "Merry"),
+        ("Luca", "10.04.2024", "Male", "Pippin"),
+        ("Giovanni", "10.05.2024", "Male", "Fredegar"),
+        ("Sofia", "10.06.2024", "Female", "Elanor"),
+        ("Elena", "10.07.2024", "Female", "Diamond"),
+    ]
+    for name, birth, sex, paired_name in partner_specs:
+        paired_key = child_keys[paired_name]
+        partner_key = add_mouse_animal(
+            core, key_map, name, birth, sex, "breeding_animal",
+            project="Zucht", partner=paired_key,
+        )
+        if sex == "Male":
+            core["animals"][paired_key]["partner_von"] = partner_key
+        else:
+            core["animals"][paired_key]["verpaart_mit"] = partner_key
+
+    return {"experimental": [child_keys[name] for name in ("Frodo", "Sam", "Merry", "Pippin")],
+            "bilbo": next(key for key in core["animals"] if key.startswith("Bilbo | Mus musculus |"))}
+
+
 def monitoring(start: date, prefix: str, *, donor: bool) -> tuple[list, list, list]:
     blood, urine, events = [], [], []
     sample = 1
@@ -606,6 +721,38 @@ def complete_housing(
     structures = result.setdefault("structures", {})
     cages = structures.setdefault("cages", {})
     occupants = result.setdefault("occupants", {})
+    # Dedicated mouse facility: experimental Ringbearer animals together,
+    # normal breeding group housing, and Bilbo's deliberate single-cage case.
+    structures.setdefault("buildings", {}).update({
+        "bld_mus": {
+            "display_name": "Building 05 - Mouse House",
+            "id": "bld_mus", "order": 5, "virtual": False,
+        },
+    })
+    structures.setdefault("units", {}).update({
+        "unit_mus_colony": {
+            "display_name": "Mouse Colony Unit",
+            "id": "unit_mus_colony", "order": 0,
+            "parent_building_id": "bld_mus", "virtual": False,
+        },
+    })
+    structures.setdefault("rooms", {}).update({
+        "room_mus_colony": {
+            "display_name": "Mouse Colony Room",
+            "id": "room_mus_colony", "order": 0,
+            "parent_building_id": "bld_mus",
+            "parent_unit_id": "unit_mus_colony", "virtual": False,
+        },
+    })
+    for cage_id, display_name, order in (
+        ("cage_mus_experimental", "Mouse Experimental Group", 0),
+        ("cage_mus_breeding", "Mouse Breeding Group", 1),
+        ("cage_mus_bilbo", "Mouse Single Housing - Bilbo", 2),
+    ):
+        cages.setdefault(cage_id, {
+            "display_name": display_name, "id": cage_id, "order": order,
+            "parent_room_id": "room_mus_colony", "virtual": False,
+        })
     # Archived and stale legacy occupants are deliberately not carried into the
     # clean seed.
     occupants = {
@@ -626,6 +773,12 @@ def complete_housing(
             (key for key in cages if key.startswith("cage_sample_")), "cage_unassigned"
         ),
     }
+    # Existing sample mice are moved into the dedicated Mouse House below;
+    # never leave them mixed with another species in the legacy sample cage.
+    for ipid in list(occupants):
+        animal = active_animals.get(ipid)
+        if animal and str(animal.get("species") or "") == "Mus musculus":
+            occupants.pop(ipid, None)
     def valid_cage(cage_id: str) -> bool:
         cage = cages.get(cage_id, {})
         room = structures.get("rooms", {}).get(cage.get("parent_room_id"), {})
@@ -638,7 +791,16 @@ def complete_housing(
     for ipid, animal in active_animals.items():
         if ipid in occupants and valid_cage(str(occupants[ipid].get("cage_id", ""))):
             continue
-        cage_id = cage_choices.get(animal["species"], "cage_unassigned")
+        if animal.get("species") == "Mus musculus":
+            name = str(animal.get("name") or "")
+            if name == "Bilbo":
+                cage_id = "cage_mus_bilbo"
+            elif animal.get("in_experiment"):
+                cage_id = "cage_mus_experimental"
+            else:
+                cage_id = "cage_mus_breeding"
+        else:
+            cage_id = cage_choices.get(animal["species"], "cage_unassigned")
         occupants[ipid] = {
             "occupant_id": ipid,
             "ipid": ipid,
@@ -756,6 +918,57 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
     }
     for key, value in legacy.items():
         records[key] = rewrite_references(value, key_map)
+    project_catalog = records[("projects", "catalog")]
+    project_catalog.setdefault("projects", {})["Ringbearer"] = {
+        "summary": {
+            "title": "Ringbearer mouse colony",
+            "species": "Mus musculus",
+            "comment": "Fictional example project for experimental mouse cohort.",
+            "contact1_login": "Researcher",
+            "contact2_login": "Vet",
+            "contacts_other_logins": [],
+        },
+        "assoc_users": {
+            "applicant_login": "Manager",
+            "planning_login": "Researcher",
+            "staff_logins": ["Keeper", "Veti"],
+        },
+        "iacuc": {
+            "short_title": "Ringbearer",
+            "welfare_login": "Veti",
+            "pi_login": "Researcher",
+        },
+        "animals_config": {
+            "approved_count": 4,
+            "departed_with_sev_no_legal": 0,
+            "roles": ["experimental_animal"],
+        },
+        "arrive": {},
+        "created_at": "22.07.2026 10:00",
+        "created_by": "Dr. Manager Plansdottir",
+        "modified_at": "22.07.2026 10:00",
+        "modified_by": "Dr. Manager Plansdottir",
+    }
+    project_history = records[("projects", "history")]
+    project_history.setdefault("projects", {})["Ringbearer"] = {
+        "animals": [
+            {
+                "ipid": ipid,
+                "name": animal["name"],
+                "date_entered": "22.07.2026",
+                "date_left": None,
+                "status": "active",
+                "last_severity": None,
+                "had_in_experiment": True,
+                "previous_in_experiment": False,
+                "previous_project_snapshot": [],
+                "previous_experimental_snapshot": [],
+            }
+            for ipid, animal in sorted(core["animals"].items())
+            if animal.get("project") == "Ringbearer"
+        ],
+        "archived": False,
+    }
     records[("housing", "cage")] = complete_housing(
         records[("housing", "cage")], core["animals"]
     )
@@ -779,6 +992,7 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
             "denethor-family", "otof-success", "otof-poor-yield",
             "otof-low-development", "surrogate-nonpregnant", "surrogate-abortions",
             "mild-resolved-medical", "all-species-weights", "four-level-housing",
+            "mus-musculus-ringbearer-colony", "mouse-house-group-housing",
         ],
     }
     return records
@@ -936,6 +1150,42 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         )
         if not all((cage, room, unit, building)) or cage_id == "cage_unassigned":
             errors.append(f"incomplete four-level housing: {ipid}")
+    mice = {
+        ipid: record for ipid, record in all_animals.items()
+        if str(record.get("species") or "") == "Mus musculus"
+    }
+    active_mice = {
+        ipid: record for ipid, record in core["animals"].items()
+        if str(record.get("species") or "") == "Mus musculus"
+    }
+    required_mouse_names = {"Frodo", "Sam", "Merry", "Pippin", "Fredegar"}
+    if not required_mouse_names.issubset({r.get("name") for r in mice.values()}):
+        errors.append("Mus musculus youngest-generation names are incomplete")
+    ringbearers = {
+        record.get("name") for record in mice.values()
+        if record.get("project") == "Ringbearer"
+    }
+    if ringbearers != {"Frodo", "Sam", "Merry", "Pippin"}:
+        errors.append(f"Ringbearer cohort mismatch: {sorted(ringbearers)}")
+    for ipid, record in mice.items():
+        if record.get("name") in {"Frodo", "Sam", "Merry", "Pippin"}:
+            if record.get("rolle") != "experimental_animal" or not record.get("in_experiment"):
+                errors.append(f"Ringbearer animal is not experimental: {record.get('name')}")
+        elif record.get("rolle") != "breeding_animal":
+            errors.append(f"mouse has non-breeding role: {record.get('ipid')}")
+        if ipid not in active_mice:
+            continue
+        occupant = housing.get("occupants", {}).get(ipid, {})
+        expected_cage = (
+            "cage_mus_bilbo" if record.get("name") == "Bilbo"
+            else "cage_mus_experimental" if record.get("in_experiment")
+            else "cage_mus_breeding"
+        )
+        if occupant.get("cage_id") != expected_cage:
+            errors.append(
+                f"mouse housing mismatch: {record.get('name')} -> "
+                f"{occupant.get('cage_id')} (expected {expected_cage})"
+            )
     return {
         "schema": "progtrack-seed-integrity/1",
         "seed_version": "0.2.1",
@@ -979,7 +1229,9 @@ def main() -> int:
     core, key_map = normalize_core()
     # Rewrite inherited pedigree references before adding new canonical animals.
     core = rewrite_references(core, key_map)
+    mouse_scenario = add_mouse_colony(core, key_map)
     scenario = add_reproduction_scenarios(core, key_map)
+    scenario["mouse"] = mouse_scenario
     normalize_mature_offspring_roles(core)
     complete_scientific_histories(core)
     records = domain_records(core, key_map, scenario)
@@ -1027,6 +1279,9 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | Complete immutable identity | Every animal; four-block IPID including origin |
 | Weight history | Every active and archived animal through its latest researcher-entered scientific/clinical record |
 | Species | Callitrix, Macaca, Papio, Mus |
+| Mus musculus | Hobbit/Lord-of-the-Rings names, Italian partner names, realistic mouse weights and connected ancestry |
+| Ringbearer | Frodo, Sam, Merry and Pippin are adult experimental mice in one project and one group cage |
+| Mouse House | Dedicated building/unit/room; breeding group, Ringbearer group, and Bilbo's deliberate single cage |
 | Denethor family | Elros descendant; Boromir and Faramir with distinct donors/surrogates |
 | OTOF- success | Two complete transfer, pregnancy-verification, and live-birth paths |
 | OTOF- failure | Poor yield, low embryo development, repeated negative pregnancy verification, two verified pregnancies followed by abortions |

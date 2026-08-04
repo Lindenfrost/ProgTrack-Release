@@ -322,7 +322,7 @@ class NetworkTrackWidget(QMainWindow):
         # Icon picker button
         self.icon_button = QToolButton()
         apply_icon(self.icon_button, "network.insert_symbol", fallback="Insert symbol")
-        self.icon_button.setIconSize(QSize(20, 20))
+        self.icon_button.setIconSize(QSize(30, 30))
         self.icon_button.setToolTip("Insert icon")
         self.icon_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.icon_button.setMenu(self._create_icon_menu())

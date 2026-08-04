@@ -382,6 +382,8 @@
   "button.sidebar.load_sperm_values": "Carica valori sperma",
   "button.sidebar.load_weights": "Carica pesi",
   "button.sidebar.archive": "Archivia",
+  "sidebar.archive_controls.expand": "Mostra i comandi archivio",
+  "sidebar.archive_controls.collapse": "Nascondi i comandi archivio",
   "button.sidebar.restore": "Ripristina",
   "button.sidebar.delete": "Elimina",
   "button.yes": "Sì",

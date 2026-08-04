@@ -475,7 +475,7 @@ class HeritageTrackWidget(QWidget):
         gen_label = QLabel(self.messages.get("heritage_track.label.gen_limit", "Ancestors:"))
         self.gen_dec_btn = QPushButton()
         apply_icon(self.gen_dec_btn, "control.decrement", fallback="Decrease")
-        self.gen_dec_btn.setIconSize(QSize(18, 18))
+        self.gen_dec_btn.setIconSize(QSize(27, 27))
         self.gen_dec_btn.setFixedWidth(28)
         self.gen_spin = QSpinBox()
         self.gen_spin.setMinimum(1)
@@ -488,7 +488,7 @@ class HeritageTrackWidget(QWidget):
                               "Max ancestor generations shown in no-selection mode"))
         self.gen_inc_btn = QPushButton()
         apply_icon(self.gen_inc_btn, "control.increment", fallback="Increase")
-        self.gen_inc_btn.setIconSize(QSize(18, 18))
+        self.gen_inc_btn.setIconSize(QSize(27, 27))
         self.gen_inc_btn.setFixedWidth(28)
         self.gen_dec_btn.clicked.connect(lambda: self.gen_spin.setValue(
             max(1, self.gen_spin.value() - 1)))
@@ -506,8 +506,8 @@ class HeritageTrackWidget(QWidget):
         self.settings_btn = QPushButton()
         apply_icon(self.add_placeholder_btn, "heritage.placeholder_animal", fallback="Placeholder animal")
         apply_icon(self.settings_btn, "action.settings", fallback="Settings")
-        self.add_placeholder_btn.setIconSize(QSize(20, 20))
-        self.settings_btn.setIconSize(QSize(20, 20))
+        self.add_placeholder_btn.setIconSize(QSize(30, 30))
+        self.settings_btn.setIconSize(QSize(30, 30))
 
         self.add_placeholder_btn.setToolTip(
             self.messages.get("heritage_track.tooltip.add_placeholder", "Placeholder animal")

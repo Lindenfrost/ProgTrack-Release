@@ -425,6 +425,8 @@
   "button.sidebar.load_sperm_values": "Загрузить значения спермы",
   "button.sidebar.load_weights": "Загрузить веса",
   "button.sidebar.archive": "Архивировать",
+  "sidebar.archive_controls.expand": "Показать управление архивом",
+  "sidebar.archive_controls.collapse": "Скрыть управление архивом",
   "button.sidebar.restore": "Восстановить",
   "button.sidebar.delete": "Удалить",
   "button.yes": "Да",

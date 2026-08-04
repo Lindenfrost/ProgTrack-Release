@@ -430,6 +430,8 @@
   "button.sidebar.load_sperm_values": "Spermawerte laden",
   "button.sidebar.load_weights": "Gewichte laden",
   "button.sidebar.archive": "Archivieren",
+  "sidebar.archive_controls.expand": "Archiv-Steuerungen einblenden",
+  "sidebar.archive_controls.collapse": "Archiv-Steuerungen ausblenden",
   "button.sidebar.restore": "Wiederherstellen",
   "button.sidebar.delete": "Löschen",
   "button.yes": "Ja",

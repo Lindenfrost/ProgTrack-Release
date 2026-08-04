@@ -5924,6 +5924,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             resolved_icon = ui_icon(semantic_id) if semantic_id else QIcon()
             tab.addTab(resolved_icon, "" if not resolved_icon.isNull() else label)
             tab.setTabToolTip(idx, tip)
+        # Render semantic SVG role icons 50% larger than the Qt default while
+        # keeping the tab hit target unchanged.
+        tab.setIconSize(QSize(24, 24))
         self._category_custom_role_values = custom_values
         tab.setCurrentIndex(min(max(previous_idx, 0), max(tab.count() - 1, 0)))
         tab.blockSignals(False)
@@ -6006,13 +6009,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Sidebar action buttons with dynamic visibility
         self.btn_new = QPushButton(self.messages["button.sidebar.new_animal"])
         apply_icon(self.btn_new, "action.add", fallback="New Animal")
-        self.btn_new.setIconSize(QSize(20, 20))
+        self.btn_new.setIconSize(QSize(30, 30))
         self.btn_new.clicked.connect(self._dlg_new_animal)
         sidebar.addWidget(self.btn_new)
 
         self.btn_edit = QPushButton(self.messages["button.sidebar.edit_animal"])
         apply_icon(self.btn_edit, "action.edit", fallback="Edit")
-        self.btn_edit.setIconSize(QSize(20, 20))
+        self.btn_edit.setIconSize(QSize(30, 30))
         # Defer wiring to _on_category_selected to avoid duplicate receivers
         try:
             self.btn_edit.clicked.disconnect()
@@ -6024,7 +6027,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.btn_edit_animal = QPushButton(self.messages.get(
             "button.sidebar.edit_animal", "\u270f\ufe0f    Edit"))
         apply_icon(self.btn_edit_animal, "action.edit", fallback="Edit")
-        self.btn_edit_animal.setIconSize(QSize(20, 20))
+        self.btn_edit_animal.setIconSize(QSize(30, 30))
         self.btn_edit_animal.setEnabled(False)
         self.btn_edit_animal.setVisible(False)
         self.btn_edit_animal.clicked.connect(self._on_edit_animal_from_all_tab)
@@ -6032,7 +6035,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         self.btn_load_blood = QPushButton(self.messages["button.sidebar.load_blood_values"])
         apply_icon(self.btn_load_blood, "measure.blood", fallback="Load Blood Values")
-        self.btn_load_blood.setIconSize(QSize(20, 20))
+        self.btn_load_blood.setIconSize(QSize(30, 30))
         self.btn_load_blood.clicked.connect(self._import_excel)
         sidebar.addWidget(self.btn_load_blood)
 
@@ -6040,47 +6043,93 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if self.has_pdg_plugin:
             self.btn_load_urine = QPushButton(self.messages["button.sidebar.load_urine_values"])
             apply_icon(self.btn_load_urine, "measure.urine", fallback="Load Urine Values")
-            self.btn_load_urine.setIconSize(QSize(20, 20))
+            self.btn_load_urine.setIconSize(QSize(30, 30))
             self.btn_load_urine.clicked.connect(self._import_pdg)
             sidebar.addWidget(self.btn_load_urine)
 
         self.btn_load_weights = QPushButton(self.messages["button.sidebar.load_weights"])
         apply_icon(self.btn_load_weights, "measure.weight", fallback="Load Weights")
-        self.btn_load_weights.setIconSize(QSize(20, 20))
+        self.btn_load_weights.setIconSize(QSize(30, 30))
         self.btn_load_weights.clicked.connect(self._import_weights)
         sidebar.addWidget(self.btn_load_weights)
 
         # Samenspender-only import button (hidden until ♂ tab)
         self.btn_load_sperm = QPushButton(self.messages["button.sidebar.load_sperm_values"])
         apply_icon(self.btn_load_sperm, "measure.sperm", fallback="Load Sperm Values")
-        self.btn_load_sperm.setIconSize(QSize(20, 20))
+        self.btn_load_sperm.setIconSize(QSize(30, 30))
         self.btn_load_sperm.clicked.connect(self._import_sperm_values)
         self.btn_load_sperm.setVisible(False)
         sidebar.addWidget(self.btn_load_sperm)
 
+        self._archive_controls_expanded = False
+        archive_row = QWidget()
+        archive_row_layout = QHBoxLayout(archive_row)
+        archive_row_layout.setContentsMargins(0, 0, 0, 0)
+        archive_row_layout.setSpacing(2)
+        self.archive_toggle_btn = QToolButton()
+        self.archive_toggle_btn.setCheckable(True)
+        self.archive_toggle_btn.setChecked(False)
+        self.archive_toggle_btn.setAutoRaise(True)
+        self.archive_toggle_btn.setFixedWidth(34)
+        self.archive_toggle_btn.clicked.connect(self._toggle_archive_controls)
+        self._update_archive_toggle_button()
+        archive_row_layout.addWidget(self.archive_toggle_btn)
         self.btn_archive = QPushButton(self.messages["button.sidebar.archive"])
         apply_icon(self.btn_archive, "action.archive", fallback="Archive")
-        self.btn_archive.setIconSize(QSize(20, 20))
+        self.btn_archive.setIconSize(QSize(30, 30))
         self.btn_archive.clicked.connect(self._archive_current)
-        sidebar.addWidget(self.btn_archive)
+        archive_row_layout.addWidget(self.btn_archive, 1)
+        sidebar.addWidget(archive_row)
+
+        self.archive_maintenance_widget = QWidget()
+        maintenance_layout = QVBoxLayout(self.archive_maintenance_widget)
+        maintenance_layout.setContentsMargins(0, 0, 0, 0)
         self.chk_show_archived = QCheckBox(self.messages.get("sidebar.show_archived", "Show Archived"))
         self.chk_show_archived.toggled.connect(self._refresh_list)
-        sidebar.addWidget(self.chk_show_archived)
+        maintenance_layout.addWidget(self.chk_show_archived)
         self.cmb_arch = QComboBox()
         self.cmb_arch.setVisible(False)
-        sidebar.addWidget(self.cmb_arch)
+        maintenance_layout.addWidget(self.cmb_arch)
         arch_actions = QHBoxLayout(); arch_actions.setContentsMargins(0,0,0,3)
         self.btn_restore = QPushButton(self.messages["button.sidebar.restore"], clicked=self._restore_archived)
         self.btn_delete = QPushButton(self.messages["button.sidebar.delete"], clicked=self._delete_archived)
         apply_icon(self.btn_restore, "action.restore", fallback="Restore")
         apply_icon(self.btn_delete, "action.delete", fallback="Delete")
-        self.btn_restore.setIconSize(QSize(20, 20))
-        self.btn_delete.setIconSize(QSize(20, 20))
+        self.btn_restore.setIconSize(QSize(30, 30))
+        self.btn_delete.setIconSize(QSize(30, 30))
         arch_actions.addWidget(self.btn_restore)
         arch_actions.addWidget(self.btn_delete)
-        sidebar.addLayout(arch_actions)
+        maintenance_layout.addLayout(arch_actions)
+        self.archive_maintenance_widget.setVisible(False)
+        sidebar.addWidget(self.archive_maintenance_widget)
        
         return sidebar
+
+    def _update_archive_toggle_button(self) -> None:
+        """Refresh the collapsed/expanded archive-maintenance affordance."""
+        expanded = bool(getattr(self, "_archive_controls_expanded", False))
+        button = getattr(self, "archive_toggle_btn", None)
+        if button is None:
+            return
+        button.setChecked(expanded)
+        semantic_id = "toggle.collapse" if expanded else "toggle.expand"
+        fallback = "Collapse" if expanded else "Expand"
+        apply_icon(button, semantic_id, fallback=fallback)
+        label_key = (
+            "sidebar.archive_controls.collapse"
+            if expanded else "sidebar.archive_controls.expand"
+        )
+        label = self.messages.get(label_key, fallback)
+        button.setToolTip(label)
+        button.setAccessibleName(label)
+
+    def _toggle_archive_controls(self, expanded: bool) -> None:
+        """Show archive maintenance controls without changing data or filters."""
+        self._archive_controls_expanded = bool(expanded)
+        maintenance = getattr(self, "archive_maintenance_widget", None)
+        if maintenance is not None:
+            maintenance.setVisible(self._archive_controls_expanded)
+        self._update_archive_toggle_button()
 
     def _set_sperm_controls_visible(self, visible: bool) -> None:
         """Show/hide sperm line-style controls without leaving empty form rows."""
@@ -7433,6 +7482,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             result.append("status.sick")
         if "♥" in status:
             result.append("status.partner")
+        if animal.get("in_experiment", False) and self._is_projects_track_active():
+            result.append("status.in_experiment")
         return result
 
     def _status_icon_tooltip(self, semantic_id: str) -> str:
@@ -7448,6 +7499,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             "status.not_pregnant": ("status.not_pregnant", "Not pregnant"),
             "status.sick": ("status.sick", "Sick / In recovery"),
             "status.abnormal": ("status.abnormal", "Abnormal"),
+            "status.in_experiment": (
+                "status.in_experiment", "In experiment"
+            ),
             "status.deceased": ("status.deceased", "Deceased"),
             "status.partner": ("status.partner", "Partner"),
         }
@@ -10722,7 +10776,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if status_icon.isNull():
                     continue
                 icon_label = QLabel()
-                icon_label.setPixmap(status_icon.pixmap(18, 18))
+                icon_label.setPixmap(status_icon.pixmap(27, 27))
                 icon_tooltip = self._status_icon_tooltip(semantic_id)
                 icon_label.setToolTip(icon_tooltip)
                 icon_label.setAccessibleName(icon_tooltip)
@@ -11343,8 +11397,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             abnormal = a.get('abnormal_current', False)
             # Genotype is excluded from status - it's shown in a separate field in the UI
             markers = ('!' if abnormal else '') + ('+' if sick else '')
-            if a.get('in_experiment', False) and self._is_projects_track_active():
-                markers += ' ■'
             return markers
         # Partners: build status with reproduction field and partner name
         if role == Role.PARTNER.value:
@@ -11504,9 +11556,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         injections.append('Prog.')
             if injections:
                 status = (status + ' ' + ' '.join(injections)).strip()
-
-        if a.get('in_experiment', False) and self._is_projects_track_active():
-            status = (status + ' ■').strip()
 
         return compact_status_with_death_priority(a, status)
 
@@ -15703,6 +15752,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.messages.get("sidebar.animal_name_filter.tooltip", "Filter the visible animal list by short name"))
         self.btn_restore.setText(self.messages["button.sidebar.restore"])
         self.btn_delete.setText(self.messages["button.sidebar.delete"])
+        if hasattr(self, 'archive_toggle_btn'):
+            self._update_archive_toggle_button()
 
         # Phase filter labels (update button text based on phase_val)
         phase_labels = {
@@ -16124,7 +16175,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             semantic_id = "account.guest_locked"
             lbl.setText(f" {self.messages.get('master_track.status.guest', 'Guest')} ")
         if icon_label is not None:
-            icon_label.setPixmap(ui_icon(semantic_id).pixmap(QSize(18, 18)))
+            icon_label.setPixmap(ui_icon(semantic_id).pixmap(QSize(27, 27)))
         self._update_master_window_title()
 
     def _update_master_window_title(self):
