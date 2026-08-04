@@ -8,7 +8,7 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | Complete immutable identity | Every animal; four-block IPID including origin |
 | Weight history | Every active and archived animal through its latest researcher-entered scientific/clinical record |
 | Species | Callitrix, Macaca, Papio, Mus |
-| Mus musculus | Hobbit/Lord-of-the-Rings names, Italian partner names, realistic mouse weights and connected ancestry |
+| Mus musculus | Canonical Hobbit-derived genealogy (Drogo + Primula -> Frodo), Italian partner names, realistic mouse weights and connected ancestry |
 | Ringbearer | Frodo, Sam, Merry and Pippin are adult experimental mice in one project and one group cage |
 | Mouse House | Dedicated building/unit/room; breeding group, Ringbearer group, and Bilbo's deliberate single cage |
 | Denethor family | Elros descendant; Boromir and Faramir with distinct donors/surrogates |

@@ -287,62 +287,122 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
             record["project"] = "Zucht"
             record["in_experiment"] = False
 
-    pairs = [
-        ("Bilbo", "10.01.2021", "Male", "Belladonna", "12.01.2021", "Female"),
-        ("Drogo", "01.04.2021", "Male", "Primula", "03.04.2021", "Female"),
-        ("Saradoc", "01.07.2021", "Male", "Esmeralda", "03.07.2021", "Female"),
-        ("Paladin", "01.10.2021", "Male", "Eglantine", "03.10.2021", "Female"),
-        ("Hamfast", "01.12.2021", "Male", "Rosie", "03.12.2021", "Female"),
-        ("Otho", "01.02.2022", "Male", "Lobelia", "03.02.2022", "Female"),
-    ]
-    parents: dict[str, tuple[str, str]] = {}
-    for male, male_birth, _male_sex, female, female_birth, _female_sex in pairs:
-        male_key = add_mouse_animal(core, key_map, male, male_birth, "Male", "breeding_animal")
-        female_key = add_mouse_animal(core, key_map, female, female_birth, "Female", "breeding_animal")
+    # Rebuild the named Hobbit cohort as one canonical family graph.  The
+    # initial mouse fixture incorrectly made Frodo a child of Bilbo.  Remove
+    # the old disposable rows first so changed sample birth dates (notably
+    # Belladonna) cannot leave stale IPIDs in the generated domain records.
+    canonical_names = {
+        "Bilbo", "Bungo", "Belladonna", "Drogo", "Primula", "Frodo",
+        "Saradoc", "Esmeralda", "Merry", "Paladin", "Eglantine", "Pippin",
+        "Hamfast", "Bell", "Sam", "Rosie", "Elanor", "Odovacar",
+        "Rosamunda", "Fredegar", "Otho", "Lobelia", "Diamond",
+    }
+    for section in ("animals", "archived_animals"):
+        stale = [
+            ipid for ipid, record in core.get(section, {}).items()
+            if str(record.get("species") or "").strip() == "Mus musculus"
+            and str(record.get("name") or "").strip() in canonical_names
+        ]
+        for ipid in stale:
+            core[section].pop(ipid, None)
+            key_map.pop(ipid, None)
+
+    def add_mouse_pair(
+        male: str, male_birth: str, female: str, female_birth: str,
+    ) -> tuple[str, str]:
+        male_key = add_mouse_animal(
+            core, key_map, male, male_birth, "Male", "breeding_animal"
+        )
+        female_key = add_mouse_animal(
+            core, key_map, female, female_birth, "Female", "breeding_animal"
+        )
         core["animals"][male_key]["verpaart_mit"] = female_key
         core["animals"][female_key]["partner_von"] = male_key
-        parents[male] = (male_key, female_key)
+        return male_key, female_key
 
-    children = [
-        ("Frodo", "10.01.2024", "Male", "Bilbo", True),
-        ("Sam", "10.02.2024", "Male", "Hamfast", True),
-        ("Merry", "10.03.2024", "Male", "Saradoc", True),
-        ("Pippin", "10.04.2024", "Male", "Paladin", True),
-        ("Fredegar", "10.05.2024", "Male", "Drogo", False),
-        ("Elanor", "10.06.2024", "Female", "Otho", False),
-        ("Diamond", "10.07.2024", "Female", "Otho", False),
-    ]
+    # Canonical named parents and couples.  Bilbo's parents are Bungo and
+    # Belladonna; Frodo's parents are Drogo and Primula; Rosie is Sam's mate,
+    # while Bell is Sam's mother.  Diamond is Pippin's mate, not his child.
+    parent_pairs = {
+        "bilbo": add_mouse_pair("Bungo", "10.01.2019", "Belladonna", "12.01.2019"),
+        "frodo": add_mouse_pair("Drogo", "01.04.2021", "Primula", "03.04.2021"),
+        "merry": add_mouse_pair("Saradoc", "01.07.2021", "Esmeralda", "03.07.2021"),
+        "pippin": add_mouse_pair("Paladin", "01.10.2021", "Eglantine", "03.10.2021"),
+        "sam": add_mouse_pair("Hamfast", "01.12.2021", "Bell", "03.12.2021"),
+        "fredegar": add_mouse_pair("Odovacar", "01.05.2021", "Rosamunda", "03.05.2021"),
+        "otho": add_mouse_pair("Otho", "01.02.2022", "Lobelia", "03.02.2022"),
+    }
+
+    def parent_keys(pair_name: str) -> tuple[str, str]:
+        father, mother = parent_pairs[pair_name]
+        return father, mother
+
     child_keys: dict[str, str] = {}
-    for name, birth, sex, parent_name, experimental in children:
-        father, mother = parents[parent_name]
+    child_specs = [
+        # Bilbo is an older generation and is not Frodo's parent.
+        ("Bilbo", "10.01.2021", "Male", "bilbo", "breeding_animal", "Zucht", False),
+        ("Frodo", "10.01.2024", "Male", "frodo", "experimental_animal", "Ringbearer", True),
+        ("Sam", "10.02.2024", "Male", "sam", "experimental_animal", "Ringbearer", True),
+        ("Merry", "10.03.2024", "Male", "merry", "experimental_animal", "Ringbearer", True),
+        ("Pippin", "10.04.2024", "Male", "pippin", "experimental_animal", "Ringbearer", True),
+        ("Fredegar", "10.05.2024", "Male", "fredegar", "breeding_animal", "Zucht", False),
+    ]
+    for name, birth, sex, pair_name, role, project, in_experiment in child_specs:
+        father, mother = parent_keys(pair_name)
         child_keys[name] = add_mouse_animal(
-            core, key_map, name, birth, sex,
-            "experimental_animal" if experimental else "breeding_animal",
-            parent_f=mother,
-            parent_m=father,
-            project="Ringbearer" if experimental else "Zucht",
-            in_experiment=experimental,
+            core, key_map, name, birth, sex, role,
+            parent_f=mother, parent_m=father,
+            project=project, in_experiment=in_experiment,
         )
 
+    # Elanor is Sam and Rosie's daughter.  Rosie is retained as the canonical
+    # partner from the Gamgee family, rather than being Hamfast's partner.
+    rosie_key = add_mouse_animal(
+        core, key_map, "Rosie", "03.12.2021", "Female", "breeding_animal"
+    )
+    sam_key = child_keys["Sam"]
+    core["animals"][sam_key]["verpaart_mit"] = rosie_key
+    core["animals"][rosie_key]["partner_von"] = sam_key
+    child_keys["Elanor"] = add_mouse_animal(
+        core, key_map, "Elanor", "10.06.2024", "Female", "breeding_animal",
+        parent_f=rosie_key, parent_m=sam_key, project="Zucht",
+    )
+    child_keys["Diamond"] = add_mouse_animal(
+        core, key_map, "Diamond", "10.07.2024", "Female", "breeding_animal",
+        project="Zucht", partner=child_keys["Pippin"],
+    )
+    core["animals"][child_keys["Pippin"]]["verpaart_mit"] = child_keys["Diamond"]
+    core["animals"][child_keys["Diamond"]]["partner_von"] = child_keys["Pippin"]
+
+    # Italian names provide ordinary non-canonical partner/background examples.
+    # They are intentionally not inserted into the Hobbit parentage graph.
     partner_specs = [
         ("Giulia", "10.01.2024", "Female", "Frodo"),
-        ("Marco", "10.02.2024", "Male", "Sam"),
         ("Chiara", "10.03.2024", "Female", "Merry"),
-        ("Luca", "10.04.2024", "Male", "Pippin"),
         ("Giovanni", "10.05.2024", "Male", "Fredegar"),
         ("Sofia", "10.06.2024", "Female", "Elanor"),
-        ("Elena", "10.07.2024", "Female", "Diamond"),
     ]
     for name, birth, sex, paired_name in partner_specs:
         paired_key = child_keys[paired_name]
         partner_key = add_mouse_animal(
-            core, key_map, name, birth, sex, "breeding_animal",
-            project="Zucht", partner=paired_key,
+            core, key_map, name, birth, sex, "breeding_animal", project="Zucht",
         )
         if sex == "Male":
             core["animals"][paired_key]["partner_von"] = partner_key
+            core["animals"][partner_key]["partner_von"] = paired_key
         else:
             core["animals"][paired_key]["verpaart_mit"] = partner_key
+            core["animals"][partner_key]["partner_von"] = paired_key
+
+    # Keep the remaining Italian examples as unpaired breeding animals so the
+    # colony still exercises ordinary male/female records without inventing
+    # extra Hobbit ancestry.
+    for name, birth, sex in (
+        ("Marco", "10.02.2024", "Male"),
+        ("Luca", "10.04.2024", "Male"),
+        ("Elena", "10.07.2024", "Female"),
+    ):
+        add_mouse_animal(core, key_map, name, birth, sex, "breeding_animal", project="Zucht")
 
     return {"experimental": [child_keys[name] for name in ("Frodo", "Sam", "Merry", "Pippin")],
             "bilbo": next(key for key in core["animals"] if key.startswith("Bilbo | Mus musculus |"))}
@@ -1567,7 +1627,7 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | Complete immutable identity | Every animal; four-block IPID including origin |
 | Weight history | Every active and archived animal through its latest researcher-entered scientific/clinical record |
 | Species | Callitrix, Macaca, Papio, Mus |
-| Mus musculus | Hobbit/Lord-of-the-Rings names, Italian partner names, realistic mouse weights and connected ancestry |
+| Mus musculus | Canonical Hobbit-derived genealogy (Drogo + Primula -> Frodo), Italian partner names, realistic mouse weights and connected ancestry |
 | Ringbearer | Frodo, Sam, Merry and Pippin are adult experimental mice in one project and one group cage |
 | Mouse House | Dedicated building/unit/room; breeding group, Ringbearer group, and Bilbo's deliberate single cage |
 | Denethor family | Elros descendant; Boromir and Faramir with distinct donors/surrogates |
