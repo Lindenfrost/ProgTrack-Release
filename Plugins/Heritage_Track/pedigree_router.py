@@ -122,7 +122,7 @@ class PedigreeRouter:
         self,
         *,
         automatic_x_scale: float = 1.45,
-        node_gap: float = 0.28,
+        node_gap: float = 0.38,
         route_clearance: float = 0.16,
         junction_clearance: float = 0.30,
         max_y_lanes: int = 5,
@@ -251,7 +251,14 @@ class PedigreeRouter:
         obstacles: Dict[str, Rect] = {}
         for node, (x, y) in positions.items():
             label = str(labels.get(node, node)).strip()
-            label_half_width = max(0.40, (len(label) * 0.075) + 0.14)
+            # The renderer uses a 9 pt primary label and a 7 pt secondary
+            # label.  A character-count-only estimate of ``0.075`` data units
+            # per character was consistently too small for proportional fonts
+            # (especially for dates, IDs, and names containing wide glyphs),
+            # allowing labels to touch even when the marker centres did not.
+            # Keep one bounded estimate in the router so placement, routing,
+            # and validation use the same footprint.
+            label_half_width = max(0.48, (self._estimated_label_width(label) / 2.0))
             bottom_offset = 0.78 if show_inbreeding else 0.56
             obstacles[node] = Rect(
                 x - label_half_width,
@@ -260,6 +267,30 @@ class PedigreeRouter:
                 y + 0.34,
             )
         return obstacles
+
+    @staticmethod
+    def _estimated_label_width(label: str) -> float:
+        """Estimate the rendered width of a Heritage label in data units.
+
+        Matplotlib text extents are only available after a renderer exists.
+        This conservative, proportional-font estimate is deliberately shared
+        by all geometry passes and capped only by the actual text length; it
+        prevents dense rows without making short names needlessly far apart.
+        """
+        text = str(label or "").strip()
+        if not text:
+            return 0.96
+        width = 0.30  # left/right breathing room around marker and text
+        for char in text:
+            if char.isspace():
+                width += 0.075
+            elif char in "MW@%#&QGOD" or ord(char) > 0x2E80:
+                width += 0.175
+            elif char in "ilI.,:;!|()[]{}'`\"":
+                width += 0.085
+            else:
+                width += 0.145
+        return max(0.96, width)
 
     def validate_plan(
         self,
@@ -1176,13 +1207,10 @@ class PedigreeRouter:
                     key=lambda child: (positions[child][0], child.casefold()),
                 )
                 widths = [
-                    max(
-                        0.80,
-                        (len(str(labels.get(child, child)).strip()) * 0.150) + 0.28,
-                    )
+                    self._estimated_label_width(str(labels.get(child, child)).strip())
                     for child in ordered_children
                 ]
-                slot_width = max(widths, default=0.80) + 0.72
+                slot_width = max(widths, default=0.96) + 0.82
                 midpoint = (len(ordered_children) - 1) / 2.0
                 for index, child in enumerate(ordered_children):
                     target_x = parent_center + ((index - midpoint) * slot_width)
@@ -1218,7 +1246,7 @@ class PedigreeRouter:
         initial = np.asarray([positions[node][0] for node in nodes], dtype=float)
         obstacles = self.node_obstacles(positions, labels, show_inbreeding)
         equality_rows: List[np.ndarray] = []
-        collision_pairs: List[Tuple[int, int, float]] = []
+        collision_pairs: List[Tuple[int, int, float, float]] = []
 
         # Preserve the visual left-to-right order while separating any pair
         # whose complete marker/name/detail rectangles share vertical space.
@@ -1238,8 +1266,18 @@ class PedigreeRouter:
                     + (second_rect.right - second_rect.left) / 2.0
                     + self.node_gap
                 )
+                # Keep the order chosen by the family placement pass.  Using
+                # ``abs(difference)`` here allowed the projection to solve a
+                # collision by swapping two unrelated animals, producing a
+                # visually false crossing even though the rectangles no
+                # longer overlapped.
+                initial_difference = initial[index[second]] - initial[index[first]]
+                if abs(initial_difference) <= _EPSILON:
+                    direction = 1.0 if first.casefold() <= second.casefold() else -1.0
+                else:
+                    direction = 1.0 if initial_difference > 0.0 else -1.0
                 collision_pairs.append(
-                    (index[first], index[second], required)
+                    (index[first], index[second], required, direction)
                 )
 
         # A direct one-child connection must be perpendicular.  This equality
@@ -1298,24 +1336,15 @@ class PedigreeRouter:
             for _pass in range(96):
                 worst_deficit = 0.0
                 changed = False
-                for first, second, required in collision_pairs:
+                for first, second, required, direction in collision_pairs:
                     difference = candidate[second] - candidate[first]
-                    deficit = required - abs(difference)
+                    deficit = required - (difference * direction)
                     worst_deficit = max(worst_deficit, deficit)
                     if deficit <= 1e-7:
                         continue
-                    preferred = (
-                        1.0
-                        if difference > 0.0
-                        else -1.0
-                        if difference < 0.0
-                        else 1.0
-                        if initial[second] >= initial[first]
-                        else -1.0
-                    )
                     raw = np.zeros(len(nodes), dtype=float)
-                    raw[first] = -preferred
-                    raw[second] = preferred
+                    raw[first] = -direction
+                    raw[second] = direction
                     movement = projector @ raw
                     gain = float(np.dot(raw, movement))
                     if gain <= 1e-10:
@@ -1428,7 +1457,7 @@ class PedigreeRouter:
 
         def half_width(node: str) -> float:
             label = str(labels.get(node, node)).strip()
-            return max(0.40, (len(label) * 0.075) + 0.14)
+            return self._estimated_label_width(label) / 2.0
 
         original_center = sum(positions[node][0] for node in row) / len(row)
         ordered = sorted(row, key=lambda node: (positions[node][0], node.casefold()))

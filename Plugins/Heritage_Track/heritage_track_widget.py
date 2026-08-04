@@ -405,6 +405,13 @@ class HeritageTrackWidget(QWidget):
         self.drag_threshold = 0.05
         self._drag_background: Optional[Any] = None
         self._drag_artist_map: Dict[str, Tuple[Any, ...]] = {}
+        # Screen-independent spatial index for hover/click hit testing.  The
+        # previous implementation transformed every node on every mouse move,
+        # which made dense trees increasingly sluggish.  A small data-space
+        # grid keeps the candidate set local while preserving nearest-marker
+        # semantics.
+        self._hit_grid: Dict[Tuple[int, int], List[str]] = {}
+        self._hit_grid_cell_size = 2.0
         self.all_animals_mode = True
         self._force_relayout = False
 
@@ -2284,8 +2291,14 @@ class HeritageTrackWidget(QWidget):
 
         xs = [p[0] for p in points]
         ys = [p[1] for p in points]
-        margin_x = 2.0
-        margin_y = 1.5
+        # Keep small graphs from floating in excessive whitespace while still
+        # reserving a stable outer margin for markers, labels, and junctions.
+        # Large graphs are allowed to grow; they are zoomable and must not be
+        # compressed until labels become unreadable.
+        span_x = max(xs) - min(xs)
+        span_y = max(ys) - min(ys)
+        margin_x = max(1.15, min(2.0, span_x * 0.08))
+        margin_y = max(1.15, min(1.8, span_y * 0.08))
         return (min(xs) - margin_x, max(xs) + margin_x), (min(ys) - margin_y, max(ys) + margin_y)
 
     def _build_display_context(
@@ -2685,6 +2698,12 @@ class HeritageTrackWidget(QWidget):
                         min_x + (index % columns) * 4.2,
                         min_y - 4.0 - (index // columns) * 3.2,
                     )
+            # Singletons are parked after routing because they have no family
+            # edges. Keep the route plan in sync with their final coordinates;
+            # otherwise ``all_points()`` retains invisible stale points and
+            # automatic fitting creates the large empty margins seen in the
+            # all-species screenshot.
+            route_plan.animal_positions = dict(animal_positions)
         self._route_plan = route_plan
         self.family_routes = route_plan.routes
 
@@ -2717,6 +2736,7 @@ class HeritageTrackWidget(QWidget):
         self.family_positions = family_positions
         self.family_members = family_members
         self.node_positions = positions
+        self._rebuild_hit_test_index()
         self.node_meta.clear()
 
         route_batches: Dict[
@@ -3033,6 +3053,7 @@ class HeritageTrackWidget(QWidget):
         self._chronological_undated_nodes = set()
         self.selected_nodes.clear()
         self.temp_positions.clear()
+        self._hit_grid.clear()
 
         # Update status label
         mode_text = self.messages.get("heritage_track.status.mode_all", "All animals mode")
@@ -3045,11 +3066,43 @@ class HeritageTrackWidget(QWidget):
         if event.x is None or event.y is None:
             return None
 
+        # Use event data coordinates to select only nearby grid cells.  The
+        # screen threshold is still evaluated exactly below, so this is an
+        # optimization rather than a change to hit-test behavior.
+        candidates: List[str]
+        if event.xdata is None or event.ydata is None or not self._hit_grid:
+            candidates = list(self.node_positions)
+        else:
+            cell = self._hit_grid_cell_size
+            cell_x = int(math.floor(float(event.xdata) / cell))
+            cell_y = int(math.floor(float(event.ydata) / cell))
+            sx0, sy0 = self.ax.transData.transform((float(event.xdata), float(event.ydata)))
+            sx1, sy1 = self.ax.transData.transform(
+                (float(event.xdata) + cell, float(event.ydata) + cell)
+            )
+            pixels_per_cell = max(abs(sx1 - sx0), abs(sy1 - sy0), 1e-6)
+            cell_radius = max(1, int(math.ceil(pixel_threshold / pixels_per_cell)) + 1)
+            if cell_radius > 8:
+                candidates = list(self.node_positions)
+                cell_radius = 0
+            else:
+                candidates = []
+            if cell_radius:
+                for dx in range(-cell_radius, cell_radius + 1):
+                    for dy in range(-cell_radius, cell_radius + 1):
+                        candidates.extend(self._hit_grid.get((cell_x + dx, cell_y + dy), ()))
+
         nearest_name = None
         nearest_dist = float("inf")
-
-
-        for name, (x, y) in self.node_positions.items():
+        seen: Set[str] = set()
+        for name in candidates:
+            if name in seen:
+                continue
+            seen.add(name)
+            point = self.node_positions.get(name)
+            if point is None:
+                continue
+            x, y = point
             sx, sy = self.ax.transData.transform((x, y))
             dx = sx - event.x
             dy = sy - event.y
@@ -3061,6 +3114,14 @@ class HeritageTrackWidget(QWidget):
         if nearest_name is None or nearest_dist > pixel_threshold:
             return None
         return nearest_name
+
+    def _rebuild_hit_test_index(self) -> None:
+        """Build a cheap data-space index for the current node positions."""
+        cell = self._hit_grid_cell_size
+        self._hit_grid = defaultdict(list)
+        for name, (x, y) in self.node_positions.items():
+            key = (int(math.floor(float(x) / cell)), int(math.floor(float(y) / cell)))
+            self._hit_grid[key].append(name)
 
     def _on_mouse_press(self, event) -> None:
         # Middle button (wheel press) starts panning.
