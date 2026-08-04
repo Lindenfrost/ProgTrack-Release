@@ -41,6 +41,7 @@
     "status.warning": {"file": "status_warning.svg", "fallback": "Warning", "usage": "Warning status"},
     "account.lord": {"file": "account_lord.svg", "fallback": "Lord", "usage": "Lord account status"},
     "account.user": {"file": "account_user.svg", "fallback": "User", "usage": "Signed-in user status"},
+    "account.awo": {"file": "account_awo.svg", "fallback": "AWO", "usage": "Animal Welfare Officer account"},
     "account.guest_locked": {"file": "account_guest_locked.svg", "fallback": "Guest", "usage": "Restricted guest status"},
     "network.insert_symbol": {"file": "network_insert_symbol.svg", "fallback": "Insert symbol", "usage": "Network Track composer"},
     "flow.freezer": {"file": "flow_freezer.svg", "fallback": "Freezer", "usage": "Flow Track freezer control"},

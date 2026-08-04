@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <style>
+    .blue{fill:#2f80ed;stroke:#25364a;stroke-width:4;stroke-linejoin:round}
+    .badge{fill:#f4b942;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
+    .line{fill:none;stroke:#25364a;stroke-width:3;stroke-linecap:round}
+  </style>
+  <circle class="blue" cx="32" cy="23" r="11"/>
+  <path class="blue" d="M13 54c2-16 36-16 38 0z"/>
+  <path class="badge" d="M43 37h15v20H43z"/>
+  <path class="line" d="M47 43h7M47 47h7M47 52h7"/>
+  <path class="line" d="M50.5 42v6"/>
+</svg>
