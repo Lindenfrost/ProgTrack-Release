@@ -1201,6 +1201,35 @@ def _normalise_project_payload(payload: Any, *, history: bool) -> dict[str, Any]
     return result
 
 
+def _remove_obsolete_project_medical_entries(medical: Any) -> Any:
+    """Drop medical audit rows that only describe deleted projects."""
+    if not isinstance(medical, dict):
+        return medical
+    result = copy.deepcopy(medical)
+    for animal in (result.get("animals") or {}).values():
+        if not isinstance(animal, dict) or not isinstance(animal.get("entries"), list):
+            continue
+        kept = []
+        for entry in animal["entries"]:
+            if not isinstance(entry, dict):
+                kept.append(entry)
+                continue
+            text = " ".join(
+                str(entry.get(field) or "")
+                for field in ("condition_label_snapshot", "note")
+            )
+            obsolete = any(
+                project in text for project in ("Anode", "Crossbreeding", "Zucht")
+            )
+            if obsolete and entry.get("entry_type") in {
+                "project_assigned", "project_left", "severity_changed"
+            }:
+                continue
+            kept.append(entry)
+        animal["entries"] = kept
+    return result
+
+
 def _ensure_project_history(project_history: dict[str, Any], project_name: str,
                             core: dict[str, Any], start_date: str) -> None:
     projects = project_history.setdefault("projects", {})
@@ -1370,8 +1399,11 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
         records[("housing", "cage")], core["animals"]
     )
     records[("heritage", "graph")] = complete_heritage(core)
+    medical = _remove_obsolete_project_medical_entries(
+        records[("medical", "history")]
+    )
     medical, reports = add_resolved_histories(
-        records[("medical", "history")],
+        medical,
         records[("reports", "animal-reports")],
         core,
     )
