@@ -2297,7 +2297,15 @@ class HeritageTrackWidget(QWidget):
         # compressed until labels become unreadable.
         span_x = max(xs) - min(xs)
         span_y = max(ys) - min(ys)
-        margin_x = max(1.15, min(2.0, span_x * 0.08))
+        label_half_widths = [
+            self._pedigree_router._estimated_label_width(
+                self._get_node_obstacle_label(node, self._get_node_record(node))
+            ) / 2.0
+            for node in positions
+            if not self._is_family_node(node)
+        ]
+        label_margin_x = max(label_half_widths, default=0.48) + 0.30
+        margin_x = max(1.15, min(2.4, max(span_x * 0.08, label_margin_x)))
         margin_y = max(1.15, min(1.8, span_y * 0.08))
         return (min(xs) - margin_x, max(xs) + margin_x), (min(ys) - margin_y, max(ys) + margin_y)
 
