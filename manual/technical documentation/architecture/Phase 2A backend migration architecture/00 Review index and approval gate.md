@@ -29,7 +29,7 @@ profiles before the resulting release is published.
 2. [Plugin capability and storage matrix](02%20Plugin%20capability%20and%20storage%20matrix.md)
 3. [Proposed canonical data dictionary and entity map](03%20Proposed%20canonical%20data%20dictionary%20and%20entity%20map.md)
 4. [PostgreSQL/SQLite transaction and lock contract](04%20Proposed%20PostgreSQL%20SQLite%20transaction%20and%20entity-lock%20contract.md)
-5. [Managed-document, interchange, and LAVAN contract](05%20Managed-document%20interchange%20and%20LAVAN%20adapter%20contract.md)
+5. [Managed-document, interchange, and external source adapter contract](05%20Managed-document%20interchange%20and%20external%20source%20adapter%20contract.md)
 6. [Findings, decisions, and open questions](06%20Findings%20proposed%20decisions%20and%20open%20questions.md)
 7. [Phase 2B implementation and validation plan](07%20Phase%202B%20implementation%20and%20validation%20plan.md)
 8. [Evidence register](08%20Evidence%20register.md)
@@ -71,7 +71,7 @@ The target also requires:
 - managed documents outside the database, with typed ownership, state,
   relative path, size, MIME type, and SHA-256 metadata;
 - a versioned backend-neutral full-dataset package for example-data cutover,
-  standalone-to-server transfer, backup/interchange, and future LAVAN
+  standalone-to-server transfer, backup/interchange, and future external-source
   conversion;
 - caches, generated projections, live locks/sessions, per-user UI state, and
   ordinary exports excluded from canonical domain data.
@@ -130,7 +130,7 @@ Phase 2A may be approved only when the reviewer accepts or amends:
 - [x] managed-document state machine and reconciliation;
 - [x] institution-branding configuration/asset placement and bounded
       aspect-ratio-preserving PDF rendering;
-- [x] canonical package, standalone-to-server transfer, and LAVAN boundary;
+- [x] canonical package, standalone-to-server transfer, and external-source boundary;
 - [x] repeatable read-only verification contract, first retained evidence run,
       and final clean-baseline run;
 - [x] ordered Phase 2B implementation and validation plan;

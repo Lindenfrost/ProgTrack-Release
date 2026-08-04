@@ -64,7 +64,7 @@ the table to avoid malformed Markdown cells.
 9. Managed payload bytes stay outside the database with authoritative metadata
    and SHA-256 in the selected profile database.
 10. Canonical full-dataset interchange is distinct from Phase 5 `.pta` and is
-    the boundary for future LAVAN conversion.
+    the boundary for future external-source conversion.
 11. The Phase 2 cutover edits disposable example data; it is not an automatic
     production-data migration.
 12. Measurement imports are existing-animal-only. Unknown animals stay visible

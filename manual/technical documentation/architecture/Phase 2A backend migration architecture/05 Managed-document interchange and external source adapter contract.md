@@ -1,4 +1,4 @@
-# Managed-document, interchange, and LAVAN adapter contract
+# Managed-document, interchange, and external source adapter contract
 
 ## Managed-document contract
 
@@ -252,16 +252,16 @@ workflow before safe retry.
 - README/manuals must explain profile choice, local-path restrictions, backup,
   and the package-based transition after implementation is finalized.
 
-## LAVAN source-adapter boundary
+## External source-adapter boundary
 
-LAVAN is a source adapter, not a database client.
+An external source adapter is a source adapter, not a database client.
 
 The adapter:
 
-- reads a documented LAVAN export/source snapshot;
+- reads a documented external-system export/source snapshot;
 - never writes ProgTrack PostgreSQL tables directly;
 - declares adapter and source-schema versions;
-- maps LAVAN identifiers to canonical source-system/source-record IDs;
+- maps source-system identifiers to canonical source-system/source-record IDs;
 - normalizes animals, species, sex, birth/death, public IDs/chips, roles,
   relationships, projects, housing, measurements, samples, medical records,
   and documents only where source semantics are known;
@@ -289,5 +289,5 @@ The adapter:
 - per-record error severity and source locator;
 - reviewable totals and reconciliation against source counts.
 
-Unknown LAVAN fields may be preserved in a namespaced provenance extension, but
+Unknown external-source fields may be preserved in a namespaced provenance extension, but
 must not be inserted into arbitrary PostgreSQL columns or opaque plugin JSON.

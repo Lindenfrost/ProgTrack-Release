@@ -217,7 +217,7 @@ services, and release artifacts contain no development/audit clutter.
 - identical bytes under distinct owners;
 - config asset distinct from document and packaged icon;
 - Standalone ↔ empty Shared package transition;
-- LAVAN adapter produces package/staging only, never SQL.
+- External source adapters produce package/staging only, never SQL.
 
 ### Domain regression
 
