@@ -1,18 +1,18 @@
 {
   "counts": {
-    "active_animals": 176,
+    "active_animals": 170,
     "archived_animals": 93,
     "canonical_users": 7,
     "domain_records": 14,
     "pregnancy_verifications": 6,
-    "scientifically_current_weights": 269,
+    "scientifically_current_weights": 263,
     "species": 4,
-    "sperm_donation_events": 9,
-    "weighted_animals": 269
+    "sperm_donation_events": 7,
+    "weighted_animals": 263
   },
   "errors": [],
   "fictional": true,
-  "package_sha256": "97a65831f6c7deb133dad03a0e191e347a4d347fef4a853d76f6cc661ae9b50a",
+  "package_sha256": "c1bb024035e04d1ae07487d3110451c638828ee63f413d7c2e890eeac97d31ad",
   "schema": "progtrack-seed-integrity/1",
   "seed_version": "0.2.1",
   "valid": true

@@ -49,6 +49,7 @@ ELDARION_BIRTH_DATE = date(2026, 3, 1)
 # assignments are cleared instead of leaving orphaned project names in the
 # database; deleting a project must not silently move animals to another one.
 SEED_PROJECTS = frozenset({"Backcrossing", "OTOF-", "Oakshield", "Ringbearer"})
+REMOVED_ANIMAL_NAMES = frozenset({"Lindir", "Dana", "Bobby", "Echo"})
 
 
 def canonical_project_name(value: Any) -> str:
@@ -60,6 +61,40 @@ def canonical_project_name(value: Any) -> str:
     """
     name = str(value or "").strip()
     return name if name in SEED_PROJECTS else ""
+
+
+def _is_removed_animal_reference(value: Any) -> bool:
+    """Recognize an identity, public ID, or bare name for a removed animal."""
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    if not text:
+        return False
+    first = text.split(" | ", 1)[0].strip()
+    if first in REMOVED_ANIMAL_NAMES or text in REMOVED_ANIMAL_NAMES:
+        return True
+    lowered = text.casefold()
+    return any(lowered.endswith("_" + name.casefold()) for name in REMOVED_ANIMAL_NAMES)
+
+
+def prune_removed_animal_references(value: Any) -> Any:
+    """Remove deleted-animal keys/list values and clear scalar references."""
+    if isinstance(value, dict):
+        return {
+            str(key): prune_removed_animal_references(item)
+            for key, item in value.items()
+            if not _is_removed_animal_reference(key)
+        }
+    if isinstance(value, list):
+        result = []
+        for item in value:
+            if _is_removed_animal_reference(item):
+                continue
+            result.append(prune_removed_animal_references(item))
+        return result
+    if _is_removed_animal_reference(value):
+        return ""
+    return value
 
 RETRIEVAL_DATES = (
     date(2024, 12, 1),
@@ -192,6 +227,8 @@ def normalize_core() -> tuple[dict[str, Any], dict[str, str]]:
         for old_key, raw in sorted(source.get(section, {}).items()):
             record = dict(raw)
             name = str(record.get("name") or old_key.split(" | ")[0]).strip()
+            if name in REMOVED_ANIMAL_NAMES:
+                continue
             species = str(record.get("species") or "").strip()
             if species == "Unknown species":
                 species = "Mus musculus"
@@ -1337,7 +1374,9 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
         ("samples", "other"): load_json("Plugins/Sample_Track/other.json", []),
     }
     for key, value in legacy.items():
-        records[key] = rewrite_references(value, key_map)
+        records[key] = prune_removed_animal_references(
+            rewrite_references(value, key_map)
+        )
     project_catalog = records[("projects", "catalog")]
     project_catalog = _normalise_project_payload(project_catalog, history=False)
     records[("projects", "catalog")] = project_catalog
@@ -1432,6 +1471,8 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
     all_animals = {**core["animals"], **core["archived_animals"]}
     errors = []
     for ipid, record in all_animals.items():
+        if str(record.get("name") or "").strip() in REMOVED_ANIMAL_NAMES:
+            errors.append(f"removed animal still present: {ipid}")
         assigned_project = str(record.get("project") or "").strip()
         if assigned_project and assigned_project not in SEED_PROJECTS:
             errors.append(f"unsupported project assignment: {ipid} -> {assigned_project}")
@@ -1684,7 +1725,7 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
 def main() -> int:
     core, key_map = normalize_core()
     # Rewrite inherited pedigree references before adding new canonical animals.
-    core = rewrite_references(core, key_map)
+    core = prune_removed_animal_references(rewrite_references(core, key_map))
     mouse_scenario = add_mouse_colony(core, key_map)
     normalize_mouse_public_ids(core)
     scenario = add_reproduction_scenarios(core, key_map)
