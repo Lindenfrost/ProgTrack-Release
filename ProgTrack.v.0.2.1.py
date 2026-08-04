@@ -13552,9 +13552,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 continue
             if not steroid_active and self._is_steroid_role_value(value):
                 continue
-            role_options.append((self._role_label_with_icon(value), value))
+            # The selector is a user-facing choice list: show only the
+            # localized role title.  ``value`` remains in the tuple as the
+            # stable internal role ID used when dispatching to the dialog;
+            # registry icon keys (for example ``role.female``) must never
+            # leak into the visible text.
+            role_options.append((self._get_localized_role(value), value))
         if not role_options:
-            role_options.append((self._role_label_with_icon(Role.OFFSPRING.value), Role.OFFSPRING.value))
+            role_options.append((self._get_localized_role(Role.OFFSPRING.value), Role.OFFSPRING.value))
 
         for label, _role_value in role_options:
             lw.addItem(label)
