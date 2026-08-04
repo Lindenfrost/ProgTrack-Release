@@ -7915,6 +7915,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return registry.display_for_value(rolle, self.messages)
         return self._get_localized_role(rolle)
 
+    def _role_selector_title(self, role_value: str) -> str:
+        """Return the title shown in the new-animal role selector.
+
+        Built-in roles use the active language catalog.  Facility-created or
+        imported roles are different: their label is maintained in the role
+        registry itself and does not require a translation entry.  Keeping
+        that label as the selector title also prevents a missing localization
+        from exposing a technical ``custom.*``/``imported.*`` value.
+        """
+        role = self._role_definition_for_value(role_value)
+        if role and not bool(role.get("built_in", False)):
+            label = str(role.get("label") or "").strip()
+            if label:
+                return label
+        return self._get_localized_role(role_value)
+
     def _permitted_export_animal_ids(
         self,
         *,
@@ -13552,14 +13568,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 continue
             if not steroid_active and self._is_steroid_role_value(value):
                 continue
-            # The selector is a user-facing choice list: show only the
-            # localized role title.  ``value`` remains in the tuple as the
-            # stable internal role ID used when dispatching to the dialog;
-            # registry icon keys (for example ``role.female``) must never
-            # leak into the visible text.
-            role_options.append((self._get_localized_role(value), value))
+            # The selector is a user-facing choice list: show only the role
+            # title.  ``value`` remains in the tuple as the stable internal
+            # role ID used when dispatching to the dialog; registry icon keys
+            # and technical IDs must never leak into the visible text.
+            role_options.append((self._role_selector_title(value), value))
         if not role_options:
-            role_options.append((self._get_localized_role(Role.OFFSPRING.value), Role.OFFSPRING.value))
+            role_options.append((self._role_selector_title(Role.OFFSPRING.value), Role.OFFSPRING.value))
 
         for label, _role_value in role_options:
             lw.addItem(label)
