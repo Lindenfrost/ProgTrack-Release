@@ -24,16 +24,25 @@ facilities.
 
 ## At a glance
 
-| Area | What ProgTrack provides |
-| --- | --- |
-| <img src="icons/ui/role_offspring.svg" width="24" alt="Animal"> Animal records | Immutable identity, role-specific fields, lifecycle events, archive/restore, and history. |
-| <img src="icons/ui/measure_weight.svg" width="24" alt="Measurements"> Measurements | Weight, blood progesterone, urine PdG, sperm values, and Excel import/export. |
-| <img src="icons/ui/medi_current_sick.svg" width="24" alt="Medical"> Medical history | Diagnoses, treatments, observations, status filters, documents, and exports. |
-| <img src="icons/ui/action_archive.svg" width="24" alt="Housing"> Housing | Building, unit, room, cage, animal placement, movement history, and inspections. |
-| <img src="icons/ui/pedigree_symbol.svg" width="24" alt="Pedigree"> Pedigree | Parent relationships, family nodes, kinship, inbreeding, and genotype annotations. |
-| <img src="icons/ui/action_settings.svg" width="24" alt="Projects"> Projects and permissions | Project association, role/job visibility, user sessions, audit events, and locks. |
-| <img src="icons/ui/flow_freezer.svg" width="24" alt="Samples"> Samples and flow | Sample records, linked documents, embryo-flow views, and freezer inventory. |
-| <img src="icons/ui/account_user.svg" width="24" alt="Portable"> Portable operation | `Launcher.exe`, bundled Python/Qt libraries, a deterministic fictional seed, and backend interchange packages. |
+The first column uses the same neutral tab background as the application
+(`QTabBar::tab:disabled`, `#e0e0e0`). Keeping each SVG on its own line makes
+partially transparent icon artwork readable in both light and dark viewers.
+
+<table>
+  <thead>
+    <tr><th bgcolor="#e0e0e0">Area</th><th>What ProgTrack provides</th></tr>
+  </thead>
+  <tbody>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_offspring.svg" width="28" alt="Animal"><br><strong>Animal records</strong></td><td>Immutable identity, role-specific fields, lifecycle events, archive/restore, and history.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/measure_weight.svg" width="28" alt="Measurements"><br><strong>Measurements</strong></td><td>Weight, blood progesterone, urine PdG, sperm values, and Excel import/export.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/medi_current_sick.svg" width="28" alt="Medical"><br><strong>Medical history</strong></td><td>Diagnoses, treatments, observations, status filters, documents, and exports.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_archive.svg" width="28" alt="Housing"><br><strong>Housing</strong></td><td>Building, unit, room, cage, animal placement, movement history, and inspections.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/pedigree_symbol.svg" width="28" alt="Pedigree"><br><strong>Pedigree</strong></td><td>Parent relationships, family nodes, kinship, inbreeding, and genotype annotations.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_settings.svg" width="28" alt="Projects"><br><strong>Projects and permissions</strong></td><td>Project association, role/job visibility, user sessions, audit events, and locks.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/flow_freezer.svg" width="28" alt="Samples"><br><strong>Samples and flow</strong></td><td>Sample records, linked documents, embryo-flow views, and freezer inventory.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_user.svg" width="28" alt="Portable"><br><strong>Portable operation</strong></td><td><code>Launcher.exe</code>, bundled Python/Qt libraries, a deterministic fictional seed, and backend interchange packages.</td></tr>
+  </tbody>
+</table>
 
 ## Contents
 
@@ -79,10 +88,10 @@ account is `123456`; change these passwords before any sensitive or shared use.
 | `Admin` | Administrator Administratorson | `lord` | none |
 | `Researcher` | Dr. Researcher Sciencedottir | `user` | `researcher` |
 | `Vet` | Dr. Veterinary Medicinsson | `user` | `vet` |
+| `Veti` | Dr. Veterinary Medicinsdottir | `AWO` | `vet` |
 | `Manager` | Dr. Manager Plansdottir | `user` | `manager` |
 | `Keeper` | Keeper Breedsson | `user` | `keeper` |
 | `Tester` | Tester Aitisson | `user` | `tester` |
-| `Veti` | Dr. Veterinary Medicinsdottir | `AWO` | `vet` |
 
 ## What is included
 
@@ -102,9 +111,6 @@ account is `123456`; change these passwords before any sensitive or shared use.
 - `_internal/` — the bundled Python/Qt runtime and native libraries;
 - `third_party_licenses/`, `THIRD_PARTY_NOTICES.md`, and `LICENSE`.
 
-The release ZIP intentionally omits repository-only launcher build sources,
-automated tests, caches, logs, and temporary audit output.
-
 ## Portable launcher
 
 `Launcher.exe` is a PyInstaller OneDir launcher. At startup it:
@@ -120,11 +126,6 @@ To select a script explicitly:
 ```text
 Launcher.exe --script ProgTrack.v.0.2.1.py
 ```
-
-The launcher is not the application itself and does not embed the editable
-ProgTrack source. Keep these items together when copying a release:
-`Launcher.exe`, `_internal/`, `ProgTrack.v.0.2.1.py`, `Plugins/`, `icons/`,
-`lang/`, `manual/`, and `Resources/`.
 
 ## Folder layout
 
@@ -161,8 +162,8 @@ interchange format:
 Only a Lord account can open `Settings -> Backend`. The dialog can select the
 profile and edit the SQLite database name/path or the PostgreSQL host, port,
 database, user, TLS, timeout, managed-storage, and pool settings. PostgreSQL
-passwords are kept in the operating-system credential store rather than in
-`backend.json`. Connection testing is non-mutating. Saving selects the profile
+passwords are kept in the operating-system credential store. Connection
+testing is non-mutating. Saving selects the profile
 for the next clean restart; it does not silently migrate data.
 
 The selected backend is authoritative for animals, users, projects, role/job
@@ -172,9 +173,6 @@ other uploaded documents are stored in backend-managed storage; database rows
 hold ownership, safe paths, and checksums.
 
 An empty backend imports the fictional `progtrack_seed.ptdb` automatically.
-Legacy dynamic JSON stores are not a runtime fallback and are not imported by
-the Phase 2 backend. Static catalogs used for bootstrap or localization may
-remain in the application payload.
 
 ## Animal identity and ID conventions
 
@@ -189,7 +187,7 @@ An animal's immutable identity consists of:
 Once an animal has been created, Lord, Master, Manager, and all other users are
 blocked from changing these identity components. An incorrect example record is
 deleted and recreated. Other IDs (sample IDs, project IDs, cage IDs, and
-facility-specific identifiers) must be institution-tagged so data exchanged
+facility-specific identifiers) is institution-tagged so data exchanged
 between facilities cannot silently collide.
 
 Measurement imports keep **both** identifiers:
@@ -199,7 +197,7 @@ Measurement imports keep **both** identifiers:
 
 The import preview validates headers, dates, numeric values, and identity
 matches before any write. A new `Animal ID` is previewed and clearly warned,
-but the researcher/keeper cannot create an animal from measurement data. Only
+but the Researcher/Keeper cannot create an animal from measurement data. Only
 rows for existing animals are imported; a Manager must create the new animal
 first, after which its measurements can be imported.
 
@@ -213,34 +211,43 @@ Animal` action is available in each role tab. The `All` tab remains the general
 overview and keeps the role-edit action; measurement-import buttons are shown
 only in role tabs whose configured blocks support them.
 
-| UI icon | Current role | Typical use |
-| --- | --- | --- |
-| <img src="icons/ui/role_female.svg" width="24" alt="Female role"> | Egg cell donor / surrogate | Steroid, urine, blood, and reproductive workflows. |
-| <img src="icons/ui/role_male.svg" width="24" alt="Male role"> | Sperm donor | Sperm measurements and donor events. |
-| <img src="icons/ui/role_offspring.svg" width="24" alt="Offspring role"> | Offspring | Young animals and offspring-specific records. |
-| <img src="icons/ui/role_partner.svg" width="24" alt="Partner role"> | Partner | Partner animals with the configured basic blocks. |
-| <img src="icons/ui/role_breeding.svg" width="24" alt="Breeding role"> | Breeding animal | Mature breeding-colony animals. |
-| <img src="icons/ui/role_experimental.svg" width="24" alt="Experimental role"> | Experimental animal | Experimental workflows and configured event blocks. |
+<table>
+  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>Current role</th><th>Typical use</th></tr></thead>
+  <tbody>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_female.svg" width="24" alt="Female role"></td><td>Egg cell donor / surrogate</td><td>Steroid, urine, blood, and reproductive workflows.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_male.svg" width="24" alt="Male role"></td><td>Sperm donor</td><td>Sperm measurements and donor events.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_offspring.svg" width="24" alt="Offspring role"></td><td>Offspring</td><td>Young animals and offspring-specific records.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_partner.svg" width="24" alt="Partner role"></td><td>Partner</td><td>Partner animals with the configured basic blocks.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_breeding.svg" width="24" alt="Breeding role"></td><td>Breeding animal</td><td>Mature breeding-colony animals.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/role_experimental.svg" width="24" alt="Experimental role"></td><td>Experimental animal</td><td>Experimental workflows and configured event blocks.</td></tr>
+  </tbody>
+</table>
 
 The common action icons are the same SVGs used by the UI:
 
-| UI icon | Action |
-| --- | --- |
-| <img src="icons/ui/action_add.svg" width="22" alt="Add"> | Create a new animal where the active role allows it. |
-| <img src="icons/ui/action_edit.svg" width="22" alt="Edit"> | Open the role-specific editor. |
-| <img src="icons/ui/action_edit_role.svg" width="22" alt="Edit role"> | Change a role from the `All` view when permitted. |
-| <img src="icons/ui/action_archive.svg" width="22" alt="Archive"> | Archive an animal without deleting its history. |
-| <img src="icons/ui/action_restore.svg" width="22" alt="Restore"> | Restore an archived animal. |
-| <img src="icons/ui/action_delete.svg" width="22" alt="Delete"> | Permanently delete an archived example record. |
+<table>
+  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_add.svg" width="22" alt="Add"></td><td>Create a new animal where the active role allows it.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_edit.svg" width="22" alt="Edit"></td><td>Open the role-specific editor.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_edit_role.svg" width="22" alt="Edit role"></td><td>Change a role from the <code>All</code> view when permitted.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_archive.svg" width="22" alt="Archive"></td><td>Archive an animal without deleting its history.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_restore.svg" width="22" alt="Restore"></td><td>Restore an archived animal.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/action_delete.svg" width="22" alt="Delete"></td><td>Permanently delete an archived example record.</td></tr>
+  </tbody>
+</table>
 
 ## Measurements, imports, and plots
 
-| UI icon | Data stream | Current use |
-| --- | --- | --- |
-| <img src="icons/ui/measure_blood.svg" width="24" alt="Blood"> | Blood progesterone | `Progesteron (ng/ml)` time series. |
-| <img src="icons/ui/measure_urine.svg" width="24" alt="Urine"> | Urine PdG | `PdG` time series in the configured unit. |
-| <img src="icons/ui/measure_weight.svg" width="24" alt="Weight"> | Weight | Body-weight time series in grams. |
-| <img src="icons/ui/measure_sperm.svg" width="24" alt="Sperm"> | Sperm values | Count, motility, and progressive motility. |
+<table>
+  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>Data stream</th><th>Current use</th></tr></thead>
+  <tbody>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/measure_blood.svg" width="24" alt="Blood"></td><td>Blood progesterone</td><td><code>Progesteron (ng/ml)</code> time series.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/measure_urine.svg" width="24" alt="Urine"></td><td>Urine PdG</td><td><code>PdG</code> time series in the configured unit.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/measure_weight.svg" width="24" alt="Weight"></td><td>Weight</td><td>Body-weight time series in grams.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/measure_sperm.svg" width="24" alt="Sperm"></td><td>Sperm values</td><td>Count, motility, and progressive motility.</td></tr>
+  </tbody>
+</table>
 
 ### Excel import templates
 
@@ -294,37 +301,46 @@ Master Track separates the immutable account role from configurable job bundles:
 - direct grants and revocations can further adjust a user;
 - sessions, passwords, users, and job overrides are stored in the selected backend.
 
-| UI icon | Account role | Meaning |
-| --- | --- | --- |
-| <img src="icons/ui/account_lord.svg" width="26" alt="Lord"> | `lord` | IT administrative role for global settings and installation, with unlimited rights. |
-| <img src="icons/ui/account_master.svg" width="26" alt="Master"> | `master` | Animal-facility administrative role for user management and ProgTrack fine-tuning. |
-| <img src="icons/ui/account_awo.svg" width="26" alt="AWO"> | `AWO` | Animal Welfare Officer account for IACUC and welfare assignments. The user overview shows `AWO`. |
-| <img src="icons/ui/account_user.svg" width="26" alt="User"> | `user` | Standard account; effective access comes from its baseline, jobs, grants, and revocations. |
-| <img src="icons/ui/account_guest_locked.svg" width="26" alt="Guest"> | `guest` | Restricted read-oriented fallback account. |
+<table>
+  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>Account role</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_lord.svg" width="26" alt="Lord"></td><td><code>lord</code></td><td>IT administrative role for global settings and installation, with unlimited rights.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_master.svg" width="26" alt="Master"></td><td><code>master</code></td><td>Animal-facility administrative role for user management and ProgTrack fine-tuning.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_awo.svg" width="26" alt="AWO"></td><td><code>AWO</code></td><td>Animal Welfare Officer account for IACUC and welfare assignments. The user overview shows <code>AWO</code>.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_user.svg" width="26" alt="User"></td><td><code>user</code></td><td>Standard account; effective access comes from its baseline, jobs, grants, and revocations.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/ui/account_guest_locked.svg" width="26" alt="Guest"></td><td><code>guest</code></td><td>Restricted read-oriented fallback account.</td></tr>
+  </tbody>
+</table>
 
 The default job bundles are `vet`, `keeper`, `manager`, `researcher`, and
 `tester`. Their permissions are bootstrapped into the backend and can be
 configured by authorized administration; there is no runtime `jobs.json`
 authority. Typical responsibilities are:
 
-| UI icon | Job | Typical focus |
-| --- | --- | --- |
-| <img src="icons/ui/medi_current_sick.svg" width="24" alt="Vet"> | `vet` | Medical review, health status, Medi Track, reports, and welfare-relevant visibility. |
-| <img src="icons/ui/role_breeding.svg" width="24" alt="Keeper"> | `keeper` | Housing, cage placement/inspection, animal core data, and permitted measurements. |
-| <img src="icons/ui/action_settings.svg" width="24" alt="Manager"> | `manager` | Animal creation, imports, archiving/deletion, projects, cages, documents, and role configuration. |
-| <img src="icons/ui/account_user.svg" width="24" alt="Researcher"> | `researcher` | Research measurements, imports/exports, reports, PdG, planning, flow, samples, and associated projects. |
-| <img src="icons/ui/action_refresh.svg" width="24" alt="Tester"> | `tester` | Restricted verification workflows and selected plugin access. |
+<table>
+  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>Job</th><th>Typical focus</th></tr></thead>
+  <tbody>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/job_vet.png" width="28" alt="Vet"></td><td><code>vet</code></td><td>Medical review, health status, Medi Track, reports, and welfare-relevant visibility.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/job_keeper.png" width="28" alt="Keeper"></td><td><code>keeper</code></td><td>Housing, cage placement/inspection, animal core data, and permitted measurements.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/job_manager.png" width="28" alt="Manager"></td><td><code>manager</code></td><td>Animal creation, imports, archiving/deletion, projects, cages, documents, and role configuration.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/job_researcher.png" width="28" alt="Researcher"></td><td><code>researcher</code></td><td>Research measurements, imports/exports, reports, PdG, planning, flow, samples, and associated projects.</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/job_tester.png" width="28" alt="Tester"></td><td><code>tester</code></td><td>Restricted verification workflows and selected plugin access.</td></tr>
+  </tbody>
+</table>
 
 ## Languages, icons, and appearance
 
 The interface message catalogs are:
 
-| UI icon | File | Language |
-| --- | --- | --- |
-| <img src="icons/flag_gb.svg" width="24" alt="English"> | `lang/messages_en.json` | English |
-| <img src="icons/flag_de.svg" width="24" alt="German"> | `lang/messages_de.json` | Deutsch |
-| <img src="icons/flag_it.svg" width="24" alt="Italian"> | `lang/messages_it.json` | Italiano |
-| <img src="icons/flag_ru.svg" width="24" alt="Russian"> | `lang/messages_ru.json` | Русский |
+<table>
+  <thead><tr><th bgcolor="#e0e0e0">UI icon</th><th>File</th><th>Language</th></tr></thead>
+  <tbody>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/flag_gb.svg" width="24" alt="English"></td><td><code>lang/messages_en.json</code></td><td>English</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/flag_de.svg" width="24" alt="German"></td><td><code>lang/messages_de.json</code></td><td>Deutsch</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/flag_it.svg" width="24" alt="Italian"></td><td><code>lang/messages_it.json</code></td><td>Italiano</td></tr>
+    <tr><td bgcolor="#e0e0e0" align="center"><img src="icons/flag_ru.svg" width="24" alt="Russian"></td><td><code>lang/messages_ru.json</code></td><td>Русский</td></tr>
+  </tbody>
+</table>
 
 Use `Settings -> Language` to change language and `Settings -> Style` to
 configure measurement/event colors, markers, line styles, role labels, and
@@ -356,7 +372,7 @@ supports them.
 Use the complete backend interchange package (`.ptdb`) for transfer and backup.
 It contains validated database records plus managed document payloads and
 checksums. It is the common path for moving a standalone SQLite installation to
-PostgreSQL later and for a future LAVAN source adapter.
+PostgreSQL later.
 
 Do not copy a live SQLite file or managed folder while ProgTrack is running.
 Do not reintroduce legacy JSON files as a fallback. An import preview validates
@@ -424,18 +440,9 @@ runtime smoke tests before release packaging.
 | --- | --- |
 | `0.2.1` / Phase 2B | Backend services and adapters, deterministic seed, runtime paths, immutable identities, locks, interchange packages, SVG icon registry, PDF branding, and launcher/runtime hardening. |
 | `0.2.0` / Phase 2A | Read-only backend migration audit, canonical data dictionary, storage matrix, interchange contract, and approved PostgreSQL/SQLite architecture. |
-| Phase 3 | Shared PostgreSQL operational hardening, Linux packaging/readiness, scheduled backup/restore, and complete audit-trail improvements. |
-| Phase 4 | Further UI/job modes, Heritage Track optimization, plots, cage-room plans, genotype correction policy, medical templates, offspring roles, and report designer work. |
-| Phase 5+ | LAVAN source adapter and bulk import, portable package transfer, surgery/planning extensions, web/tablet companion, and later integrations. |
-
-### Historical releases
-
-- `0.1.2` was the Phase 1 validation release for role tabs, Cage Track,
-  Heritage Track, imports, reports, medical history, and the first portable
-  workflow. It is superseded by the backend-based 0.2.x architecture.
-- `0.1.1` and `0.1.0 RC` are retained as historical development milestones.
-  Their JSON-oriented storage and launcher details do not describe the current
-  0.2.1 runtime.
+| `0.1.2` / Phase 1 | Role tabs, Cage Track, Heritage Track, imports, reports, medical history, and the first portable workflow. Superseded by the backend-based 0.2.x architecture. |
+| `0.1.1` | Historical stabilization milestone before the backend cutover. |
+| `0.1.0 RC` | Historical initial public testing package. |
 
 ## License
 
