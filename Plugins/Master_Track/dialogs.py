@@ -222,22 +222,41 @@ class CreateLordDialog(QDialog):
 # ===================================================================
 
 class LoginDialog(QDialog):
-    """Username / password login dialog."""
+    """Username / password login dialog.
+
+    The startup/login window is deliberately a real top-level window rather
+    than a child/tool dialog.  That lets Windows expose it in the taskbar
+    while ``ApplicationModal`` still prevents interaction with ProgTrack
+    behind it.  It stays above other applications only for the lifetime of
+    the active login dialog.
+    """
 
     MAX_ATTEMPTS = 5
     LOCKOUT_SECONDS = 60
 
     def __init__(self, parent: Optional[QWidget], messages: Dict[str, Any],
                  user_db: UserDB):
-        super().__init__(parent)
+        # Do not give the login dialog a QWidget parent: Windows otherwise
+        # treats it as an owned dialog and may omit it from the taskbar.  The
+        # application-modal setting below still blocks the main window.
+        super().__init__(None)
         self.messages = messages
         self.user_db = user_db
         self.logged_in_user: Optional[str] = None
         self._attempts = 0
         self._locked_until: float = 0
 
-        self.setWindowTitle(_msg(messages, "master_track.login.title", "Login"))
+        self.setWindowFlags(
+            Qt.WindowType.Window
+            | Qt.WindowType.WindowTitleHint
+            | Qt.WindowType.WindowSystemMenuHint
+            | Qt.WindowType.WindowCloseButtonHint
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setModal(True)
+
+        self.setWindowTitle(_msg(messages, "master_track.login.title", "Login"))
         self.setMinimumWidth(340)
 
         layout = QVBoxLayout(self)
@@ -267,6 +286,17 @@ class LoginDialog(QDialog):
 
         self.pw_edit.returnPressed.connect(self._try_login)
         self.username_edit.returnPressed.connect(lambda: self.pw_edit.setFocus())
+
+    def showEvent(self, event) -> None:
+        """Present the login prompt immediately above other active windows."""
+        super().showEvent(event)
+        self.raise_()
+        self.activateWindow()
+
+    def done(self, result: int) -> None:
+        """Drop topmost state before the dialog leaves the window system."""
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, False)
+        super().done(result)
 
     def _try_login(self) -> None:
         now = time.monotonic()
