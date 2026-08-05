@@ -8,6 +8,7 @@ import os
 import socket
 import sqlite3
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,11 @@ def utc_now() -> str:
 class StandaloneProcessLock:
     """Exclusive one-process ownership for a writable Standalone backend."""
 
+    # Older releases created the file before writing its JSON payload.  A
+    # crash in that tiny window leaves an empty/invalid lock which otherwise
+    # cannot be distinguished from an active owner.
+    _INCOMPLETE_LOCK_GRACE_SECONDS = 5.0
+
     def __init__(self, path: Path):
         self.path = path
         self._owned = False
@@ -40,7 +46,6 @@ class StandaloneProcessLock:
             "host": socket.gethostname(),
             "started_at": utc_now(),
         }
-        descriptor = None
         for attempt in range(2):
             try:
                 descriptor = os.open(
@@ -50,16 +55,8 @@ class StandaloneProcessLock:
                 )
                 break
             except FileExistsError as exc:
-                owner: Any = "unknown"
-                try:
-                    owner = json.loads(self.path.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError):
-                    pass
-                stale = (
-                    isinstance(owner, dict)
-                    and str(owner.get("host") or "") == socket.gethostname()
-                    and not _pid_is_alive(int(owner.get("pid") or -1))
-                )
+                owner = _read_lock_owner(self.path)
+                stale = _lock_is_stale(self.path, owner)
                 if stale and attempt == 0:
                     try:
                         self.path.unlink()
@@ -70,12 +67,23 @@ class StandaloneProcessLock:
                     "The Standalone database is already open for writing. "
                     f"Lock: {self.path}; owner: {owner}"
                 ) from exc
+        else:
+            descriptor = None
         if descriptor is None:
             raise BackendConfigurationError("Could not acquire Standalone lock.")
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False)
-            handle.flush()
-            os.fsync(handle.fileno())
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, ensure_ascii=False)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except Exception:
+            # Do not leave an owner-unknown file behind when metadata writing
+            # itself fails before the backend has started.
+            try:
+                self.path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
         self._owned = True
         atexit.register(self.release)
 
@@ -87,9 +95,62 @@ class StandaloneProcessLock:
                 self._owned = False
 
 
+def _read_lock_owner(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return "unknown"
+
+
+def _lock_age_seconds(path: Path) -> float:
+    try:
+        return max(0.0, time.time() - path.stat().st_mtime)
+    except OSError:
+        return 0.0
+
+
+def _lock_is_stale(path: Path, owner: Any) -> bool:
+    """Return whether a lock is safe to reclaim after an interrupted start."""
+    if isinstance(owner, dict):
+        host = str(owner.get("host") or "")
+        try:
+            pid = int(owner.get("pid") or -1)
+        except (TypeError, ValueError):
+            pid = -1
+        if host == socket.gethostname() and pid > 0:
+            return not _pid_is_alive(pid)
+        # Missing/invalid owner fields are treated like an interrupted write,
+        # but only after the short grace period has elapsed.
+        return _lock_age_seconds(path) > StandaloneProcessLock._INCOMPLETE_LOCK_GRACE_SECONDS
+    return _lock_age_seconds(path) > StandaloneProcessLock._INCOMPLETE_LOCK_GRACE_SECONDS
+
+
 def _pid_is_alive(pid: int) -> bool:
     if pid <= 0:
         return False
+    if os.name == "nt":
+        # ``os.kill(pid, 0)`` is not a safe existence probe on all supported
+        # Windows/Python combinations.  Query the process handle instead.
+        try:
+            import ctypes
+
+            process_query_limited_information = 0x1000
+            handle = ctypes.windll.kernel32.OpenProcess(
+                process_query_limited_information, False, pid
+            )
+            if not handle:
+                return False
+            exit_code = ctypes.c_ulong()
+            try:
+                if not ctypes.windll.kernel32.GetExitCodeProcess(
+                    handle, ctypes.byref(exit_code)
+                ):
+                    return False
+                return exit_code.value == 259  # STILL_ACTIVE
+            finally:
+                ctypes.windll.kernel32.CloseHandle(handle)
+        except (AttributeError, OSError):
+            return False
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
