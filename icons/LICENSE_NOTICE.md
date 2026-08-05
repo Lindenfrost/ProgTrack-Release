@@ -37,3 +37,20 @@ rights to use, modify, and redistribute these assets under its terms.
 
 Windows-generated cache files such as `Thumbs.db`, if present, are not
 ProgTrack artwork source assets.
+
+## UI SVG artwork and shared semantic IDs
+
+The canonical SVG UI masters are stored in `ui/` and are licensed under the
+same GPL-3.0-or-later terms.  The semantic IDs in `ui/manifest.json` may share
+one artwork file intentionally; this keeps the visual meaning identical across
+role, status, and Medi Track contexts.  The current shared mappings are:
+
+- `role.breeding` -> `ui/pedigree_symbol.svg`
+- `status.partner` -> `ui/role_partner.svg`
+- `medi_track.filter.current_sick` -> `ui/status_sick.svg`
+- `medi_track.filter.current_abnormal` and `status.warning` -> `ui/status_abnormal.svg`
+
+Alias copies with those former semantic names are not separate artwork and are
+not shipped.  The editable masters and PNG review previews are maintained in
+`Q:/GitHub/Graphics/SVG/UI` and `Q:/GitHub/Graphics/UI`; the application uses
+the packaged SVG masters directly without a PNG fallback.

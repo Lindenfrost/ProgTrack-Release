@@ -22,13 +22,13 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="0.39404297"
-     inkscape:cx="-628.10409"
-     inkscape:cy="247.43494"
-     inkscape:window-width="1920"
-     inkscape:window-height="1009"
-     inkscape:window-x="-8"
-     inkscape:window-y="-8"
+     inkscape:zoom="0.27863046"
+     inkscape:cx="-407.34958"
+     inkscape:cy="-98.697035"
+     inkscape:window-width="1440"
+     inkscape:window-height="829"
+     inkscape:window-x="1912"
+     inkscape:window-y="174"
      inkscape:window-maximized="1"
      inkscape:current-layer="svg1" />
   <style
@@ -42,7 +42,7 @@
      style="fill:#ee81bb;fill-opacity:1;stroke-linejoin:bevel" />
   <text
      xml:space="preserve"
-     style="font-size:43.5204px;writing-mode:lr-tb;direction:ltr;fill:#25364a;fill-opacity:1;stroke:#ffffff;stroke-width:4.49;stroke-linejoin:bevel;stroke-miterlimit:0;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke fill markers"
+     style="font-size:43.5204px;writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:#ffffff;stroke-width:4.49;stroke-linejoin:bevel;stroke-miterlimit:0;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke fill markers"
      x="16.265993"
      y="29.40819"
      id="text1"
@@ -51,5 +51,5 @@
        id="tspan1"
        x="16.265993"
        y="29.40819"
-       style="fill:#25364a;fill-opacity:1;stroke:#ffffff;stroke-width:4.49;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke fill markers">_</tspan></text>
+       style="fill:#ffffff;fill-opacity:1;stroke:#ffffff;stroke-width:4.49;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke fill markers">_</tspan></text>
 </svg>

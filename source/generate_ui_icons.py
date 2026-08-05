@@ -1,17 +1,19 @@
-"""Generate the SVG-first ProgTrack UI icon set and 64px PNG derivatives.
+"""Generate the SVG-first ProgTrack UI icon set and 64px PNG previews.
 
 The editable SVG sources live outside the release repository in
-``Q:/GitHub/Graphics/SVG/UI``.  PNG derivatives are retained in
-``Q:/GitHub/Graphics/UI`` and copied to the packaged ``icons/ui`` folder.
-Run this script after changing an icon definition; it deliberately makes every
-PNG from the matching SVG in the same run.
+``Q:/GitHub/Graphics/SVG/UI``.  PNG derivatives are retained only in
+``Q:/GitHub/Graphics/UI`` for artwork review and backup.  The release package
+uses SVG files directly and does not receive PNG fallbacks.
+
+Several semantic IDs intentionally share one canonical SVG.  Their aliases
+are declared in ``SHARED_ICON_ALIASES`` and are never emitted as duplicate
+files.  Run this script after changing an icon definition; it also removes
+stale alias SVG/PNG files from the graphics backup folder.
 """
 
 from __future__ import annotations
 
 import os
-import shutil
-import sys
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -21,11 +23,25 @@ from PyQt6.QtGui import QGuiApplication, QImage, QPainter
 from PyQt6.QtSvg import QSvgRenderer
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 SVG_ROOT = Path(r"Q:\GitHub\Graphics\SVG\UI")
 BACKUP_PNG_ROOT = Path(r"Q:\GitHub\Graphics\UI")
-PACKAGE_PNG_ROOT = REPO_ROOT / "icons" / "ui"
 SIZE = 64
+
+
+# Semantic IDs in the manifest remain distinct, but these artwork files are
+# deliberately shared.  Keeping one canonical file prevents visual drift and
+# makes the relationship explicit to the generator and asset review tools.
+SHARED_ICON_ALIASES: dict[str, str] = {
+    "role_breeding": "pedigree_symbol",
+    "status_partner": "role_partner",
+    "medi_current_sick": "status_sick",
+    "medi_current_abnormal": "status_abnormal",
+    "status_warning": "status_abnormal",
+}
+
+# pedigree_symbol is an existing editable master rather than a generated body
+# in ICONS.  It still receives a PNG review derivative below.
+EXISTING_CANONICAL_SVGS = ("pedigree_symbol",)
 
 
 def _svg(body: str) -> str:
@@ -57,7 +73,6 @@ ICONS: dict[str, str] = {
     "role_male": _svg('<circle class="blue" cx="25" cy="37" r="13"/><path d="M35 27 51 11M39 11h12v12" class="line"/>'),
     "role_offspring": _svg('<circle class="pink" cx="22" cy="25" r="9"/><circle class="blue" cx="41" cy="31" r="8"/><path d="M12 48c2-10 18-10 20 0M33 50c2-8 14-8 16 0" class="line"/>'),
     "role_partner": _svg('<circle class="pink" cx="23" cy="32" r="13"/><circle class="blue" cx="41" cy="32" r="13"/><path d="M29 32h6" class="line"/>'),
-    "role_breeding": _svg('<path class="pink" d="M20 11c18 8 6 20 24 29"/><path class="blue" d="M44 11C26 19 38 31 20 40"/><path d="M22 16h20M22 35h20" class="line"/>'),
     "role_experimental": _svg('<path class="purple" d="M25 9h14M28 9v17L16 47a7 7 0 0 0 6 9h20a7 7 0 0 0 6-9L36 26V9"/><path d="M20 43h24" stroke="#fff" stroke-width="4"/><circle cx="34" cy="36" r="3" fill="#fff"/>'),
     "status_pregnant": _svg('<circle class="pink" cx="32" cy="32" r="22"/><circle cx="29" cy="29" r="8" fill="#fff"/><circle cx="39" cy="39" r="4" fill="#fff"/><path d="m22 43 6 6 14-17" fill="none" stroke="#25364a" stroke-width="4" stroke-linecap="round"/>'),
     "status_possible": _svg('<circle class="pink" cx="32" cy="32" r="22" stroke-dasharray="5 4"/><circle cx="30" cy="29" r="8" fill="#fff"/><path d="M37 38c5 1 6 7 1 10M38 51v1" class="line"/>'),
@@ -65,9 +80,7 @@ ICONS: dict[str, str] = {
     "status_not_pregnant": _svg('<circle class="light" cx="32" cy="32" r="22"/><path d="M17 47 47 17" stroke="#df5b5b" stroke-width="6" stroke-linecap="round"/>'),
     "status_sick": _svg('<circle class="red" cx="32" cy="32" r="22"/><path d="M32 18v28M18 32h28" stroke="#fff" stroke-width="6" stroke-linecap="round"/>'),
     "status_abnormal": _svg('<path class="amber" d="M32 9 57 53H7z"/><path d="M32 24v14M32 45v1" class="line"/>'),
-    "medi_current_sick": _svg('<circle class="red" cx="32" cy="32" r="22"/><path d="M32 18v28M18 32h28" stroke="#fff" stroke-width="6" stroke-linecap="round"/>'),
     "medi_ever_sick": _svg('<circle class="light" cx="27" cy="30" r="20"/><path d="M27 18v24M15 30h24" stroke="#df5b5b" stroke-width="6" stroke-linecap="round"/><circle class="blue" cx="47" cy="47" r="12"/><path d="M47 40v8l5 3" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>'),
-    "medi_current_abnormal": _svg('<path class="amber" d="M32 9 57 53H7z"/><path d="M32 24v14M32 45v1" class="line"/>'),
     "medi_ever_abnormal": _svg('<path class="light" d="M27 8 50 49H4z"/><path d="M27 22v13M27 42v1" class="line"/><circle class="blue" cx="47" cy="47" r="12"/><path d="M47 40v8l5 3" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>'),
     "status_deceased": _svg('<circle class="light" cx="32" cy="32" r="22"/><path d="M32 15v34M21 25h22M21 40h22" class="line"/>'),
     "account_lord": _svg('<path class="amber" d="M12 21l10 8 10-16 10 16 10-8-4 28H16z"/><path d="M16 52h32" class="line"/><circle cx="22" cy="29" r="3" fill="#fff"/><circle cx="32" cy="23" r="3" fill="#fff"/><circle cx="42" cy="29" r="3" fill="#fff"/>'),
@@ -76,12 +89,7 @@ ICONS: dict[str, str] = {
     "network_insert_symbol": _svg('<circle class="amber" cx="32" cy="32" r="22"/><circle cx="24" cy="27" r="3" fill="#25364a"/><circle cx="40" cy="27" r="3" fill="#25364a"/><path d="M21 38c6 8 16 8 22 0" class="line"/>'),
     "flow_freezer": _svg('<circle class="blue" cx="32" cy="32" r="22"/><path d="M32 14v36M16 23l32 18M16 41l32-18" stroke="#fff" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="32" r="4" fill="#fff"/>'),
     "status_ok": _svg('<circle class="green" cx="32" cy="32" r="22"/><path d="m20 33 8 8 17-19" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'),
-    "status_warning": _svg('<path class="amber" d="M32 9 57 53H7z"/><path d="M32 24v14M32 45v1" class="line"/>'),
 }
-
-# The partner status and role intentionally share exactly the same artwork,
-# while retaining separate semantic IDs in the manifest/UI contract.
-ICONS["status_partner"] = ICONS["role_partner"]
 
 
 def render(svg: str, target: Path) -> None:
@@ -100,16 +108,28 @@ def render(svg: str, target: Path) -> None:
 def main() -> int:
     app = QGuiApplication.instance() or QGuiApplication([])
     del app
-    for root in (SVG_ROOT, BACKUP_PNG_ROOT, PACKAGE_PNG_ROOT):
+    for root in (SVG_ROOT, BACKUP_PNG_ROOT):
         root.mkdir(parents=True, exist_ok=True)
+
+    # Remove old generated aliases so a previous run cannot leave duplicate
+    # artwork beside the canonical file.
+    for alias in SHARED_ICON_ALIASES:
+        (SVG_ROOT / f"{alias}.svg").unlink(missing_ok=True)
+        (BACKUP_PNG_ROOT / f"{alias}.png").unlink(missing_ok=True)
+
     for identifier, svg in ICONS.items():
         svg_path = SVG_ROOT / f"{identifier}.svg"
         backup_png = BACKUP_PNG_ROOT / f"{identifier}.png"
-        package_png = PACKAGE_PNG_ROOT / f"{identifier}.png"
         svg_path.write_text(svg + "\n", encoding="utf-8")
         render(svg, backup_png)
-        shutil.copy2(backup_png, package_png)
-    print(f"Generated {len(ICONS)} SVG and PNG icon pairs.")
+
+    for identifier in EXISTING_CANONICAL_SVGS:
+        svg_path = SVG_ROOT / f"{identifier}.svg"
+        if not svg_path.is_file():
+            raise FileNotFoundError(f"Missing canonical SVG master: {svg_path}")
+        render(svg_path.read_text(encoding="utf-8"), BACKUP_PNG_ROOT / f"{identifier}.png")
+
+    print(f"Generated {len(ICONS)} SVG definitions and {len(ICONS) + len(EXISTING_CANONICAL_SVGS)} PNG previews.")
     return 0
 
 

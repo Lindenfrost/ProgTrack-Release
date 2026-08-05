@@ -56,9 +56,11 @@ reason is mandatory, and the action is audited.
 
 ## Semantic UI icons
 
-`icons/ui/manifest.json` maps semantic identifiers to packaged 64×64 PNG
-assets and exact text fallbacks. Each packaged PNG is generated from a matching
-editable SVG source under `Q:\GitHub\Graphics\SVG\UI`; generated PNG backups
-are under `Q:\GitHub\Graphics\UI`. Code resolves icons with
-`Plugins.core.ui_icons` and must retain a readable fallback. Network Track
-discovers only root-level `icons/*.png` and never loads `icons/ui/`.
+`icons/ui/manifest.json` maps semantic identifiers to packaged SVG assets and
+exact text fallbacks. The editable SVG masters are maintained under
+`Q:\GitHub\Graphics\SVG\UI`; 64×64 PNG previews are retained only under
+`Q:\GitHub\Graphics\UI` for artwork review and backup. Code resolves icons
+with `Plugins.core.ui_icons` and must retain a readable fallback. Semantic IDs
+may intentionally share one canonical SVG; duplicate alias files are not
+shipped. Network Track discovers only root-level `icons/*.png` and never loads
+`icons/ui/`.
