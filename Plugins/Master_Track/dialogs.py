@@ -14,10 +14,11 @@ import os
 import re
 import time
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from PyQt6.QtCore import QDate, Qt, QTimer
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -117,6 +118,18 @@ def _strength(pw: str) -> int:
     if any(not c.isalnum() for c in pw):
         score += 15
     return min(100, score)
+
+
+def _progtrack_application_icon() -> QIcon:
+    """Load the bundled ProgTrack icon for top-level Master Track dialogs."""
+    candidates = (
+        Path(__file__).resolve().parents[2] / "icons" / "progtrack_icon.ico",
+        Path.cwd() / "icons" / "progtrack_icon.ico",
+    )
+    for path in candidates:
+        if path.is_file():
+            return QIcon(str(path))
+    return QIcon()
 
 
 # ===================================================================
@@ -255,6 +268,7 @@ class LoginDialog(QDialog):
         )
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setModal(True)
+        self.setWindowIcon(_progtrack_application_icon())
 
         self.setWindowTitle(_msg(messages, "master_track.login.title", "Login"))
         self.setMinimumWidth(340)
