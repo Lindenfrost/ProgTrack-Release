@@ -15270,7 +15270,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Windows renders regional-indicator emoji as letter pairs in
             # native menus.  Use flag artwork so no GB/DE/RU/IT abbreviations
             # appear while retaining the canonical emoji as action metadata.
-            icon_path = APP_BASE_DIR / "icons" / f"flag_{asset}.svg"
+            icon_path = APP_BASE_DIR / "icons" / "ui" / f"flag_{asset}.svg"
             act = QAction(QIcon(str(icon_path)), "", self, checkable=True)
             act.setProperty("emojiFlag", flag)
             act.setToolTip(label)

@@ -335,10 +335,10 @@ The interface message catalogs are:
 <table>
   <thead><tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">UI icon</th><th>File</th><th>Language</th></tr></thead>
   <tbody>
-    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/flag_gb.svg" width="24" alt="English"></td><td><code>lang/messages_en.json</code></td><td>English</td></tr>
-    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/flag_de.svg" width="24" alt="German"></td><td><code>lang/messages_de.json</code></td><td>Deutsch</td></tr>
-    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/flag_it.svg" width="24" alt="Italian"></td><td><code>lang/messages_it.json</code></td><td>Italiano</td></tr>
-    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/flag_ru.svg" width="24" alt="Russian"></td><td><code>lang/messages_ru.json</code></td><td>Русский</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/flag_gb.svg" width="24" alt="English"></td><td><code>lang/messages_en.json</code></td><td>English</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/flag_de.svg" width="24" alt="German"></td><td><code>lang/messages_de.json</code></td><td>Deutsch</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/flag_it.svg" width="24" alt="Italian"></td><td><code>lang/messages_it.json</code></td><td>Italiano</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/flag_ru.svg" width="24" alt="Russian"></td><td><code>lang/messages_ru.json</code></td><td>Русский</td></tr>
   </tbody>
 </table>
 
