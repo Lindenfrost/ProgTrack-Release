@@ -1139,8 +1139,8 @@ class MediTrackWidget(QWidget):
             self.FILTER_EVER_SICK: "medi_track.filter.ever_sick",
             self.FILTER_ABNORMAL: "medi_track.filter.current_abnormal",
             self.FILTER_EVER_ABNORMAL: "medi_track.filter.ever_abnormal",
-            self.FILTER_IN_EXPERIMENT: "role.experimental",
-            self.FILTER_EVER_EXPERIMENT: "role.experimental",
+            self.FILTER_IN_EXPERIMENT: "medi_track.filter.current_experiment",
+            self.FILTER_EVER_EXPERIMENT: "medi_track.filter.ever_experiment",
         }
         for fkey, msg_key, fallback in _filters:
             label = _msg(self.messages, msg_key, fallback)
@@ -1352,11 +1352,11 @@ class MediTrackWidget(QWidget):
                 k, fb = _filter_map[fkey]
                 if fkey == self.FILTER_IN_EXPERIMENT:
                     btn.setText(_msg(messages, k, fb))
-                    apply_icon(btn, "role.experimental", fallback=fb)
+                    apply_icon(btn, "medi_track.filter.current_experiment", fallback=fb)
                     btn.setToolTip(_msg(messages, k, "Currently in experiment"))
                 elif fkey == self.FILTER_EVER_EXPERIMENT:
                     btn.setText(_msg(messages, k, fb))
-                    apply_icon(btn, "role.experimental", fallback=fb)
+                    apply_icon(btn, "medi_track.filter.ever_experiment", fallback=fb)
                     btn.setToolTip(_msg(messages, k, "Was in experiment"))
                 else:
                     btn.setText(_msg(messages, k, fb))
