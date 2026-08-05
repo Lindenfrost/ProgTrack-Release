@@ -32,7 +32,7 @@
     "status.sick": {"file": "status_sick.svg", "fallback": "Sick", "usage": "Sick/recovery status or filter"},
     "status.abnormal": {"file": "status_abnormal.svg", "fallback": "Abnormal", "usage": "Abnormal status or filter"},
     "status.in_experiment": {"file": "status_in_experiment.svg", "fallback": "In experiment", "usage": "Animal currently assigned to an active experiment"},
-    "medi_track.filter.current_experiment": {"file": "status_in_experiment.svg", "fallback": "Currently in experiment", "usage": "Medi Track current experiment filter; shared current-status artwork"},
+    "medi_track.filter.current_experiment": {"file": "role_experimental.svg", "fallback": "Currently in experiment", "usage": "Medi Track current experiment filter; shared experimental-bottle artwork"},
     "medi_track.filter.ever_experiment": {"file": "medi_ever_experiment.svg", "fallback": "Was in experiment", "usage": "Medi Track previous experiment filter"},
     "medi_track.filter.current_sick": {"file": "status_sick.svg", "fallback": "Currently sick", "usage": "Medi Track current sickness filter; shared sickness artwork"},
     "medi_track.filter.ever_sick": {"file": "medi_ever_sick.svg", "fallback": "Ever sick", "usage": "Medi Track sickness history filter"},
