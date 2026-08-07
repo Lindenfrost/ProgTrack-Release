@@ -47,6 +47,7 @@ from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FixedLocator, FuncFormatter, MultipleLocator
+from matplotlib.transforms import Bbox
 import matplotlib.patheffects as path_effects
 
 from Plugins.core.animal_identity import (
@@ -58,6 +59,10 @@ from Plugins.core.animal_identity import (
 )
 from Plugins.core.animal_roles import ROLE_VALUE_AMME, ROLE_VALUE_SAMENSP, ROLE_VALUE_SPENDER, canonical_role_value
 from Plugins.core.ui_icons import apply_icon
+from Plugins.core.resource_catalogs import (
+    UNKNOWN_SPECIES_VALUE,
+    ordered_species_for_display,
+)
 
 from .display_context import DisplayContext, DisplayContextBuilder
 from .display_strategies import AllAnimalsStrategy, SelectedAnimalsStrategy
@@ -66,6 +71,7 @@ from .ghost_strategies import (
     CompositeGhostStrategy,
     OffspringAndSiblingsGhostStrategy,
     ScopeGhostStrategy,
+    VisibleFamilyCompletenessGhostStrategy,
 )
 from .engine_cache import PedigreeEngineCache
 from .heritage_store import HeritageStore
@@ -136,8 +142,13 @@ class NodeEditDialog(QDialog):
             if self._species_options:
                 self.species_combo = QComboBox()
                 self.species_combo.addItem(messages.get("dialog.species.placeholder", "(Please select)"), "")
-                for sp in sorted(self._species_options, key=str.lower):
-                    self.species_combo.addItem(sp, sp)
+                for sp in ordered_species_for_display(self._species_options):
+                    label = (
+                        messages.get("species.unknown", UNKNOWN_SPECIES_VALUE)
+                        if sp.casefold() == UNKNOWN_SPECIES_VALUE.casefold()
+                        else sp
+                    )
+                    self.species_combo.addItem(label, sp)
                 form.addRow(messages.get("dialog.field.species", "Species:"), self.species_combo)
             else:
                 self.species_combo = None
@@ -806,7 +817,63 @@ class HeritageTrackWidget(QWidget):
         )
         self.ax.grid(axis="y", which="major", color="#d4d4d4", linewidth=0.65, zorder=0)
         self.ax.grid(axis="y", which="minor", color="#ededed", linewidth=0.35, zorder=0)
-        self.figure.subplots_adjust(left=0.075, right=0.995, top=0.995, bottom=0.02)
+        self.figure.subplots_adjust(
+            left=0.075,
+            right=0.825 if getattr(self, "_legend_gutter_active", False) else 0.995,
+            top=0.995,
+            bottom=0.02,
+        )
+
+    def _place_legend_in_clear_gutter(self, legend) -> None:
+        """Choose a right-gutter slot that does not cover overhanging names."""
+        try:
+            renderer = self.canvas.get_renderer()
+            label_boxes: List[Bbox] = []
+            for meta in self.node_meta.values():
+                if meta.get("kind") != "animal":
+                    continue
+                artists = [
+                    meta.get("label_artist"),
+                    meta.get("f_artist"),
+                    meta.get("undated_artist"),
+                ]
+                boxes = [
+                    artist.get_window_extent(renderer)
+                    for artist in artists
+                    if artist is not None and artist.get_visible()
+                ]
+                if boxes:
+                    label_boxes.append(Bbox.union(boxes))
+
+            candidates = (
+                ("lower left", (1.01, 0.0)),
+                ("upper left", (1.01, 1.0)),
+                ("center left", (1.01, 0.5)),
+            )
+            best = None
+            for preference, (location, anchor) in enumerate(candidates):
+                legend.set_loc(location)
+                legend.set_bbox_to_anchor(anchor)
+                legend_box = legend.get_window_extent(renderer)
+                overlap_count = 0
+                overlap_area = 0.0
+                for label_box in label_boxes:
+                    overlap = Bbox.intersection(legend_box, label_box)
+                    if overlap is None or overlap.width <= 1.0 or overlap.height <= 1.0:
+                        continue
+                    overlap_count += 1
+                    overlap_area += overlap.width * overlap.height
+                score = (overlap_count, round(overlap_area, 3), preference)
+                if best is None or score < best[0]:
+                    best = (score, location, anchor)
+            if best is not None:
+                legend.set_loc(best[1])
+                legend.set_bbox_to_anchor(best[2])
+        except Exception:
+            # Legend placement is cosmetic; retain the safe centre-gutter
+            # default if a backend cannot provide text extents yet.
+            legend.set_loc("center left")
+            legend.set_bbox_to_anchor((1.01, 0.5))
 
     def _snap_to_grid(self, x: float, y: float) -> Tuple[float, float]:
         if not self.settings.get("snap_to_grid", False):
@@ -2293,8 +2360,6 @@ class HeritageTrackWidget(QWidget):
         ys = [p[1] for p in points]
         # Keep small graphs from floating in excessive whitespace while still
         # reserving a stable outer margin for markers, labels, and junctions.
-        # Large graphs are allowed to grow; they are zoomable and must not be
-        # compressed until labels become unreadable.
         span_x = max(xs) - min(xs)
         span_y = max(ys) - min(ys)
         label_half_widths = [
@@ -2307,7 +2372,64 @@ class HeritageTrackWidget(QWidget):
         label_margin_x = max(label_half_widths, default=0.48) + 0.30
         margin_x = max(1.15, min(2.4, max(span_x * 0.08, label_margin_x)))
         margin_y = max(1.15, min(1.8, span_y * 0.08))
-        return (min(xs) - margin_x, max(xs) + margin_x), (min(ys) - margin_y, max(ys) + margin_y)
+        full_xlim = (min(xs) - margin_x, max(xs) + margin_x)
+        full_ylim = (min(ys) - margin_y, max(ys) + margin_y)
+
+        # Matplotlib labels are point-sized, not data-sized.  Fitting an
+        # arbitrarily large pedigree into one viewport therefore shrinks the
+        # distance between nodes while the names stay equally wide.  Large
+        # trees must open at a readable scale and remain pannable/zoomable.
+        canvas_width, canvas_height = self.canvas.get_width_height()
+        if canvas_width <= 0 or canvas_height <= 0:
+            return full_xlim, full_ylim
+        min_pixels_per_unit = 36.0
+        max_width = max(16.0, canvas_width / min_pixels_per_unit)
+        max_height = max(11.0, canvas_height / min_pixels_per_unit)
+        full_width = full_xlim[1] - full_xlim[0]
+        full_height = full_ylim[1] - full_ylim[0]
+        if full_width <= max_width and full_height <= max_height:
+            return full_xlim, full_ylim
+
+        selected = [
+            node
+            for node in list(getattr(self.app, "selected_animals", []) or [])
+            + list(getattr(self.app, "_selected_heritage_only", []) or [])
+            if node in positions and not self._is_family_node(node)
+        ]
+        if selected and len(selected) <= 8:
+            center_x = sum(positions[node][0] for node in selected) / len(selected)
+            center_y = sum(positions[node][1] for node in selected) / len(selected)
+        else:
+            animal_points = sorted(
+                (
+                    point
+                    for node, point in positions.items()
+                    if not self._is_family_node(node)
+                ),
+                key=lambda point: (point[0], point[1]),
+            ) or points
+            ordered_x = sorted(point[0] for point in animal_points)
+            ordered_y = sorted(point[1] for point in animal_points)
+            center_x = ordered_x[len(ordered_x) // 2]
+            center_y = ordered_y[len(ordered_y) // 2]
+
+        visible_width = min(full_width, max_width)
+        visible_height = min(full_height, max_height)
+        center_x = min(
+            max(center_x, full_xlim[0] + (visible_width / 2.0)),
+            full_xlim[1] - (visible_width / 2.0),
+        )
+        center_y = min(
+            max(center_y, full_ylim[0] + (visible_height / 2.0)),
+            full_ylim[1] - (visible_height / 2.0),
+        )
+        return (
+            center_x - (visible_width / 2.0),
+            center_x + (visible_width / 2.0),
+        ), (
+            center_y - (visible_height / 2.0),
+            center_y + (visible_height / 2.0),
+        )
 
     def _build_display_context(
         self,
@@ -2357,6 +2479,9 @@ class HeritageTrackWidget(QWidget):
         if not all_animals_mode and selected_animals:
             ghost_strategies.append(
                 OffspringAndSiblingsGhostStrategy(selected_animals=set(selected_animals))
+            )
+            ghost_strategies.append(
+                VisibleFamilyCompletenessGhostStrategy(families=all_graph_families)
             )
 
         # Archived ghosts
@@ -2570,101 +2695,33 @@ class HeritageTrackWidget(QWidget):
                     # New node: use computed position
                     animal_positions[node] = pos
 
-        # Horizontal ancestry-side correction is valid in both vertical modes;
-        # chronological mode only owns Y coordinates.
-        if animal_positions:
-            def _ancestry_x(node: str) -> Optional[float]:
-                values = engine.child_to_parents.get(node, {})
-                xs = [
-                    animal_positions[parent][0]
-                    for parent in (
-                        str(values.get("egg_donor") or ""),
-                        str(values.get("sperm_donor") or ""),
-                    )
-                    if parent in animal_positions
-                ]
-                return (sum(xs) / len(xs)) if xs else None
-
-            for family in families.values():
-                mother = str(family.get("mother") or "")
-                father = str(family.get("father") or "")
-                if (
-                    mother not in animal_positions
-                    or father not in animal_positions
-                    or mother in protected_nodes
-                    or father in protected_nodes
-                ):
-                    continue
-                mother_center = _ancestry_x(mother)
-                father_center = _ancestry_x(father)
-                if mother_center is None or father_center is None:
-                    continue
-                mother_x, mother_y = animal_positions[mother]
-                father_x, father_y = animal_positions[father]
-                if (mother_center - father_center) * (mother_x - father_x) < 0:
-                    animal_positions[mother] = (father_x, mother_y)
-                    animal_positions[father] = (mother_x, father_y)
-                    protected_nodes.update((mother, father))
+        # Partner order and ancestry locality are resolved together by the
+        # router's row-block pass.  The former pre-route swap marked automatic
+        # nodes as manually protected and therefore prevented the router from
+        # keeping their complete partner row contiguous.
 
         obstacle_labels = {
             node: self._get_node_obstacle_label(node, self._get_node_record(node))
             for node in animal_positions
         }
         has_secondary_label = self.settings.get("animal_label_detail", "inbreeding_f") != "nothing"
+        if self.settings.get("show_legend", True):
+            self._pedigree_router.label_width_scale = (
+                1.55 if chronological_mode else 1.22
+            )
+        else:
+            self._pedigree_router.label_width_scale = 1.0
         route_plan = self._pedigree_router.plan(
             animal_positions,
             families,
             labels=obstacle_labels,
             protected_nodes=protected_nodes,
+            focus_nodes=set(selected_animals),
             show_inbreeding=has_secondary_label,
             vertical_layout_mode=self.settings.get(
                 "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
             ),
         )
-        if route_plan.animal_positions:
-            reroute_positions = dict(route_plan.animal_positions)
-            reroute_protected = set(protected_nodes)
-            changed = False
-
-            def _routed_ancestry_x(node: str) -> Optional[float]:
-                values = engine.child_to_parents.get(node, {})
-                xs = [
-                    reroute_positions[parent][0]
-                    for parent in (
-                        str(values.get("egg_donor") or ""),
-                        str(values.get("sperm_donor") or ""),
-                    )
-                    if parent in reroute_positions
-                ]
-                return (sum(xs) / len(xs)) if xs else None
-
-            for family in families.values():
-                mother = str(family.get("mother") or "")
-                father = str(family.get("father") or "")
-                if mother not in reroute_positions or father not in reroute_positions:
-                    continue
-                mother_center = _routed_ancestry_x(mother)
-                father_center = _routed_ancestry_x(father)
-                if mother_center is None or father_center is None:
-                    continue
-                mother_x, mother_y = reroute_positions[mother]
-                father_x, father_y = reroute_positions[father]
-                if (mother_center - father_center) * (mother_x - father_x) < 0:
-                    reroute_positions[mother] = (father_x, mother_y)
-                    reroute_positions[father] = (mother_x, father_y)
-                    reroute_protected.update((mother, father))
-                    changed = True
-            if changed:
-                route_plan = self._pedigree_router.plan(
-                    reroute_positions,
-                    families,
-                    labels=obstacle_labels,
-                    protected_nodes=reroute_protected,
-                    show_inbreeding=has_secondary_label,
-                    vertical_layout_mode=self.settings.get(
-                        "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
-                    ),
-                )
         animal_positions = route_plan.animal_positions
         family_positions = route_plan.family_positions
         family_members = route_plan.family_members
@@ -2688,17 +2745,58 @@ class HeritageTrackWidget(QWidget):
                 self.settings.get("vertical_layout_mode")
                 == VERTICAL_LAYOUT_CHRONOLOGICAL
             )
-            chronological_columns: Dict[float, int] = {}
-            for index, node in enumerate(singletons):
+            # A chronological singleton keeps its exact birth-date Y, so a
+            # conventional row de-overlap must not move it vertically.  The
+            # old allocator only separated *identical* Y values.  Dates a few
+            # months (or one year) apart could therefore share the same
+            # outside column while their two-line labels still overlapped.
+            # Allocate the first column whose occupied vertical label bands
+            # do not intersect instead.  This retains true dates and produces
+            # a compact interval-colouring of the detached records.
+            chronological_column_bands: Dict[int, List[Tuple[float, float]]] = defaultdict(list)
+            singleton_column_spacing = max(
+                4.2,
+                max(
+                    (
+                        self._pedigree_router._estimated_label_width(
+                            self._get_node_obstacle_label(
+                                node, self._get_node_record(node)
+                            )
+                        )
+                        for node in singletons
+                    ),
+                    default=3.5,
+                )
+                + 0.65,
+            )
+            ordered_singletons = (
+                sorted(
+                    singletons,
+                    key=lambda node: (
+                        -float(animal_positions[node][1]),
+                        self._get_node_display_label(node).casefold(),
+                    ),
+                )
+                if chronological and connected_points
+                else singletons
+            )
+            for index, node in enumerate(ordered_singletons):
                 if chronological and connected_points:
                     # Keep the birth-date Y coordinate, but reserve columns
                     # clearly outside the family-tree envelope.
                     y = animal_positions[node][1]
-                    y_bucket = round(float(y), 3)
-                    x_column = chronological_columns.get(y_bucket, 0)
-                    chronological_columns[y_bucket] = x_column + 1
+                    band = (float(y) - 0.80, float(y) + 0.36)
+                    x_column = 0
+                    while any(
+                        min(band[1], occupied[1])
+                        >= max(band[0], occupied[0]) - 1e-7
+                        for occupied in chronological_column_bands[x_column]
+                    ):
+                        x_column += 1
+                    chronological_column_bands[x_column].append(band)
                     animal_positions[node] = (
-                        min_x - 4.2 - x_column * 4.2,
+                        min_x - singleton_column_spacing
+                        - x_column * singleton_column_spacing,
                         y,
                     )
                 else:
@@ -2901,7 +2999,7 @@ class HeritageTrackWidget(QWidget):
             label_artist = self.ax.annotate(
                 display_label,
                 xy=(x, y),
-                xytext=(0, -14),
+                xytext=(0, -10),
                 textcoords="offset points",
                 ha="center",
                 va="top",
@@ -2919,7 +3017,7 @@ class HeritageTrackWidget(QWidget):
                 f_artist = self.ax.annotate(
                     detail_text,
                     xy=(x, y),
-                    xytext=(0, -27),
+                    xytext=(0, -22),
                     textcoords="offset points",
                     ha="center",
                     va="top",
@@ -2973,11 +3071,19 @@ class HeritageTrackWidget(QWidget):
                 "undated_artist": undated_artist,
             }
 
+        self._legend_gutter_active = bool(
+            self.settings.get("show_legend", True) and legend_entries
+        )
         if chronological_mode:
             self._configure_chronological_axis()
         else:
             self.ax.axis("off")
-            self.figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
+            self.figure.subplots_adjust(
+                left=0,
+                right=0.825 if self._legend_gutter_active else 1,
+                top=1,
+                bottom=0,
+            )
 
         if self.settings.get("show_legend", True) and legend_entries:
             legend_handles: List[Line2D] = []
@@ -3002,13 +3108,16 @@ class HeritageTrackWidget(QWidget):
 
             legend = self.ax.legend(
                 handles=legend_handles,
-                loc="lower right",
+                loc="center left",
+                bbox_to_anchor=(1.01, 0.5),
+                borderaxespad=0.0,
                 title=self.messages.get("heritage_track.legend.title", "Genotype legend"),
                 fontsize=8,
                 title_fontsize=8,
                 frameon=True,
             )
             legend.set_zorder(12)
+            self._place_legend_in_clear_gutter(legend)
 
         self.current_xlim = self.ax.get_xlim()
         self.current_ylim = self.ax.get_ylim()
@@ -3374,10 +3483,10 @@ class HeritageTrackWidget(QWidget):
         else:
             marker.set_data([x], [y])
         label.xy = (x, y)
-        label.set_position((0, -14))
+        label.set_position((0, -10))
         if f_artist is not None:
             f_artist.xy = (x, y)
-            f_artist.set_position((0, -27))
+            f_artist.set_position((0, -22))
         if undated_artist is not None:
             undated_artist.xy = (x, y)
             undated_artist.set_position((10, 7))
@@ -3695,7 +3804,7 @@ class HeritageTrackWidget(QWidget):
                     values.append(entry)
         except Exception:
             return []
-        return values
+        return ordered_species_for_display(values)
 
     def _open_create_animal_dialog(self) -> None:
         """Open dialog to create a new heritage-only (placeholder) animal."""

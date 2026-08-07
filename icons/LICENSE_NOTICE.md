@@ -51,6 +51,8 @@ role, status, and Medi Track contexts.  The current shared mappings are:
 - `medi_track.filter.current_abnormal` and `status.warning` -> `ui/status_abnormal.svg`
 
 Alias copies with those former semantic names are not separate artwork and are
-not shipped.  The editable masters and PNG review previews are maintained in
-`Q:/GitHub/Graphics/SVG/UI` and `Q:/GitHub/Graphics/UI`; the application uses
-the packaged SVG masters directly without a PNG fallback.
+not shipped.  Editable masters are maintained in
+`Q:/GitHub/Graphics/SVG/UI`; the application uses the packaged SVG masters
+directly without a PNG fallback.  Optional raster review evidence outside the
+release is not a runtime asset.  The shared Qt loader may adapt only the
+canonical outline colour in memory when required by the active palette.

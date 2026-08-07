@@ -75,6 +75,43 @@ class ScopeGhostStrategy(GhostNodeStrategy):
         return ghost_nodes
 
 
+class VisibleFamilyCompletenessGhostStrategy(GhostNodeStrategy):
+    """Add only the missing co-parent of an already visible relationship.
+
+    Generation cut-offs and selected-animal ghost expansion can expose a child
+    together with one genetic parent while omitting the other.  Without the
+    co-parent the visible child is rendered like a founder even though its
+    ancestry is already present elsewhere in the graph.  This one-step rule
+    completes that family without recursively expanding another generation.
+    """
+
+    def __init__(self, families: Optional[Dict[str, Dict[str, Any]]] = None):
+        self.families = families or {}
+
+    def find_ghosts(
+        self,
+        display_nodes: Set[str],
+        engine: PedigreeEngine,
+        archived_animals: Optional[Set[str]] = None,
+    ) -> Set[str]:
+        ghost_nodes: Set[str] = set()
+        for family in self.families.values():
+            parents = {
+                str(family.get(key, "")).strip()
+                for key in ("mother", "father")
+                if str(family.get(key, "")).strip()
+            }
+            children = {
+                str(child).strip()
+                for child in family.get("children", [])
+                if str(child).strip()
+            }
+            if not (children & display_nodes) or not (parents & display_nodes):
+                continue
+            ghost_nodes.update(parents - display_nodes)
+        return ghost_nodes
+
+
 class ArchivedGhostStrategy(GhostNodeStrategy):
     """Ghosts from archived animal boundaries.
 

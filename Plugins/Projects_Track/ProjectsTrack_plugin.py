@@ -16,6 +16,8 @@ from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.project_visibility import animal_visible_by_project_scope
 from Plugins.core.backend_store import BackendJsonStore
 from Plugins.core.ui_icons import apply_icon
+from Plugins.core.resource_catalogs import ordered_species_for_display
+from Plugins.core.project_lifecycle import normalize_project_status
 
 
 class ProjectTabButton(QPushButton):
@@ -27,6 +29,7 @@ class ProjectTabButton(QPushButton):
         self.setFlat(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.button_text = text
+        self.lifecycle_status = ""
         # Height = text width in rotated space + padding, minimum 60 px
         from PyQt6.QtGui import QFont, QFontMetrics
         _font = QFont()
@@ -63,7 +66,8 @@ class ProjectTabButton(QPushButton):
         # Draw text centered
         font = QFont()
         font.setPointSize(9)
-        font.setBold(self.isChecked())
+        font.setItalic(self.lifecycle_status == "draft")
+        font.setBold(self.isChecked() or self.lifecycle_status == "active")
         painter.setFont(font)
         
         # Calculate text position using actual button height as the text span
@@ -72,6 +76,10 @@ class ProjectTabButton(QPushButton):
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self.button_text)
         
         painter.end()
+
+    def setLifecycleStatus(self, status: str) -> None:
+        self.lifecycle_status = normalize_project_status(status, default="active")
+        self.update()
     
     def _update_style(self, active):
         """Update button styling."""
@@ -659,6 +667,18 @@ class ProjectsTrackPlugin:
         tooltip_key = "projects.tooltip.all" if is_all else "projects.tooltip.project"
         default_text = "Show all animals" if is_all else f"Show animals in project: {project_name}"
         tooltip_text = self.app.messages.get(tooltip_key, default_text)
+        if not is_all:
+            status = self._project_lifecycle_status(project_name)
+            btn.setLifecycleStatus(status)
+            status_label = self.app.messages.get(
+                f"project.status.{status}", status.capitalize()
+            )
+            tooltip_text = (
+                f"{tooltip_text}\n"
+                + self.app.messages.get(
+                    "project.status.tooltip", "Status: {status}"
+                ).replace("{status}", status_label)
+            )
         btn.setToolTip(tooltip_text)
 
         self.button_group.addButton(btn)
@@ -667,6 +687,19 @@ class ProjectsTrackPlugin:
         self.tab_buttons[project_name] = btn
 
         btn.toggled.connect(lambda checked, p=project_name: self._on_tab_toggled(p, checked))
+
+    def _project_lifecycle_status(self, project_name: str) -> str:
+        try:
+            catalog = BackendJsonStore(
+                self.app.backend, "projects", "catalog"
+            ).load({"projects": {}})
+            record = (catalog.get("projects") or {}).get(project_name, {})
+            return normalize_project_status(
+                record.get("status") if isinstance(record, dict) else None,
+                default="active",
+            )
+        except Exception:
+            return "active"
 
     def _create_species_button(self, species_name: str, layout) -> None:
         """Create a single species tab button."""
@@ -743,6 +776,18 @@ class ProjectsTrackPlugin:
             tooltip_key = "projects.tooltip.all" if is_all else "projects.tooltip.project"
             tooltip_text = messages.get(tooltip_key, 
                                       "Show all animals" if is_all else f"Show project: {project_name}")
+            if not is_all:
+                status = self._project_lifecycle_status(project_name)
+                btn.setLifecycleStatus(status)
+                status_label = messages.get(
+                    f"project.status.{status}", status.capitalize()
+                )
+                tooltip_text = (
+                    f"{tooltip_text}\n"
+                    + messages.get(
+                        "project.status.tooltip", "Status: {status}"
+                    ).replace("{status}", status_label)
+                )
             btn.setToolTip(tooltip_text)
     
     def _on_species_tab_toggled(self, species_name: str, checked: bool) -> None:
@@ -908,7 +953,9 @@ class ProjectsTrackPlugin:
             sp = rec.get('species', '')
             if sp and isinstance(sp, str) and sp.strip():
                 species.add(sp.strip())
-        self.all_species = sorted(species, key=str.lower)
+        self.all_species = ordered_species_for_display(
+            sorted(species, key=str.lower)
+        )
 
     def animals_in_scope(self) -> List[str]:
         """Return the list of animal names matching the current project + species filter."""
@@ -1042,7 +1089,7 @@ class ProjectsTrackPlugin:
                 project_data.setdefault('version', 1)
                 project_data.setdefault('projects', {})
                 if project not in project_data['projects']:
-                    project_data['projects'][project] = {}
+                    project_data['projects'][project] = {'status': 'draft'}
                 rec = project_data['projects'][project]
                 if not rec.get('created_by') or not rec.get('created_at'):
                     rec['created_by'] = sig

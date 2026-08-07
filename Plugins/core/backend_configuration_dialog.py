@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import QSize, QTimer, QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QButtonGroup,
@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -25,6 +26,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from .dialog_geometry import install_dialog_geometry_guard
 
 from .backend_configuration import (
     BackendConfigurationPermissionError,
@@ -52,9 +55,10 @@ class BackendConfigurationDialog(QDialog):
         self.authorized = authorized
         self.audit_callback = audit_callback
         self.setWindowTitle(self._text("backend.dialog.title", "Backend"))
-        self.setMinimumWidth(650)
+        self.setMinimumWidth(520)
         self._build()
         self._load()
+        install_dialog_geometry_guard(self, minimum=QSize(520, 300))
 
     def _text(self, key: str, fallback: str) -> str:
         return str(self.messages.get(key, fallback))
@@ -90,9 +94,7 @@ class BackendConfigurationDialog(QDialog):
         root.addWidget(self.pages)
         self._build_sqlite_page()
         self._build_postgres_page()
-        self.sqlite_radio.toggled.connect(
-            lambda checked: self.pages.setCurrentIndex(0 if checked else 1)
-        )
+        self.sqlite_radio.toggled.connect(self._select_profile_page)
 
         self.override_label = QLabel()
         self.override_label.setWordWrap(True)
@@ -140,19 +142,42 @@ class BackendConfigurationDialog(QDialog):
         self.open_sqlite_folder = QPushButton(
             self._text("backend.open_folder", "Open folder")
         )
+        self.change_sqlite_folder = QPushButton(
+            self._text("backend.change_folder", "Change folder")
+        )
         self.open_sqlite_folder.clicked.connect(
             lambda: QDesktopServices.openUrl(
                 QUrl.fromLocalFile(self.sqlite_folder.text())
             )
         )
         folder_row.addWidget(self.sqlite_folder, 1)
+        folder_row.addWidget(self.change_sqlite_folder)
         folder_row.addWidget(self.open_sqlite_folder)
+        self.change_sqlite_folder.clicked.connect(self._change_sqlite_folder)
         form.addRow(
             self._text("backend.sqlite.folder", "Local storage folder"),
             folder_row,
         )
         layout.addLayout(form)
         self.pages.addWidget(page)
+
+    def _change_sqlite_folder(self) -> None:
+        selected = QFileDialog.getExistingDirectory(
+            self,
+            self._text("backend.change_folder.title", "Choose SQLite storage folder"),
+            self.sqlite_folder.text(),
+        )
+        if selected:
+            self.sqlite_folder.setText(str(Path(selected).resolve()))
+
+    def _select_profile_page(self, sqlite_selected: bool) -> None:
+        self.pages.setCurrentIndex(0 if sqlite_selected else 1)
+        QTimer.singleShot(0, self._resize_for_profile)
+
+    def _resize_for_profile(self) -> None:
+        target_width = 560 if self.sqlite_radio.isChecked() else 760
+        self.adjustSize()
+        self.resize(target_width, self.sizeHint().height())
 
     def _build_postgres_page(self) -> None:
         page = QWidget(self)
@@ -216,7 +241,11 @@ class BackendConfigurationDialog(QDialog):
         )
         self.sqlite_filename.setText(configured_sqlite.name)
         self.sqlite_folder.setText(
-            str(self.service.paths.data_root / "database")
+            str(
+                configured_sqlite.parent
+                if configured_sqlite.is_absolute()
+                else self.service.paths.data_root / "database"
+            )
         )
         pg = self.service.saved_postgresql()
         self.pg_host.setText(pg.host)
@@ -248,6 +277,7 @@ class BackendConfigurationDialog(QDialog):
                 "No deployment environment overrides are active.",
             )
         )
+        QTimer.singleShot(0, self._resize_for_profile)
 
     def postgresql_settings(self) -> PostgreSQLSettings:
         return PostgreSQLSettings(
@@ -305,6 +335,7 @@ class BackendConfigurationDialog(QDialog):
             document = self.service.save(
                 profile=profile,
                 sqlite_filename=self.sqlite_filename.text(),
+                sqlite_folder=self.sqlite_folder.text(),
                 postgresql=pg,
                 password=self.pg_password.text(),
                 authorized=self.authorized,
@@ -314,9 +345,9 @@ class BackendConfigurationDialog(QDialog):
                     {
                         "profile": document["profile"],
                         "sqlite_filename": Path(document["sqlite_path"]).name,
-                        "postgresql_host": document["postgresql"]["host"],
-                        "postgresql_database": document["postgresql"]["database"],
-                        "sslmode": document["postgresql"]["sslmode"],
+                        "postgresql_host": document["postgresql"].get("host", ""),
+                        "postgresql_database": document["postgresql"].get("database", ""),
+                        "sslmode": document["postgresql"].get("sslmode", ""),
                         "restart_required": True,
                     }
                 )

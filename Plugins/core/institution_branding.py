@@ -139,15 +139,15 @@ class InstitutionBrandingService:
             overlay_bytes = io.BytesIO()
             layer = canvas.Canvas(overlay_bytes, pagesize=(width, height))
             margin = 18.0
-            header_h = min(34.0, max(24.0, height * 0.04))
-            gap = 8.0
+            header_h = min(82.0, max(64.0, height * 0.095))
+            gap = 10.0
             right_edge = width - margin
             center_y = height - margin - header_h / 2.0
             logo_size: tuple[float, float] | None = None
             if logo is not None:
                 with Image.open(logo) as image:
                     iw, ih = image.size
-                max_w, max_h = 72.0, header_h - 4.0
+                max_w, max_h = 216.0, header_h - 6.0
                 scale = min(max_w / max(iw, 1), max_h / max(ih, 1))
                 logo_size = (iw * scale, ih * scale)
             if facility:
@@ -156,9 +156,9 @@ class InstitutionBrandingService:
                 # long names reduce the logo width/font size, never the page
                 # content area or the right-edge alignment.
                 font_name = "Helvetica-Bold"
-                font_size = 8.0
+                font_size = 10.0
                 available = max(36.0, width - 2.0 * margin)
-                for candidate in (8.0, 7.5, 7.0, 6.5, 6.0, 5.5):
+                for candidate in (10.0, 9.0, 8.0, 7.0, 6.0, 5.5):
                     text_width = stringWidth(facility, font_name, candidate)
                     logo_width = logo_size[0] if logo_size else 0.0
                     if text_width + (gap if logo_size else 0.0) + logo_width <= available:
@@ -246,57 +246,93 @@ class InstitutionBrandingDialog(QDialog):
         actor: str,
         *,
         authorized: bool = False,
+        messages: dict[str, Any] | None = None,
+        embedded: bool = False,
         parent=None,
     ):
         super().__init__(parent)
         self.service = service
         self.actor = actor
         self.authorized = authorized
+        self.messages = messages or {}
+        self.embedded = bool(embedded)
         self._remove_logo = False
-        self.setWindowTitle("Institution branding")
-        self.setMinimumWidth(480)
+        self.setWindowTitle(self._text("branding.title", "Institution branding"))
+        self.setMinimumWidth(560)
+        if self.embedded:
+            self.setWindowFlags(Qt.WindowType.Widget)
         config = service.load()
+        self._initial_config = dict(config)
 
         outer = QVBoxLayout(self)
         form = QFormLayout()
-        self.enabled = QCheckBox("Include institution header in generated PDFs")
+        self.enabled = QCheckBox(
+            self._text(
+                "branding.enabled",
+                "Include institution header in generated PDFs",
+            )
+        )
         self.enabled.setChecked(bool(config.get("enabled")))
         self.name = QLineEdit(str(config.get("facility_name", "")))
         self.logo = QLineEdit()
         self.logo.setReadOnly(True)
-        choose = QPushButton("Choose PNG/JPEG…")
-        choose.clicked.connect(self._choose_logo)
-        remove = QPushButton("Remove")
-        remove.clicked.connect(self._remove_selected_logo)
+        self.choose_button = QPushButton(
+            self._text("branding.choose", "Choose PNG/JPEG…")
+        )
+        self.choose_button.clicked.connect(self._choose_logo)
+        self.remove_button = QPushButton(
+            self._text("branding.remove", "Remove")
+        )
+        self.remove_button.clicked.connect(self._remove_selected_logo)
         logo_row = QHBoxLayout()
         logo_row.addWidget(self.logo, 1)
-        logo_row.addWidget(choose)
-        logo_row.addWidget(remove)
+        logo_row.addWidget(self.choose_button)
+        logo_row.addWidget(self.remove_button)
         form.addRow("", self.enabled)
-        form.addRow("Institution name:", self.name)
-        form.addRow("Logo:", logo_row)
+        form.addRow(
+            self._text("branding.institution_name", "Institution name:"),
+            self.name,
+        )
+        form.addRow(self._text("branding.logo", "Logo:"), logo_row)
         outer.addLayout(form)
         self.preview = QLabel()
         self.preview.setWordWrap(True)
         outer.addWidget(self.preview)
         self.preview_logo = QLabel()
-        self.preview_logo.setMinimumHeight(44)
-        self.preview_logo.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.preview_logo.setMinimumHeight(132)
+        self.preview_logo.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         outer.addWidget(self.preview_logo)
         self.name.textChanged.connect(self._refresh_preview)
         self.enabled.toggled.connect(self._refresh_preview)
         self._refresh_preview()
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save
-            | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self._save)
-        buttons.rejected.connect(self.reject)
-        outer.addWidget(buttons)
+        for widget in (
+            self.enabled,
+            self.name,
+            self.logo,
+            self.choose_button,
+            self.remove_button,
+        ):
+            widget.setEnabled(self.authorized)
+        if not self.embedded:
+            buttons = QDialogButtonBox(
+                QDialogButtonBox.StandardButton.Save
+                | QDialogButtonBox.StandardButton.Cancel
+            )
+            buttons.accepted.connect(self._save)
+            buttons.rejected.connect(self.reject)
+            outer.addWidget(buttons)
+
+    def _text(self, key: str, fallback: str) -> str:
+        return str(self.messages.get(key, fallback))
 
     def _choose_logo(self) -> None:
         filename, _ = QFileDialog.getOpenFileName(
-            self, "Choose institution logo", "", "Images (*.png *.jpg *.jpeg)"
+            self,
+            self._text("branding.choose_title", "Choose institution logo"),
+            "",
+            self._text("branding.image_filter", "Images (*.png *.jpg *.jpeg)"),
         )
         if filename:
             self.logo.setText(filename)
@@ -309,11 +345,20 @@ class InstitutionBrandingDialog(QDialog):
         self._refresh_preview()
 
     def _refresh_preview(self) -> None:
-        state = "Enabled" if self.enabled.isChecked() else "Disabled"
-        name = self.name.text().strip() or "(no institution name)"
+        state = (
+            self._text("branding.state.enabled", "Enabled")
+            if self.enabled.isChecked()
+            else self._text("branding.state.disabled", "Disabled")
+        )
+        name = self.name.text().strip() or self._text(
+            "branding.no_name", "(no institution name)"
+        )
         self.preview.setText(
-            f"Preview — {state}: {name}\n"
-            "The logo keeps its aspect ratio inside a compact PDF header."
+            self._text(
+                "branding.preview",
+                "Preview — {state}: {name}\n"
+                "The logo keeps its aspect ratio inside a bounded PDF header.",
+            ).format(state=state, name=name)
         )
         self.preview_logo.clear()
         logo_path = Path(self.logo.text()) if self.logo.text() else self.service.logo_path()
@@ -323,19 +368,46 @@ class InstitutionBrandingDialog(QDialog):
             if not pixmap.isNull():
                 self.preview_logo.setPixmap(
                     pixmap.scaled(
-                        96, 42,
+                        288, 126,
                         aspectRatioMode=Qt.AspectRatioMode.KeepAspectRatio,
                         transformMode=Qt.TransformationMode.SmoothTransformation,
                     )
                 )
 
-    def _save(self) -> None:
-        self.service.save(
-            enabled=self.enabled.isChecked(),
-            facility_name=self.name.text(),
-            logo_source=self.logo.text(),
-            actor=self.actor,
-            authorized=self.authorized,
-            remove_logo=self._remove_logo,
+    def save_embedded(self) -> bool:
+        unchanged = (
+            not self.logo.text()
+            and not self._remove_logo
+            and bool(self._initial_config.get("enabled"))
+            == self.enabled.isChecked()
+            and str(self._initial_config.get("facility_name", "")).strip()
+            == self.name.text().strip()
         )
-        self.accept()
+        if unchanged:
+            return True
+        try:
+            saved = self.service.save(
+                enabled=self.enabled.isChecked(),
+                facility_name=self.name.text(),
+                logo_source=self.logo.text(),
+                actor=self.actor,
+                authorized=self.authorized,
+                remove_logo=self._remove_logo,
+            )
+        except (OSError, PermissionError, ValueError) as exc:
+            QMessageBox.warning(
+                self,
+                self._text(
+                    "branding.save_failed.title", "Cannot save branding"
+                ),
+                str(exc),
+            )
+            return False
+        self._initial_config = dict(saved)
+        self.logo.clear()
+        self._remove_logo = False
+        return True
+
+    def _save(self) -> None:
+        if self.save_embedded():
+            self.accept()

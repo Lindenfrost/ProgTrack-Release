@@ -2,7 +2,11 @@
 
 Status: **approved on 2026-07-28**
 
-This directory is the versioned, approved architecture baseline for Phase 2B.
+This directory is the versioned, approved historical architecture baseline for
+Phase 2B. Current operational behavior is documented in
+`../Phase 2B backend runtime and plugin contract.md` and in the localized user
+guides; this directory is retained as review evidence, not as a runtime
+workflow manual.
 It was prepared against ProgTrack branch `Phase-0.1.2`, clean source/data
 commit `3fc22583799b6ed394544035f1387e1c759c3aea`.
 
@@ -23,6 +27,6 @@ The final verifier result has SHA-256
 exit code `0`, and `passed = true`. The repository Git status was empty before
 and after verification.
 
-Phase 2B Issues #49–#53 must implement this baseline. Later implementation
-discoveries may add reviewed amendments, but must not silently contradict this
-approved contract.
+Phase 2B Issues #49–#53 used this baseline. Reviewed implementation details and
+the as-built contract supersede future-tense instructions in the archived
+planning documents without rewriting their review history.

@@ -87,14 +87,15 @@ class SelectedAnimalsStrategy(DisplaySetStrategy):
 
         # Phase: Collect ancestors of selected animals only (not descendants)
         # Descendants will be shown as ghosts by the ghost strategy
-        visited_ancestors: Set[str] = set()
-
         for seed in selected_names:
-            if seed in visited_ancestors:
-                continue
-
+            # Each selected animal owns its generation budget.  A shared
+            # global visited set made ``[descendant, ancestor]`` stop at a
+            # different boundary than ``[ancestor, descendant]``: the first
+            # traversal could mark the second seed visited before that seed
+            # received its full ``max_generations`` walk.  Keep cycle guards
+            # local to a seed and union the results into the display set.
+            visited_ancestors: Set[str] = {seed}
             current_level: List[tuple[str, int]] = [(seed, 0)]
-            visited_ancestors.add(seed)
 
             while current_level:
                 node, gen = current_level.pop(0)

@@ -202,7 +202,7 @@
     <li><code>Plugins</code>, <code>icons</code>, <code>lang</code>, <code>manual</code> und das aktive Payload-Skript müssen neben <code>Launcher.exe</code> bleiben.</li>
     <li>Der kompilierte Launcher enthält die benötigte Python-Laufzeitumgebung; Nutzer des portablen Pakets müssen keine Python-Pakete installieren.</li>
   </ul>
-  <div class="hint"><strong>Tipp:</strong> Wenn die Anwendung nicht startet, prüfen Sie <code>launcher_error.log</code> und <code>launcher_fault.log</code> im Launcher-Ordner.</div>
+  <div class="hint"><strong>Tipp:</strong> Wenn die Anwendung nicht startet, prüfen Sie <code>launcher_error.log</code> und <code>launcher_fault.log</code> bei einer beschreibbaren portablen Installation unter <code>ProgTrackData/state/logs</code>, sonst im Benutzer-State-Verzeichnis der Installation.</div>
   
   <h3>2.2 Backend-Profile und verwaltete Daten</h3>
   <p>ProgTrack verwendet eine gemeinsame Datenzugriffsschicht mit zwei Profilen:</p>
@@ -211,9 +211,12 @@
     <tr><td><strong>Standalone SQLite</strong></td><td>Genau ein lokaler Arbeitsplatz oder Tests; nur lokaler, nicht synchronisierter Speicher.</td></tr>
     <tr><td><strong>Shared PostgreSQL</strong></td><td>Netzwerk- und Mehrarbeitsplatzbetrieb mit gemeinsamem Backend.</td></tr>
   </table>
-  <p>Als Lord unter <strong>Einstellungen → Backend</strong> das Profil auswählen, das nach dem nächsten sauberen Neustart verwendet wird. Für Standalone SQLite ist nur ein sicherer Dateiname im lokalen Anwendungsdaten-Datenbankordner zulässig. Für Shared PostgreSQL stehen Host, Port, Datenbank, Benutzer, Passwort, SSL-Modus, Timeout, verwalteter Dokumentenspeicher und Poolgrößen zur Verfügung. Vor dem Speichern <strong>Verbindung testen</strong> verwenden. Das Passwort liegt im Anmeldeinformationsspeicher des Betriebssystems und niemals in <code>backend.json</code>. Speichern überträgt keine Daten; dafür den kanonischen Export-/Importablauf verwenden. Deployment-Umgebungsvariablen behalten für Headless-Administration Vorrang.</p>
-  <p>Dokumente liegen im verwalteten Speicher des aktiven Backends; die Datenbank hält Eigentümer-, Pfad- und Prüfsummenangaben. Schreibgeschützte Installationen verwenden Benutzerprofil- bzw. XDG-Verzeichnisse. Eine saubere Beispielinstallation wird aus dem einzigen deterministischen, vollständig fiktiven Paket unter <code>Resources/Seed</code> aufgebaut.</p>
+  <p>Als Lord unter <strong>Einstellungen → Backend</strong> das Profil auswählen, das nach dem nächsten sauberen Neustart verwendet wird. Für Standalone SQLite einen sicheren <code>.sqlite3</code>-Dateinamen und einen absoluten lokalen Ordner wählen. Für Shared PostgreSQL stehen Host, Port, Datenbank, Benutzer, Passwort, SSL-Modus, Timeout, verwalteter Dokumentenspeicher und Poolgrößen zur Verfügung. Vor dem Speichern <strong>Verbindung testen</strong> verwenden. Das Passwort liegt im Anmeldeinformationsspeicher des Betriebssystems. Speichern überträgt keine Daten; dafür den vollständigen Export-/Importablauf verwenden. Deployment-Umgebungsvariablen behalten für Headless-Administration Vorrang.</p>
+  <p>In einem beschreibbaren portablen Ordner liegen veränderliche Daten unter <code>ProgTrackData</code>: die Standarddatenbank unter <code>database/progtrack.sqlite3</code>, Konfiguration und Einstellungen unter <code>config</code>, hochgeladene Dokumente und das Branding-Asset unter <code>managed</code>, Protokolle und die Standalone-Sperre unter <code>state</code> sowie Standardexporte unter <code>exports</code>. Schreibgeschützte Installationen verwenden stattdessen Windows-Benutzerprofil- oder Linux-XDG-Verzeichnisse.</p>
+  <p>Das konfigurierte Backend ist die einzige operative Datenquelle. Ist es nicht verfügbar, meldet der Start den Fehler und wechselt nicht auf das andere Profil. Das Release enthält den PostgreSQL-Clienttreiber, aber keinen Server; Servereinrichtung sowie PostgreSQL-/Linux-Deploymenttests sind getrennte Installationsprüfungen.</p>
   <div class="warning"><strong>Standalone SQLite niemals auf Netzlaufwerken oder in Cloud-Synchronisationsordnern verwenden.</strong> Für Sicherung/Übertragung den vollständigen Interchange-Weg benutzen.</div>
+  <p>Standalone SQLite erlaubt genau einen schreibenden ProgTrack-Prozess. Eine zweite Instanz wird abgewiesen, solange der aktive Besitzer <code>state/runtime/standalone.lock</code> hält; verwaiste lokale Prozesssperren werden sicher bereinigt. Geprüfte Schreibvorgänge verwenden in beiden Profilen Backend-Revisionen und Entitätssperren. Nur eine Lord-autorisierte Aktion darf eine Entitätssperre zwangsweise lösen; der Grund ist Pflicht und wird protokolliert.</p>
+  <p>Nur ein wirklich leeres Backend wird aus dem einzigen deterministischen, vollständig fiktiven Paket unter <code>Resources/Seed</code> aufgebaut. Eine vorhandene Datenbank bleibt unverändert.</p>
 
   <h3>2.3 Beispiel-Excel-Dateien</h3>
   <p>
@@ -228,8 +231,8 @@
   <h2 id="ui-overview">3. Überblick Benutzeroberfläche</h2>
   <p>Das Hauptfenster ist wie folgt aufgebaut:</p>
   <ul>
-    <li><strong>Menüleiste</strong> – Datei, Werkzeuge, Einstellungen (Sprache
-      &amp; Stil), Info (Über das Programm).</li>
+    <li><strong>Menüleiste</strong> – Datei, Werkzeuge, Einstellungen (Sprache,
+      Konventionen, Backend), Info (Über das Programm).</li>
     <li><strong>Linke Seitenleiste</strong> – listet verfügbare und
       archivierte Tiere, bietet Filter nach Zyklusphase sowie Schnellaktionen
       (Neu, Bearbeiten, Import, Archivieren, Wiederherstellen, Löschen).</li>
@@ -259,7 +262,7 @@
 
   <h3>3.2 Aktionen der Seitenleiste</h3>
   <p>Die Schaltflächen sind kontextabhängig: Import-Schaltflächen erscheinen nur, wenn Rolle und installierte Plugins sie verwenden können. Die folgenden Bezeichnungen stammen aus der aktiven Sprachdatei.</p>
-  <p>Lord, Master und Manager konfigurieren unter <strong>Einstellungen → Stil → Rollenkonfiguration</strong> Reihenfolge, Bezeichnungen/Symbole, Blöcke der Neu-/Bearbeiten-Dialoge und die Sichtbarkeit von <strong>Neues Tier</strong> je Rollen-Tab. Alle behält allgemeines Bearbeiten und die Rollenkorrektur, zeigt aber nicht pauschal alle vier Messwert-Importe.</p>
+  <p>Lord, Master und Manager konfigurieren unter <strong>Einstellungen → Konventionen → Rollenkonfiguration</strong> Reihenfolge, Bezeichnungen/Symbole, Blöcke der Neu-/Bearbeiten-Dialoge und die Sichtbarkeit von <strong>Neues Tier</strong> je Rollen-Tab. Die Symbolschaltfläche öffnet eine Auswahl aller ausgelieferten SVGs unter <code>icons/ui</code>. Alle behält allgemeines Bearbeiten und die Rollenkorrektur, zeigt aber nicht pauschal alle vier Messwert-Importe.</p>
   <table class="basic"><tr><th>Schaltfläche</th><th>Nutzung</th></tr>
   <tr><td><strong>➕ Neues Tier</strong></td><td>Neuen Datensatz anlegen.</td></tr>
   <tr><td><strong>✏️ Bearbeiten</strong></td><td>Vollständigen Editor für das ausgewählte Tier öffnen.</td></tr>
@@ -280,11 +283,11 @@
   <p>Verwenden Sie die Aktion der Seitenleiste, um einen Datensatz anzulegen. In der Kategorie Alle fragt ProgTrack zuerst nach der Rolle und öffnet danach den passenden Editor. Pflichtfelder hängen von der Rolle ab; optionale ID-, Projekt-, Herkunfts-, Genotyp-, Eltern-, Haltungs- und Grenzwertfelder erscheinen dort, wo sie relevant sind.</p>
   <p><strong>➕ Neues Tier</strong> · <strong>Rolle auswählen</strong> · <strong>Speichern</strong></p>
   <div class="hint">
-    <strong>Tieridentität:</strong> ProgTrack identifiziert jedes Tier über die IPID im Format <code>Name | Spezies | TT.MM.JJJJ</code>. Die Seitenleiste zeigt weiterhin den kurzen Namen, aber Tooltips, gespeicherte JSON-Daten, Importe und Exporte behalten die vollständige IPID. Nachträgliche Änderungen an Name, Spezies oder Geburtsdatum dürfen nur Manager durchführen.
+    <strong>Tieridentität:</strong> ProgTrack identifiziert jedes Tier über die unveränderliche IPID <code>Name | Spezies | TT.MM.JJJJ | Herkunft</code>. Nach dem Anlegen dürfen Name, Spezies, vollständiges Geburtsdatum, Herkunft und IPID von keinem Konto geändert werden, auch nicht vom Lord. Listen verwenden zur Lesbarkeit den Kurznamen; Backend-Beziehungen und exakte Exporte behalten die stabile Identität.
   </div>
 
   <h3>4.2 Konventionen für Tier-IDs konfigurieren</h3>
-  <p>Die oben beschriebene IPID ist der interne Identitätsschlüssel von ProgTrack. Die getrennte öffentliche <strong>Animal ID</strong> kann einer einrichtungsspezifischen Konvention folgen. Lord, Master oder Manager konfigurieren sie unter <strong>Einstellungen → Stil → Identitäts- und Lebenszykluskonventionen</strong>.</p>
+  <p>Die oben beschriebene IPID ist der interne Identitätsschlüssel von ProgTrack. Die getrennte öffentliche <strong>Animal ID</strong> kann einer einrichtungsspezifischen Konvention folgen. Lord, Master oder Manager konfigurieren sie unter <strong>Einstellungen → Konventionen → Identitäts- und Lebenszykluskonventionen</strong>.</p>
   <p>Stellen Sie die Animal ID aus bis zu fünf geordneten Bestandteilen zusammen. Jeder Bestandteil kann unbenutzt bleiben oder Spezies, Geburtsjahr (JJ), Geburtsjahr (JJJJ), Zähler pro Jahr, absoluter Zähler, Geschlecht oder Name enthalten. ProgTrack verbindet die gewählten Bestandteile mit Unterstrichen.</p>
   <table class="basic"><tr><th>Bestandteil</th><th>Erzeugter Wert</th></tr>
     <tr><td><strong>Spezies</strong></td><td>Kleingeschriebene Anfangsbuchstaben der ersten bis zu drei Wörter der registrierten Spezies.</td></tr>
@@ -293,7 +296,7 @@
     <tr><td><strong>Geschlecht</strong></td><td><code>M</code>, <code>F</code> oder <code>U</code>.</td></tr>
     <tr><td><strong>Name</strong></td><td>Der Tiername als ID-sicherer Textbaustein.</td></tr>
   </table>
-  <p>Beim Anlegen eines Tiers zeigt das ID-Feld während der Eingabe von Name, Spezies, Geburtsdatum und Geschlecht eine Vorschau. Fehlende Bestandteile erscheinen als <code>XX</code> oder <code>XXXX</code>. Beim Speichern vergibt ProgTrack die nächste freie Sequenz. Konventionsgenerierte IDs werden nach einer berechtigten Identitätsänderung unter Beibehaltung ihrer ursprünglichen Sequenz neu berechnet; manuell überschriebene IDs bleiben unverändert.</p>
+  <p>Beim Anlegen eines Tiers zeigt das ID-Feld während der Eingabe von Name, Spezies, Geburtsdatum und Geschlecht eine Vorschau. Fehlende Bestandteile erscheinen als <code>XX</code> oder <code>XXXX</code>. Beim Speichern vergibt ProgTrack die nächste freie Sequenz. Änderungen der Konvention gelten für neue Datensätze; eine fehlerhafte endgültige Beispielidentität wird gelöscht und neu angelegt, nicht umgeschrieben.</p>
 
   <h3>4.3 Tierrollen und rollenspezifische Editoren</h3>
   <p>Die Rolle bestimmt, welcher Editor und welche Datentabs angezeigt werden. Steroidbezogene Rollen und Steuerungen sind nur verfügbar, wenn Steroid Track aktiv ist.</p>
@@ -413,7 +416,7 @@
   </p>
   <p>
     Für eine umfassendere Konfiguration verwenden Sie
-    <strong>Einstellungen &rarr; Stil</strong> (siehe Abschnitt
+    <strong>Einstellungen &rarr; Konventionen</strong> (siehe Abschnitt
     <a href="#language-style">7</a>).
   </p>
 
@@ -457,11 +460,12 @@
     <code>icons/ui/flag_*.svg</code>.
   </p>
 
-  <h3>7.2 Darstellungsoptionen</h3>
+  <h3>7.2 Konventionen und Darstellung</h3>
   <p>
-    Verwenden Sie <strong>Einstellungen &rarr; Stil</strong>, um den Dialog für
+    Verwenden Sie <strong>Einstellungen &rarr; Konventionen</strong>, um den Dialog für
     Darstellungsoptionen zu öffnen. Dort können Sie konfigurieren:
   </p>
+  <p>Die ausgelieferten Bedienelemente unter <code>icons/ui</code> verwenden ausschließlich SVG. Semantische IDs in <code>icons/ui/manifest.json</code> wählen Grafik und lokalisierten Tooltip; in diesem Ordner gibt es keinen PNG-Fallback. Bearbeitbare Master liegen unter <code>Q:\GitHub\Graphics\SVG\UI</code>. PNG-Dateien im Stamm von <code>icons</code> für Startbild, Meldungen, Jobs und Dateitypen fallen nicht unter diese UI-Regel.</p>
   <ul>
     <li>Hauptfarben für Progesteron-, Gewichts-, PdG- und Spermienkurven.</li>
     <li>Farben für FSH-Injektionen und Ereignismarker (PGF,
@@ -481,7 +485,7 @@
   <p><strong>Datei → Datenbank speichern</strong> schreibt den aktuellen Stand transaktional über das aktive Backend. Für Sicherung und Übertragung verwenden Sie das vollständige Interchange-/Backup-Verfahren, damit Datenbank und verwaltete Dokumente zusammenbleiben.</p>
 
   <h3>8.2 Einrichtungsbranding für PDFs</h3>
-  <p>Lord, Master und Manager öffnen <strong>Einstellungen → Einrichtungsbranding</strong>, hinterlegen Einrichtungsname und optional ein PNG-/JPEG-Logo und aktivieren den Kopf. Jede PDF-Seite erhält einen kompakten Kopf; übergroße Bilder werden unter Beibehaltung des Seitenverhältnisses verkleinert.</p>
+  <p>Lord, Master und Manager öffnen <strong>Einstellungen → Konventionen → Einrichtungsbranding</strong>, hinterlegen Einrichtungsname und optional ein PNG-/JPEG-Logo und aktivieren den Kopf. Jede unterstützte PDF-Seite erhält rechts einen kompakten Kopf; übergroße Bilder werden unter Beibehaltung des Seitenverhältnisses verkleinert.</p>
 
   <h3>8.3 Excel-Export</h3>
   <p>
@@ -495,7 +499,7 @@
   </ul>
   <p>Tierbezogene Exporte enthalten den lesbaren Tiernamen und die <code>IPID</code> (Internal ProgTrack ID). Verwenden Sie die IPID für eindeutige Zuordnung oder Re-Importe und den Kurznamen für die menschliche Kontrolle.</p>
 
-  <h3>8.3 PDF-Export (mit Animal Reports-Plugin)</h3>
+  <h3>8.4 PDF-Export (mit Animal Reports-Plugin)</h3>
   <p>
     Wenn das Animal Reports-Plugin installiert ist, steht der Menüpunkt
     <strong>Datei → Berichte exportieren (.pdf)</strong> zur Verfügung. Er nutzt das
@@ -509,21 +513,21 @@
   </ul>
 
   <h2 id="plugins">9. Plugins und Module</h2>
-  <p>Plugin-Verfügbarkeit wird beim Start erkannt. Anklickbare Einträge im Menü Werkzeuge zeigen/verbergen Haupttabs; Fensterwerkzeuge öffnen einen eigenen Dialog. Ausgeblendete Tabs behalten ihre Daten.</p>
+  <p>Plugin-Verfügbarkeit wird beim Start geprüft. Anklickbare Einträge im Menü Werkzeuge zeigen/verbergen Haupttabs; Fensterwerkzeuge öffnen einen eigenen Dialog. Kann ein Plugin nicht importiert oder initialisiert werden, bleibt es nicht verfügbar und der Grund steht im technischen Protokoll. Bei einem gepackten Release den vollständigen Ordner <code>_internal</code> wiederherstellen, statt einzelne Pakete daneben zu installieren.</p>
   <table class="basic"><tr><th>Menüeintrag</th><th>Art</th><th>Aktuelles Verhalten und Nutzung</th></tr>
   <tr><td><strong>Steroid Track</strong></td><td>Feature-Gate</td><td>Steroid Track ist ein echtes Plugin ohne eigenes Fenster. Es aktiviert Phasenfilter für weibliche Tiere, Blut-Progesteronimport, Urin-PdG-Import, Spermaimport, Hormon-/Ereignissteuerungen, Sperma-Plotsteuerungen und den PdG-Konverter.</td></tr>
   <tr><td><strong>PdG→Progesteron Converter</strong></td><td>Dialog</td><td>Erstellt tierbezogene PdG-zu-Progesteron-Modelle aus gepaarten PdG- und Blut-Progesteronmessungen am selben Tag; gespeicherte Modelle aktivieren Vereinheitl. Prog. und kombinierte Diagramme.</td></tr>
   <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Bietet Anmeldung, Gastmodus, Benutzer, Jobs, Berechtigungen, Sitzungen und Audit-Protokolle. Kontorollen sind lord, master, AWO, user und guest; Job-Bündel verfeinern die praktischen Rechte.</td></tr>
-  <tr><td><strong>Projekt Track</strong></td><td>Seitenleiste + optionaler Tab</td><td>Bietet zuordnungsabhängige Projekt-/Speziesfilter, Projekthistorie, IACUC-/AWO-Zuordnung, Versuchsstatus, Dokumente/SOPs und Projektverwaltung.</td></tr>
-  <tr><td><strong>Medi Track</strong></td><td>Haupttab</td><td>Zeigt Krankengeschichte, Diagnosen, Notizen, Behandlungen, Beobachtungen, Versuchs-/Lebenszyklusereignisse und Dokumente; PDF/XLSX-Export unterstützt optionale Signaturen. XLSX kann verknüpfte Dateien in einen benachbarten Dokumentenordner kopieren.</td></tr>
+  <tr><td><strong>Projekt Track</strong></td><td>Seitenleiste + optionaler Tab</td><td>Bietet zuordnungsabhängige Projekt-/Speziesfilter, Projekthistorie, IACUC-/AWO-Zuordnung, Versuchsstatus, Dokumente/SOPs und Projektverwaltung. Jedes Projekt hat genau den lokalisierten Status Entwurf, Aktiv oder Geschlossen; die Liste zeigt Entwurf kursiv, Aktiv fett und Geschlossen normal. Schließen archiviert es nicht und entfernt keine Zuordnungen; Statuswechsel sind berechtigungsgeprüft und protokolliert.</td></tr>
+  <tr><td><strong>Medi Track</strong></td><td>Haupttab</td><td>Zeigt Krankengeschichte, Diagnosen, Notizen, Behandlungen, Beobachtungen, Versuchs-/Lebenszyklusereignisse und Dokumente; PDF/XLSX-Export unterstützt optionale Signaturen. Der Mehrtierexport im Dateimenü zeigt Gesamtzahl, Fortschritt und aktuelles Tier, lässt sich zwischen atomaren Tierausgaben abbrechen, behält gültige fertige Dateien und fasst Ergebnis, Teilfehler und Dateinamen zusammen.</td></tr>
   <tr><td><strong>Tierberichte</strong></td><td>Haupttab</td><td>Bietet monatliche bearbeitbare/sperrbare Berichtszeilen. Entsperren erhält den Text bis zum Verlassen und erneuten Öffnen des Tabs. PDF/XLSX kann die gesamte Signaturspalte auslassen; XLSX enthält Klartext ohne Format-Tags.</td></tr>
   <tr><td><strong>Flow Track</strong></td><td>Haupttab</td><td>Visualisiert den Embryofluss zwischen Eizellspenderinnen, Samenspendern, Ammen und Gefrierschrank mit Kennzahlen, manueller Bearbeitung, Einstellungen, Aktualisierung aus ProgTrack und Export.</td></tr>
   <tr><td><strong>Heritage Track</strong></td><td>Haupttab</td><td>Zeigt Stammbaum- und Verwandtschaftsgraphen, Elternbearbeitung, Heritage-Platzhalter, Genotyp-/Farbmarkierungen, Legende, Raster und Einstellungen. Die vertikale Anordnung verwendet standardmäßig den kompakten partner-normalisierten Stammbaum oder optional eine chronologische Geburtsmonatsachse mit adaptiven Monatsticks. Eine getrennte Radio-Gruppe zeigt unter dem Tiernamen nichts, Inzucht F (Standard), Geburtsdatum oder die öffentliche Tier-ID.</td></tr>
-<tr><td><strong>Käfig-Übersicht</strong></td><td>Haupttab</td><td>Verwaltet die vierstufige Hierarchie Gebäude → Einheit → Raum → Käfig, echte Tiere, Platzhalter-Tiere, nicht zugewiesene Bewohner, Umzugsverlauf, Farben und PDF-Export. Gebäude, Einheiten, Räume und einzelne Käfige sind jeweils als Inspektionsbereich auswählbar; ein übergeordneter Bereich umfasst seine belegten, inspektionspflichtigen Unterstrukturen.</td></tr>
+<tr><td><strong>Käfig-Übersicht</strong></td><td>Haupttab</td><td>Verwaltet die vierstufige Hierarchie Gebäude → Einheit → Raum → Käfig, echte Tiere, Platzhalter-Tiere, nicht zugewiesene Bewohner, Umzugsverlauf, Farben und PDF-Export. Gebäude, Einheiten, Räume und einzelne Käfige sind als Inspektionsbereich auswählbar; ein übergeordneter Bereich umfasst seine belegten, inspektionspflichtigen Unterstrukturen. Eine Mehrfachauswahl in der Tierliste öffnet deterministisch ein Gebäude und markiert dort alle ausgewählten Bewohner. Die Inspektionstabelle sortiert über jede Überschrift in beide Richtungen und stellt die benutzerspezifische Sortierung wieder her; Gäste verwenden den Standard.</td></tr>
   <tr><td><strong>Sample Track</strong></td><td>Fenster</td><td>Verfolgt Organ- und Zeitreihenproben, nutzt lokalisierte Gewebe-/Typ-Listen, erhält Blut-/PdG-Importmeldungen und exportiert PDF.</td></tr>
   <tr><td><strong>Embryo Track</strong></td><td>Dialog</td><td>Sagt den Gestationstag beim Marmoset aus COL/TTL-Ultraschallmessungen, Embryoanzahl und Messdatum voraus; Referenzdaten und Diagnostik sind verfügbar.</td></tr>
   <tr><td><strong>OP-Planner</strong></td><td>Dialog</td><td>Plant Operationen und Embryotransfers mit aktuellen Spenderinnen/Ammen, Datumsregeln, Erholungseinstellungen, manuellen Ereignissen, gesperrten Daten und Planexport.</td></tr>
-  <tr><td><strong>Network Track</strong></td><td>Fenster</td><td>Bietet lokalen dateibasierten Team-Chat mit Abfrageintervall, optionalem In-den-Vordergrund-Holen und Benachrichtigungston bei verfügbarem Qt Multimedia.</td></tr>
+  <tr><td><strong>Network Track</strong></td><td>Fenster</td><td>Bietet backendgestützten Team-Chat mit Abfrageintervall, optionalem In-den-Vordergrund-Holen und Benachrichtigungston bei verfügbarem Qt Multimedia.</td></tr>
   </table>
 
   <h3>9.1 Kontorollen und Job-Berechtigungen</h3>
@@ -539,10 +543,10 @@
   <h3>9.2 Modulübergreifend arbeiten</h3>
   <p>Verwenden Sie in allen ProgTrack-Modulen dieselbe kontrollierte Tieridentität. Der folgende Ablauf hält Rollen-Tabs, Projekte, Krankengeschichte, Berichte und Haltung konsistent:</p>
   <ol>
-    <li><strong>Tierrollen konfigurieren:</strong> Lord, Master oder Manager öffnen <strong>Einstellungen → Stil → Rollenkonfiguration</strong> und wählen aktive Tabs, Reihenfolge, Bezeichnungen/Symbole, Neu-/Bearbeiten-Blöcke sowie die Sichtbarkeit von Neues Tier je Rolle. Identität, Haltung, Gewicht und Eltern bleiben Pflichtblöcke.</li>
-    <li><strong>Projektumfang zuweisen:</strong> Ordnen Sie in Projekt Track Benutzer und Tiere dem Projekt zu und erfassen Sie IACUC-/AWO-Zuordnung, Dokumente, SOPs und Versuchsstatus. Rollen-Tabs zeigen normalen Benutzern die zugeordneten Tiere; der Tier-Tab <strong>Alle</strong> bleibt die vollständige Übersicht.</li>
-    <li><strong>Identität und Historie pflegen:</strong> Verwenden Sie den Tiereditor für kontrollierte Änderungen an Identität, Eltern, Herkunft, Haltung und Lebenszyklus. Zugehörige Versuchs- und medizinische Ereignisse stehen anschließend, soweit zutreffend, in Medi Track und Tierberichten zur Verfügung.</li>
-    <li><strong>Haltung inspizieren:</strong> Wählen Sie in der Käfig-Übersicht Gebäude, Einheit, Raum oder Käfig und öffnen Sie Inspektion. Eine Inspektion auf höherer Ebene umfasst geeignete belegte Unterstrukturen und speichert die verantwortliche Person.</li>
+    <li><strong>Tierrollen konfigurieren:</strong> Lord, Master oder Manager öffnen <strong>Einstellungen → Konventionen → Rollenkonfiguration</strong> und wählen aktive Tabs, Reihenfolge, Bezeichnungen/SVG-Symbole, Neu-/Bearbeiten-Blöcke sowie die Sichtbarkeit von Neues Tier je Rolle. Identität, Haltung, Gewicht und Eltern bleiben Pflichtblöcke.</li>
+    <li><strong>Projektumfang zuweisen:</strong> Ordnen Sie in Projekt Track Benutzer und Tiere zu, erfassen Sie IACUC-/AWO-Zuordnung, Dokumente, SOPs und Versuchsstatus und wählen Sie anschließend Entwurf, Aktiv oder Geschlossen. Schließen erhält Zuordnungen und Datensätze.</li>
+    <li><strong>Historie pflegen:</strong> Legen Sie die unveränderliche Tieridentität einmal an und verwenden Sie den Tiereditor danach für zulässige Änderungen an Eltern, Haltung und Lebenszyklus. Zugehörige Versuchs- und medizinische Ereignisse bleiben in Medi Track und Tierberichten verfügbar.</li>
+    <li><strong>Haltung inspizieren:</strong> Wählen Sie in der Käfig-Übersicht Gebäude, Einheit, Raum oder Käfig und öffnen Sie Inspektion. Eine Inspektion auf höherer Ebene umfasst geeignete belegte Unterstrukturen. Ein Klick auf eine Tabellenüberschrift sortiert, der zweite kehrt die Richtung um.</li>
   </ol>
   <div class="hint"><strong>Hinweis:</strong> Fehlende Tabs, Tiere oder Aktionen weisen meist auf Projektumfang oder Berechtigungen des aktuellen Kontos hin. Lord oder Master können die Spalte Effektiv in Benutzer verwalten prüfen.</div>
 
@@ -553,7 +557,9 @@
     Wenn ein Plugin-Menüeintrag deaktiviert ist oder eine Meldung wie
     "plugin is not installed" anzeigt, prüfen Sie, ob der entsprechende
     Unterordner unter <code>Plugins</code> existiert und die erwarteten
-    Dateien enthält.
+    Dateien enthält. Prüfen Sie anschließend das technische Protokoll auf den
+    Import- oder Initialisierungsfehler und stellen Sie sicher, dass die
+    vollständige gepackte Laufzeit unter <code>_internal</code> vorhanden ist.
   </p>
 
   <h3>10.2 Excel-Importfehler</h3>

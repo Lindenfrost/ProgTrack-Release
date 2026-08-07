@@ -188,6 +188,13 @@ class BackendConfigurationService:
         return [key for key in keys if str(self.environ.get(key) or "").strip()]
 
     def validate_sqlite_filename(self, filename: str) -> Path:
+        return self.validate_sqlite_location(
+            self.paths.data_root / "database", filename
+        )
+
+    def validate_sqlite_location(
+        self, folder: str | Path, filename: str
+    ) -> Path:
         value = str(filename or "").strip()
         if not value or Path(value).name != value:
             raise BackendConfigurationValidationError(
@@ -197,8 +204,15 @@ class BackendConfigurationService:
             raise BackendConfigurationValidationError(
                 "SQLite file name must end in .sqlite3 and contain safe characters only."
             )
-        target = self.paths.data_root / "database" / value
-        return validate_standalone_sqlite_path(target)
+        directory = Path(str(folder or "")).expanduser()
+        if not directory.is_absolute():
+            raise BackendConfigurationValidationError(
+                "SQLite storage folder must be an absolute local path."
+            )
+        try:
+            return validate_standalone_sqlite_path(directory / value)
+        except Exception as exc:
+            raise BackendConfigurationValidationError(str(exc)) from exc
 
     def validate_postgresql(
         self, settings: PostgreSQLSettings
@@ -301,14 +315,35 @@ class BackendConfigurationService:
         *,
         profile: BackendProfile,
         sqlite_filename: str,
+        sqlite_folder: str | Path | None = None,
         postgresql: PostgreSQLSettings,
         password: str,
         authorized: bool,
     ) -> dict[str, Any]:
         self.require_lord(authorized)
-        sqlite_path = self.validate_sqlite_filename(sqlite_filename)
-        pg = self.validate_postgresql(postgresql)
+        previous = self.load_document()
+        if profile is BackendProfile.STANDALONE_SQLITE:
+            sqlite_path = self.validate_sqlite_location(
+                sqlite_folder or self.paths.data_root / "database",
+                sqlite_filename,
+            )
+        else:
+            sqlite_path = Path(
+                str(
+                    previous.get("sqlite_path")
+                    or self.paths.database_path
+                    or self.paths.data_root / "database" / "progtrack.sqlite3"
+                )
+            )
+
+        pg_document = previous.get("postgresql", {})
+        if not isinstance(pg_document, dict):
+            pg_document = {}
+        managed_root = str(
+            previous.get("managed_root") or self.paths.managed_root
+        )
         if profile is BackendProfile.SHARED_POSTGRESQL:
+            pg = self.validate_postgresql(postgresql)
             if password:
                 self.credential_store.write(self.credential_target, password)
             elif not self.read_password() and not str(
@@ -317,21 +352,23 @@ class BackendConfigurationService:
                 raise BackendConfigurationValidationError(
                     "A PostgreSQL password or deployment DSN override is required."
                 )
-        document = {
-            "profile": profile.value,
-            "sqlite_path": str(sqlite_path),
-            "managed_root": str(Path(pg.managed_root).expanduser()),
-            "postgresql": {
+            managed_root = str(Path(pg.managed_root).expanduser())
+            pg_document = {
                 "host": pg.host.strip(),
                 "port": int(pg.port),
                 "database": pg.database.strip(),
                 "user": pg.user.strip(),
                 "sslmode": pg.sslmode,
                 "connect_timeout": int(pg.connect_timeout),
-                "managed_root": str(Path(pg.managed_root).expanduser()),
+                "managed_root": managed_root,
                 "pool_min": int(pg.pool_min),
                 "pool_max": int(pg.pool_max),
-            },
+            }
+        document = {
+            "profile": profile.value,
+            "sqlite_path": str(sqlite_path),
+            "managed_root": managed_root,
+            "postgresql": pg_document,
         }
         self.paths.profile_file.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.paths.profile_file.with_suffix(".json.tmp")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -157,16 +158,21 @@ def preview_animal_id(
     birth_date: str = "",
     sex: str = "",
     origin: str = "",
+    sequence: Optional[int] = None,
+    absolute_sequence: Optional[int] = None,
 ) -> str:
     """Render an unsaved ID with explicit placeholders for missing values."""
     component_values = {
         "species": species_token(species).lower() if str(species).strip() else "XX",
         "year_short": birth_year_token(birth_date) if re.search(r"\d{4}", str(birth_date)) else "XX",
         "year_full": birth_year_full_token(birth_date) if re.search(r"\d{4}", str(birth_date)) else "XXXX",
-        "count_year": "XXXX",
-        "count_absolute": "XXXX",
+        "count_year": f"{int(sequence):04d}" if sequence is not None else "XXXX",
+        "count_absolute": (
+            f"{int(absolute_sequence):04d}"
+            if absolute_sequence is not None else "XXXX"
+        ),
         "year": birth_year_token(birth_date) if re.search(r"\d{4}", str(birth_date)) else "XX",
-        "count": "XXXX",
+        "count": f"{int(sequence):04d}" if sequence is not None else "XXXX",
         "sex": sex_token(sex) if str(sex).strip() else "XX",
         "name": _token(name, "XXXX") if str(name).strip() else "XXXX",
         "origin": _token(origin, "XXXX") if str(origin).strip() else "XXXX",
@@ -271,6 +277,45 @@ def next_generated_id(
             sequences[year] = sequence
             conventions["absolute_sequence"] = absolute
             return candidate
+
+
+def preview_next_generated_id(
+    conventions: Mapping[str, Any],
+    *,
+    name: str = "",
+    species: str = "",
+    birth_date: str = "",
+    sex: str = "",
+    origin: str = "",
+    existing_ids: Iterable[str] = (),
+) -> str:
+    """Render the next generated ID without mutating or reserving counters.
+
+    The same collision logic used by the final allocator runs against a deep
+    copy.  Missing descriptive fields retain the preview placeholders while
+    the yearly and absolute count segments show their real next values.
+    """
+    simulated = copy.deepcopy(dict(conventions or {}))
+    next_generated_id(
+        simulated,
+        name=name,
+        species=species,
+        birth_date=birth_date,
+        sex=sex,
+        origin=origin,
+        existing_ids=existing_ids,
+    )
+    year = birth_year_token(birth_date)
+    return preview_animal_id(
+        simulated.get("animal_id_components", []),
+        name=name,
+        species=species,
+        birth_date=birth_date,
+        sex=sex,
+        origin=origin,
+        sequence=int(simulated.get("yearly_sequences", {}).get(year, 0)),
+        absolute_sequence=int(simulated.get("absolute_sequence", 0)),
+    )
 
 
 def regenerated_id_for_edit(

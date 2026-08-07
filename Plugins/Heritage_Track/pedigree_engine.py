@@ -150,14 +150,15 @@ class PedigreeEngine:
         # (selected animals + their descendants)
         # This ensures we show the complete pedigree for the entire descendant tree
         seeds_for_ancestors = list(display)  # Include selected + all descendants
-        visited_ancestors: Set[str] = set()
-
         for seed in seeds_for_ancestors:
-            if seed in visited_ancestors:
-                continue
             # BFS from this seed up to max_generations
             current_level: List[Tuple[str, int]] = [(seed, 0)]  # (node, generation_from_seed)
-            visited_ancestors.add(seed)
+            # Generation depth is relative to *each* seed.  Sharing one
+            # visited set between seeds made the returned scope depend on the
+            # order of the selected animals whenever one was an ancestor of
+            # another.  A local set keeps cycles bounded while preserving the
+            # complete budget for every selected/descendant seed.
+            visited_ancestors: Set[str] = {seed}
 
             while current_level:
                 node, gen = current_level.pop(0)

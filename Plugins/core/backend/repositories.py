@@ -64,6 +64,25 @@ class DomainRecordRepository:
         value = row["payload_json"] if isinstance(row, dict) else row[0]
         return value if isinstance(value, (dict, list)) else loads(value, default)
 
+    def get_with_revision(
+        self, namespace: str, record_id: str, default: Any = None
+    ) -> tuple[Any, int]:
+        """Return a record and its optimistic-lock revision in one read."""
+        mark = _placeholder(self.adapter)
+        with self.adapter.transaction() as connection:
+            row = _fetchone(
+                connection,
+                f"SELECT payload_json,revision FROM domain_records "
+                f"WHERE namespace={mark} AND record_id={mark}",
+                (namespace, record_id),
+            )
+        if row is None:
+            return default, 0
+        value = row["payload_json"] if isinstance(row, dict) else row[0]
+        revision = int(row["revision"] if isinstance(row, dict) else row[1])
+        payload = value if isinstance(value, (dict, list)) else loads(value, default)
+        return payload, revision
+
     def list(self, namespace: str) -> dict[str, Any]:
         mark = _placeholder(self.adapter)
         with self.adapter.transaction() as connection:

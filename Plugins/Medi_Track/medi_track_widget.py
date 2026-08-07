@@ -13,6 +13,7 @@ import os
 import shutil
 import tempfile
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
@@ -37,6 +38,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QRadioButton,
     QScrollArea,
@@ -57,6 +59,10 @@ from Plugins.core.animal_status import status_summary_with_death_priority
 from Plugins.core.lifecycle_events import ever_in_experiment
 from Plugins.core.platform_helpers import open_local_path
 from Plugins.core.ui_icons import apply_icon
+from Plugins.core.resource_catalogs import (
+    UNKNOWN_SPECIES_VALUE,
+    ordered_species_for_display,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -164,11 +170,16 @@ class UnifiedExportDialog(QDialog):
             self.species_filter.addItem(
                 _msg(self.messages, "filter.all_species", "All species"), ""
             )
-            for species in sorted(
+            for species in ordered_species_for_display(sorted(
                 {row[3] for row in self._candidates if row[3]},
                 key=str.casefold,
-            ):
-                self.species_filter.addItem(species, species)
+            )):
+                label = (
+                    _msg(self.messages, "species.unknown", UNKNOWN_SPECIES_VALUE)
+                    if species.casefold() == UNKNOWN_SPECIES_VALUE.casefold()
+                    else species
+                )
+                self.species_filter.addItem(label, species)
             filter_row.addWidget(self.species_filter)
 
             self.project_filter = QComboBox()
@@ -549,6 +560,202 @@ def _icon_for_ext(ext: str) -> QIcon:
 
 def _msg(messages: Dict[str, Any], key: str, fallback: str) -> str:
     return messages.get(key, fallback) if isinstance(messages, dict) else fallback
+
+
+@dataclass(frozen=True)
+class BatchExportFailure:
+    """One failed, atomic item in a multi-file export."""
+
+    item_id: str
+    item_label: str
+    error: str
+
+
+@dataclass(frozen=True)
+class BatchExportOutcome:
+    """Machine-testable result shared by Medi Track and export UI summaries."""
+
+    total: int
+    completed_paths: Tuple[str, ...]
+    failures: Tuple[BatchExportFailure, ...]
+    cancelled: bool = False
+
+    @property
+    def completed_count(self) -> int:
+        return len(self.completed_paths)
+
+    @property
+    def failed_count(self) -> int:
+        return len(self.failures)
+
+    @property
+    def processed_count(self) -> int:
+        return self.completed_count + self.failed_count
+
+
+class BatchExportProgressDialog(QDialog):
+    """Determinate, event-pumping progress used for foreground batch exports."""
+
+    def __init__(
+        self,
+        parent: Optional[QWidget],
+        *,
+        total: int,
+        messages: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.messages = messages or {}
+        self.total = max(0, int(total))
+        self._cancel_requested = False
+        self.completed_count = 0
+        self.failed_count = 0
+        self.setObjectName("batchExportProgressDialog")
+        self.setWindowTitle(
+            _msg(
+                self.messages,
+                "export.batch.title",
+                "Exporting files",
+            )
+        )
+        self.setWindowModality(Qt.WindowModality.WindowModal)
+        self.setMinimumWidth(420)
+
+        layout = QVBoxLayout(self)
+        self.status_label = QLabel()
+        self.status_label.setObjectName("batchExportStatus")
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setObjectName("batchExportProgressBar")
+        self.progress_bar.setRange(0, self.total)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("%v / %m")
+        layout.addWidget(self.progress_bar)
+
+        self.cancel_button = QPushButton(
+            _msg(self.messages, "button.cancel", "Cancel")
+        )
+        self.cancel_button.setObjectName("batchExportCancelButton")
+        self.cancel_button.clicked.connect(self.request_cancel)
+        layout.addWidget(self.cancel_button)
+        # Treat the window-manager close action as the same safe request; the
+        # current atomic item may finish, then the loop yields immediately.
+        self.rejected.connect(self.request_cancel)
+
+    def request_cancel(self) -> None:
+        if self._cancel_requested:
+            return
+        self._cancel_requested = True
+        self.cancel_button.setEnabled(False)
+        self.status_label.setText(
+            _msg(self.messages, "export.cancelling", "Cancelling...")
+        )
+        QApplication.processEvents()
+
+    def was_cancelled(self) -> bool:
+        return self._cancel_requested
+
+    def begin_item(self, item_label: str, item_number: int) -> None:
+        self.progress_bar.setValue(max(0, int(item_number) - 1))
+        self.status_label.setText(
+            _msg(
+                self.messages,
+                "export.batch.status",
+                "Exporting {item} ({current}/{total})... Completed: {completed}",
+            ).format(
+                item=str(item_label),
+                current=int(item_number),
+                total=self.total,
+                completed=self.completed_count,
+                failed=self.failed_count,
+            )
+        )
+        QApplication.processEvents()
+
+    def finish_item(self, processed_count: int, *, success: bool = True) -> None:
+        if success:
+            self.completed_count += 1
+        else:
+            self.failed_count += 1
+        self.progress_bar.setValue(min(self.total, max(0, int(processed_count))))
+        QApplication.processEvents()
+
+
+def batch_export_summary(
+    messages: Dict[str, Any],
+    outcome: BatchExportOutcome,
+    output_dir: str,
+) -> Tuple[str, str, str]:
+    """Return ``(severity, localized title, localized body)`` for an outcome."""
+    details = "\n".join(
+        _msg(
+            messages,
+            "export.batch.error.detail",
+            "{item}: {error}",
+        ).format(item=failure.item_label, error=failure.error)
+        for failure in outcome.failures
+    )
+    files = "\n".join(
+        f"- {Path(path).name}" for path in outcome.completed_paths
+    ) or _msg(messages, "export.batch.files.none", "(none)")
+    values = {
+        "completed": outcome.completed_count,
+        "failed": outcome.failed_count,
+        "total": outcome.total,
+        "path": str(output_dir),
+        "details": details,
+        "files": files,
+    }
+    if outcome.cancelled:
+        severity, title_key, title_fallback = (
+            "information",
+            "export.batch.cancelled.title",
+            "Export cancelled",
+        )
+        body_key = "export.batch.cancelled"
+        body_fallback = (
+            "Export cancelled. {completed} of {total} files were created; "
+            "{failed} failed.\n\nCreated files:\n{files}\n\nFolder:\n{path}"
+        )
+    elif outcome.failures and outcome.completed_paths:
+        severity, title_key, title_fallback = (
+            "warning",
+            "export.batch.partial.title",
+            "Export partially completed",
+        )
+        body_key = "export.batch.partial"
+        body_fallback = (
+            "Export completed with errors. {completed} of {total} files were "
+            "created; {failed} failed.\n\nCreated files:\n{files}"
+            "\n\n{details}\n\nFolder:\n{path}"
+        )
+    elif outcome.failures:
+        severity, title_key, title_fallback = (
+            "critical",
+            "export.batch.failed.title",
+            "Export failed",
+        )
+        body_key = "export.batch.failed"
+        body_fallback = (
+            "No files were created; {failed} of {total} items failed."
+            "\n\n{details}"
+        )
+    else:
+        severity, title_key, title_fallback = (
+            "information",
+            "export.batch.complete.title",
+            "Export complete",
+        )
+        body_key = "export.batch.complete"
+        body_fallback = (
+            "Export complete. {completed} of {total} files were created in:"
+            "\n{path}"
+        )
+    body = _msg(messages, body_key, body_fallback).format(**values)
+    if outcome.cancelled and details:
+        body = f"{body}\n\n{details}"
+    return severity, _msg(messages, title_key, title_fallback), body
 
 
 def _today_iso() -> str:
@@ -1696,6 +1903,9 @@ class MediTrackWidget(QWidget):
         include_documents: bool = True,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
+        _document_staging_dir: Optional[Path] = None,
+        _document_final_dir: Optional[Path] = None,
+        _link_base_dir: Optional[Path] = None,
     ) -> int:
         from openpyxl import Workbook
 
@@ -1710,20 +1920,29 @@ class MediTrackWidget(QWidget):
 
         copied = {}
         if include_documents:
-            document_dir = Path(output_path).with_suffix("")
-            document_dir = document_dir.parent / f"{document_dir.name}_documents"
+            derived_dir = Path(output_path).with_suffix("")
+            derived_dir = derived_dir.parent / f"{derived_dir.name}_documents"
+            document_dir = Path(_document_staging_dir or derived_dir)
+            final_document_dir = Path(_document_final_dir or document_dir)
+            link_base_dir = Path(_link_base_dir or Path(output_path).parent)
             document_dir.mkdir(parents=True, exist_ok=True)
             for source in _document_paths_for_animal(animal_name, self.store):
                 src = Path(source)
                 if not src.is_file():
                     continue
                 destination = document_dir / src.name
+                final_destination = final_document_dir / src.name
                 counter = 1
-                while destination.exists():
+                while destination.exists() or final_destination.exists():
                     destination = document_dir / f"{src.stem}_{counter}{src.suffix}"
+                    final_destination = (
+                        final_document_dir / f"{src.stem}_{counter}{src.suffix}"
+                    )
                     counter += 1
                 shutil.copy2(src, destination)
-                copied[str(src)] = destination
+                copied[str(src)] = final_destination
+        else:
+            link_base_dir = Path(_link_base_dir or Path(output_path).parent)
 
         entries = sorted(
             (
@@ -1748,7 +1967,7 @@ class MediTrackWidget(QWidget):
             for source in entry.get("document_paths", []) or []:
                 destination = copied.get(str(source))
                 if destination:
-                    linked = os.path.relpath(destination, Path(output_path).parent)
+                    linked = os.path.relpath(destination, link_base_dir)
                     break
             row.append(linked)
             sheet.append(row)
@@ -1757,7 +1976,7 @@ class MediTrackWidget(QWidget):
                 cell.hyperlink = linked
                 cell.style = "Hyperlink"
         for destination in copied.values():
-            linked = os.path.relpath(destination, Path(output_path).parent)
+            linked = os.path.relpath(destination, link_base_dir)
             row = ["", "Document", "", destination.name]
             if include_signature:
                 row.append("")
@@ -1831,7 +2050,79 @@ class MediTrackWidget(QWidget):
             project_options=project_options,
         )
 
-    def _export_animals_to_directory(
+    def _atomic_export_animal(
+        self,
+        animal_id: str,
+        final_path: Path,
+        *,
+        suffix: str,
+        include_signatures: bool,
+        include_documents: bool,
+        lang: Optional[str],
+        date_from: Optional[date],
+        date_to: Optional[date],
+    ) -> str:
+        """Write one export to a sibling staging directory, then publish it."""
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+        staging_root = Path(
+            tempfile.mkdtemp(prefix=".progtrack-export-", dir=final_path.parent)
+        )
+        staged_path = staging_root / final_path.name
+        staged_documents = staging_root / f"{final_path.stem}_documents"
+        final_documents = final_path.parent / f"{final_path.stem}_documents"
+        try:
+            if suffix == "xlsx":
+                self._export_animal_to_xlsx(
+                    animal_id,
+                    str(staged_path),
+                    include_signature=include_signatures,
+                    include_documents=include_documents,
+                    date_from=date_from,
+                    date_to=date_to,
+                    _document_staging_dir=staged_documents,
+                    _document_final_dir=final_documents,
+                    _link_base_dir=final_path.parent,
+                )
+            else:
+                self._export_animal_to_pdf(
+                    animal_id,
+                    str(staged_path),
+                    lang=lang or self._lang,
+                    include_signature=include_signatures,
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+            if not staged_path.is_file() or staged_path.stat().st_size <= 0:
+                raise RuntimeError(
+                    _msg(
+                        self.messages,
+                        "export.batch.empty_output",
+                        "The exporter did not create a valid output file.",
+                    )
+                )
+
+            # Sidecar documents are complete files before they leave staging.
+            # Their final names were selected while writing the workbook, so a
+            # concurrent collision is an error instead of silently breaking a
+            # hyperlink.
+            if include_documents and staged_documents.is_dir():
+                final_documents.mkdir(parents=True, exist_ok=True)
+                for staged_document in sorted(staged_documents.iterdir()):
+                    if not staged_document.is_file():
+                        continue
+                    destination = final_documents / staged_document.name
+                    if destination.exists():
+                        raise FileExistsError(str(destination))
+                    os.replace(staged_document, destination)
+
+            # Publishing is one same-volume atomic rename.  Cancellation is
+            # checked before the next animal, never halfway through this file.
+            os.replace(staged_path, final_path)
+            return str(final_path)
+        finally:
+            shutil.rmtree(staging_root, ignore_errors=True)
+
+    def _export_animals_to_directory_batch(
         self,
         requested_animals: Iterable[str],
         output_dir: str,
@@ -1842,8 +2133,9 @@ class MediTrackWidget(QWidget):
         lang: Optional[str] = None,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
-    ) -> List[str]:
-        """Export only if every requested animal is still permission-visible."""
+        progress: Optional[BatchExportProgressDialog] = None,
+    ) -> BatchExportOutcome:
+        """Export atomic animal units, continuing after safe item failures."""
         requested = [str(animal_id) for animal_id in requested_animals]
         selected = self._permission_scope_export_ids(requested)
         if selected != requested:
@@ -1858,32 +2150,90 @@ class MediTrackWidget(QWidget):
         suffix = str(export_format).strip().lower()
         if suffix not in ("pdf", "xlsx"):
             raise ValueError(f"Unsupported export format: {export_format}")
+        destination = Path(output_dir)
+        if not destination.is_dir():
+            raise NotADirectoryError(str(destination))
+
         exported: List[str] = []
-        for animal_id in selected:
-            path = os.path.join(
-                output_dir,
-                f"{_safe_name(animal_id)}_medical_history.{suffix}",
+        failures: List[BatchExportFailure] = []
+        cancelled = False
+        app_animals = getattr(self.app, "animals", {}) or {}
+        for item_number, animal_id in enumerate(selected, start=1):
+            if progress is not None and progress.was_cancelled():
+                cancelled = True
+                break
+            record = app_animals.get(animal_id, {})
+            item_label = _display_animal_name(animal_id, record)
+            public_id = str(record.get("id") or "").strip()
+            if public_id:
+                item_label = f"{item_label} ({public_id})"
+            if progress is not None:
+                progress.begin_item(item_label, item_number)
+                if progress.was_cancelled():
+                    cancelled = True
+                    break
+            final_path = destination / (
+                f"{_safe_name(animal_id)}_medical_history.{suffix}"
             )
-            if suffix == "xlsx":
-                self._export_animal_to_xlsx(
+            item_succeeded = False
+            try:
+                exported.append(self._atomic_export_animal(
                     animal_id,
-                    path,
-                    include_signature=include_signatures,
+                    final_path,
+                    suffix=suffix,
+                    include_signatures=include_signatures,
                     include_documents=include_documents,
+                    lang=lang,
                     date_from=date_from,
                     date_to=date_to,
+                ))
+                item_succeeded = True
+            except Exception as exc:
+                logger.exception("Medi Track export failed for %s", animal_id)
+                failures.append(
+                    BatchExportFailure(animal_id, item_label, str(exc))
                 )
-            else:
-                self._export_animal_to_pdf(
-                    animal_id,
-                    path,
-                    lang=lang or self._lang,
-                    include_signature=include_signatures,
-                    date_from=date_from,
-                    date_to=date_to,
+            finally:
+                if progress is not None:
+                    progress.finish_item(item_number, success=item_succeeded)
+        return BatchExportOutcome(
+            total=len(selected),
+            completed_paths=tuple(exported),
+            failures=tuple(failures),
+            cancelled=cancelled,
+        )
+
+    def _export_animals_to_directory(
+        self,
+        requested_animals: Iterable[str],
+        output_dir: str,
+        *,
+        export_format: str,
+        include_signatures: bool,
+        include_documents: bool,
+        lang: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[str]:
+        """Lightweight compatibility path for a tab-local/single export."""
+        outcome = self._export_animals_to_directory_batch(
+            requested_animals,
+            output_dir,
+            export_format=export_format,
+            include_signatures=include_signatures,
+            include_documents=include_documents,
+            lang=lang,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        if outcome.failures:
+            raise RuntimeError(
+                "\n".join(
+                    f"{failure.item_label}: {failure.error}"
+                    for failure in outcome.failures
                 )
-            exported.append(path)
-        return exported
+            )
+        return list(outcome.completed_paths)
 
     def _on_export_clicked(self) -> None:
         """Export the current tab animal without exposing a batch selector."""

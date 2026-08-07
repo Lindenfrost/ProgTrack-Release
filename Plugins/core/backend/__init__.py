@@ -7,6 +7,7 @@ from .errors import (
     ImmutableIdentityError,
     LockConflictError,
     PermissionDeniedError,
+    StandaloneLockError,
     ValidationError,
 )
 from .facade import ProgTrackBackend
@@ -19,5 +20,6 @@ __all__ = [
     "LockConflictError",
     "PermissionDeniedError",
     "ProgTrackBackend",
+    "StandaloneLockError",
     "ValidationError",
 ]

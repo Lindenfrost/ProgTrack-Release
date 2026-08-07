@@ -10,9 +10,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from textwrap import wrap
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from PyQt6.QtCore import Qt, QDate, QTimer, QSize
 from PyQt6.QtGui import QColor, QCursor
@@ -62,6 +63,7 @@ from Plugins.core.animal_roles import (
     ROLE_VALUE_UNKNOWN,
     ROLE_VALUE_ZUCHTTIER,
     canonical_role_value,
+    role_color_for_record,
 )
 from Plugins.core.platform_helpers import default_save_path
 
@@ -112,6 +114,207 @@ DEFAULT_PROJECT_PALETTE = [
     "#1976D2", "#D32F2F", "#388E3C", "#7B1FA2", "#F57C00",
     "#0097A7", "#C2185B", "#455A64", "#FBC02D", "#512DA8",
 ]
+
+INSPECTION_SORT_COLUMNS = ("unit", "date", "cages", "inspector")
+DEFAULT_INSPECTION_SORT = {"column": "date", "direction": "descending"}
+INSPECTION_PREFERENCE_NAMESPACE = "preferences"
+
+
+def normalize_inspection_sort_preference(
+    value: Optional[Dict[str, Any]],
+) -> Dict[str, str]:
+    """Return a safe inspection sort preference with stable defaults."""
+    value = value if isinstance(value, dict) else {}
+    column = str(value.get("column") or "").strip().lower()
+    direction = str(value.get("direction") or "").strip().lower()
+    if column not in INSPECTION_SORT_COLUMNS:
+        column = DEFAULT_INSPECTION_SORT["column"]
+    if direction not in ("ascending", "descending"):
+        direction = DEFAULT_INSPECTION_SORT["direction"]
+    return {"column": column, "direction": direction}
+
+
+def _inspection_record_stable_key(record: Dict[str, Any]) -> Tuple[str, ...]:
+    """Return a deterministic secondary key without changing record order."""
+    return tuple(
+        str(record.get(key) or "").casefold()
+        for key in (
+            "record_id", "scope_id", "unit_id", "date_sort", "date",
+            "unit_name", "cages", "user",
+        )
+    )
+
+
+def _inspection_sort_value(
+    record: Dict[str, Any], column: str,
+) -> Optional[Any]:
+    field = {
+        "unit": "unit_name",
+        "cages": "cages",
+        "inspector": "user",
+    }.get(column)
+    if field:
+        text = str(record.get(field) or "").strip()
+        if not text:
+            return None
+        return tuple(
+            (0, int(part)) if part.isdigit() else (1, part.casefold())
+            for part in re.split(r"(\d+)", text)
+            if part
+        )
+
+    for raw in (record.get("date_sort"), record.get("date")):
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        try:
+            return datetime.fromisoformat(text[:10]).date().toordinal()
+        except ValueError:
+            pass
+        for fmt in ("%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y"):
+            try:
+                return datetime.strptime(text[:10], fmt).date().toordinal()
+            except ValueError:
+                continue
+    return None
+
+
+def sort_inspection_records(
+    records: List[Dict[str, Any]],
+    preference: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """Type-aware stable sorting; missing values remain last in either order."""
+    pref = normalize_inspection_sort_preference(preference)
+    base = sorted(list(records), key=_inspection_record_stable_key)
+    present: List[Dict[str, Any]] = []
+    missing: List[Dict[str, Any]] = []
+    for record in base:
+        destination = (
+            present
+            if _inspection_sort_value(record, pref["column"]) is not None
+            else missing
+        )
+        destination.append(record)
+    present.sort(
+        key=lambda record: _inspection_sort_value(record, pref["column"]),
+        reverse=pref["direction"] == "descending",
+    )
+    return present + missing
+
+
+def inspection_preference_record_id(user_identity: str) -> str:
+    return f"cage-track:inspection-sort:{user_identity.strip()}"
+
+
+def load_inspection_sort_preference(
+    backend: Any, user_identity: Optional[str],
+) -> Dict[str, str]:
+    """Load a signed-in user's backend preference; guests use defaults."""
+    identity = str(user_identity or "").strip()
+    if not identity or backend is None or not hasattr(backend, "records"):
+        return dict(DEFAULT_INSPECTION_SORT)
+    try:
+        value = backend.records.get(
+            INSPECTION_PREFERENCE_NAMESPACE,
+            inspection_preference_record_id(identity),
+            default=None,
+        )
+    except Exception as exc:
+        logger.warning("Could not load Cage Track inspection preference: %s", exc)
+        return dict(DEFAULT_INSPECTION_SORT)
+    return normalize_inspection_sort_preference(value)
+
+
+def save_inspection_sort_preference(
+    backend: Any,
+    user_identity: Optional[str],
+    preference: Optional[Dict[str, Any]],
+) -> bool:
+    """Persist only authenticated-user UI state, never housing records."""
+    identity = str(user_identity or "").strip()
+    if not identity or backend is None or not hasattr(backend, "records"):
+        return False
+    try:
+        backend.records.put(
+            INSPECTION_PREFERENCE_NAMESPACE,
+            inspection_preference_record_id(identity),
+            normalize_inspection_sort_preference(preference),
+        )
+    except Exception as exc:
+        logger.warning("Could not save Cage Track inspection preference: %s", exc)
+        return False
+    return True
+
+
+def resolve_cage_selection_scope(
+    animal_names: List[str],
+    addresses: Dict[str, Dict[str, Optional[str]]],
+    building_order: Dict[str, Tuple[int, str]],
+) -> Dict[str, Any]:
+    """Choose one deterministic building and all selected occupants inside it."""
+    unique_names = list(dict.fromkeys(str(name) for name in animal_names if name))
+    by_building: Dict[str, List[str]] = {}
+    unassigned: List[str] = []
+    for name in unique_names:
+        address = addresses.get(name)
+        if not isinstance(address, dict):
+            continue
+        building_id = str(address.get("building_id") or "")
+        if building_id:
+            by_building.setdefault(building_id, []).append(name)
+        elif not address.get("cage_id"):
+            unassigned.append(name)
+
+    chosen_building: Optional[str] = None
+    highlighted: List[str] = []
+    if by_building:
+        chosen_building = min(
+            by_building,
+            key=lambda building_id: (
+                -len(by_building[building_id]),
+                building_order.get(building_id, (2**31 - 1, building_id)),
+                building_id,
+            ),
+        )
+        highlighted = by_building[chosen_building]
+    else:
+        highlighted = unassigned
+
+    structure_ids: Set[str] = set()
+    unit_ids: Set[str] = set()
+    room_ids: Set[str] = set()
+    cage_ids: Set[str] = set()
+    for name in highlighted:
+        address = addresses[name]
+        for key, destination in (
+            ("building_id", structure_ids),
+            ("unit_id", unit_ids),
+            ("room_id", room_ids),
+            ("cage_id", cage_ids),
+        ):
+            value = str(address.get(key) or "")
+            if value:
+                destination.add(value)
+                structure_ids.add(value)
+
+    primary_cage = next(
+        (
+            str(addresses[name].get("cage_id") or "")
+            for name in highlighted
+            if addresses[name].get("cage_id")
+        ),
+        "",
+    )
+    return {
+        "building_id": chosen_building,
+        "animal_ids": highlighted,
+        "structure_ids": structure_ids,
+        "unit_ids": unit_ids,
+        "room_ids": room_ids,
+        "cage_ids": cage_ids,
+        "primary_cage_id": primary_cage or None,
+        "show_unassigned": bool(highlighted and not chosen_building),
+    }
 
 
 def movement_identity_text(
@@ -776,10 +979,23 @@ class InspectionDialog(QDialog):
     """Non-editable viewer for cage inspection records."""
 
     def __init__(self, parent, messages: Dict[str, Any],
-                 records: List[Dict[str, Any]], on_export, on_inspect=None):
+                 records: List[Dict[str, Any]], on_export, on_inspect=None,
+                 initial_sort: Optional[Dict[str, Any]] = None,
+                 on_sort_changed: Optional[
+                     Callable[[Dict[str, str]], None]
+                 ] = None):
         super().__init__(parent)
         self.messages = messages
         self._on_inspect_callback = on_inspect
+        self._on_sort_changed = on_sort_changed
+        self._records: List[Dict[str, Any]] = []
+        initial = normalize_inspection_sort_preference(initial_sort)
+        self._sort_column = INSPECTION_SORT_COLUMNS.index(initial["column"])
+        self._sort_order = (
+            Qt.SortOrder.DescendingOrder
+            if initial["direction"] == "descending"
+            else Qt.SortOrder.AscendingOrder
+        )
         self.setWindowTitle(messages.get(
             "cage_track.inspection.title", "Inspection Log"))
         self.setModal(True)
@@ -803,6 +1019,18 @@ class InspectionDialog(QDialog):
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionsClickable(True)
+        header.setSortIndicatorShown(True)
+        header.setSortIndicator(self._sort_column, self._sort_order)
+        header.sectionClicked.connect(self._on_header_clicked)
+        sort_hint = messages.get(
+            "cage_track.inspection.sort_hint",
+            "Click a column header to sort; click again to reverse.",
+        )
+        for column in range(self._table.columnCount()):
+            item = self._table.horizontalHeaderItem(column)
+            if item is not None:
+                item.setToolTip(sort_hint)
 
         self.set_records(records)
         layout.addWidget(self._table)
@@ -827,18 +1055,67 @@ class InspectionDialog(QDialog):
 
     def set_records(self, records: List[Dict[str, Any]]) -> None:
         """Refresh the viewer table without closing the inspection dialog."""
-        sorted_records = sorted(
-            records, key=lambda record: record.get("date_sort", ""), reverse=True)
-        self._table.setRowCount(len(sorted_records))
-        for row, record in enumerate(sorted_records):
-            self._table.setItem(
-                row, 0, QTableWidgetItem(record.get("unit_name", "")))
-            self._table.setItem(
-                row, 1, QTableWidgetItem(record.get("date", "")))
-            self._table.setItem(
-                row, 2, QTableWidgetItem(record.get("cages", "")))
-            self._table.setItem(
-                row, 3, QTableWidgetItem(record.get("user", "")))
+        self._records = list(records)
+        self._populate_records()
+
+    def sort_preference(self) -> Dict[str, str]:
+        return {
+            "column": INSPECTION_SORT_COLUMNS[self._sort_column],
+            "direction": (
+                "descending"
+                if self._sort_order == Qt.SortOrder.DescendingOrder
+                else "ascending"
+            ),
+        }
+
+    def _populate_records(self) -> None:
+        preference = self.sort_preference()
+        sorted_records = sort_inspection_records(self._records, preference)
+        self._table.setUpdatesEnabled(False)
+        try:
+            self._table.setRowCount(len(sorted_records))
+            for row, record in enumerate(sorted_records):
+                self._table.setItem(
+                    row, 0, QTableWidgetItem(str(record.get("unit_name", ""))))
+                self._table.setItem(
+                    row, 1, QTableWidgetItem(str(record.get("date", ""))))
+                self._table.setItem(
+                    row, 2, QTableWidgetItem(str(record.get("cages", ""))))
+                self._table.setItem(
+                    row, 3, QTableWidgetItem(str(record.get("user", ""))))
+        finally:
+            self._table.setUpdatesEnabled(True)
+        self._table.horizontalHeader().setSortIndicator(
+            self._sort_column, self._sort_order)
+        direction_key = (
+            "cage_track.inspection.sort_descending"
+            if preference["direction"] == "descending"
+            else "cage_track.inspection.sort_ascending"
+        )
+        direction = self.messages.get(
+            direction_key,
+            "Sorted descending" if preference["direction"] == "descending"
+            else "Sorted ascending",
+        )
+        header_item = self._table.horizontalHeaderItem(self._sort_column)
+        column_label = header_item.text() if header_item is not None else ""
+        self._table.setAccessibleDescription(f"{column_label}: {direction}")
+
+    def _on_header_clicked(self, column: int) -> None:
+        if column < 0 or column >= len(INSPECTION_SORT_COLUMNS):
+            return
+        if column == self._sort_column:
+            self._sort_order = (
+                Qt.SortOrder.AscendingOrder
+                if self._sort_order == Qt.SortOrder.DescendingOrder
+                else Qt.SortOrder.DescendingOrder
+            )
+        else:
+            self._sort_column = column
+            self._sort_order = Qt.SortOrder.AscendingOrder
+        self._populate_records()
+        if callable(self._on_sort_changed):
+            self._on_sort_changed(self.sort_preference())
 
     def _inspect_now(self) -> None:
         if not callable(self._on_inspect_callback):
@@ -1047,6 +1324,12 @@ class CageTrackWidget(QWidget):
 
         self.selected_cage_id: Optional[str] = None
         self._highlight_occupant: Optional[str] = None
+        self._highlight_occupants: Set[str] = set()
+        self._selection_structure_ids: Set[str] = set()
+        self._selection_scope_building: Optional[str] = None
+        self._selection_expanded_units: Set[str] = set()
+        self._selection_expanded_rooms: Set[str] = set()
+        self._selection_show_unassigned = False
         self._hit_map: List[Tuple[Tuple[float, float, float, float], str, str]] = []
         # (x0, y0, x1, y1), entity_id, entity_type
 
@@ -1221,6 +1504,12 @@ class CageTrackWidget(QWidget):
         expanded_buildings = set(ui_state.get("expanded_buildings", []))
         expanded_units = set(ui_state.get("expanded_units", []))
         expanded_rooms = set(ui_state.get("expanded_rooms", []))
+        if self._selection_scope_building:
+            # Selection-driven expansion is ephemeral UI projection. It must
+            # neither persist in housing records nor open several buildings.
+            expanded_buildings = {self._selection_scope_building}
+            expanded_units.update(self._selection_expanded_units)
+            expanded_rooms.update(self._selection_expanded_rooms)
 
         if sync_animals or not self._project_color_cache:
             project_colors = self._build_project_color_map(animals_dict)
@@ -1246,7 +1535,10 @@ class CageTrackWidget(QWidget):
             )
         ]
         unassigned_height = 0
-        show_unassigned = ui_state.get("show_unassigned", True)
+        show_unassigned = (
+            True if self._selection_show_unassigned
+            else ui_state.get("show_unassigned", True)
+        )
         if unassigned:
             unassigned_height = self._draw_unassigned(
                 unassigned, x_cursor, 0, animals_dict, project_colors, show_unassigned)
@@ -1382,14 +1674,29 @@ class CageTrackWidget(QWidget):
             self._project_rgba_cache[project_color] = rgba
         return self._project_rgba_cache[project_color]
 
+    def _is_occupant_highlighted(self, occupant_id: str) -> bool:
+        return (
+            occupant_id in getattr(self, "_highlight_occupants", set())
+            or occupant_id == getattr(self, "_highlight_occupant", None)
+        )
+
+    def _is_structure_highlighted(self, structure_id: str) -> bool:
+        return (
+            self.selected_cage_id == structure_id
+            or structure_id in getattr(self, "_selection_structure_ids", set())
+        )
+
     def _draw_animal_name(self, x: float, y: float, name: str,
-                          project_color: str, zorder: int) -> None:
+                          project_color: str, zorder: int,
+                          occupant_id: Optional[str] = None) -> None:
+        highlighted = self._is_occupant_highlighted(occupant_id or name)
         kwargs: Dict[str, Any] = {
             "fontsize": 7.5,
             "color": "#000000",
             "zorder": zorder,
             "clip_on": True,
             "verticalalignment": "center",
+            "fontweight": "bold" if highlighted else "normal",
         }
         if project_color and project_color != "#000000":
             rgba = list(self._cached_project_rgba(project_color))
@@ -1397,7 +1704,15 @@ class CageTrackWidget(QWidget):
             kwargs["bbox"] = {
                 "boxstyle": "round,pad=0.14",
                 "facecolor": tuple(rgba),
-                "edgecolor": "none",
+                "edgecolor": SELECTED_BORDER if highlighted else "none",
+                "linewidth": 1.2 if highlighted else 0.0,
+            }
+        elif highlighted:
+            kwargs["bbox"] = {
+                "boxstyle": "round,pad=0.14",
+                "facecolor": "#FFF3E0",
+                "edgecolor": SELECTED_BORDER,
+                "linewidth": 1.2,
             }
         self.ax.text(x, y, name, **kwargs)
 
@@ -1406,47 +1721,11 @@ class CageTrackWidget(QWidget):
             self._role_color_cache[animal_name] = self._get_animal_role_color(animal_name, animals_dict)
         return self._role_color_cache[animal_name]
 
-    @staticmethod
-    def _get_animal_role_color(animal_name: str, animals_dict: Dict[str, Any]) -> str:
-        """Get role colour for an animal matching the ProgTrack list colours."""
-        rec = animals_dict.get(animal_name, {})
-        if not isinstance(rec, dict):
-            return "#000000"
-        role = canonical_role_value(rec.get("rolle", ""), default=ROLE_VALUE_UNKNOWN)
-        sex = (rec.get("sex", "") or "").lower()
-
-        is_female = ("female" in sex or "weiblich" in sex or "жен" in sex)
-        is_male = ("male" in sex or "männlich" in sex or "муж" in sex)
-
-        if not role or role == ROLE_VALUE_UNKNOWN:
-            return "#D3D3D3"  # lightgray
-        if role == ROLE_VALUE_SPENDER:
-            return "#FF1493"  # deeppink
-        if role == ROLE_VALUE_AMME:
-            return "#9370DB"  # mediumpurple
-        if role == ROLE_VALUE_SAMENSP:
-            return "#000000"  # black
-        if role == ROLE_VALUE_OFFSPRING:
-            if is_female:
-                return "#FF69B4"  # hotpink
-            if is_male:
-                return "#0000FF"  # blue
-            return "#808080"  # gray
-        if role == ROLE_VALUE_PARTNER:
-            return "#FF8C00"  # darkorange
-        if role == ROLE_VALUE_ZUCHTTIER:
-            if is_female:
-                return "#C71585"  # mediumvioletred
-            if is_male:
-                return "#00008B"  # darkblue
-            return "#808080"  # gray
-        if role == ROLE_VALUE_EXPERIMENTAL:
-            if is_female:
-                return "#FF7788"
-            if is_male:
-                return "#00CCAA"
-            return "#00AAAA"
-        return "#000000"
+    def _get_animal_role_color(self, animal_name: str, animals_dict: Dict[str, Any]) -> str:
+        """Get the shared backend-configured role/sex colour for an animal."""
+        record = animals_dict.get(animal_name, {})
+        registry = getattr(getattr(self.plugin, "app", None), "animal_role_registry", None)
+        return role_color_for_record(record, registry)
 
     # ------------------------------------------------------------------
     # Measurement helpers
@@ -1653,7 +1932,9 @@ class CageTrackWidget(QWidget):
         scatter_y: List[float] = []
         face_colors: List[str] = []
         edge_colors: List[str] = []
-        text_rows: List[Tuple[float, float, str, str]] = []
+        marker_sizes: List[float] = []
+        marker_widths: List[float] = []
+        text_rows: List[Tuple[float, float, str, str, str]] = []
         for i, occ in enumerate(occupants):
             col_idx = i % 4
             row_idx = i // 4
@@ -1670,16 +1951,28 @@ class CageTrackWidget(QWidget):
             scatter_x.append(tx + 4)
             scatter_y.append(ty)
             face_colors.append(color)
-            edge_colors.append("#000000")
-            text_rows.append((tx + 15, ty, animal_base_name(occ_id, animals_dict.get(occ_id, {})), project_color))
+            highlighted = self._is_occupant_highlighted(occ_id)
+            edge_colors.append(SELECTED_BORDER if highlighted else "#000000")
+            marker_sizes.append(52 if highlighted else 30)
+            marker_widths.append(1.8 if highlighted else 0.8)
+            text_rows.append((
+                tx + 15,
+                ty,
+                animal_base_name(occ_id, animals_dict.get(occ_id, {})),
+                project_color,
+                occ_id,
+            ))
             self._hit_map.append(((tx - 2, ty - 6, tx + column_width - 4, ty + 8), occ_id, "occupant"))
 
         if scatter_x:
-            self.ax.scatter(scatter_x, scatter_y, s=30, marker="o",
+            self.ax.scatter(scatter_x, scatter_y, s=marker_sizes, marker="o",
                             facecolors=face_colors, edgecolors=edge_colors,
-                            linewidths=0.8, zorder=4, clip_on=True)
-        for tx, ty, occ_id, project_color in text_rows:
-            self._draw_animal_name(tx, ty, occ_id, project_color, zorder=5)
+                            linewidths=marker_widths, zorder=4, clip_on=True)
+        for tx, ty, display_name, project_color, occ_id in text_rows:
+            self._draw_animal_name(
+                tx, ty, display_name, project_color, zorder=5,
+                occupant_id=occ_id,
+            )
 
         self._hit_map.append(((x, y, x + w, y + h), UNASSIGNED_CAGE_ID, "cage"))
         self._hit_map.append(((x, y, x + w, y + TITLE_H), UNASSIGNED_CAGE_ID, "unassigned_title"))
@@ -1689,8 +1982,9 @@ class CageTrackWidget(QWidget):
                        expanded: bool, expanded_units: Set[str], expanded_rooms: Set[str],
                        animals_dict: Dict[str, Any], project_colors: Dict[str, str]) -> None:
         bld_id = bld["id"]
-        border = SELECTED_BORDER if self.selected_cage_id == bld_id else BLD_BORDER
-        lw = 2.5 if self.selected_cage_id == bld_id else 1.0
+        selected = self._is_structure_highlighted(bld_id)
+        border = SELECTED_BORDER if selected else BLD_BORDER
+        lw = 2.5 if selected else 1.0
 
         building_bg = (
             "#B3E5FC" if self.store.is_effectively_virtual(bld_id)
@@ -1749,8 +2043,9 @@ class CageTrackWidget(QWidget):
                    expanded: bool, expanded_rooms: Set[str],
                    animals_dict: Dict[str, Any], project_colors: Dict[str, str]) -> None:
         unit_id = unit["id"]
-        border = SELECTED_BORDER if self.selected_cage_id == unit_id else UNIT_BORDER
-        linewidth = 2.5 if self.selected_cage_id == unit_id else 1.0
+        selected = self._is_structure_highlighted(unit_id)
+        border = SELECTED_BORDER if selected else UNIT_BORDER
+        linewidth = 2.5 if selected else 1.0
         background = (
             "#B3E5FC" if self.store.is_effectively_virtual(unit_id)
             else "#FFCDD2" if self._structure_overdue(unit_id)
@@ -1795,8 +2090,9 @@ class CageTrackWidget(QWidget):
                    expanded: bool, animals_dict: Dict[str, Any],
                    project_colors: Dict[str, str]) -> None:
         room_id = room["id"]
-        border = SELECTED_BORDER if self.selected_cage_id == room_id else ROOM_BORDER
-        lw = 2.5 if self.selected_cage_id == room_id else 1.0
+        selected = self._is_structure_highlighted(room_id)
+        border = SELECTED_BORDER if selected else ROOM_BORDER
+        lw = 2.5 if selected else 1.0
 
         room_bg = (
             "#B3E5FC" if self.store.is_effectively_virtual(room_id)
@@ -1835,8 +2131,9 @@ class CageTrackWidget(QWidget):
         cage_id = cage["id"]
         occupants = cage.get("occupants", [])
 
-        border = SELECTED_BORDER if self.selected_cage_id == cage_id else CAGE_BORDER
-        lw = 2.5 if self.selected_cage_id == cage_id else 1.0
+        selected = self._is_structure_highlighted(cage_id)
+        border = SELECTED_BORDER if selected else CAGE_BORDER
+        lw = 2.5 if selected else 1.0
 
         # Plain cage background
         cage_bg = (
@@ -1860,7 +2157,9 @@ class CageTrackWidget(QWidget):
         scatter_y: List[float] = []
         face_colors: List[str] = []
         edge_colors: List[str] = []
-        text_rows: List[Tuple[float, float, str, str]] = []
+        marker_sizes: List[float] = []
+        marker_widths: List[float] = []
+        text_rows: List[Tuple[float, float, str, str, str]] = []
         for occ in occupants:
             occ_id = occ["occupant_id"]
             circle_color = self._cached_animal_role_color(occ_id, animals_dict)
@@ -1868,22 +2167,29 @@ class CageTrackWidget(QWidget):
             scatter_x.append(x + CAGE_PAD + 4)
             scatter_y.append(oy)
             face_colors.append(circle_color)
-            edge_colors.append("#000000")
+            highlighted = self._is_occupant_highlighted(occ_id)
+            edge_colors.append(SELECTED_BORDER if highlighted else "#000000")
+            marker_sizes.append(52 if highlighted else 30)
+            marker_widths.append(1.8 if highlighted else 0.8)
             text_rows.append((
                 x + CAGE_PAD + 15,
                 oy,
                 animal_base_name(occ_id, animals_dict.get(occ_id, {})),
                 project_color,
+                occ_id,
             ))
             self._hit_map.append(((x + CAGE_PAD - 2, oy - 6, x + w - CAGE_PAD, oy + 8),
                                   occ_id, "occupant"))
             oy += OCCUPANT_LINE_H
         if scatter_x:
-            self.ax.scatter(scatter_x, scatter_y, s=30, marker="o",
+            self.ax.scatter(scatter_x, scatter_y, s=marker_sizes, marker="o",
                             facecolors=face_colors, edgecolors=edge_colors,
-                            linewidths=0.8, zorder=6, clip_on=True)
-        for tx, ty, occ_id, project_color in text_rows:
-            self._draw_animal_name(tx, ty, occ_id, project_color, zorder=7)
+                            linewidths=marker_widths, zorder=6, clip_on=True)
+        for tx, ty, display_name, project_color, occ_id in text_rows:
+            self._draw_animal_name(
+                tx, ty, display_name, project_color, zorder=7,
+                occupant_id=occ_id,
+            )
 
     def _inspected_cages_today(self) -> Set[str]:
         today = datetime.now().strftime("%Y-%m-%d")
@@ -1994,6 +2300,7 @@ class CageTrackWidget(QWidget):
         if not occupant_id:
             return
         self._highlight_occupant = occupant_id
+        self._highlight_occupants = {occupant_id}
         self.refresh_view(sync_animals=False)
 
     def _on_canvas_press(self, event) -> None:
@@ -2047,6 +2354,9 @@ class CageTrackWidget(QWidget):
                     self.selected_cage_id = eid
                     self.refresh_view(sync_animals=False)
                     return
+            elif getattr(event, "dblclick", False):
+                self._clear_shared_animal_selection()
+                return
 
         # Right-click → context menu
         if event.button == 3:
@@ -2177,6 +2487,29 @@ class CageTrackWidget(QWidget):
     def _show_movement_history(self, occupant_id: str) -> None:
         dlg = MovementHistoryDialog(self, self.messages, occupant_id, self.engine, self.store)
         dlg.exec()
+
+    def _clear_shared_animal_selection(self) -> None:
+        """Clear the main selection through the same application update path."""
+        app = getattr(self.plugin, "app", None)
+        animal_list = getattr(app, "lst", None) if app is not None else None
+        if animal_list is not None and hasattr(animal_list, "clearSelection"):
+            animal_list.blockSignals(True)
+            try:
+                animal_list.clearSelection()
+            finally:
+                animal_list.blockSignals(False)
+        if app is not None:
+            for attribute in (
+                "selected_animals", "_selected_archived",
+                "_selected_heritage_only",
+            ):
+                if hasattr(app, attribute):
+                    setattr(app, attribute, [])
+            callback = getattr(app, "_on_select", None)
+            if callable(callback):
+                callback()
+                return
+        self.on_animal_selected([])
 
     # ------------------------------------------------------------------
     # Expand / collapse
@@ -2465,6 +2798,27 @@ class CageTrackWidget(QWidget):
         import getpass
         return getpass.getuser()
 
+    def _get_current_user_identity(self) -> Optional[str]:
+        """Return the stable signed-in username, or None for guest mode."""
+        app = getattr(self.plugin, "app", None)
+        master_track = getattr(app, "master_track", None) if app else None
+        if master_track and getattr(master_track, "is_logged_in", False):
+            identity = str(getattr(master_track, "current_username", "") or "").strip()
+            return identity or None
+        return None
+
+    def _load_inspection_sort_preference(self) -> Dict[str, str]:
+        backend = getattr(self.store.backend_store, "backend", None)
+        return load_inspection_sort_preference(
+            backend, self._get_current_user_identity())
+
+    def _save_inspection_sort_preference(
+        self, preference: Dict[str, str],
+    ) -> None:
+        backend = getattr(self.store.backend_store, "backend", None)
+        save_inspection_sort_preference(
+            backend, self._get_current_user_identity(), preference)
+
     def _resolve_entity_type(self, entity_id: str) -> Optional[str]:
         data = self.store.load_data()
         s = data["structures"]
@@ -2613,6 +2967,8 @@ class CageTrackWidget(QWidget):
             self._load_inspections(),
             on_export,
             record_now if inspection_data and self._can('cage.record_inspection') else None,
+            initial_sort=self._load_inspection_sort_preference(),
+            on_sort_changed=self._save_inspection_sort_preference,
         )
         dlg.exec()
 
@@ -2643,19 +2999,51 @@ class CageTrackWidget(QWidget):
     # ------------------------------------------------------------------
 
     def on_animal_selected(self, animal_names: List[str]) -> None:
-        """Called by ProgTrack when an animal is selected in main list."""
-        if not animal_names:
-            self._highlight_occupant = None
-            self.selected_cage_id = None
-            return
+        """Project the complete main-list selection into one building view."""
+        unique_names = list(dict.fromkeys(
+            str(name) for name in animal_names if name
+        ))
+        addresses: Dict[str, Dict[str, Optional[str]]] = {}
+        for name in unique_names:
+            occupant = self.store.get_occupant(name)
+            if not isinstance(occupant, dict):
+                continue
+            cage_id = str(occupant.get("cage_id") or "")
+            if cage_id == UNASSIGNED_CAGE_ID:
+                addresses[name] = {
+                    "building_id": None,
+                    "unit_id": None,
+                    "room_id": None,
+                    "cage_id": None,
+                }
+                continue
+            address = self.store.get_address_for_dialog(name)
+            if address.get("building_id") and address.get("cage_id"):
+                addresses[name] = address
 
-        name = animal_names[0]
-        self._highlight_occupant = name
-        cage_id = self.store.get_occupant_cage(name)
-        if cage_id and cage_id != UNASSIGNED_CAGE_ID:
-            self.selected_cage_id = cage_id
-        else:
-            self.selected_cage_id = None
+        building_order: Dict[str, Tuple[int, str]] = {}
+        for fallback_order, building in enumerate(self.store.get_all_buildings()):
+            building_id = str(building.get("id") or "")
+            if not building_id:
+                continue
+            try:
+                order = int(building.get("order", fallback_order))
+            except (TypeError, ValueError):
+                order = fallback_order
+            building_order[building_id] = (order, building_id)
+        scope = resolve_cage_selection_scope(
+            unique_names, addresses, building_order)
+
+        highlighted = set(scope["animal_ids"])
+        self._highlight_occupants = highlighted
+        self._highlight_occupant = next(iter(scope["animal_ids"]), None)
+        self._selection_structure_ids = set(scope["structure_ids"])
+        self._selection_scope_building = scope["building_id"]
+        self._selection_expanded_units = set(scope["unit_ids"])
+        self._selection_expanded_rooms = set(scope["room_ids"])
+        self._selection_show_unassigned = bool(scope["show_unassigned"])
+        self.selected_cage_id = scope["primary_cage_id"]
+        self.refresh_view(sync_animals=False)
 
 
 # ======================================================================

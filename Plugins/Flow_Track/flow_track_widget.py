@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from Plugins.core.animal_identity import animal_base_name
-from Plugins.core.animal_roles import canonical_role_value
+from Plugins.core.animal_roles import canonical_role_value, role_color_for_record
 from Plugins.core.platform_helpers import default_save_path
 from Plugins.core.backend_store import BackendJsonStore
 from Plugins.core.ui_icons import apply_icon
@@ -1705,17 +1705,12 @@ class FlowTrackWidget:
                 color = 'cyan'
                 role = None
             else:
-                role = _animal_role_value(self.parent_app.animals.get(animal_name, {}))
-                
-                # Color by role - matching ProgTrack sidebar colors
-                if role == Role.SPENDER.value:
-                    color = 'deeppink'
-                elif role == Role.SAMENSP.value:
-                    color = 'black'
-                elif role == Role.AMME.value:
-                    color = 'mediumpurple'
-                else:
-                    color = 'lightgray'
+                animal_record = self.parent_app.animals.get(animal_name, {})
+                role = _animal_role_value(animal_record)
+                color = role_color_for_record(
+                    animal_record,
+                    getattr(self.parent_app, "animal_role_registry", None),
+                )
             
             # Draw node (clip_on=False allows drawing beyond axis limits)
             artist, = self.ax.plot(x, y, 'o', markersize=12, 

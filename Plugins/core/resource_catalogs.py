@@ -17,6 +17,21 @@ CATALOG_FILES = {
     "handover_recipients": "Handover_Recipients.txt",
 }
 GENOTYPE_FILE = "Genotype_List.txt"
+UNKNOWN_SPECIES_VALUE = "Unknown species"
+
+
+def ordered_species_for_display(values: Iterable[str]) -> List[str]:
+    """Preserve configured species order while presenting Unknown last."""
+    unique = _unique_lines(values)
+    known = [
+        value for value in unique
+        if value.casefold() != UNKNOWN_SPECIES_VALUE.casefold()
+    ]
+    unknown = [
+        value for value in unique
+        if value.casefold() == UNKNOWN_SPECIES_VALUE.casefold()
+    ]
+    return known + unknown
 
 
 def resources_path(app_root: Path) -> Path:

@@ -2232,7 +2232,14 @@ def create_monthly_report(
             report_title = messages.get('report.title', 'Animal Report')
             title = Paragraph(f"<b>{report_title}: {title_subject}</b>", title_style)
             subtitle = Paragraph(date_range_str, subtitle_style)
-            w, h = title.wrap(doc.width, doc.topMargin)
+            # The shared branding overlay occupies the top-right header
+            # corridor.  Keep the report title in the left header block when
+            # branding is active so long animal IDs cannot run beneath the
+            # facility name/logo.
+            title_width = (
+                doc.width * 0.62 if branding_owner is not None else doc.width
+            )
+            w, h = title.wrap(title_width, doc.topMargin)
             title.drawOn(canvas, doc.leftMargin, header_top - h)
             
             w2, h2 = subtitle.wrap(doc.width, doc.topMargin)

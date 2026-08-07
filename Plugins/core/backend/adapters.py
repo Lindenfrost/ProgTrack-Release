@@ -19,7 +19,7 @@ from ..runtime_paths import (
     RuntimePaths,
     validate_standalone_sqlite_path,
 )
-from .errors import BackendConfigurationError
+from .errors import BackendConfigurationError, StandaloneLockError
 from .schema import POSTGRESQL_MIGRATIONS, SQLITE_MIGRATIONS
 
 
@@ -63,9 +63,8 @@ class StandaloneProcessLock:
                         continue
                     except OSError:
                         pass
-                raise BackendConfigurationError(
-                    "The Standalone database is already open for writing. "
-                    f"Lock: {self.path}; owner: {owner}"
+                raise StandaloneLockError(
+                    lock_path=str(self.path), owner=owner
                 ) from exc
         else:
             descriptor = None

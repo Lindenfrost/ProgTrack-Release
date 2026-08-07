@@ -33,6 +33,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from Plugins.core.animal_identity import animal_identity_key
+from Plugins.core.animal_relationships import resolve_animal_reference
+from Plugins.core.animal_roles import canonical_role_value
 from Plugins.core.backend.facade import ProgTrackBackend
 from Plugins.core.runtime_paths import resolve_runtime_paths
 
@@ -49,7 +51,26 @@ ELDARION_BIRTH_DATE = date(2026, 3, 1)
 # assignments are cleared instead of leaving orphaned project names in the
 # database; deleting a project must not silently move animals to another one.
 SEED_PROJECTS = frozenset({"Backcrossing", "OTOF-", "Oakshield", "Ringbearer"})
-REMOVED_ANIMAL_NAMES = frozenset({"Lindir", "Dana", "Bobby", "Echo"})
+# Disposable probes and superseded examples must never return when the
+# canonical package is rebuilt from the archived authoring snapshot.  Keep
+# this list in one place so Core and every domain payload are pruned by the
+# same rule.
+REMOVED_ANIMAL_NAMES = frozenset({
+    "Lindir", "Dana", "Bobby", "Echo",
+    "Andy", "Betta", "RoleProbe", "Test",
+})
+
+_ANIMAL_REFERENCE_FIELDS = frozenset({
+    "ipid",
+    "animal",
+    "animal_id",
+    "animal_ipid",
+    "occupant_id",
+    "offspring",
+    "sperm_donor",
+    "egg_donor",
+    "surrogate",
+})
 
 
 def canonical_project_name(value: Any) -> str:
@@ -77,6 +98,25 @@ def _is_removed_animal_reference(value: Any) -> bool:
     return any(lowered.endswith("_" + name.casefold()) for name in REMOVED_ANIMAL_NAMES)
 
 
+def _mapping_identifies_removed_animal(value: dict[str, Any]) -> bool:
+    """Return whether a list record is owned by a removed animal.
+
+    Project histories and similar domain payloads store animal records as
+    dictionaries inside lists.  Clearing only their ``ipid`` would leave a
+    malformed, anonymous row behind, so the whole owned record is removed.
+    Multi-animal snapshots (for example ``cage_mates_snapshot``) are not
+    treated as owners and are pruned recursively instead.
+    """
+    for key, item in value.items():
+        normalized = str(key).strip().casefold()
+        if (
+            normalized in _ANIMAL_REFERENCE_FIELDS
+            or normalized.endswith("_ipid")
+        ) and _is_removed_animal_reference(item):
+            return True
+    return False
+
+
 def prune_removed_animal_references(value: Any) -> Any:
     """Remove deleted-animal keys/list values and clear scalar references."""
     if isinstance(value, dict):
@@ -90,11 +130,30 @@ def prune_removed_animal_references(value: Any) -> Any:
         for item in value:
             if _is_removed_animal_reference(item):
                 continue
+            if isinstance(item, dict) and _mapping_identifies_removed_animal(item):
+                continue
             result.append(prune_removed_animal_references(item))
         return result
     if _is_removed_animal_reference(value):
         return ""
     return value
+
+
+def removed_animal_reference_paths(value: Any, path: str = "$") -> list[str]:
+    """Return structured paths that still contain a removed-animal identity."""
+    found: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            child = f"{path}.{key}"
+            if _is_removed_animal_reference(key):
+                found.append(child + " (key)")
+            found.extend(removed_animal_reference_paths(item, child))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            found.extend(removed_animal_reference_paths(item, f"{path}[{index}]"))
+    elif _is_removed_animal_reference(value):
+        found.append(path)
+    return found
 
 RETRIEVAL_DATES = (
     date(2024, 12, 1),
@@ -1205,6 +1264,47 @@ def _normalise_seed_project_assignments(core: dict[str, Any]) -> None:
                 )
 
 
+def _normalise_seed_partner_relationships(core: dict[str, Any]) -> None:
+    """Make each sample partner/breeding relationship reciprocal by role."""
+    all_animals = {
+        **core.get("animals", {}),
+        **core.get("archived_animals", {}),
+    }
+    edges: set[tuple[str, str]] = set()
+    for subject, record in all_animals.items():
+        for field in ("partner_von", "verpaart_mit"):
+            target = resolve_animal_reference(all_animals, record.get(field))
+            if target and target != subject:
+                edges.add(tuple(sorted((subject, target))))
+    for left, right in sorted(edges):
+        left_record = all_animals[left]
+        right_record = all_animals[right]
+        left_is_partner = canonical_role_value(
+            left_record.get("rolle")
+        ) == "partner_animal"
+        right_is_partner = canonical_role_value(
+            right_record.get("rolle")
+        ) == "partner_animal"
+        for record, counterpart in (
+            (left_record, right), (right_record, left)
+        ):
+            for field in ("partner_von", "verpaart_mit"):
+                if resolve_animal_reference(all_animals, record.get(field)) == counterpart:
+                    record[field] = ""
+        if left_is_partner and not right_is_partner:
+            left_record["partner_von"] = right
+            right_record["verpaart_mit"] = left
+        elif right_is_partner and not left_is_partner:
+            right_record["partner_von"] = left
+            left_record["verpaart_mit"] = right
+        elif left_is_partner and right_is_partner:
+            left_record["partner_von"] = right
+            right_record["partner_von"] = left
+        else:
+            left_record["verpaart_mit"] = right
+            right_record["verpaart_mit"] = left
+
+
 def _normalise_project_payload(payload: Any, *, history: bool) -> dict[str, Any]:
     """Filter a legacy project payload to the supported four projects."""
     if not isinstance(payload, dict):
@@ -1314,6 +1414,7 @@ def _enrich_project_catalog(project_catalog: dict[str, Any],
     projects = project_catalog.setdefault("projects", {})
     for name, profile in PROJECT_DATA_PROFILES.items():
         record = projects.setdefault(name, {})
+        record["status"] = "active"
         record["summary"] = {
             **(record.get("summary") if isinstance(record.get("summary"), dict) else {}),
             "title": profile["title"],
@@ -1381,6 +1482,7 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
     project_catalog = _normalise_project_payload(project_catalog, history=False)
     records[("projects", "catalog")] = project_catalog
     project_catalog.setdefault("projects", {})["Ringbearer"] = {
+        "status": "active",
         "summary": {
             "title": "Ringbearer mouse colony",
             "species": "Mus musculus",
@@ -1463,6 +1565,33 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
             "mus-musculus-ringbearer-colony", "mouse-house-group-housing",
         ],
     }
+    # Archived authoring snapshots contain a handful of obsolete medical and
+    # report keys that no longer have a Core animal.  A canonical backend seed
+    # must not retain plugin-local ghosts: those records cannot be opened,
+    # housed, reported on, or resolved through an immutable IPID.
+    known_animals = {
+        **core.get("animals", {}),
+        **core.get("archived_animals", {}),
+    }
+    for domain_key, container_key in (
+        (("medical", "history"), "animals"),
+        (("heritage", "graph"), "animals"),
+    ):
+        payload = records.get(domain_key, {})
+        container = payload.get(container_key, {}) if isinstance(payload, dict) else {}
+        if isinstance(container, dict):
+            payload[container_key] = {
+                ipid: value
+                for ipid, value in container.items()
+                if ipid in known_animals
+            }
+    report_payload = records.get(("reports", "animal-reports"), {})
+    if isinstance(report_payload, dict):
+        records[("reports", "animal-reports")] = {
+            ipid: value
+            for ipid, value in report_payload.items()
+            if ipid in known_animals
+        }
     return records
 
 
@@ -1470,6 +1599,12 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
              scenario: dict[str, Any]) -> dict[str, Any]:
     all_animals = {**core["animals"], **core["archived_animals"]}
     errors = []
+    for (namespace, record_id), payload in sorted(records.items()):
+        for path in removed_animal_reference_paths(payload):
+            errors.append(
+                "removed animal reference remains: "
+                f"{namespace}/{record_id}{path[1:]}"
+            )
     for ipid, record in all_animals.items():
         if str(record.get("name") or "").strip() in REMOVED_ANIMAL_NAMES:
             errors.append(f"removed animal still present: {ipid}")
@@ -1504,10 +1639,26 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         for field in ("name", "species", "birth_date", "origin", "id", "rolle", "sex"):
             if not str(record.get(field, "")).strip():
                 errors.append(f"missing {field}: {ipid}")
-        for ref_field in ("eizellspenderin", "samenspender", "ziehmutter", "ziehvater"):
+        for ref_field in (
+            "eizellspenderin", "samenspender", "ziehmutter", "ziehvater",
+            "partner_von", "verpaart_mit",
+        ):
             reference = str(record.get(ref_field, "")).strip()
             if reference and reference not in all_animals:
                 errors.append(f"dangling {ref_field}: {ipid} -> {reference}")
+        for relationship_field in ("partner_von", "verpaart_mit"):
+            partner = str(record.get(relationship_field) or "").strip()
+            if not partner or partner not in all_animals:
+                continue
+            partner_record = all_animals[partner]
+            reciprocal = any(
+                str(partner_record.get(field) or "").strip() == ipid
+                for field in ("partner_von", "verpaart_mit")
+            )
+            if not reciprocal:
+                errors.append(
+                    f"one-sided {relationship_field}: {ipid} -> {partner}"
+                )
     denethor = all_animals[scenario["denethor"]]
     if denethor.get("samenspender") not in all_animals:
         errors.append("Denethor father missing")
@@ -1515,6 +1666,30 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         record = all_animals[scenario[offspring]]
         if record.get("samenspender") != scenario["denethor"]:
             errors.append(f"{offspring} father mismatch")
+        incompatible = {
+            "embryo_transfer", "pregnancy_verification", "birth", "abortion"
+        }
+        if any(
+            isinstance(event, dict) and event.get("typ") in incompatible
+            for event in record.get("events", []) or []
+        ):
+            errors.append(f"incompatible reproductive event on male {offspring}")
+        surrogate = str(record.get("ziehmutter") or "").strip()
+        if not surrogate or surrogate not in all_animals:
+            errors.append(f"{offspring} surrogate missing")
+        else:
+            maternal_births = [
+                event
+                for event in all_animals[surrogate].get("events", []) or []
+                if isinstance(event, dict)
+                and event.get("typ") == "birth"
+                and event.get("offspring") == scenario[offspring]
+            ]
+            if len(maternal_births) != 1:
+                errors.append(
+                    f"{offspring} maternal birth record mismatch: "
+                    f"expected 1, found {len(maternal_births)}"
+                )
     cutoff = ELDARION_BIRTH_DATE.replace(year=ELDARION_BIRTH_DATE.year - 1)
     for ipid, record in all_animals.items():
         species = str(record.get("species") or "").strip().lower()
@@ -1550,6 +1725,28 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
             errors.append(
                 f"project {record_id} mismatch: {sorted(project_names)}"
             )
+    project_history = records.get(("projects", "history"), {})
+    for project_name, project in (project_history.get("projects") or {}).items():
+        for index, entry in enumerate(project.get("animals", []) or []):
+            ipid = str(entry.get("ipid") or "").strip() if isinstance(entry, dict) else ""
+            if ipid not in all_animals:
+                errors.append(
+                    "dangling project-history animal: "
+                    f"{project_name}[{index}] -> {ipid or '<empty>'}"
+                )
+    for namespace, record_id, container_key in (
+        ("heritage", "graph", "animals"),
+        ("medical", "history", "animals"),
+    ):
+        payload = records.get((namespace, record_id), {})
+        references = set((payload.get(container_key) or {}).keys())
+        for reference in sorted(references - set(all_animals)):
+            errors.append(
+                f"dangling {namespace} animal: {reference}"
+            )
+    reports = records.get(("reports", "animal-reports"), {})
+    for reference in sorted(set(reports) - set(all_animals)):
+        errors.append(f"dangling report animal: {reference}")
     for surrogate_index, transfer_date, outcome, _offspring in TRANSFER_SCENARIOS:
         surrogate = scenario["surrogates"][surrogate_index]
         course_id = f"ET-{surrogate_index + 1}-{transfer_date.isoformat()}"
@@ -1623,6 +1820,19 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
             errors.append(f"unexpected forced password change: {username}")
     housing = records[("housing", "cage")]
     structures = housing.get("structures", {})
+    for reference in sorted(set(housing.get("occupants", {})) - set(core["animals"])):
+        errors.append(f"dangling housed animal: {reference}")
+    for reference, movements in (housing.get("movement_history", {}) or {}).items():
+        if reference not in all_animals:
+            errors.append(f"dangling housing-history animal: {reference}")
+        for movement in movements if isinstance(movements, list) else []:
+            if not isinstance(movement, dict):
+                continue
+            for cage_mate in movement.get("cage_mates_snapshot", []) or []:
+                if cage_mate not in all_animals:
+                    errors.append(
+                        f"dangling housing cage-mate: {reference} -> {cage_mate}"
+                    )
     for ipid in core["animals"]:
         occupant = housing.get("occupants", {}).get(ipid)
         if not occupant:
@@ -1732,6 +1942,7 @@ def main() -> int:
     scenario["mouse"] = mouse_scenario
     normalize_mature_offspring_roles(core)
     _normalise_seed_project_assignments(core)
+    _normalise_seed_partner_relationships(core)
     complete_scientific_histories(core)
     records = domain_records(core, key_map, scenario)
     result = validate(core, records, scenario)

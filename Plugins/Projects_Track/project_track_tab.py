@@ -13,9 +13,9 @@ from typing import Any, Dict, List, Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QFrame,
+    QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QMessageBox, QPushButton, QScrollArea, QSpinBox, QSplitter,
+    QMessageBox, QPushButton, QRadioButton, QScrollArea, QSpinBox, QSplitter,
     QTextEdit, QVBoxLayout, QWidget,
 )
 from Plugins.core.animal_identity import animal_base_name
@@ -28,11 +28,21 @@ from Plugins.core.animal_roles import (
     ROLE_VALUE_SPENDER,
     ROLE_VALUE_ZUCHTTIER,
     canonical_role_value,
+    role_color_for_record,
 )
 from Plugins.core.project_visibility import diff_project_associated_users
 from Plugins.core.project_species import remove_mismatched_assignments
 from Plugins.core.platform_helpers import open_local_path
 from Plugins.core.backend_store import BackendJsonStore
+from Plugins.core.project_lifecycle import (
+    PROJECT_LIFECYCLE_STATUSES,
+    normalize_project_status,
+    set_project_status,
+)
+from Plugins.core.resource_catalogs import (
+    UNKNOWN_SPECIES_VALUE,
+    ordered_species_for_display,
+)
 from Plugins.core.ui_icons import apply_icon
 logger = logging.getLogger(__name__)
 _DOCS_SUBDIR   = "documents"
@@ -52,11 +62,21 @@ def _history_animal_key(record: dict) -> str:
 def _m(messages, key, fallback):
     return messages.get(key, fallback) if isinstance(messages, dict) else fallback
 
+def _project_role_color(record: Dict[str, Any], app: Any) -> str:
+    """Project Track projection of the shared backend-owned role palette."""
+    return role_color_for_record(
+        record,
+        getattr(app, "animal_role_registry", None),
+    )
+
 def _load_species_list() -> list:
     """Load species from Resources/Species_List.txt each time (dynamic)."""
     txt = Path(__file__).parent.parent / 'Resources' / 'Species_List.txt'
     try:
-        return [ln.strip() for ln in txt.read_text(encoding='utf-8').splitlines() if ln.strip()]
+        return ordered_species_for_display(
+            ln.strip() for ln in txt.read_text(encoding='utf-8').splitlines()
+            if ln.strip()
+        )
     except Exception:
         return []
 
@@ -403,7 +423,40 @@ class ProjectTrackTab(QWidget):
         r=p[name]
         for k in ('created_by','created_at','modified_by','modified_at'): r.setdefault(k,'')
         for k in ('summary','iacuc','assoc_users','animals_config','arrive'): r.setdefault(k,{})
+        r['status'] = normalize_project_status(r.get('status'), default='active')
         return r
+
+    def _status_text(self, status: str) -> str:
+        status = normalize_project_status(status, default='active')
+        return _m(
+            self._messages,
+            f'project.status.{status}',
+            {'draft': 'Draft', 'active': 'Active', 'closed': 'Closed'}[status],
+        )
+
+    def _style_project_item(self, item: QListWidgetItem, name: str) -> None:
+        record = self._project_data.get('projects', {}).get(name, {})
+        status = normalize_project_status(
+            record.get('status') if isinstance(record, dict) else None,
+            default='active',
+        )
+        font = QFont(item.font())
+        font.setItalic(status == 'draft')
+        font.setBold(status == 'active')
+        item.setFont(font)
+        status_text = self._status_text(status)
+        item.setToolTip(
+            _m(self._messages, 'project.status.tooltip', 'Status: {status}')
+            .replace('{status}', status_text)
+        )
+        item.setData(
+            Qt.ItemDataRole.AccessibleTextRole,
+            f'{name} — {status_text}',
+        )
+        item.setData(
+            Qt.ItemDataRole.AccessibleDescriptionRole,
+            item.toolTip(),
+        )
 
     def _can(self, perm):
         can_fn = getattr(self._app, '_master_can', None)
@@ -499,6 +552,7 @@ class ProjectTrackTab(QWidget):
         for name in active_names:
             item = QListWidgetItem(name)
             item.setData(Qt.ItemDataRole.UserRole, name)
+            self._style_project_item(item, name)
             self._list.addItem(item)
         if show_arch and arch_names:
             sep = QListWidgetItem('\u2500' * 20)
@@ -509,6 +563,7 @@ class ProjectTrackTab(QWidget):
             for name in arch_names:
                 item = QListWidgetItem(name)
                 item.setData(Qt.ItemDataRole.UserRole, name)
+                self._style_project_item(item, name)
                 self._list.addItem(item)
         self._list.blockSignals(False)
         if prev:
@@ -558,6 +613,7 @@ class ProjectTrackTab(QWidget):
         self._project_data['projects'][pname] = {
             'created_by': sig, 'created_at': now_str,
             'modified_by': sig, 'modified_at': now_str,
+            'status': 'draft',
             'summary': {}, 'iacuc': {}, 'assoc_users': {}, 'animals_config': {}
         }
         self._save_data()
@@ -635,6 +691,34 @@ class ProjectTrackTab(QWidget):
             l2.setStyleSheet("color:grey;font-size:9pt;"); meta_v.addWidget(l2)
         self._right_v.addWidget(meta_w)
 
+        # Project lifecycle is deliberately independent from archive state.
+        lifecycle_w = QWidget()
+        lifecycle_h = QHBoxLayout(lifecycle_w)
+        lifecycle_h.setContentsMargins(4, 0, 4, 4)
+        lifecycle_h.addWidget(QLabel(
+            _m(self._messages, 'project.status.label', 'Project status:')
+        ))
+        self._status_group = QButtonGroup(lifecycle_w)
+        self._status_buttons = {}
+        current_status = normalize_project_status(rec.get('status'), default='active')
+        for status in PROJECT_LIFECYCLE_STATUSES:
+            button = QRadioButton(self._status_text(status))
+            button.setProperty('projectStatus', status)
+            button.setChecked(status == current_status)
+            button.setEnabled(can_manage)
+            button.setToolTip(
+                _m(
+                    self._messages,
+                    f'project.status.{status}.tooltip',
+                    self._status_text(status),
+                )
+            )
+            self._status_group.addButton(button)
+            self._status_buttons[status] = button
+            lifecycle_h.addWidget(button)
+        lifecycle_h.addStretch()
+        self._right_v.addWidget(lifecycle_w)
+
         # ── Summary (1 column) ───────────────────────────────────────────
         sec_s = CollapsibleSection(_m(self._messages, "project.section.summary", "Summary"))
         cl = sec_s.content_layout()
@@ -646,10 +730,15 @@ class ProjectTrackTab(QWidget):
         species_list = _load_species_list()
         self._s_species = QComboBox(); self._s_species.setEditable(True); self._s_species.setEnabled(can_manage)
         for sp in species_list:
-            self._s_species.addItem(sp)
+            label = (
+                _m(self._messages, 'species.unknown', UNKNOWN_SPECIES_VALUE)
+                if sp.casefold() == UNKNOWN_SPECIES_VALUE.casefold()
+                else sp
+            )
+            self._s_species.addItem(label, sp)
         csp = summ.get('species', '') or ''
         if csp:
-            idx = self._s_species.findText(csp)
+            idx = self._s_species.findData(csp)
             if idx >= 0:
                 self._s_species.setCurrentIndex(idx)
             else:
@@ -960,31 +1049,11 @@ class ProjectTrackTab(QWidget):
             ROLE_VALUE_ZUCHTTIER,
             ROLE_VALUE_EXPERIMENTAL,
         ]
-        _ROLE_COLORS = {
-            ROLE_VALUE_SPENDER: 'deeppink',
-            ROLE_VALUE_AMME: 'mediumpurple',
-            ROLE_VALUE_SAMENSP: '#1a1aff',
-            ROLE_VALUE_OFFSPRING: 'gray',
-            ROLE_VALUE_PARTNER: 'darkorange',
-            ROLE_VALUE_ZUCHTTIER: 'gray',
-            ROLE_VALUE_EXPERIMENTAL: '#00AAAA',
-        }
-
         def _name_color(aname):
             data = all_known.get(aname)
-            if data is None:
+            if not isinstance(data, dict):
                 return '#888888'
-            role_val = canonical_role_value(data.get('rolle') or '')
-            sex = (data.get('sex') or '').lower()
-            if role_val in (ROLE_VALUE_OFFSPRING, ROLE_VALUE_ZUCHTTIER):
-                if 'female' in sex or 'weiblich' in sex:
-                    return 'deeppink' if role_val == ROLE_VALUE_OFFSPRING else '#C71585'
-                if 'male' in sex or 'männlich' in sex:
-                    return '#1a1aff' if role_val == ROLE_VALUE_OFFSPRING else '#00008B'
-                return 'gray'
-            if role_val == ROLE_VALUE_EXPERIMENTAL:
-                return '#FF7788' if ('female' in sex or 'weiblich' in sex) else '#00FFDD'
-            return _ROLE_COLORS.get(role_val, '#333333')
+            return _project_role_color(data, self._app)
 
         def _association_records(aname):
             result = []
@@ -1262,6 +1331,26 @@ class ProjectTrackTab(QWidget):
     def _save_detail(self, name):
         rec = self._project_record(name); sig = self._current_sig()
         before_rec = json.loads(json.dumps(rec))
+        selected_status = next(
+            (
+                status for status, button in self._status_buttons.items()
+                if button.isChecked()
+            ),
+            normalize_project_status(rec.get('status'), default='active'),
+        )
+        try:
+            old_status, new_status = set_project_status(
+                rec,
+                selected_status,
+                can_manage=self._can('project.manage'),
+            )
+        except (PermissionError, ValueError) as exc:
+            QMessageBox.warning(
+                self,
+                _m(self._messages, 'title.warning', 'Warning'),
+                str(exc),
+            )
+            return
         old_species = str((rec.get("summary") or {}).get("species") or "")
         now_str = datetime.now().strftime('%d.%m.%Y %H:%M')
         if not rec.get('created_by'): rec['created_by'] = sig; rec['created_at'] = now_str
@@ -1271,7 +1360,9 @@ class ProjectTrackTab(QWidget):
             'contact1_login': self._s_c1.get_login() or '',
             'contact2_login': self._s_c2.get_login() or '',
             'contacts_other_logins': self._s_co.get_logins(),
-            'species': self._s_species.currentText().strip(),
+            'species': str(
+                self._s_species.currentData() or self._s_species.currentText()
+            ).strip(),
             'comment': self._s_comment.toPlainText().strip(),
         }
         new_species = rec["summary"]["species"]
@@ -1337,6 +1428,11 @@ class ProjectTrackTab(QWidget):
             if callable(refresh):
                 refresh(force_discovery=True)
         self._audit_project_action('edit_project', name)
+        if old_status != new_status:
+            self._audit_project_action(
+                'change_project_status',
+                f'{name}: {old_status} -> {new_status}',
+            )
         self._refresh_animals_section(name)
         self._refresh_project_list()
         QMessageBox.information(

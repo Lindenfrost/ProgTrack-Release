@@ -200,7 +200,7 @@
     <li>Keep <code>Plugins</code>, <code>icons</code>, <code>lang</code>, <code>manual</code>, and the active payload script beside <code>Launcher.exe</code>.</li>
     <li>The compiled launcher already contains the required Python runtime; users of the portable bundle do not need to install Python packages.</li>
   </ul>
-  <div class="hint"><strong>Tip:</strong> If the application does not start, check <code>launcher_error.log</code> and <code>launcher_fault.log</code> in the launcher folder.</div>
+  <div class="hint"><strong>Tip:</strong> If the application does not start, check <code>launcher_error.log</code> and <code>launcher_fault.log</code> under <code>ProgTrackData/state/logs</code> in a writable portable installation, or under the installed user-state root.</div>
   
   <h3>2.2 Backend profiles and managed data</h3>
   <p>ProgTrack uses one shared data-access layer with two deployment profiles:</p>
@@ -209,10 +209,12 @@
     <tr><td><strong>Standalone SQLite</strong></td><td>One local workstation or testing. The writable database must stay on local, non-synchronized storage.</td></tr>
     <tr><td><strong>Shared PostgreSQL</strong></td><td>Network and multi-workstation facilities. Users, animals, projects, plugin records, locks and configuration share the same backend.</td></tr>
   </table>
-  <p>Sign in as Lord and open <strong>Settings → Backend</strong> to select the profile used after the next clean restart. Standalone SQLite accepts only a safe file name inside the local application-data database folder. Shared PostgreSQL exposes host, port, database, user, password, SSL mode, timeout, managed document storage and pool-size fields. Use <strong>Test connection</strong> before saving PostgreSQL. The password is stored in the operating-system credential store and never in <code>backend.json</code>. Saving does not transfer data; use the canonical export/import workflow for that purpose. Deployment environment variables retain priority for headless administration.</p>
-  <p>PDFs and other documents are kept in managed storage belonging to the selected backend. The database retains ownership, safe-path and checksum metadata. Installed/read-only application folders use user-profile data directories on Windows and XDG data/config/cache/state roots on Linux.</p>
+  <p>Sign in as Lord and open <strong>Settings → Backend</strong> to select the profile used after the next clean restart. For Standalone SQLite, choose a safe <code>.sqlite3</code> file name and an absolute local folder. Shared PostgreSQL exposes host, port, database, user, password, SSL mode, timeout, managed document storage and pool-size fields. Use <strong>Test connection</strong> before saving PostgreSQL. The password is stored in the operating-system credential store. Saving does not transfer data; use the complete export/import workflow. Deployment environment variables retain priority for headless administration.</p>
+  <p>In a writable portable folder, mutable data lives below <code>ProgTrackData</code>: the default database is <code>database/progtrack.sqlite3</code>, configuration and preferences are under <code>config</code>, uploaded documents and the branding asset are under <code>managed</code>, logs and the Standalone lock are under <code>state</code>, and the default export folder is <code>exports</code>. Installed/read-only application folders use the Windows user-profile or Linux XDG roots instead.</p>
+  <p>The configured backend is the only operational data source. If it is unavailable, startup reports the error and does not switch profiles. The release contains the PostgreSQL client driver, but the server and its credentials must be provided separately; PostgreSQL and Linux deployment checks are separate installation tests.</p>
   <div class="warning"><strong>Do not place Standalone SQLite on a network drive or cloud-synchronized folder.</strong> Do not copy a live database and managed files separately; use the complete interchange/backup workflow.</div>
-  <p>A clean example installation is initialized from the single deterministic, entirely fictional package under <code>Resources/Seed</code>. Legacy JSON files are not imported during backend cutover.</p>
+  <p>Standalone SQLite accepts one writable ProgTrack process. A second instance is refused while its live owner holds <code>state/runtime/standalone.lock</code>; stale local-process locks are reclaimed safely. Reviewed writes in either profile use backend revisions and entity locks. Only a Lord-authorized operation may force-release an entity lock, and a reason is required and audited.</p>
+  <p>A truly empty backend is initialized from the single deterministic, entirely fictional package under <code>Resources/Seed</code>. An existing database remains unchanged.</p>
 
   <h3>2.3 Sample Excel files</h3>
   <p>
@@ -227,7 +229,7 @@
   <h2 id="ui-overview">3. User interface overview</h2>
   <p>The main window is organized as follows:</p>
   <ul>
-    <li><strong>Menu bar</strong> – File, Tools, Settings (Language &amp; Style),
+    <li><strong>Menu bar</strong> – File, Tools, Settings (Language, Conventions, Backend),
       Info (About the Program).</li>
     <li><strong>Left sidebar</strong> – lists available and archived animals,
       provides filters by cycle phase and quick actions (new, edit, import,
@@ -256,7 +258,7 @@
 
   <h3>3.2 Sidebar actions</h3>
   <p>Buttons are context-sensitive: import buttons appear only where the active role and installed plugins can use them. The labels below are the labels from the active language file.</p>
-  <p>Lord, Master, and Manager users configure role order, labels/icons, New/Edit dialog blocks, and per-role <strong>New Animal</strong> visibility under <strong>Settings → Style → Role setup</strong>. The All tab keeps general editing and role correction; it does not show all measurement-import buttons.</p>
+  <p>Lord, Master, and Manager users configure role order, labels/icons, New/Edit dialog blocks, and per-role <strong>New Animal</strong> visibility under <strong>Settings → Conventions → Role setup</strong>. The icon button opens a picker containing every packaged SVG in <code>icons/ui</code>. The All tab keeps general editing and role correction; it does not show all measurement-import buttons.</p>
   <table class="basic"><tr><th>Button</th><th>Use</th></tr>
   <tr><td><strong>➕ New Animal</strong></td><td>Create a new record.</td></tr>
   <tr><td><strong>✏️ Edit</strong></td><td>Open the full editor for the selected animal.</td></tr>
@@ -277,11 +279,11 @@
   <p>Use the sidebar action to create a record. In the All category ProgTrack asks for the role first, then opens the matching editor. Required fields depend on the role; optional ID, project, origin, genotype, parent, housing, and limit fields are shown where relevant.</p>
   <p><strong>➕ New Animal</strong> · <strong>Select Role</strong> · <strong>Save</strong></p>
   <div class="hint">
-    <strong>Animal identity:</strong> ProgTrack identifies each animal by its IPID, built from <code>Name | Species | DD.MM.YYYY</code>. The sidebar still shows the short name for readability, but tooltips, stored JSON data, imports, and exports keep the full IPID. Later changes to name, species, or birth date require manager permission.
+    <strong>Animal identity:</strong> ProgTrack identifies each animal by the immutable IPID <code>Name | Species | DD.MM.YYYY | Origin</code>. After creation, name, species, complete birth date, origin, and IPID cannot be changed by any account, including Lord. Lists use the short name for readability while backend relationships and exact exports retain stable identity.
   </div>
 
   <h3>4.2 Configuring Animal ID conventions</h3>
-  <p>The IPID described above is ProgTrack's internal identity key. The separate public <strong>Animal ID</strong> can follow an institution-specific convention. Lord, Master or Manager users configure it under <strong>Settings → Style → Identity and lifecycle conventions</strong>.</p>
+  <p>The IPID described above is ProgTrack's internal identity key. The separate public <strong>Animal ID</strong> can follow an institution-specific convention. Lord, Master or Manager users configure it under <strong>Settings → Conventions → Identity and lifecycle conventions</strong>.</p>
   <p>Build the Animal ID from as many as five ordered components. Each component may be unused or contain Species, Birth year (YY), Birth year (YYYY), Count per year, Count absolute, Sex or Name. ProgTrack joins the selected components with underscores.</p>
   <table class="basic"><tr><th>Component</th><th>Generated value</th></tr>
     <tr><td><strong>Species</strong></td><td>Lower-case initials from up to the first three words of the registered species.</td></tr>
@@ -290,7 +292,7 @@
     <tr><td><strong>Sex</strong></td><td><code>M</code>, <code>F</code> or <code>U</code>.</td></tr>
     <tr><td><strong>Name</strong></td><td>The animal name converted to an ID-safe token.</td></tr>
   </table>
-  <p>When creating an animal, the ID field previews the result while Name, Species, Birth Date and Sex are entered. Missing preview components appear as <code>XX</code> or <code>XXXX</code>. On Save, ProgTrack assigns the next unused sequence. Convention-generated IDs are recalculated after an authorized identity change while retaining their original sequence; manually overridden IDs remain unchanged.</p>
+  <p>When creating an animal, the ID field previews the result while Name, Species, Birth Date and Sex are entered. Missing preview components appear as <code>XX</code> or <code>XXXX</code>. On Save, ProgTrack assigns the next unused sequence. Convention changes affect new records; an incorrect finalized example identity is deleted and recreated rather than rewritten.</p>
 
   <h3>4.3 Animal roles and category-specific editors</h3>
   <p>The role determines which editor and data tabs are shown. Steroid-specific roles and controls are available only while Steroid Track is enabled.</p>
@@ -402,7 +404,7 @@
   </p>
   <p>
     For a more global configuration, use
-    <strong>Settings → Style</strong> (see section
+    <strong>Settings → Conventions</strong> (see section
     <a href="#language-style">7</a>).
   </p>
 
@@ -440,11 +442,12 @@
     <code>icons/ui/flag_*.svg</code>.
   </p>
 
-  <h3>7.2 Style settings</h3>
+  <h3>7.2 Conventions and appearance</h3>
   <p>
-    Use <strong>Settings → Style</strong> to open the style settings
+    Use <strong>Settings → Conventions</strong> to open the settings
     dialog. Here you can configure:
   </p>
+  <p>The packaged controls in <code>icons/ui</code> use SVG only. Semantic IDs in <code>icons/ui/manifest.json</code> select the artwork and localized tooltip; no PNG fallback is used in that folder. Editable masters are maintained under <code>Q:\GitHub\Graphics\SVG\UI</code>. Root-level PNG files for the splash screen, messages, jobs, and file types are outside this UI rule.</p>
   <ul>
     <li>Main colors for progesterone, weight, PdG and sperm curves.</li>
     <li>Colors for FSH injections and event markers (PGF, embryo transfers,
@@ -460,11 +463,11 @@
   <h2 id="saving-export">8. Saving &amp; exporting</h2>
 
   <h3>8.1 Saving the database</h3>
-  <p>Use <strong>File → Save Database</strong> to persist the current state through the active backend transaction. Standalone and Shared profiles use the same application service; plugins do not write operational JSON beside their code.</p>
+  <p>Use <strong>File → Save Database</strong> to persist the current state through the active backend transaction. Standalone and Shared profiles use the same application service and the configured backend is the sole operational store.</p>
   <div class="hint"><strong>Tip:</strong> Use the complete interchange/backup workflow before bulk operations so database records and managed documents stay together.</div>
 
   <h3>8.2 Institution branding for PDFs</h3>
-  <p>Lord, Master, and Manager users open <strong>Settings → Institution branding</strong>, enter the institution name, choose an optional PNG/JPEG logo, and enable the header. The previewed configuration is stored with the backend. Every generated PDF page receives a compact header; oversized logos are reduced while preserving their aspect ratio. A missing logo produces a valid name-only header.</p>
+  <p>Lord, Master, and Manager users open <strong>Settings → Conventions → Institution branding</strong>, enter the institution name, choose an optional PNG/JPEG logo, and enable the header. The previewed configuration is stored with the backend. Every supported PDF page receives a compact, right-aligned header; oversized logos are reduced while preserving their aspect ratio. A missing logo produces a valid name-only header.</p>
 
   <h3>8.3 Excel export</h3>
   <p>
@@ -477,7 +480,7 @@
   </ul>
   <p>Animal exports include the readable animal name and the <code>IPID</code> (Internal ProgTrack ID). Use the IPID for exact joins or re-imports, and the short name for human review.</p>
 
-  <h3>8.3 PDF export (with Animal Reports plugin)</h3>
+  <h3>8.4 PDF export (with Animal Reports plugin)</h3>
   <p>
     If the Animal Reports plugin is installed, the menu item
     <strong>File → Export Reports (.pdf)</strong> becomes available. It uses the
@@ -490,21 +493,21 @@
   </ul>
 
   <h2 id="plugins">9. Plugins and modules</h2>
-  <p>Plugin availability is detected on startup. Checkable entries in the Tools menu show or hide main tabs; window-style tools open a separate dialog or window. Hidden tabs keep their data on disk.</p>
+  <p>Plugin availability is checked during startup. Checkable entries in the Tools menu show or hide main tabs; window-style tools open a separate dialog or window. A plugin that fails to import or initialize remains unavailable and writes the reason to the technical log. Restore the complete bundled <code>_internal</code> runtime rather than installing ad-hoc packages beside a frozen release.</p>
   <table class="basic"><tr><th>Menu item</th><th>Kind</th><th>Current behavior and use</th></tr>
   <tr><td><strong>Steroid Track</strong></td><td>Feature gate</td><td>Steroid Track is a real plugin without its own window. It enables female phase filters, blood progesterone import, urine PdG import, sperm import, hormone/event plot controls, sperm plot controls, and the PdG converter entry.</td></tr>
   <tr><td><strong>PdG→Progesterone Converter</strong></td><td>Dialog</td><td>Fits animal-specific PdG to progesterone models from paired same-day PdG and blood progesterone measurements; fitted models enable Unified Prog. and combined plots.</td></tr>
   <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Provides login, guest mode, users, jobs, permissions, sessions, and audit logs. Account roles are lord, master, AWO, user, and guest; job bundles refine practical permissions.</td></tr>
-  <tr><td><strong>Project Track</strong></td><td>Sidebar + optional tab</td><td>Adds association-scoped project/species filters, project history, IACUC/AWO assignment, experiment state, documents/SOPs, and project management.</td></tr>
-  <tr><td><strong>Medi Track</strong></td><td>Main tab</td><td>Shows medical history, active diagnoses, notes, treatments, observations, experiment/lifecycle events and documents; exports PDF or XLSX with optional signatures. XLSX can copy linked files into a sibling document folder.</td></tr>
+  <tr><td><strong>Project Track</strong></td><td>Sidebar + optional tab</td><td>Adds association-scoped project/species filters, project history, IACUC/AWO assignment, experiment state, documents/SOPs, and project management. Each project has one localized Draft, Active, or Closed state; the list shows Draft italic, Active bold, and Closed in normal text. Closing does not archive it or remove assignments; lifecycle changes are permission-checked and audited.</td></tr>
+  <tr><td><strong>Medi Track</strong></td><td>Main tab</td><td>Shows medical history, active diagnoses, notes, treatments, observations, experiment/lifecycle events and documents; exports PDF or XLSX with optional signatures. Multi-animal File-menu export shows total/completed/current progress, accepts cancellation between atomic animal outputs, keeps valid completed files, and summarizes completion, cancellation, partial errors, and filenames.</td></tr>
   <tr><td><strong>Animal Reports</strong></td><td>Main tab</td><td>Provides monthly editable/lockable report lines. Unlocking preserves text until the tab is left and reopened. PDF/XLSX export can omit the entire Signatures column; XLSX stores plain text without rich-text tags.</td></tr>
   <tr><td><strong>Flow Track</strong></td><td>Main tab</td><td>Visualizes embryo flow between egg donors, sperm donors, surrogates, and freezer, with metrics, manual edits, settings, refresh from ProgTrack, and export.</td></tr>
   <tr><td><strong>Heritage Track</strong></td><td>Main tab</td><td>Shows pedigree and relationship graphs, parent editing, Heritage-only placeholders, genotype/fill-color annotations, legend, grid, and settings. Vertical placement can use the default compact partner-normalized pedigree or an optional chronological birth-month axis with adaptive month ticks. A separate label-detail radio group shows nothing, inbreeding F (default), birth date, or the public animal ID below each name.</td></tr>
-<tr><td><strong>Cage Track</strong></td><td>Main tab</td><td>Manages the four-level Building → Unit → Room → Cage hierarchy, real and dummy animals, unassigned occupants, movement history, colors, and PDF export. Buildings, units, rooms, and individual cages can each be selected as an inspection scope; a parent scope includes its eligible occupied descendants.</td></tr>
+<tr><td><strong>Cage Track</strong></td><td>Main tab</td><td>Manages the four-level Building → Unit → Room → Cage hierarchy, real and dummy animals, unassigned occupants, movement history, colors, and PDF export. Buildings, units, rooms, and individual cages can each be selected as an inspection scope; a parent scope includes its eligible occupied descendants. A multi-animal main-list selection opens one deterministic building and highlights all selected occupants there. Inspection headers sort in both directions; a signed-in user's column/direction preference is restored, while guests use the default.</td></tr>
   <tr><td><strong>Sample Track</strong></td><td>Window</td><td>Tracks organ samples and time-series samples, uses localized tissue/type lookups, receives blood/PdG import notifications, and exports PDF.</td></tr>
   <tr><td><strong>Embryo Track</strong></td><td>Dialog</td><td>Predicts marmoset gestation day from COL/TTL ultrasound measurements, embryo count, and measurement date; reference data and diagnostics are available.</td></tr>
   <tr><td><strong>OP-Scheduler</strong></td><td>Dialog</td><td>Schedules surgeries and embryo transfers using current donor/surrogate animals, date rules, recovery settings, manual events, blocked dates, and schedule export.</td></tr>
-  <tr><td><strong>Network Track</strong></td><td>Window</td><td>Provides local file-based team chat with polling, optional bring-to-front behavior, and notification sound when Qt Multimedia is available.</td></tr>
+  <tr><td><strong>Network Track</strong></td><td>Window</td><td>Provides backend-backed team chat with polling, optional bring-to-front behavior, and notification sound when Qt Multimedia is available.</td></tr>
   </table>
 
   <h3>9.1 Account roles and job permissions</h3>
@@ -520,10 +523,10 @@
   <h3>9.2 Working across modules</h3>
   <p>Use the same controlled animal identity throughout ProgTrack. The following sequence keeps role tabs, projects, medical records, reports and housing information consistent:</p>
   <ol>
-    <li><strong>Configure animal roles:</strong> Lord, Master or Manager users open <strong>Settings → Style → Role setup</strong> to choose active tabs, order, labels/icons, New/Edit blocks and per-role New Animal visibility. Identity, housing, weight and parent blocks remain required.</li>
-    <li><strong>Assign project scope:</strong> In Project Track, associate users and animals with the project and record IACUC/AWO assignments, documents, SOPs and experiment state. Project-role tabs show associated animals for ordinary users; the <strong>All</strong> animal tab remains the complete overview.</li>
-    <li><strong>Maintain identity and history:</strong> Use the animal editor for controlled identity, parent, origin, housing and lifecycle changes. Related experiment and medical events then remain available to Medi Track and Animal Reports where applicable.</li>
-    <li><strong>Inspect housing:</strong> In Cage Track select a Building, Unit, Room or Cage and open Inspection. A higher-level inspection includes its eligible occupied child structures and records the responsible inspector.</li>
+    <li><strong>Configure animal roles:</strong> Lord, Master or Manager users open <strong>Settings → Conventions → Role setup</strong> to choose active tabs, order, labels/SVG icons, New/Edit blocks and per-role New Animal visibility. Identity, housing, weight and parent blocks remain required.</li>
+    <li><strong>Assign project scope:</strong> In Project Track, associate users and animals, record IACUC/AWO assignments, documents, SOPs and experiment state, then choose Draft, Active or Closed. Closing a project leaves assignments and records intact.</li>
+    <li><strong>Maintain history:</strong> Create the immutable animal identity once, then use the animal editor for permitted parent, housing and lifecycle changes. Related experiment and medical events remain available to Medi Track and Animal Reports where applicable.</li>
+    <li><strong>Inspect housing:</strong> In Cage Track select a Building, Unit, Room or Cage and open Inspection. A higher-level inspection includes its eligible occupied descendants. Click a log header to sort and click again to reverse.</li>
   </ol>
   <div class="hint"><strong>Note:</strong> Missing tabs, animals or actions usually indicate the current account's project scope or permissions. A Lord or Master can review the Effective column in Manage Users.</div>
 
@@ -533,7 +536,9 @@
   <p>
     If a plugin menu entry is disabled or displays a message such as
     "plugin is not installed", check that the corresponding subfolder exists
-    under <code>Plugins</code> and contains the expected files.
+    under <code>Plugins</code> and contains the expected files. Then review the
+    technical log for the import or initialization error and verify that the
+    complete packaged <code>_internal</code> runtime is present.
   </p>
 
   <h3>10.2 Excel import errors</h3>

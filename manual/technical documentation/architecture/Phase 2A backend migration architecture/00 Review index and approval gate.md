@@ -1,6 +1,6 @@
 # Issue #48 — Phase 2A review package
 
-Status: **revised after critical review; not approved; Phase 2B remains blocked**
+Status: **approved and archived on 2026-07-28**
 
 GitHub issue: https://github.com/Lindenfrost/ProgTrack-Release/issues/48  
 Frozen source audit: 2026-07-23  
@@ -11,11 +11,11 @@ Inspected branch/commit: `Phase-0.1.2` /
 
 ## Scope guard
 
-This package is discovery and architecture work only. No ProgTrack source,
-plugin, runtime data, example data, schema, language, manual, README, managed
-payload, test, or package has been changed. No backend, adapter, migration,
-runtime-path service, lock, data correction, or measurement-import change has
-been implemented.
+This package records discovery and architecture work performed before Phase 2B.
+At the time of this frozen audit, no ProgTrack source, plugin, runtime data,
+example data, schema, language, manual, README, managed payload, test, or
+package was changed and no backend implementation had begun. For current
+behavior, use the Phase 2B runtime contract and localized workflow guides.
 
 After approval, the frozen target architecture is copied into versioned
 technical documentation under

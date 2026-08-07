@@ -99,7 +99,7 @@ account is `123456`; change these passwords before any sensitive or shared use.
 
 - `ProgTrack.v.0.2.1.py` — editable main application script;
 - `Plugins/` — the core and optional plugin modules;
-- `icons/` — splash, file, language, and UI SVG assets;
+- `icons/` — splash, file-type, job, language, and UI assets;
 - `lang/` — English, German, Italian, and Russian message catalogs;
 - `manual/` — localized user guides and technical documentation;
 - `Resources/ExampleFiles/` — current measurement import examples;
@@ -148,6 +148,19 @@ Mutable runtime data is kept below `ProgTrackData/` in a writable portable
 folder, or below the operating-system user data/config/cache/state roots when
 the application folder is read-only. It is not stored in the source payload.
 
+In the default portable profile the important writable locations are:
+
+| Path | Purpose |
+| --- | --- |
+| `ProgTrackData/database/progtrack.sqlite3` | Standalone SQLite database. |
+| `ProgTrackData/config/backend.json` | Non-secret backend profile selection and connection settings. |
+| `ProgTrackData/managed/documents/` | Uploaded and generated managed document payloads. |
+| `ProgTrackData/managed/config-assets/` | Managed configuration assets such as the institution logo. |
+| `ProgTrackData/state/runtime/standalone.lock` | Exclusive Standalone process lock. |
+| `ProgTrackData/state/logs/` | Application and launcher diagnostics. |
+| `ProgTrackData/exports/` | Default export destination. |
+| `ProgTrackData/config/preferences/` | Per-user presentation preferences. |
+
 ## Backend profiles and data ownership
 
 Both profiles use the same services, validation, locks, audit repository, and
@@ -160,11 +173,15 @@ interchange format:
   desktop application uses Psycopg 3 and a bounded connection pool.
 
 Only a Lord account can open `Settings -> Backend`. The dialog can select the
-profile and edit the SQLite database name/path or the PostgreSQL host, port,
+profile and edit the SQLite database name/local folder or the PostgreSQL host, port,
 database, user, TLS, timeout, managed-storage, and pool settings. PostgreSQL
 passwords are kept in the operating-system credential store. Connection
 testing is non-mutating. Saving selects the profile
-for the next clean restart; it does not silently migrate data.
+for the next clean restart; it does not transfer data. If the selected backend
+cannot be opened, startup fails with a diagnostic instead of silently using
+the other profile. The release contains the PostgreSQL client driver, not a
+PostgreSQL server; server provisioning and PostgreSQL/Linux deployment checks
+are separate installation tests.
 
 The selected backend is authoritative for animals, users, projects, role/job
 configuration, measurements, reproductive events, medical history, reports,
@@ -172,7 +189,8 @@ housing, samples, plugin records, sessions, locks, and audit events. PDFs and
 other uploaded documents are stored in backend-managed storage; database rows
 hold ownership, safe paths, and checksums.
 
-An empty backend imports the fictional `progtrack_seed.ptdb` automatically.
+A truly empty backend imports the fictional `progtrack_seed.ptdb`
+automatically. An existing database is left unchanged.
 
 ## Animal identity and ID conventions
 
@@ -187,7 +205,7 @@ An animal's immutable identity consists of:
 Once an animal has been created, Lord, Master, Manager, and all other users are
 blocked from changing these identity components. An incorrect example record is
 deleted and recreated. Other IDs (sample IDs, project IDs, cage IDs, and
-facility-specific identifiers) is institution-tagged so data exchanged
+facility-specific identifiers) are institution-tagged so data exchanged
 between facilities cannot silently collide.
 
 Measurement imports keep **both** identifiers:
@@ -204,12 +222,14 @@ first, after which its measurements can be imported.
 ## Animal workflows and roles
 
 Roles control the fields, event blocks, limits, and role-tab actions shown in
-the application. The role builder is available under `Settings -> Style ->
+the application. The role builder is available under `Settings -> Conventions ->
 Role setup` to authorized Lord, Master, and Manager users. It controls active
-roles, labels, ordering, icons, dialog block presets, and whether the `New
+roles, labels, ordering, dialog block presets, and whether the `New
 Animal` action is available in each role tab. The `All` tab remains the general
 overview and keeps the role-edit action; measurement-import buttons are shown
-only in role tabs whose configured blocks support them.
+only in role tabs whose configured blocks support them. Its icon picker shows
+every packaged SVG in `icons/ui`; custom role labels are facility-owned text
+and do not require additions to the shipped language catalogs.
 
 <table>
   <thead><tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">UI icon</th><th>Current role</th><th>Typical use</th></tr></thead>
@@ -281,15 +301,15 @@ and some provide feature gates or backend services.
 | Steroid Track | Feature gate | Steroid roles, hormone imports, sperm imports, reproductive events, phase filters, and PdG integration. |
 | Master Track | Administration | Login, users, jobs, permissions, sessions, locks, and audit logs. |
 | Animal Reports | Main tab | Monthly reports, locked/manual lines, signatures, and PDF/XLSX export. |
-| Medi Track | Main tab | Medical history, status filters, treatment/observation records, documents, and exports. |
+| Medi Track | Main tab | Medical history, status filters, treatment/observation records, documents, and PDF/XLSX exports. Multi-animal File-menu export shows determinate progress, supports cancellation between atomic outputs, and reports exactly which valid files remain. |
 | Surgery Planner | Dialog | Surgery and embryo-transfer planning, recovery rules, blocked days, and export. |
 | Embryo Tracker | Dialog | Gestation-day prediction from ultrasound measurements. |
 | PdG to Progesterone Converter | Dialog | Per-animal PdG-to-progesterone model fitting. |
 | Flow Track | Main tab | Embryo flow between donors, surrogates, and freezer inventory. |
 | Heritage Track | Main tab | Pedigree graphs, family nodes, kinship, inbreeding, genotype annotations, and complex-family routing. |
-| Cage Track | Main tab | Building → Unit → Room → Cage hierarchy, placement, movements, inspections, and PDF export. |
+| Cage Track | Main tab | Building → Unit → Room → Cage hierarchy, placement, movements, inspections, and PDF export. It projects the complete animal-list selection into one deterministic building, highlights matching occupants, and remembers each signed-in user's inspection-table sort. |
 | Sample Track | Window | Organ/biological samples, aliquots, linked files, filters, and PDF export. |
-| Projects Track | Sidebar and tab | Project/species visibility, project history, IACUC/AWO assignment, documents/SOPs, and experiment state. |
+| Projects Track | Sidebar and tab | Project/species visibility, project history, IACUC/AWO assignment, documents/SOPs, and experiment state. Each project has a localized `Draft`, `Active`, or `Closed` lifecycle state; lifecycle and archive state are independent. |
 | Network Track | Window | Backend-backed team chat with polling and optional notification sounds. |
 
 ## Users, account roles, and job bundles
@@ -342,18 +362,24 @@ The interface message catalogs are:
   </tbody>
 </table>
 
-Use `Settings -> Language` to change language and `Settings -> Style` to
+Use `Settings -> Language` to change language and `Settings -> Conventions` to
 configure measurement/event colors, markers, line styles, role labels, and
 role-dialog blocks.
 
 `icons/ui/manifest.json` is the canonical semantic UI icon registry. The
 application and this README use the same SVG filenames; the UI does not rely
-on emoji or PNG fallbacks for these controls. File-type and splash graphics
-outside `icons/ui/` may remain PNG assets where they are not UI controls.
+on emoji or PNG fallbacks for these controls. Semantic identifiers provide the
+localized tooltip text while allowing several actions to share one canonical
+SVG. Editable masters are maintained under `Q:\GitHub\Graphics\SVG\UI`.
+Qt keeps the master colours on light palettes and adapts the canonical outline
+to the active palette when dark surfaces would otherwise hide icon details.
+This SVG-only rule applies to `icons/ui`; splash, message, job, and file-type
+graphics at the root of `icons/` may remain PNG assets.
 
 ## PDF branding and exports
 
-Lord, Master, and Manager users can open `Settings -> Institution branding` and
+Lord, Master, and Manager users can open `Settings -> Conventions ->
+Institution branding` and
 store an institution name plus an optional PNG/JPEG logo in backend-managed
 storage. Branding is applied to every supported PDF export, right-aligned in a
 bounded header area. The logo keeps its aspect ratio and is automatically
@@ -371,17 +397,20 @@ supports them.
 
 Use the complete backend interchange package (`.ptdb`) for transfer and backup.
 It contains validated database records plus managed document payloads and
-checksums. It is the common path for moving a standalone SQLite installation to
-PostgreSQL later.
+checksums. The same package is accepted by an empty Standalone SQLite or Shared
+PostgreSQL backend.
 
 Do not copy a live SQLite file or managed folder while ProgTrack is running.
-Do not reintroduce legacy JSON files as a fallback. An import preview validates
-the package before any target write; the target backend must be empty unless a
-future, explicitly authorized merge workflow says otherwise.
+The configured backend is the only operational data source and there is no
+automatic profile fallback. An import preview validates the package before any
+target write; the target backend must be empty unless a future, explicitly
+authorized merge workflow says otherwise.
 
-Entity locks are backend records and apply to both SQLite and PostgreSQL. A
-Lord can force-release a lock with a reason; ordinary users cannot silently
-overwrite another user's active edit.
+Standalone SQLite also uses one local process lock: a second writable ProgTrack
+instance is refused until the live owner closes, while stale local-process
+locks are reclaimed safely. Entity locks and optimistic revisions apply to
+reviewed writes in both profiles. Only the Lord-authorized service can
+force-release an entity lock, and it requires an audited reason.
 
 ## Troubleshooting
 
@@ -396,7 +425,11 @@ usually causes missing Qt, SciPy, Excel, PDF, or PostgreSQL-library errors.
 ### A plugin is missing
 
 Check that its folder under `Plugins/` contains the expected Python modules and
-`manifest.json`, and review the technical log for import errors.
+`manifest.json`, and review the technical log for import or initialization
+errors. A plugin which cannot be loaded remains unavailable; ProgTrack does not
+substitute another data store. In a packaged installation, restore the complete
+`_internal/` frozen runtime instead of installing individual libraries beside
+the application.
 
 ### Excel import fails
 
@@ -441,7 +474,7 @@ runtime smoke tests before release packaging.
 | `0.2.1` / Phase 2B | Backend services and adapters, deterministic seed, runtime paths, immutable identities, locks, interchange packages, SVG icon registry, PDF branding, and launcher/runtime hardening. |
 | `0.2.0` / Phase 2A | Read-only backend migration audit, canonical data dictionary, storage matrix, interchange contract, and approved PostgreSQL/SQLite architecture. |
 | `0.1.2` / Phase 1 | Role tabs, Cage Track, Heritage Track, imports, reports, medical history, and the first portable workflow. Superseded by the backend-based 0.2.x architecture. |
-| `0.1.1` | Historical stabilization milestone before the backend cutover. |
+| `0.1.1` | Historical stabilization milestone before the shared backend architecture. |
 | `0.1.0 RC` | Historical initial public testing package. |
 
 ## License
