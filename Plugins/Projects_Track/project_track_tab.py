@@ -48,6 +48,7 @@ logger = logging.getLogger(__name__)
 _DOCS_SUBDIR   = "documents"
 _SOP_SUBDIR    = "sop"
 _ALL_DOC_FILTER = "Documents (*.jpg *.jpeg *.png *.pdf *.txt *.md *.xls *.xlsx *.csv)"
+_PROJECT_LIST_PANEL_WIDTH = 150
 
 def _clean_text(value) -> str:
     if value is None:
@@ -445,10 +446,13 @@ class ProjectTrackTab(QWidget):
         font.setBold(status == 'active')
         item.setFont(font)
         status_text = self._status_text(status)
-        item.setToolTip(
+        status_tooltip = (
             _m(self._messages, 'project.status.tooltip', 'Status: {status}')
             .replace('{status}', status_text)
         )
+        # The compact project panel intentionally elides long list entries.
+        # Keep the complete project name available without expanding the panel.
+        item.setToolTip(f'{name}\n{status_tooltip}')
         item.setData(
             Qt.ItemDataRole.AccessibleTextRole,
             f'{name} — {status_text}',
@@ -481,49 +485,53 @@ class ProjectTrackTab(QWidget):
         # Left
         left_w=QWidget(); left_v=QVBoxLayout(left_w); left_v.setContentsMargins(4,4,0,0)
         left_v.setSpacing(5)
-        hdr=QLabel(_m(self._messages,"project.tab.list_header","Projects"))
-        hdr.setStyleSheet("font-weight:bold;"); left_v.addWidget(hdr)
-        self._new_project_btn = QPushButton(_m(self._messages, "project.tab.new_btn", "New Project"))
+        hdr_row = QHBoxLayout()
+        hdr_row.setContentsMargins(0, 0, 0, 0)
+        hdr_row.setSpacing(4)
+        self._list_header=QLabel()
+        self._list_header.setStyleSheet("font-weight:bold;")
+        hdr_row.addWidget(self._list_header)
+        hdr_row.addStretch(1)
+        self._refresh_project_btn = QPushButton()
+        self._refresh_project_btn.setFixedSize(30, 30)
+        apply_icon(self._refresh_project_btn, "action.refresh", fallback="Refresh")
+        self._refresh_project_btn.clicked.connect(self._on_refresh_clicked)
+        hdr_row.addWidget(self._refresh_project_btn)
+        left_v.addLayout(hdr_row)
+        self._new_project_btn = QPushButton()
         apply_icon(self._new_project_btn, "action.add", fallback="New Project")
         self._new_project_btn.setEnabled(self._can('project.create'))
         self._new_project_btn.clicked.connect(self._on_new_project)
-        top_btn_row = QHBoxLayout()
-        top_btn_row.setContentsMargins(0, 0, 0, 0)
-        top_btn_row.setSpacing(4)
-        self._refresh_project_btn = QPushButton()
-        apply_icon(self._refresh_project_btn, "action.refresh", fallback="Refresh")
-        self._refresh_project_btn.setToolTip(_m(self._messages, "projects.tooltip.refresh", "Refresh project list"))
-        self._refresh_project_btn.clicked.connect(self._on_refresh_clicked)
-        top_btn_row.addWidget(self._new_project_btn, 5)
-        top_btn_row.addWidget(self._refresh_project_btn, 1)
-        left_v.addLayout(top_btn_row)
-        self._list=QListWidget(); self._list.currentRowChanged.connect(self._on_list_selection)
+        left_v.addWidget(self._new_project_btn)
+        self._list=QListWidget()
+        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._list.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self._list.currentRowChanged.connect(self._on_list_selection)
         left_v.addWidget(self._list,1)
         left_v.addSpacing(2)
-        self._archive_btn = QPushButton(_m(self._messages, "button.sidebar.archive", "Archive"))
+        self._archive_btn = QPushButton()
         apply_icon(self._archive_btn, "action.archive", fallback="Archive")
         self._archive_btn.setEnabled(False); self._archive_btn.clicked.connect(self._on_archive)
         left_v.addWidget(self._archive_btn)
-        self._show_archived_chk=QCheckBox(_m(self._messages,"project.tab.show_archived","Show archived"))
+        self._show_archived_chk=QCheckBox()
         self._show_archived_chk.toggled.connect(self._refresh_project_list); left_v.addWidget(self._show_archived_chk)
-        arch_row_h = QHBoxLayout()
-        arch_row_h.setContentsMargins(0, 0, 0, 0); arch_row_h.setSpacing(2)
-        self._restore_btn = QPushButton(_m(self._messages, "button.sidebar.restore", "Restore"))
+        self._restore_btn = QPushButton()
         apply_icon(self._restore_btn, "action.restore", fallback="Restore")
         self._restore_btn.setEnabled(False); self._restore_btn.clicked.connect(self._on_restore_project)
-        self._delete_btn = QPushButton(_m(self._messages, "button.sidebar.delete", "Delete"))
+        self._delete_btn = QPushButton()
         apply_icon(self._delete_btn, "action.delete", fallback="Delete")
         self._delete_btn.setEnabled(False); self._delete_btn.clicked.connect(self._on_delete_project)
-        arch_row_h.addWidget(self._restore_btn); arch_row_h.addWidget(self._delete_btn)
-        left_v.addLayout(arch_row_h)
-        left_w.setMinimumWidth(280); left_w.setMaximumWidth(280); splitter.addWidget(left_w)
+        left_v.addWidget(self._restore_btn)
+        left_v.addWidget(self._delete_btn)
+        self._update_left_panel_texts()
+        left_w.setFixedWidth(_PROJECT_LIST_PANEL_WIDTH); splitter.addWidget(left_w)
         # Right
         right_scroll=QScrollArea(); right_scroll.setWidgetResizable(True)
         right_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._right_w=QWidget(); self._right_v=QVBoxLayout(self._right_w)
         self._right_v.setContentsMargins(8,8,8,8); self._right_v.setSpacing(6)
         self._right_v.addStretch(); right_scroll.setWidget(self._right_w)
-        splitter.addWidget(right_scroll); splitter.setSizes([220,600])
+        splitter.addWidget(right_scroll); splitter.setSizes([_PROJECT_LIST_PANEL_WIDTH,650])
         splitter.setStretchFactor(0,0); splitter.setStretchFactor(1,1)
         main_h.addWidget(splitter); self._splitter=splitter
         self._refresh_project_list()
@@ -1448,10 +1456,55 @@ class ProjectTrackTab(QWidget):
 
     def update_language(self, messages):
         self._messages=messages
-        if hasattr(self, '_refresh_project_btn'):
-            self._refresh_project_btn.setToolTip(_m(self._messages, "projects.tooltip.refresh", "Refresh project list"))
+        self._update_left_panel_texts()
         self._refresh_project_list()
         if self._current_project: self._build_detail(self._current_project)
+
+    def _update_left_panel_texts(self):
+        """Apply compact labels while preserving complete localized action text."""
+        specs = (
+            (
+                self._new_project_btn,
+                "project.tab.new_btn.compact", "New",
+                "project.tab.new_btn", "New Project",
+            ),
+            (
+                self._archive_btn,
+                "project.tab.archive_btn.compact", "Archive",
+                "button.sidebar.archive", "Archive",
+            ),
+            (
+                self._restore_btn,
+                "project.tab.restore_btn.compact", "Restore",
+                "button.sidebar.restore", "Restore",
+            ),
+            (
+                self._delete_btn,
+                "project.tab.delete_btn.compact", "Delete",
+                "button.sidebar.delete", "Delete",
+            ),
+        )
+        self._list_header.setText(
+            _m(self._messages, "project.tab.list_header", "Projects")
+        )
+        for button, compact_key, compact_fallback, full_key, full_fallback in specs:
+            full_text = _m(self._messages, full_key, full_fallback)
+            button.setText(_m(self._messages, compact_key, compact_fallback))
+            button.setToolTip(full_text)
+            button.setAccessibleName(full_text)
+        archived_text = _m(
+            self._messages, "project.tab.show_archived", "Show archived"
+        )
+        self._show_archived_chk.setText(
+            _m(self._messages, "project.tab.show_archived.compact", "Archived")
+        )
+        self._show_archived_chk.setToolTip(archived_text)
+        self._show_archived_chk.setAccessibleName(archived_text)
+        refresh_text = _m(
+            self._messages, "projects.tooltip.refresh", "Refresh project list"
+        )
+        self._refresh_project_btn.setToolTip(refresh_text)
+        self._refresh_project_btn.setAccessibleName(refresh_text)
 
     def on_user_login(self):
         """Refresh UI permissions when user logs in or out."""

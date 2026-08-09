@@ -25,6 +25,15 @@ DISPLAY_SCALE = 1.5
 CANONICAL_OUTLINE = QColor("#25364a")
 CANONICAL_LIGHT_FILL = QColor("#f7fafc")
 MIN_OUTLINE_CONTRAST = 3.0
+LEGACY_ROLE_ICON_ALIASES = {
+    "\u2640": "role.female",
+    "\u2642": "role.male",
+    "\U0001f476": "role.offspring",
+    "\U0001f43e": "role.partner",
+    "\u26a4": "role.breeding",
+    "\U0001f4a1": "role.experimental",
+}
+
 
 
 @lru_cache(maxsize=1)
@@ -137,14 +146,36 @@ def _rendered_icon(filename: str, outline: str) -> QIcon:
     return resolved
 
 
+def canonical_icon_value(value: object) -> str:
+    raw = str(value or "").strip()
+    return LEGACY_ROLE_ICON_ALIASES.get(raw, raw)
+
+
+def resolve_icon_path(icon_value: object) -> Path | None:
+    """Resolve a semantic ID or safe SVG value within the UI asset root."""
+    value = canonical_icon_value(icon_value)
+    entry = manifest().get(value, {})
+    filename = str(entry.get("file", "")).strip() if isinstance(entry, dict) else ""
+    if not filename:
+        candidate = value[4:].strip() if value.startswith("svg:") else value
+        if Path(candidate).name != candidate or Path(candidate).suffix.casefold() != ".svg":
+            return None
+        filename = candidate
+    path = ICON_ROOT / Path(filename).name
+    if not path.is_file() or path.suffix.casefold() != ".svg":
+        return None
+    return path
+
+
 def icon(semantic_id: str, *, palette: QPalette | None = None) -> QIcon:
-    entry = manifest().get(semantic_id, {})
-    filename = str(entry.get("file", ""))
+    path = resolve_icon_path(semantic_id)
+    filename = path.name if path is not None else ""
     return _rendered_icon(filename, _adaptive_outline(palette))
 
 
 def fallback_text(semantic_id: str, default: str = "") -> str:
-    return str(manifest().get(semantic_id, {}).get("fallback", default))
+    value = canonical_icon_value(semantic_id)
+    return str(manifest().get(value, {}).get("fallback", default))
 
 
 def apply_icon(widget: Any, semantic_id: str, *, fallback: str = "") -> bool:

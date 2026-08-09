@@ -140,6 +140,9 @@ class PedigreeRouter:
         # axes become narrower.  Keep the default neutral for standalone
         # router users; the widget updates this factor before planning.
         self.label_width_scale = 1.0
+        # Highest conflict-free value in the current-seed terminal-sibling
+        # sweep; it protects compact focused branches without forcing knots.
+        self.focused_branch_weight = 512.0
 
     def plan(
         self,
@@ -568,6 +571,36 @@ class PedigreeRouter:
                         default=0.0,
                     ) <= 1e-6:
                         break
+                if prefer_descendant_order and focus_nodes:
+                    node_weights = self._compact_focused_terminal_sibling_fans(
+                        adjusted,
+                        families,
+                        labels,
+                        set(focus_nodes),
+                        partner_blocks,
+                    )
+                    if node_weights:
+                        # A family projection can reveal a collision that was
+                        # not present in its input seed. Rediscover obstacles
+                        # after each projection, with a bounded interactive
+                        # cost. Five passes cover the current dense fixtures.
+                        for _round in range(5):
+                            before = {
+                                node: point[0] for node, point in adjusted.items()
+                            }
+                            self._solve_horizontal_constraints(
+                                adjusted,
+                                families,
+                                labels,
+                                show_inbreeding,
+                                chronological=False,
+                                node_weights=node_weights,
+                            )
+                            if max(
+                                abs(adjusted[node][0] - before[node])
+                                for node in adjusted
+                            ) <= 1e-6:
+                                break
                 self._compact_disconnected_family_components(
                     adjusted,
                     families,
@@ -926,7 +959,182 @@ class PedigreeRouter:
                     positions[node] = (cursor + (node_width / 2.0), positions[node][1])
                     cursor += node_width
 
+
         return block_by_node
+    def _compact_focused_terminal_sibling_fans(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        focus_nodes: Set[str],
+        partner_blocks: Mapping[str, Set[str]],
+    ) -> Dict[str, float]:
+        """Compact one continuing branch beside terminal siblings.
+
+        A strict sibling barycentre is essential for an unambiguous family
+        knot.  It can nevertheless create a very wide tree when one child
+        continues through a partner and descendants while its siblings are
+        leaves: the continuing branch is pushed outward and the leaves must
+        compensate on the opposite side.  In a focused view we can use the
+        otherwise empty vertical shoulder above those leaves.  The complete
+        continuing descendant block is translated toward its origin and
+        lifted slightly; leaf siblings form a deterministic diagonal fan.
+        Their X values are solved analytically, so the child mean remains the
+        exact parent midpoint before the general constraint projection runs.
+        """
+
+        if not focus_nodes:
+            return {}
+
+        node_weights: Dict[str, float] = {}
+
+        outgoing: Dict[str, List[str]] = {node: [] for node in positions}
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            visible_children = [
+                child for child in self._children(family) if child in positions
+            ]
+            if not visible_children:
+                continue
+            for parent in self._parents(family):
+                if parent in positions:
+                    outgoing.setdefault(parent, []).append(family_id)
+
+        def is_continuing(node: str) -> bool:
+            return any(
+                any(
+                    child in positions
+                    for child in self._children(families[family_id])
+                )
+                for family_id in outgoing.get(node, [])
+            )
+
+        changed = False
+        claimed: Set[str] = set()
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            parents = [
+                parent for parent in self._parents(family) if parent in positions
+            ]
+            children = [
+                child for child in self._children(family) if child in positions
+            ]
+            if len(parents) != 2 or len(children) < 3:
+                continue
+
+            continuing = [child for child in children if is_continuing(child)]
+            terminal = [child for child in children if not is_continuing(child)]
+            if len(continuing) != 1 or len(terminal) < 2:
+                continue
+            trunk = continuing[0]
+            if trunk not in focus_nodes or any(node in focus_nodes for node in terminal):
+                continue
+
+            moving = set(partner_blocks.get(trunk, {trunk})) | {trunk}
+            # Expand only downwards from the continuing child.  Origin
+            # ancestors stay fixed, while mates and all descendants move as
+            # one visual subtree.
+            expanded = True
+            while expanded:
+                expanded = False
+                for descendant_family in families.values():
+                    descendant_parents = [
+                        parent
+                        for parent in self._parents(descendant_family)
+                        if parent in positions
+                    ]
+                    if not set(descendant_parents).intersection(moving):
+                        continue
+                    additions = set(descendant_parents)
+                    additions.update(
+                        child
+                        for child in self._children(descendant_family)
+                        if child in positions
+                    )
+                    if not additions.issubset(moving):
+                        moving.update(additions)
+                        expanded = True
+
+            fixed_family = set(parents) | set(terminal)
+            if moving.intersection(fixed_family) or moving.intersection(claimed):
+                continue
+
+            parent_center = sum(positions[parent][0] for parent in parents) / 2.0
+            trunk_x, trunk_y = positions[trunk]
+            branch_center = sum(positions[node][0] for node in moving) / len(moving)
+            direction_source = trunk_x - parent_center
+            if abs(direction_source) <= _EPSILON:
+                direction_source = branch_center - parent_center
+            side = 1.0 if direction_source >= 0.0 else -1.0
+
+            block = set(partner_blocks.get(trunk, {trunk})) | {trunk}
+            block_width = 0.0
+            if block:
+                block_width = (
+                    max(
+                        positions[node][0]
+                        + self._estimated_label_width(str(labels.get(node, node))) / 2.0
+                        for node in block
+                    )
+                    - min(
+                        positions[node][0]
+                        - self._estimated_label_width(str(labels.get(node, node))) / 2.0
+                        for node in block
+                    )
+                )
+            target_offset = max(3.2, min(6.4, (block_width / 2.0) + 2.2))
+            current_offset = abs(trunk_x - parent_center)
+            # This is a compaction rule, never a reason to widen an already
+            # tidy family.
+            if current_offset <= target_offset * 1.12:
+                continue
+
+            target_trunk_x = parent_center + (side * target_offset)
+            shift_x = target_trunk_x - trunk_x
+            parent_top = max(positions[parent][1] for parent in parents)
+            generation_gap = max(2.4, trunk_y - parent_top)
+            lift = min(1.8, max(0.9, generation_gap * 0.22))
+            for node in moving:
+                x, y = positions[node]
+                positions[node] = (x + shift_x, y + lift)
+
+            terminal_count = len(terminal)
+            terminal_mean = (
+                ((terminal_count + 1) * parent_center) - target_trunk_x
+            ) / terminal_count
+            fan_step = min(2.1, max(1.55, generation_gap * 0.20))
+            base_y = max(
+                min(positions[node][1] for node in terminal),
+                parent_top + min(3.6, max(2.5, generation_gap * 0.42)),
+            )
+            terminal_order = sorted(
+                terminal,
+                key=lambda node: (
+                    side * positions[node][0],
+                    node.casefold(),
+                ),
+                reverse=True,
+            )
+            midpoint = (terminal_count - 1) / 2.0
+            for index, node in enumerate(terminal_order):
+                # Higher leaves continue diagonally away from the trunk;
+                # their symmetric offsets keep the terminal mean exact.
+                x = terminal_mean - (side * (index - midpoint) * fan_step)
+                y = base_y + (index * fan_step)
+                positions[node] = (x, y)
+
+            # Preserve this compact seed preferentially while leaving the
+            # general solver enough freedom to clear genuine conflicts.
+            for node in moving | set(terminal):
+                node_weights[node] = max(
+                    node_weights.get(node, 1.0), self.focused_branch_weight
+                )
+
+            claimed.update(moving)
+            claimed.update(terminal)
+            changed = True
+
+        return node_weights if changed else {}
 
     def _rotate_partner_blocks_toward_ancestry(
         self,
@@ -1858,6 +2066,7 @@ class PedigreeRouter:
         show_inbreeding: bool,
         *,
         chronological: bool = False,
+        node_weights: Optional[Mapping[str, float]] = None,
     ) -> None:
         """Resolve label/route collisions while retaining exact family axes.
 
@@ -2007,7 +2216,9 @@ class PedigreeRouter:
         # the row order selected by the block stage supplies the inequality
         # directions.  The resulting matrix projects all later clearance
         # movements into the equality null space.
-        metric = np.eye(len(nodes), dtype=float)
+        metric = np.diag([
+            max(1.0, float((node_weights or {}).get(node, 1.0))) for node in nodes
+        ])
         metric_inverse = np.linalg.inv(metric)
         if equality_rows:
             equality_matrix = np.vstack(equality_rows)

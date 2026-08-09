@@ -83,7 +83,11 @@ from Plugins.core.backend_configuration import (
     PostgreSQLSettings,
     configured_postgres_dsn,
 )
-from Plugins.core.ui_icons import apply_icon, icon as ui_icon
+from Plugins.core.ui_icons import (
+    apply_icon,
+    icon as ui_icon,
+    resolve_icon_path as ui_icon_path,
+)
 from Plugins.core.dialog_geometry import install_dialog_geometry_guard
 from Plugins.core.animal_identity import (
     animal_base_name,
@@ -347,7 +351,7 @@ UI_STD_FIELD_MIN_WIDTH: int = 180   # minimum width for input widgets
 # # ================================================================ #
 # # 4. Qt Import                                                       #
 # # ================================================================ #
-from PyQt6.QtCore import Qt, QDate, QTimer, QSize, QRect, QRectF
+from PyQt6.QtCore import Qt, QDate, QTimer, QSize, QRect, QRectF, QEvent
 from PyQt6.QtGui import QIcon, QColor, QIntValidator, QPixmap, QAction, QActionGroup, QDoubleValidator, QFont, QPalette, QTextDocument, QAbstractTextDocumentLayout, QPainter
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QMainWindow, QLabel, QListWidget, QListWidgetItem,
@@ -1023,6 +1027,43 @@ class GenotypeCatalogEditor(QWidget):
         }
 
 
+class _CurrentPageTabWidget(QTabWidget):
+    """Report geometry for the visible page instead of the widest page.
+
+    Qt's default ``QTabWidget`` size hint is the union of every page.  That is
+    useful for fixed preference windows, but it made Conventions permanently
+    inherit the very wide Role setup table even while the compact Branding
+    page was visible.  The dialog owns the screen clamp; this widget only
+    keeps layout negotiation tied to the page the user can actually see.
+    """
+
+    _PAGE_FRAME = 12
+
+    def _current_page_hint(self, *, minimum: bool) -> QSize:
+        page = self.currentWidget()
+        if page is None:
+            return super().minimumSizeHint() if minimum else super().sizeHint()
+        page.ensurePolished()
+        if page.layout() is not None:
+            page.layout().activate()
+        page_hint = page.minimumSizeHint() if minimum else page.sizeHint()
+        bar_hint = self.tabBar().minimumSizeHint() if minimum else self.tabBar().sizeHint()
+        width = max(page_hint.width(), bar_hint.width()) + self._PAGE_FRAME
+        height = page_hint.height() + bar_hint.height() + self._PAGE_FRAME
+        if minimum:
+            # Long forms and wide tables are scrollable.  Do not turn their
+            # complete content size into an unshrinkable window minimum.
+            width = min(width, 720)
+            height = min(height, 460)
+        return QSize(max(1, width), max(1, height))
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt API name
+        return self._current_page_hint(minimum=False)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API name
+        return self._current_page_hint(minimum=True)
+
+
 class StyleSettingsDialog(QDialog):
     """Dialog for customizing plot colors, markers, and styles."""
     
@@ -1032,7 +1073,10 @@ class StyleSettingsDialog(QDialog):
         self.messages = messages
         self.setWindowTitle(messages.get("style.dialog.title", "Style Settings"))
         self.setModal(True)
-        self.resize(1180, 700)
+        self._dialog_base_minimum = QSize(560, 360)
+        self._tab_fit_in_progress = False
+        self._tab_fit_pending = False
+        self._last_tab_target_sizes: Dict[int, QSize] = {}
         
         # Store color buttons for easy access
         self.color_buttons = {}
@@ -1051,6 +1095,12 @@ class StyleSettingsDialog(QDialog):
         
         self._init_ui()
         self._load_current_settings()
+        install_dialog_geometry_guard(
+            self,
+            minimum=self._dialog_base_minimum,
+        )
+        self._on_conventions_tab_changed(self.tabs.currentIndex())
+        QTimer.singleShot(0, self._schedule_current_tab_fit)
 
     def _steroid_track_active(self) -> bool:
         """Return whether Steroid_track is currently active in the parent app."""
@@ -1151,19 +1201,31 @@ class StyleSettingsDialog(QDialog):
         """Initialize the dialog UI."""
         layout = QVBoxLayout(self)
         steroid_active = self._steroid_track_active()
-        tabs = QTabWidget(self)
+        self.tabs = _CurrentPageTabWidget(self)
+        self.tabs.setObjectName("conventionsTabs")
+        tabs = self.tabs
         visual_tab = QWidget()
+        visual_tab.setObjectName("conventionsVisualTab")
         visual_layout = QVBoxLayout(visual_tab)
         
         # Create scroll area for settings
         scroll = QtWidgets.QScrollArea()
+        scroll.setObjectName("conventionsVisualScroll")
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setSizeAdjustPolicy(
+            QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        )
         scroll_widget = QWidget()
+        scroll_widget.setObjectName("conventionsVisualContent")
         scroll_layout = QVBoxLayout(scroll_widget)
         
         # ===== Color Groups Container (side by side) =====
         colors_container = QWidget()
-        colors_container_layout = QHBoxLayout(colors_container)
+        colors_container_layout = QtWidgets.QGridLayout(colors_container)
+        colors_container_layout.setContentsMargins(0, 0, 0, 0)
+        colors_container_layout.setSpacing(8)
         
         # ===== Main Colors Section =====
         colors_group = QGroupBox(self.messages.get("style.main_colors", "Main Colors"))
@@ -1239,7 +1301,7 @@ class StyleSettingsDialog(QDialog):
             )
         
         colors_group.setLayout(colors_layout)
-        colors_container_layout.addWidget(colors_group)
+        colors_container_layout.addWidget(colors_group, 0, 0)
         
         # ===== Event Colors Section =====
         events_group = QGroupBox(self.messages.get("style.event_colors", "Event Colors"))
@@ -1316,8 +1378,11 @@ class StyleSettingsDialog(QDialog):
             )
         
         events_group.setLayout(events_layout)
-        colors_container_layout.addWidget(events_group)
+        colors_container_layout.addWidget(events_group, 0, 1)
         events_group.setVisible(steroid_active)
+        self._visual_colors_layout = colors_container_layout
+        self._visual_color_groups = (colors_group, events_group)
+        self._visual_compact = False
         
         # Add the colors container to the main layout
         scroll_layout.addWidget(colors_container)
@@ -1421,10 +1486,15 @@ class StyleSettingsDialog(QDialog):
         scroll_layout.addStretch()
         scroll.setWidget(scroll_widget)
         visual_layout.addWidget(scroll)
+        self._visual_scroll = scroll
+        self._visual_content = scroll_widget
+        self._visual_tab = visual_tab
         tabs.addTab(visual_tab, self.messages.get("settings.tab.visual_style", "Visual style"))
-        tabs.addTab(self._create_role_setup_tab(), self.messages.get("settings.tab.role_setup", "Role setup"))
+        self._role_setup_tab = self._create_role_setup_tab()
+        tabs.addTab(self._role_setup_tab, self.messages.get("settings.tab.role_setup", "Role setup"))
+        self._identity_lifecycle_tab = self._create_identity_lifecycle_tab()
         tabs.addTab(
-            self._create_identity_lifecycle_tab(),
+            self._identity_lifecycle_tab,
             self.messages.get(
                 "settings.tab.identity_lifecycle",
                 "Identity and lifecycle conventions",
@@ -1442,8 +1512,10 @@ class StyleSettingsDialog(QDialog):
         
         # ===== Buttons =====
         button_layout = QHBoxLayout()
+        self._dialog_button_layout = button_layout
         
         reset_button = QPushButton(self.messages.get("style.reset_defaults", "Reset to Defaults"))
+        reset_button.setObjectName("conventionsResetButton")
         reset_button.clicked.connect(self._reset_to_defaults)
         button_layout.addWidget(reset_button)
         
@@ -1453,11 +1525,252 @@ class StyleSettingsDialog(QDialog):
             QtWidgets.QDialogButtonBox.StandardButton.Ok |
             QtWidgets.QDialogButtonBox.StandardButton.Cancel
         )
+        button_box.setObjectName("conventionsDialogButtons")
+        self._dialog_button_box = button_box
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         button_layout.addWidget(button_box)
         
         layout.addLayout(button_layout)
+
+        tabs.currentChanged.connect(self._on_conventions_tab_changed)
+
+    def _available_screen_geometry(self) -> QRect:
+        """Return the work area of the screen currently containing the dialog."""
+        screen = QApplication.screenAt(self.frameGeometry().center())
+        screen = screen or QApplication.primaryScreen()
+        if screen is None:
+            return QRect(0, 0, 1180, 700)
+        return screen.availableGeometry()
+
+    def _set_visual_compact(self, compact: bool) -> None:
+        compact = bool(compact)
+        if not hasattr(self, "_visual_colors_layout"):
+            return
+        if compact == getattr(self, "_visual_compact", False):
+            return
+        colors_group, events_group = self._visual_color_groups
+        layout = self._visual_colors_layout
+        layout.removeWidget(colors_group)
+        layout.removeWidget(events_group)
+        layout.addWidget(colors_group, 0, 0)
+        layout.addWidget(events_group, 1 if compact else 0, 0 if compact else 1)
+        layout.setColumnStretch(0, 1)
+        layout.setColumnStretch(1, 0 if compact else 1)
+        self._visual_compact = compact
+        self._visual_content.updateGeometry()
+
+    def _set_identity_component_columns(self, columns: int) -> None:
+        if not hasattr(self, "_identity_component_layout"):
+            return
+        columns = max(1, min(int(columns), len(self._id_component_combos)))
+        if columns == getattr(self, "_identity_component_columns", 0):
+            return
+        layout = self._identity_component_layout
+        for combo in self._id_component_combos:
+            layout.removeWidget(combo)
+        for column in range(len(self._id_component_combos)):
+            layout.setColumnStretch(column, 0)
+        for index, combo in enumerate(self._id_component_combos):
+            row, column = divmod(index, columns)
+            layout.addWidget(combo, row, column)
+        for column in range(columns):
+            layout.setColumnStretch(column, 1)
+        self._identity_component_columns = columns
+        layout.invalidate()
+        self._identity_component_row.adjustSize()
+        self._identity_form.invalidate()
+        self._identity_content.updateGeometry()
+
+    def _apply_conventions_reflow(self, page_width: int) -> None:
+        """Reflow the two naturally horizontal pages for the usable width."""
+        usable = max(1, int(page_width))
+        self._set_visual_compact(usable < 680)
+        # Five selectors in one row only remain comfortable on genuinely
+        # wide work areas.  A normal 1366px laptop uses a readable 3+2 grid
+        # instead of forcing the whole dialog to monitor width.
+        if usable >= 1320:
+            component_columns = 5
+        elif usable >= 780:
+            component_columns = 3
+        else:
+            component_columns = 2
+        self._set_identity_component_columns(component_columns)
+        # At laptop/narrow-window widths, a QFormLayout's normal side-by-side
+        # label/field calculation adds both natural widths and can make a
+        # perfectly scrollable catalogue dictate the entire dialog width.
+        # Wrap fields below their labels instead; the catalogues then consume
+        # the available width and retain vertical/horizontal scrolling only
+        # for genuinely long entries.
+        row_policy = (
+            QFormLayout.RowWrapPolicy.WrapLongRows
+            if usable < 780
+            else QFormLayout.RowWrapPolicy.DontWrapRows
+        )
+        if self._identity_form.rowWrapPolicy() != row_policy:
+            self._identity_form.setRowWrapPolicy(row_policy)
+            self._identity_form.invalidate()
+            self._identity_content.updateGeometry()
+
+    @staticmethod
+    def _activated_widget_hint(widget: QWidget) -> QSize:
+        widget.ensurePolished()
+        if widget.layout() is not None:
+            widget.layout().activate()
+        return widget.sizeHint().expandedTo(widget.minimumSizeHint())
+
+    def _role_setup_natural_size(self) -> QSize:
+        table = self.role_table
+        header = table.horizontalHeader()
+        visible_columns = [
+            column for column in range(table.columnCount())
+            if not table.isColumnHidden(column)
+        ]
+        table_width = sum(
+            max(header.sectionSize(column), table.sizeHintForColumn(column))
+            for column in visible_columns
+        )
+        table_width += table.frameWidth() * 2 + 30
+        table_height = header.sizeHint().height()
+        table_height += sum(table.rowHeight(row) for row in range(table.rowCount()))
+        table_height += table.frameWidth() * 2 + 26
+
+        page_layout = self._role_setup_tab.layout()
+        margins = page_layout.contentsMargins()
+        button_height = page_layout.itemAt(page_layout.count() - 1).sizeHint().height()
+        return QSize(
+            table_width + margins.left() + margins.right(),
+            table_height + button_height + margins.top() + margins.bottom()
+            + page_layout.spacing(),
+        )
+
+    def _current_page_natural_size(self) -> QSize:
+        current = self.tabs.currentWidget()
+        if current is self._visual_tab:
+            content = self._activated_widget_hint(self._visual_content)
+            # Preserve the compact two-column color overview on normal
+            # laptop screens.  Below this readable working width it reflows
+            # vertically and remains scrollable.
+            return QSize(max(content.width() + 28, 680), content.height() + 28)
+        if current is self._role_setup_tab:
+            return self._role_setup_natural_size()
+        if current is self._identity_lifecycle_tab:
+            content = self._activated_widget_hint(self._identity_content)
+            # A modest working-width floor prevents avoidable horizontal
+            # scrolling for the 3+2 ID selector grid without inheriting the
+            # much wider Role setup table.
+            return QSize(max(content.width() + 28, 780), content.height() + 28)
+        if current is self._branding_editor:
+            return self._activated_widget_hint(self._branding_editor)
+        return self._activated_widget_hint(current)
+
+    def _target_size_for_available(self, available: QSize) -> QSize:
+        """Calculate a current-tab natural size bounded by one work area."""
+        max_width = max(320, int(available.width() * 0.92))
+        max_height = max(260, int(available.height() * 0.92))
+        outer = self.layout().contentsMargins()
+        outer_width = outer.left() + outer.right()
+        outer_height = outer.top() + outer.bottom()
+        tab_bar_hint = self.tabs.tabBar().sizeHint()
+        tab_bar_minimum = self.tabs.tabBar().minimumSizeHint()
+        button_hint = self._dialog_button_layout.sizeHint()
+        horizontal_chrome = outer_width + 20
+        vertical_chrome = (
+            outer_height
+            + tab_bar_hint.height()
+            + button_hint.height()
+            + (self.layout().spacing() * 2)
+            + 16
+        )
+
+        self._apply_conventions_reflow(max_width - horizontal_chrome)
+        page_hint = self._current_page_natural_size()
+        natural_width = max(
+            page_hint.width() + horizontal_chrome,
+            # QTabBar supplies scroll buttons when all translated titles do
+            # not fit.  Its full size hint must therefore not make every page
+            # as wide as the combined titles.
+            tab_bar_minimum.width() + outer_width + 20,
+        )
+        natural_height = page_hint.height() + vertical_chrome
+        minimum_width = min(self._dialog_base_minimum.width(), max_width)
+        minimum_height = min(self._dialog_base_minimum.height(), max_height)
+        return QSize(
+            min(max(natural_width, minimum_width), max_width),
+            min(max(natural_height, minimum_height), max_height),
+        )
+
+    def _fit_current_tab(
+        self,
+        available_geometry: Optional[QRect] = None,
+        *,
+        apply_guard: bool = True,
+    ) -> QSize:
+        """Resize around the current centre and return the applied target."""
+        if self._tab_fit_in_progress or not hasattr(self, "tabs"):
+            return self.size()
+        self._tab_fit_in_progress = True
+        try:
+            available = available_geometry or self._available_screen_geometry()
+            target = self._target_size_for_available(available.size())
+            old_center = self.frameGeometry().center()
+
+            # The geometry guard sets explicit limits for the previous page.
+            # Reset them before measuring a different page so Role setup can
+            # grow and Branding can subsequently shrink again.
+            self.setMinimumSize(self._dialog_base_minimum)
+            self.setMaximumSize(16777215, 16777215)
+            self.resize(target)
+            frame = self.frameGeometry()
+            frame.moveCenter(old_center)
+            self.move(frame.topLeft())
+            self._last_tab_target_sizes[self.tabs.currentIndex()] = QSize(target)
+
+            if apply_guard:
+                guard = getattr(self, "_progtrack_geometry_guard", None)
+                if guard is not None:
+                    guard.clamp()
+            return QSize(target)
+        finally:
+            self._tab_fit_in_progress = False
+
+    def _schedule_current_tab_fit(self) -> None:
+        if self._tab_fit_pending:
+            return
+        self._tab_fit_pending = True
+
+        def apply_fit() -> None:
+            self._tab_fit_pending = False
+            self._fit_current_tab()
+
+        QTimer.singleShot(0, apply_fit)
+
+    def _on_conventions_tab_changed(self, index: int) -> None:
+        for page_index in range(self.tabs.count()):
+            page = self.tabs.widget(page_index)
+            policy = QSizePolicy.Policy.Expanding if page_index == index else QSizePolicy.Policy.Ignored
+            page.setSizePolicy(policy, policy)
+        self.tabs.updateGeometry()
+        self._schedule_current_tab_fit()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt API name
+        super().resizeEvent(event)
+        if not self._tab_fit_in_progress and hasattr(self, "tabs"):
+            self._apply_conventions_reflow(max(1, self.tabs.width() - 28))
+
+    def showEvent(self, event) -> None:  # noqa: N802 - Qt API name
+        super().showEvent(event)
+        self._schedule_current_tab_fit()
+
+    def changeEvent(self, event) -> None:  # noqa: N802 - Qt API name
+        super().changeEvent(event)
+        if event.type() in {
+            QEvent.Type.LanguageChange,
+            QEvent.Type.FontChange,
+            QEvent.Type.ApplicationFontChange,
+            QEvent.Type.StyleChange,
+        }:
+            self._schedule_current_tab_fit()
 
     def _create_role_setup_tab(self):
         tab = QWidget()
@@ -1473,6 +1786,7 @@ class StyleSettingsDialog(QDialog):
             layout.addWidget(locked)
 
         self.role_table = QTableWidget(0, 9, tab)
+        self.role_table.setObjectName("conventionsRoleTable")
         self.role_table.setHorizontalHeaderLabels([
             self.messages.get("settings.role_setup.col.active", "Active"),
             self.messages.get("settings.role_setup.col.order", "Order"),
@@ -1498,6 +1812,18 @@ class StyleSettingsDialog(QDialog):
         self.role_table.verticalHeader().setVisible(False)
         self.role_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
         self.role_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        self.role_table.setHorizontalScrollMode(
+            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        self.role_table.setVerticalScrollMode(
+            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        self.role_table.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.role_table.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
         if not self._role_setup_editable:
             self.role_table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
 
@@ -1524,9 +1850,20 @@ class StyleSettingsDialog(QDialog):
         tab = QWidget()
         outer = QVBoxLayout(tab)
         scroll = QScrollArea(tab)
+        scroll.setObjectName("conventionsIdentityScroll")
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setSizeAdjustPolicy(
+            QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        )
         content = QWidget(scroll)
+        content.setObjectName("conventionsIdentityContent")
         form = QFormLayout(content)
+        form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+        )
+        self._identity_form = form
         self._identity_conventions = (
             self.parent_app._load_identity_conventions()
         )
@@ -1546,11 +1883,12 @@ class StyleSettingsDialog(QDialog):
             ("name", self.messages.get("settings.identity.component.name", "Name")),
         ]
         component_row = QWidget(content)
-        component_layout = QHBoxLayout(component_row)
+        component_row.setObjectName("conventionsIdentityComponents")
+        component_layout = QtWidgets.QGridLayout(component_row)
         component_layout.setContentsMargins(0, 0, 0, 0)
         component_layout.setSpacing(4)
         self._id_component_combos: List[QComboBox] = []
-        for configured in configured_components:
+        for component_index, configured in enumerate(configured_components):
             combo = QComboBox(component_row)
             for value, label in component_options:
                 combo.addItem(label, value)
@@ -1558,7 +1896,11 @@ class StyleSettingsDialog(QDialog):
             combo.setCurrentIndex(index if index >= 0 else 0)
             combo.setEnabled(self._role_setup_editable)
             self._id_component_combos.append(combo)
-            component_layout.addWidget(combo, 1)
+            component_layout.addWidget(combo, 0, component_index)
+            component_layout.setColumnStretch(component_index, 1)
+        self._identity_component_layout = component_layout
+        self._identity_component_row = component_row
+        self._identity_component_columns = 5
         form.addRow(
             self.messages.get("settings.identity.id_pattern", "Animal ID pattern:"),
             component_row,
@@ -1627,6 +1969,8 @@ class StyleSettingsDialog(QDialog):
             form.addRow(self.messages.get(f"settings.identity.{key}", fallback), edit)
         scroll.setWidget(content)
         outer.addWidget(scroll)
+        self._identity_scroll = scroll
+        self._identity_content = content
         return tab
 
     def _rebuild_role_table(self, roles):
@@ -1684,27 +2028,7 @@ class StyleSettingsDialog(QDialog):
 
     def _role_icon_path(self, icon_value: str):
         """Resolve a stored semantic or ``svg:`` role icon to its SVG path."""
-        value = str(icon_value or "").strip()
-        if not value:
-            return None
-        icon_root = APP_BASE_DIR / "icons" / "ui"
-        filename = ""
-        if value.startswith("svg:"):
-            filename = value[4:].strip()
-        else:
-            try:
-                payload = json.loads(
-                    (icon_root / "manifest.json").read_text(encoding="utf-8")
-                )
-                icons = payload.get("icons", {}) if isinstance(payload, dict) else {}
-                entry = icons.get(value, {}) if isinstance(icons, dict) else {}
-                filename = str(entry.get("file") or "").strip() if isinstance(entry, dict) else ""
-            except (OSError, json.JSONDecodeError):
-                filename = ""
-            if not filename and value.endswith(".svg"):
-                filename = value
-        path = icon_root / Path(filename).name if filename else None
-        return path if path is not None and path.is_file() and path.suffix.casefold() == ".svg" else None
+        return ui_icon_path(icon_value)
 
     def _set_role_icon_button_visual(self, button, icon_value: str) -> None:
         from PyQt6.QtCore import QSize
@@ -1849,7 +2173,7 @@ class StyleSettingsDialog(QDialog):
     def _open_role_icon_picker(self, button) -> None:
         """Show the NetworkTrack-style grid picker for all UI SVGs."""
         from PyQt6.QtCore import QSize
-        from PyQt6.QtWidgets import QGridLayout, QWidget
+        from PyQt6.QtWidgets import QGridLayout, QMenu, QWidget
 
         menu = QMenu(self)
         widget = QWidget(menu)

@@ -10,10 +10,30 @@ from Plugins.core.animal_roles import canonical_role_value
 
 
 RELATIONSHIP_FIELDS = ("partner_von", "verpaart_mit")
+_MALE_SEX_VALUES = {
+    "m", "male", "maennlich", "m\u00e4nnlich", "maschio",
+    "\u043c\u0443\u0436\u0441\u043a\u043e\u0439",
+}
+_FEMALE_SEX_VALUES = {
+    "f", "female", "weiblich", "femmina",
+    "\u0436\u0435\u043d\u0441\u043a\u0438\u0439",
+}
 
 
 def _role(record: Mapping[str, Any]) -> str:
     return canonical_role_value(record.get("rolle"))
+
+
+def _sex(record: Mapping[str, Any]) -> str:
+    """Return the canonical biological sex used by relationship display."""
+    value = str(record.get("sex") or "").strip().casefold()
+    if value in _MALE_SEX_VALUES:
+        return "male"
+    if value in _FEMALE_SEX_VALUES:
+        return "female"
+    return ""
+
+
 
 
 def _reciprocal_field(
@@ -152,5 +172,8 @@ def relationship_status_icon(
             canonical_role_value(record.get("rolle")),
             canonical_role_value(target_record.get("rolle")),
         }
-        return "status.partner" if "partner_animal" in roles else "role.breeding"
+        subject_sex = _sex(record)
+        target_sex = _sex(target_record)
+        same_sex = bool(subject_sex and subject_sex == target_sex)
+        return "status.partner" if same_sex or "partner_animal" in roles else "role.breeding"
     return ""

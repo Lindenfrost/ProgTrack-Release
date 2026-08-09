@@ -770,6 +770,58 @@ class HeritageTrackWidget(QWidget):
             self.ax.axhline(y, color="#d9d9d9", linewidth=0.6, alpha=0.45, zorder=0)
             y += grid_spacing
 
+    def _legend_gutter_pixels(self) -> float:
+        """Return a compact, content-aware legend reservation in pixels."""
+        if not getattr(self, "_legend_gutter_active", False):
+            return 0.0
+        canvas_width, _canvas_height = self.canvas.get_width_height()
+        if canvas_width <= 0:
+            return 112.0
+        no_genotype = self.messages.get(
+            "heritage_track.legend.no_genotype", "(no genotype)"
+        )
+        labels = [
+            self.messages.get("heritage_track.legend.title", "Genotype legend"),
+            no_genotype,
+        ]
+        route_plan = getattr(self, "_route_plan", None)
+        if route_plan is not None:
+            for node in route_plan.animal_positions:
+                record = self._get_node_record(node)
+                labels.append(str(record.get("genotype", "") or no_genotype))
+        longest = max((len(str(label).strip()) for label in labels), default=14)
+        wanted = 30.0 + (longest * 5.25)
+        return min(canvas_width * 0.28, max(88.0, min(156.0, wanted)))
+
+    def _configure_subplot_geometry(self, chronological: bool) -> None:
+        """Reserve only the pixels actually needed by axes and legend."""
+        canvas_width, canvas_height = self.canvas.get_width_height()
+        if canvas_width <= 0 or canvas_height <= 0:
+            return
+        left_px = 58.0 if chronological else 4.0
+        bottom_px = 16.0 if chronological else 4.0
+        gutter_px = self._legend_gutter_pixels()
+        right_px = (20.0 + gutter_px) if gutter_px else 4.0
+        top_px = 4.0
+        left = min(0.22, left_px / canvas_width)
+        right = max(left + 0.35, 1.0 - (right_px / canvas_width))
+        bottom = min(0.18, bottom_px / canvas_height)
+        top = max(bottom + 0.35, 1.0 - (top_px / canvas_height))
+        self.figure.subplots_adjust(
+            left=left,
+            right=min(0.997, right),
+            top=min(0.997, top),
+            bottom=bottom,
+        )
+
+    def _effective_axes_pixels(self) -> Tuple[float, float]:
+        """Return the drawable axes rectangle before equal-aspect fitting."""
+        canvas_width, canvas_height = self.canvas.get_width_height()
+        subplot = self.figure.subplotpars
+        width = canvas_width * max(0.01, subplot.right - subplot.left)
+        height = canvas_height * max(0.01, subplot.top - subplot.bottom)
+        return width, height
+
     def _configure_chronological_axis(self) -> None:
         """Show an adaptive calendar Y-axis for the chronological layout."""
         low, high = sorted(self.ax.get_ylim())
@@ -817,12 +869,7 @@ class HeritageTrackWidget(QWidget):
         )
         self.ax.grid(axis="y", which="major", color="#d4d4d4", linewidth=0.65, zorder=0)
         self.ax.grid(axis="y", which="minor", color="#ededed", linewidth=0.35, zorder=0)
-        self.figure.subplots_adjust(
-            left=0.075,
-            right=0.825 if getattr(self, "_legend_gutter_active", False) else 0.995,
-            top=0.995,
-            bottom=0.02,
-        )
+        self._configure_subplot_geometry(True)
 
     def _place_legend_in_clear_gutter(self, legend) -> None:
         """Choose a right-gutter slot that does not cover overhanging names."""
@@ -1487,8 +1534,8 @@ class HeritageTrackWidget(QWidget):
         xlim: Tuple[float, float],
         ylim: Tuple[float, float],
     ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-        canvas_width, canvas_height = self.canvas.get_width_height()
-        if canvas_width <= 0 or canvas_height <= 0:
+        axes_width, axes_height = self._effective_axes_pixels()
+        if axes_width <= 0 or axes_height <= 0:
             return xlim, ylim
 
         x_range = xlim[1] - xlim[0]
@@ -1496,7 +1543,7 @@ class HeritageTrackWidget(QWidget):
         if x_range <= 0 or y_range <= 0:
             return xlim, ylim
 
-        fig_ratio = canvas_width / canvas_height
+        fig_ratio = axes_width / axes_height
         data_ratio = x_range / y_range
         x_center = (xlim[0] + xlim[1]) / 2.0
         y_center = (ylim[0] + ylim[1]) / 2.0
@@ -2379,12 +2426,12 @@ class HeritageTrackWidget(QWidget):
         # arbitrarily large pedigree into one viewport therefore shrinks the
         # distance between nodes while the names stay equally wide.  Large
         # trees must open at a readable scale and remain pannable/zoomable.
-        canvas_width, canvas_height = self.canvas.get_width_height()
-        if canvas_width <= 0 or canvas_height <= 0:
+        axes_width, axes_height = self._effective_axes_pixels()
+        if axes_width <= 0 or axes_height <= 0:
             return full_xlim, full_ylim
         min_pixels_per_unit = 36.0
-        max_width = max(16.0, canvas_width / min_pixels_per_unit)
-        max_height = max(11.0, canvas_height / min_pixels_per_unit)
+        max_width = max(16.0, axes_width / min_pixels_per_unit)
+        max_height = max(11.0, axes_height / min_pixels_per_unit)
         full_width = full_xlim[1] - full_xlim[0]
         full_height = full_ylim[1] - full_ylim[0]
         if full_width <= max_width and full_height <= max_height:
@@ -2818,6 +2865,11 @@ class HeritageTrackWidget(QWidget):
 
         self._force_relayout = False
 
+        self._legend_gutter_active = bool(
+            self.settings.get("show_legend", True) and animal_positions
+        )
+        self._configure_subplot_geometry(chronological_mode)
+
         prev_xlim = self.current_xlim
         prev_ylim = self.current_ylim
         fit_xlim, fit_ylim = self._compute_view_bounds(positions, route_plan.all_points())
@@ -3078,12 +3130,7 @@ class HeritageTrackWidget(QWidget):
             self._configure_chronological_axis()
         else:
             self.ax.axis("off")
-            self.figure.subplots_adjust(
-                left=0,
-                right=0.825 if self._legend_gutter_active else 1,
-                top=1,
-                bottom=0,
-            )
+            self._configure_subplot_geometry(False)
 
         if self.settings.get("show_legend", True) and legend_entries:
             legend_handles: List[Line2D] = []
