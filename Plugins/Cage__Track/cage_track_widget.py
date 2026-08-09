@@ -88,6 +88,10 @@ CAGE_BORDER = "#BDBDBD"
 CAGE_TITLE_BG = "#F5F5F5"
 UNASSIGNED_BG = "#FFF8E1"
 UNASSIGNED_BORDER = "#FFD54F"
+# A clearly visible warning fill for buildings, units, rooms, and cages that
+# still require today's inspection.  Keep this distinct from the pale pink
+# used previously so the inspection state is immediately recognizable.
+INSPECTION_DUE_BG = "#E53935"
 
 SELECTED_BORDER = "#FF9800"
 DROP_HIGHLIGHT = "#4CAF50"
@@ -1988,7 +1992,7 @@ class CageTrackWidget(QWidget):
 
         building_bg = (
             "#B3E5FC" if self.store.is_effectively_virtual(bld_id)
-            else "#FFCDD2" if self._structure_overdue(bld_id)
+            else INSPECTION_DUE_BG if self._structure_overdue(bld_id)
             else BLD_BG
         )
         self._draw_rect(x, y, w, h, building_bg, border, linewidth=lw, zorder=1)
@@ -2048,7 +2052,7 @@ class CageTrackWidget(QWidget):
         linewidth = 2.5 if selected else 1.0
         background = (
             "#B3E5FC" if self.store.is_effectively_virtual(unit_id)
-            else "#FFCDD2" if self._structure_overdue(unit_id)
+            else INSPECTION_DUE_BG if self._structure_overdue(unit_id)
             else UNIT_BG
         )
         self._draw_rect(x, y, w, h, background, border, linewidth=linewidth, zorder=2)
@@ -2096,7 +2100,7 @@ class CageTrackWidget(QWidget):
 
         room_bg = (
             "#B3E5FC" if self.store.is_effectively_virtual(room_id)
-            else "#FFCDD2" if self._structure_overdue(room_id)
+            else INSPECTION_DUE_BG if self._structure_overdue(room_id)
             else ROOM_BG
         )
         self._draw_rect(x, y, w, h, room_bg, border, linewidth=lw, zorder=2)
@@ -2138,7 +2142,7 @@ class CageTrackWidget(QWidget):
         # Plain cage background
         cage_bg = (
             "#B3E5FC" if self.store.is_effectively_virtual(cage_id)
-            else "#FFCDD2" if self._structure_overdue(cage_id)
+            else INSPECTION_DUE_BG if self._structure_overdue(cage_id)
             else CAGE_BG
         )
         self._draw_flat_rect(x, y, w, h, cage_bg, border, linewidth=lw, zorder=3)
