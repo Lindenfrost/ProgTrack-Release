@@ -424,7 +424,10 @@ class MovementHistoryDialog(QDialog):
             )
         )
         self.setModal(True)
-        self.resize(620, 400)
+        self._store = store
+        history = store.get_movement_history(occupant_id)
+        if history:
+            self.resize(620, 400)
 
         layout = QVBoxLayout(self)
 
@@ -439,9 +442,7 @@ class MovementHistoryDialog(QDialog):
             f"{messages.get('cage_track.history.current_cage', 'Current Cage')}: {current_path}"
         ))
 
-        self._store = store
         self._table = None
-        history = store.get_movement_history(occupant_id)
         if not history:
             layout.addWidget(QLabel(messages.get("cage_track.history.no_history", "No movement history available")))
         else:
@@ -506,7 +507,18 @@ class MovementHistoryDialog(QDialog):
         close_btn.clicked.connect(self.reject)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
-        install_dialog_geometry_guard(self, minimum=QSize(520, 280))
+        if history:
+            install_dialog_geometry_guard(self, minimum=QSize(520, 280))
+        else:
+            # With no table there is no reason to retain the 400-pixel history
+            # viewport. Keep the identity, current cage, message, and actions
+            # visible in a compact shell derived from their real size hint.
+            self.adjustSize()
+            compact_height = max(150, self.sizeHint().height())
+            self.resize(max(440, self.sizeHint().width()), compact_height)
+            install_dialog_geometry_guard(
+                self, minimum=QSize(440, compact_height)
+            )
 
     def _export_pdf(self) -> None:
         if self._table is None:
@@ -1345,10 +1357,9 @@ class CageTrackWidget(QWidget):
         self._hierarchy_cache: Optional[List[Dict[str, Any]]] = None
         self._unassigned_cache: Optional[List[Dict[str, Any]]] = None
 
-        # Minimum pixel widths for cages (cage_id -> min pixel width)
-        self._cage_min_pixel_widths: Dict[str, float] = {}
-        # Actual data widths of cages (cage_id -> data coordinate width)
-        self._cage_data_widths: Dict[str, float] = {}
+        # Matplotlib text is point-sized and otherwise ignores data zoom.
+        # Store every hierarchy label with its design-size font for scaling.
+        self._zoom_scaled_text_artists: List[Tuple[Any, float]] = []
 
         # Legend drag state
         self._legend_dragging = False
@@ -1494,6 +1505,7 @@ class CageTrackWidget(QWidget):
                 self.plugin.mark_cage_assignments_clean()
 
         self.ax.clear()
+        self._zoom_scaled_text_artists.clear()
         self.ax.set_aspect("auto")
         self.ax.axis("off")
         self._hit_map.clear()
@@ -1604,6 +1616,7 @@ class CageTrackWidget(QWidget):
             self._draw_legend(legend_project_colors, total_w, total_h, legend_pos)
 
         self.figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        self._update_zoom_scaled_text()
         self.canvas.draw_idle()
 
     def _get_animals_dict(self) -> Dict[str, Any]:
@@ -1692,7 +1705,8 @@ class CageTrackWidget(QWidget):
 
     def _draw_animal_name(self, x: float, y: float, name: str,
                           project_color: str, zorder: int,
-                          occupant_id: Optional[str] = None) -> None:
+                          occupant_id: Optional[str] = None,
+                          clip_patch: Optional[Any] = None) -> None:
         highlighted = self._is_occupant_highlighted(occupant_id or name)
         kwargs: Dict[str, Any] = {
             "fontsize": 7.5,
@@ -1718,7 +1732,9 @@ class CageTrackWidget(QWidget):
                 "edgecolor": SELECTED_BORDER,
                 "linewidth": 1.2,
             }
-        self.ax.text(x, y, name, **kwargs)
+        artist = self.ax.text(x, y, name, **kwargs)
+        self._register_zoom_scaled_text(
+            artist, float(FONT_OCC["fontsize"]), clip_patch)
 
     def _cached_animal_role_color(self, animal_name: str, animals_dict: Dict[str, Any]) -> str:
         if animal_name not in self._role_color_cache:
@@ -1757,12 +1773,6 @@ class CageTrackWidget(QWidget):
         # Minimum width: circle area (18px) + text + padding on both sides + safety buffer
         min_pixel_width = CAGE_PAD + 18 + max_text_width + CAGE_PAD + 10  # +10px safety buffer
         w = max(self._title_width(cage, CAGE_MIN_W, 7.0), min_pixel_width)
-
-        # Store minimum pixel width and data width for resize enforcement
-        cage_id = cage.get("id", "")
-        if cage_id:
-            self._cage_min_pixel_widths[cage_id] = min_pixel_width
-            self._cage_data_widths[cage_id] = w
 
         return w, h
 
@@ -1870,7 +1880,7 @@ class CageTrackWidget(QWidget):
 
     def _draw_rect(self, x: float, y: float, w: float, h: float,
                    facecolor: str, edgecolor: str, linewidth: float = 1.0,
-                   zorder: int = 1) -> None:
+                   zorder: int = 1) -> FancyBboxPatch:
         rect = FancyBboxPatch(
             (x, y), w, h,
             boxstyle="round,pad=2",
@@ -1880,10 +1890,11 @@ class CageTrackWidget(QWidget):
             zorder=zorder,
         )
         self.ax.add_patch(rect)
+        return rect
 
     def _draw_flat_rect(self, x: float, y: float, w: float, h: float,
                         facecolor: str, edgecolor: str, linewidth: float = 1.0,
-                        zorder: int = 1) -> None:
+                        zorder: int = 1) -> Rectangle:
         rect = Rectangle(
             (x, y), w, h,
             facecolor=facecolor,
@@ -1892,6 +1903,15 @@ class CageTrackWidget(QWidget):
             zorder=zorder,
         )
         self.ax.add_patch(rect)
+        return rect
+
+    def _register_zoom_scaled_text(
+        self, artist: Any, base_size: float, clip_patch: Optional[Any] = None
+    ) -> Any:
+        self._zoom_scaled_text_artists.append((artist, float(base_size)))
+        if clip_patch is not None:
+            artist.set_clip_path(clip_patch)
+        return artist
 
     def _draw_unassigned(self, occupants: List[Dict[str, Any]], x: float, y: float,
                          animals_dict: Dict[str, Any],
@@ -1905,10 +1925,13 @@ class CageTrackWidget(QWidget):
             # Collapsed – just title bar
             w = 300
             h = TITLE_H + 6
-            self._draw_flat_rect(x, y, w, h, UNASSIGNED_BG, UNASSIGNED_BORDER, linewidth=1.5, zorder=2)
+            container_patch = self._draw_flat_rect(x, y, w, h, UNASSIGNED_BG, UNASSIGNED_BORDER, linewidth=1.5, zorder=2)
             arrow = "▶"
-            self.ax.text(x + 6, y + TITLE_H * 0.6, f"{arrow} {ua_label} ({n})",
-                         **FONT_CAGE, color="#F57F17", zorder=3)
+            title_artist = self.ax.text(
+                x + 6, y + TITLE_H * 0.6, f"{arrow} {ua_label} ({n})",
+                **FONT_CAGE, color="#F57F17", zorder=3)
+            self._register_zoom_scaled_text(
+                title_artist, float(FONT_CAGE["fontsize"]), container_patch)
             self._hit_map.append(((x, y, x + w, y + h), UNASSIGNED_CAGE_ID, "cage"))
             self._hit_map.append(((x, y, x + w, y + TITLE_H), UNASSIGNED_CAGE_ID, "unassigned_title"))
             return h
@@ -1923,10 +1946,13 @@ class CageTrackWidget(QWidget):
         w = max(180, cols * column_width + CAGE_PAD * 2)
         h = TITLE_H + OCCUPANT_LINE_H * rows + CAGE_PAD * 2
 
-        self._draw_flat_rect(x, y, w, h, UNASSIGNED_BG, UNASSIGNED_BORDER, linewidth=1.5, zorder=2)
+        container_patch = self._draw_flat_rect(x, y, w, h, UNASSIGNED_BG, UNASSIGNED_BORDER, linewidth=1.5, zorder=2)
         arrow = "▼"
-        self.ax.text(x + 6, y + TITLE_H * 0.6, f"{arrow} {ua_label} ({n})",
-                     **FONT_CAGE, color="#F57F17", zorder=3)
+        title_artist = self.ax.text(
+            x + 6, y + TITLE_H * 0.6, f"{arrow} {ua_label} ({n})",
+            **FONT_CAGE, color="#F57F17", zorder=3)
+        self._register_zoom_scaled_text(
+            title_artist, float(FONT_CAGE["fontsize"]), container_patch)
 
         # Keep circles batched for speed, but draw names per row so they stay
         # aligned with the corresponding circle.
@@ -1975,7 +2001,7 @@ class CageTrackWidget(QWidget):
         for tx, ty, display_name, project_color, occ_id in text_rows:
             self._draw_animal_name(
                 tx, ty, display_name, project_color, zorder=5,
-                occupant_id=occ_id,
+                occupant_id=occ_id, clip_patch=container_patch,
             )
 
         self._hit_map.append(((x, y, x + w, y + h), UNASSIGNED_CAGE_ID, "cage"))
@@ -1997,10 +2023,13 @@ class CageTrackWidget(QWidget):
         )
         self._draw_rect(x, y, w, h, building_bg, border, linewidth=lw, zorder=1)
         # Title bar
-        self._draw_flat_rect(x + 1, y + 1, w - 2, TITLE_H - 2, BLD_TITLE_BG, "none", zorder=2)
+        header_patch = self._draw_flat_rect(x + 1, y + 1, w - 2, TITLE_H - 2, BLD_TITLE_BG, "none", zorder=2)
         arrow = "▼" if expanded else "▶"
-        self.ax.text(x + 6, y + TITLE_H * 0.65, f"{arrow} {bld.get('display_name', bld_id)}",
-                     **FONT_BLD, color="#37474F", zorder=3, clip_on=True)
+        title_artist = self.ax.text(
+            x + 6, y + TITLE_H * 0.65, f"{arrow} {bld.get('display_name', bld_id)}",
+            **FONT_BLD, color="#37474F", zorder=3, clip_on=True)
+        self._register_zoom_scaled_text(
+            title_artist, float(FONT_BLD["fontsize"]), header_patch)
 
         self._hit_map.append(((x, y, x + w, y + h), bld_id, "building"))
         self._hit_map.append(((x, y, x + w, y + TITLE_H), bld_id, "building_title"))
@@ -2056,14 +2085,16 @@ class CageTrackWidget(QWidget):
             else UNIT_BG
         )
         self._draw_rect(x, y, w, h, background, border, linewidth=linewidth, zorder=2)
-        self._draw_flat_rect(
+        header_patch = self._draw_flat_rect(
             x + 1, y + 1, w - 2, TITLE_H - 2,
             UNIT_TITLE_BG, "none", zorder=3)
         arrow = "▼" if expanded else "▶"
-        self.ax.text(
+        title_artist = self.ax.text(
             x + 6, y + TITLE_H * 0.65,
             f"{arrow} {unit.get('display_name', unit_id)}",
             **FONT_UNIT, color="#3949AB", zorder=4, clip_on=True)
+        self._register_zoom_scaled_text(
+            title_artist, float(FONT_UNIT["fontsize"]), header_patch)
         self._hit_map.append(((x, y, x + w, y + h), unit_id, "unit"))
         self._hit_map.append(((x, y, x + w, y + TITLE_H), unit_id, "unit_title"))
         if not expanded:
@@ -2104,10 +2135,13 @@ class CageTrackWidget(QWidget):
             else ROOM_BG
         )
         self._draw_rect(x, y, w, h, room_bg, border, linewidth=lw, zorder=2)
-        self._draw_flat_rect(x + 1, y + 1, w - 2, TITLE_H - 2, ROOM_TITLE_BG, "none", zorder=3)
+        header_patch = self._draw_flat_rect(x + 1, y + 1, w - 2, TITLE_H - 2, ROOM_TITLE_BG, "none", zorder=3)
         arrow = "▼" if expanded else "▶"
-        self.ax.text(x + 6, y + TITLE_H * 0.65, f"{arrow} {room.get('display_name', room_id)}",
-                     **FONT_ROOM, color="#2E7D32", zorder=4, clip_on=True)
+        title_artist = self.ax.text(
+            x + 6, y + TITLE_H * 0.65, f"{arrow} {room.get('display_name', room_id)}",
+            **FONT_ROOM, color="#2E7D32", zorder=4, clip_on=True)
+        self._register_zoom_scaled_text(
+            title_artist, float(FONT_ROOM["fontsize"]), header_patch)
 
         self._hit_map.append(((x, y, x + w, y + h), room_id, "room"))
         self._hit_map.append(((x, y, x + w, y + TITLE_H), room_id, "room_title"))
@@ -2145,11 +2179,14 @@ class CageTrackWidget(QWidget):
             else INSPECTION_DUE_BG if self._structure_overdue(cage_id)
             else CAGE_BG
         )
-        self._draw_flat_rect(x, y, w, h, cage_bg, border, linewidth=lw, zorder=3)
+        container_patch = self._draw_flat_rect(x, y, w, h, cage_bg, border, linewidth=lw, zorder=3)
 
-        self._draw_flat_rect(x, y, w, TITLE_H, CAGE_TITLE_BG, "none", zorder=4)
-        self.ax.text(x + 4, y + TITLE_H * 0.65, cage.get("display_name", cage_id),
-                     **FONT_CAGE, color="#424242", zorder=5, clip_on=True)
+        header_patch = self._draw_flat_rect(x, y, w, TITLE_H, CAGE_TITLE_BG, "none", zorder=4)
+        title_artist = self.ax.text(
+            x + 4, y + TITLE_H * 0.65, cage.get("display_name", cage_id),
+            **FONT_CAGE, color="#424242", zorder=5, clip_on=True)
+        self._register_zoom_scaled_text(
+            title_artist, float(FONT_CAGE["fontsize"]), header_patch)
 
         self._hit_map.append(((x, y, x + w, y + h), cage_id, "cage"))
         self._hit_map.append(((x, y, x + w, y + TITLE_H), cage_id, "cage_title"))
@@ -2192,7 +2229,7 @@ class CageTrackWidget(QWidget):
         for tx, ty, display_name, project_color, occ_id in text_rows:
             self._draw_animal_name(
                 tx, ty, display_name, project_color, zorder=7,
-                occupant_id=occ_id,
+                occupant_id=occ_id, clip_patch=container_patch,
             )
 
     def _inspected_cages_today(self) -> Set[str]:
@@ -2433,60 +2470,40 @@ class CageTrackWidget(QWidget):
         self.ax.set_ylim(new_ylim)
         self._current_xlim = tuple(new_xlim)
         self._current_ylim = tuple(new_ylim)
-        # Enforce minimum content widths after zoom
-        self._enforce_min_content_widths()
+        self._update_zoom_scaled_text()
         self.canvas.draw_idle()
 
     def _on_resize(self, _event) -> None:
-        """Re-apply subplot margins and enforce minimum cage/legend pixel widths."""
+        """Re-apply full-canvas margins and rescale hierarchy labels."""
         self.figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
         if self._current_xlim and self._current_ylim:
             self.ax.set_xlim(self._current_xlim)
             self.ax.set_ylim(self._current_ylim)
-            self._enforce_min_content_widths()
+            self._update_zoom_scaled_text()
         self.canvas.draw_idle()
 
-    def _enforce_min_content_widths(self) -> None:
-        """Ensure cages and legend don't shrink below their content widths when window narrows.
-
-        Calculates required pixels-per-data-unit ratio based on stored minimum pixel widths
-        and expands the x-axis range if necessary to maintain those widths.
-        """
-        if not self._cage_min_pixel_widths:
+    def _update_zoom_scaled_text(self) -> None:
+        """Scale hierarchy labels with their data-coordinate containers."""
+        if not self._zoom_scaled_text_artists:
             return
 
-        # Get current display metrics
         bbox = self.ax.get_window_extent()
         if bbox.width <= 0 or bbox.height <= 0:
             return
 
         xlim = self.ax.get_xlim()
-        data_width = xlim[1] - xlim[0]
-        if data_width <= 0:
+        ylim = self.ax.get_ylim()
+        data_width = abs(xlim[1] - xlim[0])
+        data_height = abs(ylim[1] - ylim[0])
+        if data_width <= 0 or data_height <= 0:
             return
 
-        # Current pixels per data unit
-        px_per_unit = bbox.width / data_width
-
-        # Find the maximum required pixels-per-unit ratio
-        # For each cage: we need its min_pixel_width to occupy its data_width
-        # So required px_per_unit = min_pixel_width / data_width
-        max_required_ratio = 0
-        for cage_id, min_px_width in self._cage_min_pixel_widths.items():
-            # Get actual data width for this cage
-            cage_data_width = self._cage_data_widths.get(cage_id, CAGE_MIN_W)
-            if cage_data_width > 0:
-                required_ratio = min_px_width / cage_data_width
-                max_required_ratio = max(max_required_ratio, required_ratio)
-
-        # If current ratio is insufficient, we need to zoom out (increase data_width)
-        if px_per_unit < max_required_ratio and max_required_ratio > 0:
-            # Calculate new data width needed to maintain min pixel widths
-            new_data_width = (bbox.width / max_required_ratio) * 1.02  # 2% safety margin
-            center = (xlim[0] + xlim[1]) / 2
-            new_xlim = (center - new_data_width / 2, center + new_data_width / 2)
-            self.ax.set_xlim(new_xlim)
-            self._current_xlim = new_xlim
+        # Layout constants target roughly one display pixel per data unit.
+        # The smaller axis density keeps text within both box dimensions.
+        # Zooming in never inflates labels beyond their normal UI size.
+        scale = min(bbox.width / data_width, bbox.height / data_height, 1.0)
+        for artist, base_size in self._zoom_scaled_text_artists:
+            artist.set_fontsize(base_size * scale)
 
     def _show_movement_history(self, occupant_id: str) -> None:
         dlg = MovementHistoryDialog(self, self.messages, occupant_id, self.engine, self.store)

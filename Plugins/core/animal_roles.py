@@ -399,8 +399,10 @@ DEFAULT_ROLE_DEFINITIONS: List[Dict[str, Any]] = [
         "label": ROLE_DISPLAY_LABELS[ROLE_VALUE_UNKNOWN],
         "label_key": ROLE_LABEL_KEYS[ROLE_VALUE_UNKNOWN],
         "icon": "",
+        "representation_mode": REPRESENTATION_TEXT,
+        "representation_text": "●",
         "order": 9990,
-        "active": False,
+        "active": True,
         "built_in": True,
         "base_editor": "basic",
         "field_preset": "basic",
@@ -694,12 +696,19 @@ def normalize_role_definition(raw: Dict[str, Any], *, default_order: int = 1000)
 
     raw_icon = str(raw.get("icon") if raw.get("icon") is not None else "").strip()
     representation_mode = str(raw.get("representation_mode") or "").strip().casefold()
+    representation_text = str(raw.get("representation_text") or "").strip()
+    # A manually configured dot was historically stored in the icon field.
+    # It is text artwork, not an SVG key; normalize it into the explicit text
+    # representation so Role Setup does not present a broken icon preview.
+    if representation_mode == REPRESENTATION_ICON and raw_icon == "●":
+        representation_mode = REPRESENTATION_TEXT
+        representation_text = representation_text or raw_icon
+        raw_icon = ""
     if representation_mode not in REPRESENTATION_MODES:
         # Legacy role definitions rendered their non-empty icon first. Empty
         # icons therefore become a text representation without changing the
         # role's facility-managed label.
         representation_mode = REPRESENTATION_ICON if raw_icon else REPRESENTATION_TEXT
-    representation_text = str(raw.get("representation_text") or "").strip()
     if representation_mode == REPRESENTATION_ICON and not raw_icon:
         representation_mode = REPRESENTATION_TEXT
     if representation_mode == REPRESENTATION_TEXT:

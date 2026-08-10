@@ -49,6 +49,7 @@ _DOCS_SUBDIR   = "documents"
 _SOP_SUBDIR    = "sop"
 _ALL_DOC_FILTER = "Documents (*.jpg *.jpeg *.png *.pdf *.txt *.md *.xls *.xlsx *.csv)"
 _PROJECT_LIST_PANEL_WIDTH = 150
+_PROJECT_IACUC_FIELD_MIN_WIDTH = 160
 
 def _clean_text(value) -> str:
     if value is None:
@@ -103,12 +104,16 @@ def _localize_role(role: str, messages: dict) -> str:
         return messages.get('role.unknown', 'Unknown')
     return messages.get(_ROLE_KEY_MAP.get(role_value, ''), role_value)
 
-def _mk_form() -> QFormLayout:
+def _mk_form(*, grow_fields: bool = False) -> QFormLayout:
     f = QFormLayout()
     f.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
     f.setContentsMargins(4, 4, 4, 4)
     f.setHorizontalSpacing(8)
     f.setVerticalSpacing(4)
+    if grow_fields:
+        f.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+        )
     return f
 
 class CollapsibleSection(QWidget):
@@ -492,17 +497,23 @@ class ProjectTrackTab(QWidget):
         self._list_header.setStyleSheet("font-weight:bold;")
         hdr_row.addWidget(self._list_header)
         hdr_row.addStretch(1)
-        self._refresh_project_btn = QPushButton()
-        self._refresh_project_btn.setFixedSize(30, 30)
-        apply_icon(self._refresh_project_btn, "action.refresh", fallback="Refresh")
-        self._refresh_project_btn.clicked.connect(self._on_refresh_clicked)
-        hdr_row.addWidget(self._refresh_project_btn)
         left_v.addLayout(hdr_row)
+
+        self._project_action_row = QWidget(left_w)
+        project_action_layout = QHBoxLayout(self._project_action_row)
+        project_action_layout.setContentsMargins(0, 0, 0, 0)
+        project_action_layout.setSpacing(2)
         self._new_project_btn = QPushButton()
         apply_icon(self._new_project_btn, "action.add", fallback="New Project")
         self._new_project_btn.setEnabled(self._can('project.create'))
         self._new_project_btn.clicked.connect(self._on_new_project)
-        left_v.addWidget(self._new_project_btn)
+        project_action_layout.addWidget(self._new_project_btn, 1)
+        self._refresh_project_btn = QPushButton()
+        self._refresh_project_btn.setFixedSize(30, 30)
+        apply_icon(self._refresh_project_btn, "action.refresh", fallback="Refresh")
+        self._refresh_project_btn.clicked.connect(self._on_refresh_clicked)
+        project_action_layout.addWidget(self._refresh_project_btn)
+        left_v.addWidget(self._project_action_row)
         self._list=QListWidget()
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._list.setTextElideMode(Qt.TextElideMode.ElideRight)
@@ -777,9 +788,10 @@ class ProjectTrackTab(QWidget):
         self._iacuc_fields = {}
 
         # IACUC col 1: sort title, protocol ID, internal number, auth nr
-        form_i1 = _mk_form()
+        form_i1 = _mk_form(grow_fields=True)
         sort_val = iacuc.get('short_title', '') or name
         le_sort = QLineEdit(sort_val); le_sort.setEnabled(can_manage)
+        le_sort.setMinimumWidth(_PROJECT_IACUC_FIELD_MIN_WIDTH)
         le_sort.setToolTip(_m(self._messages, "project.iacuc.short_title.tooltip",
                               "This value is used as the project name in animal records."))
         form_i1.addRow(_m(self._messages, "project.iacuc.short_title", "Sort title:"), le_sort)
@@ -790,15 +802,18 @@ class ProjectTrackTab(QWidget):
             ('authorization_nr', "project.iacuc.authorization_nr", "Authorization Nr:"),
         ]:
             le = QLineEdit(iacuc.get(fk, '') or ''); le.setEnabled(can_manage)
+            le.setMinimumWidth(_PROJECT_IACUC_FIELD_MIN_WIDTH)
             form_i1.addRow(_m(self._messages, mk, fb), le); self._iacuc_fields[fk] = le
         iw1 = QWidget(); iw1.setLayout(form_i1)
 
         # IACUC col 2: PI, DI, Welfare Officer, Unit
-        form_i2 = _mk_form()
+        form_i2 = _mk_form(grow_fields=True)
         self._iacuc_pi = UserSearchField(self._messages, self._app, can_edit=can_manage)
+        self._iacuc_pi.setMinimumWidth(_PROJECT_IACUC_FIELD_MIN_WIDTH)
         self._iacuc_pi.set_login(iacuc.get('pi_login', '') or '')
         form_i2.addRow(_m(self._messages, "project.iacuc.pi", "PI:"), self._iacuc_pi)
         self._iacuc_di = UserSearchField(self._messages, self._app, can_edit=can_manage)
+        self._iacuc_di.setMinimumWidth(_PROJECT_IACUC_FIELD_MIN_WIDTH)
         self._iacuc_di.set_login(iacuc.get('di_login', '') or '')
         form_i2.addRow(_m(self._messages, "project.iacuc.di", "DI:"), self._iacuc_di)
         self._iacuc_welfare = UserSearchField(
@@ -807,24 +822,28 @@ class ProjectTrackTab(QWidget):
             can_edit=can_manage,
             role_filter='animal_welfare_officer',
         )
+        self._iacuc_welfare.setMinimumWidth(_PROJECT_IACUC_FIELD_MIN_WIDTH)
         self._iacuc_welfare.set_login(iacuc.get('welfare_login', '') or '')
         form_i2.addRow(_m(self._messages, "project.iacuc.welfare_officer", "Welfare Officer:"), self._iacuc_welfare)
         le_unit = QLineEdit(iacuc.get('unit', '') or ''); le_unit.setEnabled(can_manage)
+        le_unit.setMinimumWidth(_PROJECT_IACUC_FIELD_MIN_WIDTH)
         form_i2.addRow(_m(self._messages, "project.iacuc.unit", "Unit:"), le_unit)
         self._iacuc_fields['unit'] = le_unit
         iw2 = QWidget(); iw2.setLayout(form_i2)
 
         # IACUC col 3: Purpose, Authorized, Approved
-        form_i3 = _mk_form()
+        form_i3 = _mk_form(grow_fields=True)
         for fk, mk, fb in [
             ('purpose',    "project.iacuc.purpose",    "Purpose:"),
             ('authorized', "project.iacuc.authorized", "Authorized:"),
             ('approved',   "project.iacuc.approved",   "Approved:"),
         ]:
             le = QLineEdit(iacuc.get(fk, '') or ''); le.setEnabled(can_manage)
+            le.setMinimumWidth(_PROJECT_IACUC_FIELD_MIN_WIDTH)
             form_i3.addRow(_m(self._messages, mk, fb), le); self._iacuc_fields[fk] = le
         iw3 = QWidget(); iw3.setLayout(form_i3)
 
+        self._iacuc_column_forms = (form_i1, form_i2, form_i3)
         iacuc_h.addWidget(iw1, 1); iacuc_h.addWidget(iw2, 1); iacuc_h.addWidget(iw3, 1)
         cl2.addWidget(iacuc_w)
         self._right_v.addWidget(sec_i)

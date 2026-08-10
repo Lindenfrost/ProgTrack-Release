@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "deleted_builtin_values": [],
   "roles": [
     {
@@ -439,6 +439,8 @@
       "label": "Unknown",
       "label_key": "role.unknown",
       "icon": "",
+      "representation_mode": "text",
+      "representation_text": "●",
       "order": 9990,
       "active": true,
       "built_in": true,

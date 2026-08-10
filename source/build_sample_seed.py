@@ -34,7 +34,11 @@ if str(ROOT) not in sys.path:
 
 from Plugins.core.animal_identity import animal_identity_key
 from Plugins.core.animal_relationships import resolve_animal_reference
-from Plugins.core.animal_roles import canonical_role_value
+from Plugins.core.animal_roles import (
+    SCHEMA_VERSION as ROLE_SCHEMA_VERSION,
+    canonical_role_value,
+    normalize_role_definition,
+)
 from Plugins.core.backend.facade import ProgTrackBackend
 from Plugins.core.runtime_paths import resolve_runtime_paths
 
@@ -71,6 +75,29 @@ _ANIMAL_REFERENCE_FIELDS = frozenset({
     "egg_donor",
     "surrogate",
 })
+
+
+def seeded_animal_role_configuration() -> dict[str, Any]:
+    """Return the canonical Role Setup defaults stored in a fresh backend.
+
+    Role Setup is mutable facility configuration, but a new example database
+    must open with the reviewed SVG choices immediately.  The static catalog
+    is normalized through the same schema code used at runtime; no legacy
+    JSON fallback is introduced.
+    """
+    catalog_path = ROOT / "Plugins" / "core" / "animal_roles.json"
+    raw = json.loads(catalog_path.read_text(encoding="utf-8"))
+    roles = raw.get("roles", []) if isinstance(raw, dict) else []
+    normalized = [
+        normalize_role_definition(role, default_order=(index + 1) * 10)
+        for index, role in enumerate(roles)
+        if isinstance(role, dict)
+    ]
+    return {
+        "schema_version": ROLE_SCHEMA_VERSION,
+        "deleted_builtin_values": [],
+        "roles": normalized,
+    }
 
 
 def canonical_project_name(value: Any) -> str:
@@ -1554,6 +1581,7 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
     records[("security", "users")] = seed_users()
     records[("configuration", "global-settings")] = {"language": "en"}
     records[("configuration", "disabled-plugins")] = []
+    records[("configuration", "animal-roles")] = seeded_animal_role_configuration()
     records[("seed", "metadata")] = {
         "version": "0.2.1",
         "fictional": True,

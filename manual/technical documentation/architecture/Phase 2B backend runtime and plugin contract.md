@@ -84,10 +84,19 @@ stale local-process lock is reclaimed.
 - Medi Track multi-animal File-menu export publishes each completed PDF/XLSX
   atomically, reports determinate progress and current item, checks cancellation
   between outputs, and gives localized complete/partial/cancelled summaries.
+- The main animal-list filter row combines a case-insensitive short-name prefix
+  search with independent female, male, and unknown-sex icon checkboxes. All
+  three sex predicates start enabled and compose with authorization, role,
+  project, species, archive, and active-plugin filters; they are presentation
+  state only and never mutate animal records.
 - Institution branding is embedded in
   `Settings -> Conventions -> Institution branding` for Lord, Master, and
   Manager. Its optional PNG/JPEG payload is a managed configuration asset and
-  is scaled into a bounded right-aligned PDF header.
+  is proportionally scaled into one bounded shared PDF block. The backend-owned
+  position convention selects top left or top right (top right is the legacy
+  default), every PDF exporter consumes the same setting, and the grey page
+  preview renders the effective name/logo block at the selected edge before
+  saving.
 
 ## Semantic UI icons
 

@@ -9,18 +9,25 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QRectF, QSize, Qt
+from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
 from PyQt6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
+    QRadioButton,
+    QSizePolicy,
     QVBoxLayout,
+    QWidget,
 )
 
 
@@ -28,6 +35,14 @@ CONFIG_NAMESPACE = "configuration"
 CONFIG_RECORD = "institution-branding"
 ALLOWED_SUFFIXES = {".png", ".jpg", ".jpeg"}
 MAX_LOGO_BYTES = 10 * 1024 * 1024
+POSITION_TOP_LEFT = "top_left"
+POSITION_TOP_RIGHT = "top_right"
+BRANDING_POSITIONS = (POSITION_TOP_LEFT, POSITION_TOP_RIGHT)
+
+
+def normalize_branding_position(value: object) -> str:
+    position = str(value or "").strip().casefold().replace("-", "_")
+    return position if position in BRANDING_POSITIONS else POSITION_TOP_RIGHT
 
 
 class InstitutionBrandingService:
@@ -38,9 +53,23 @@ class InstitutionBrandingService:
         value = self.backend.records.get(
             CONFIG_NAMESPACE,
             CONFIG_RECORD,
-            default={"enabled": False, "facility_name": "", "logo_document_id": ""},
+            default={
+                "enabled": False,
+                "facility_name": "",
+                "logo_document_id": "",
+                "position": POSITION_TOP_RIGHT,
+            },
         )
-        return value if isinstance(value, dict) else {}
+        if not isinstance(value, dict):
+            value = {}
+        normalized = dict(value)
+        normalized.setdefault("enabled", False)
+        normalized.setdefault("facility_name", "")
+        normalized.setdefault("logo_document_id", "")
+        normalized["position"] = normalize_branding_position(
+            normalized.get("position")
+        )
+        return normalized
 
     def save(
         self,
@@ -48,6 +77,7 @@ class InstitutionBrandingService:
         enabled: bool,
         facility_name: str,
         logo_source: str = "",
+        position: str = POSITION_TOP_RIGHT,
         actor: str,
         authorized: bool = False,
         remove_logo: bool = False,
@@ -80,6 +110,7 @@ class InstitutionBrandingService:
             "enabled": bool(enabled),
             "facility_name": str(facility_name or "").strip(),
             "logo_document_id": logo_id,
+            "position": normalize_branding_position(position),
         }
         self.backend.records.put(CONFIG_NAMESPACE, CONFIG_RECORD, value)
         self.backend.audit.append(
@@ -92,6 +123,7 @@ class InstitutionBrandingService:
                 "enabled": value["enabled"],
                 "facility_name": value["facility_name"],
                 "logo_document_id": value["logo_document_id"],
+                "position": value["position"],
             },
         )
         return value
@@ -109,19 +141,19 @@ class InstitutionBrandingService:
             return None
 
     def apply_to_pdf(self, pdf_path: str | Path) -> bool:
-        """Overlay a compact, right-aligned name/logo header on every page.
+        """Overlay the configured compact name/logo header on every page.
 
-        The exported document remains the primary content.  Branding occupies
-        only a bounded top-right header region: the logo is the rightmost
-        element and the facility name is right-aligned immediately to its
-        left.  The available logo width is reduced before the font is reduced
-        so long facility names remain readable without clipping or overlap.
+        The complete block is anchored to the selected top-left or top-right
+        page edge.  Every exporter reaches this one method, so the convention
+        cannot drift between report types.  Logo proportions and the bounded
+        header height remain identical in both orientations.
         """
         config = self.load()
         if not config.get("enabled"):
             return False
         facility = str(config.get("facility_name", "")).strip()
         logo = self.logo_path(config)
+        position = normalize_branding_position(config.get("position"))
         if not facility and logo is None:
             return False
 
@@ -141,6 +173,7 @@ class InstitutionBrandingService:
             margin = 18.0
             header_h = min(82.0, max(64.0, height * 0.095))
             gap = 10.0
+            left_edge = margin
             right_edge = width - margin
             center_y = height - margin - header_h / 2.0
             logo_size: tuple[float, float] | None = None
@@ -150,11 +183,14 @@ class InstitutionBrandingService:
                 max_w, max_h = 216.0, header_h - 6.0
                 scale = min(max_w / max(iw, 1), max_h / max(ih, 1))
                 logo_size = (iw * scale, ih * scale)
+            logo_x = (
+                right_edge - (logo_size[0] if logo_size else 0.0)
+                if position == POSITION_TOP_RIGHT
+                else left_edge
+            )
             if facility:
-                # Fit the name and logo into the bounded right header.  The
-                # normal 8pt font is retained whenever possible; only very
-                # long names reduce the logo width/font size, never the page
-                # content area or the right-edge alignment.
+                # Fit the complete block into the bounded page header.  The
+                # same sizing rules apply at either edge.
                 font_name = "Helvetica-Bold"
                 font_size = 10.0
                 available = max(36.0, width - 2.0 * margin)
@@ -177,19 +213,34 @@ class InstitutionBrandingService:
                             allowed_logo_width,
                             logo_h * allowed_logo_width / max(logo_w, 1.0),
                         )
-                logo_left = right_edge - (logo_size[0] if logo_size else 0.0)
-                text_right = logo_left - gap if logo_size else right_edge
-                layer.setFont(font_name, font_size)
-                layer.drawRightString(
-                    text_right,
-                    center_y - font_size * 0.35,
-                    facility,
+                logo_x = (
+                    right_edge - (logo_size[0] if logo_size else 0.0)
+                    if position == POSITION_TOP_RIGHT
+                    else left_edge
                 )
+                layer.setFont(font_name, font_size)
+                if position == POSITION_TOP_RIGHT:
+                    text_right = logo_x - gap if logo_size else right_edge
+                    layer.drawRightString(
+                        text_right,
+                        center_y - font_size * 0.35,
+                        facility,
+                    )
+                else:
+                    text_left = (
+                        logo_x + logo_size[0] + gap
+                        if logo_size else left_edge
+                    )
+                    layer.drawString(
+                        text_left,
+                        center_y - font_size * 0.35,
+                        facility,
+                    )
             if logo_size:
                 draw_w, draw_h = logo_size
                 layer.drawImage(
                     ImageReader(str(logo)),
-                    right_edge - draw_w,
+                    logo_x,
                     center_y - draw_h / 2.0,
                     width=draw_w,
                     height=draw_h,
@@ -239,6 +290,107 @@ def brand_generated_pdf(owner: Any, pdf_path: str | Path) -> bool:
     return False
 
 
+class _BrandingPreview(QWidget):
+    """Small grey page mock-up sharing the PDF block orientation."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("institutionBrandingPreview")
+        self.setMinimumSize(420, 176)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._enabled = False
+        self._facility_name = ""
+        self._logo_path: Path | None = None
+        self._position = POSITION_TOP_RIGHT
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt API name
+        return QSize(520, 210)
+
+    def set_preview(
+        self,
+        *,
+        enabled: bool,
+        facility_name: str,
+        logo_path: Path | None,
+        position: str,
+    ) -> None:
+        self._enabled = bool(enabled)
+        self._facility_name = str(facility_name or "").strip()
+        self._logo_path = logo_path if logo_path and logo_path.is_file() else None
+        self._position = normalize_branding_position(position)
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802 - Qt API name
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        page = QRectF(self.rect()).adjusted(8, 8, -8, -8)
+        painter.setPen(QColor("#9ca3aa"))
+        painter.setBrush(QColor("#e5e7e9"))
+        painter.drawRoundedRect(page, 3, 3)
+
+        # Muted body lines make the header position legible without pretending
+        # to preview a specific exporter or covering its content.
+        painter.setPen(QColor("#c1c6ca"))
+        body_top = page.top() + 76
+        for fraction, offset in ((0.84, 0), (0.66, 18), (0.78, 36), (0.52, 54)):
+            painter.drawLine(
+                int(page.left() + 18),
+                int(body_top + offset),
+                int(page.left() + 18 + (page.width() - 36) * fraction),
+                int(body_top + offset),
+            )
+
+        painter.save()
+        painter.setOpacity(1.0 if self._enabled else 0.38)
+        margin = 18.0
+        gap = 9.0
+        header = QRectF(page.left() + margin, page.top() + 14, page.width() - 2 * margin, 48)
+        pixmap = QPixmap(str(self._logo_path)) if self._logo_path is not None else QPixmap()
+        logo_w = logo_h = 0.0
+        if not pixmap.isNull():
+            scaled = pixmap.scaled(
+                132,
+                46,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            logo_w = float(scaled.width())
+            logo_h = float(scaled.height())
+            logo_x = (
+                header.right() - logo_w
+                if self._position == POSITION_TOP_RIGHT
+                else header.left()
+            )
+            logo_y = header.center().y() - logo_h / 2.0
+            painter.drawPixmap(int(logo_x), int(logo_y), scaled)
+        else:
+            logo_x = header.right() if self._position == POSITION_TOP_RIGHT else header.left()
+
+        if self._facility_name:
+            font = QFont(self.font())
+            font.setBold(True)
+            font.setPointSizeF(max(8.0, font.pointSizeF()))
+            painter.setFont(font)
+            painter.setPen(QColor("#343a40"))
+            if self._position == POSITION_TOP_RIGHT:
+                right = logo_x - gap if logo_w else header.right()
+                text_rect = QRectF(header.left(), header.top(), max(1.0, right - header.left()), header.height())
+                alignment = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            else:
+                left = logo_x + logo_w + gap if logo_w else header.left()
+                text_rect = QRectF(left, header.top(), max(1.0, header.right() - left), header.height())
+                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            elided = painter.fontMetrics().elidedText(
+                self._facility_name,
+                Qt.TextElideMode.ElideRight,
+                max(1, int(text_rect.width())),
+            )
+            painter.drawText(text_rect, alignment, elided)
+        painter.restore()
+        painter.end()
+
+
 class InstitutionBrandingDialog(QDialog):
     def __init__(
         self,
@@ -257,15 +409,19 @@ class InstitutionBrandingDialog(QDialog):
         self.messages = messages or {}
         self.embedded = bool(embedded)
         self._remove_logo = False
+        self._logo_controls_compact: bool | None = None
         self.setWindowTitle(self._text("branding.title", "Institution branding"))
-        self.setMinimumWidth(560)
         if self.embedded:
             self.setWindowFlags(Qt.WindowType.Widget)
+        else:
+            self.setMinimumSize(480, 360)
         config = service.load()
         self._initial_config = dict(config)
 
         outer = QVBoxLayout(self)
         form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.enabled = QCheckBox(
             self._text(
                 "branding.enabled",
@@ -284,28 +440,55 @@ class InstitutionBrandingDialog(QDialog):
             self._text("branding.remove", "Remove")
         )
         self.remove_button.clicked.connect(self._remove_selected_logo)
-        logo_row = QHBoxLayout()
-        logo_row.addWidget(self.logo, 1)
-        logo_row.addWidget(self.choose_button)
-        logo_row.addWidget(self.remove_button)
+        for button in (self.choose_button, self.remove_button):
+            button.setMinimumWidth(button.sizeHint().width())
+        self._logo_controls = QWidget(self)
+        self._logo_controls.setObjectName("institutionBrandingLogoControls")
+        self._logo_controls_layout = QGridLayout(self._logo_controls)
+        self._logo_controls_layout.setContentsMargins(0, 0, 0, 0)
+        self._logo_controls_layout.setSpacing(5)
+
+        self.position_left = QRadioButton(
+            self._text("branding.position.top_left", "Top left"), self
+        )
+        self.position_left.setObjectName("institutionBrandingPositionTopLeft")
+        self.position_right = QRadioButton(
+            self._text("branding.position.top_right", "Top right"), self
+        )
+        self.position_right.setObjectName("institutionBrandingPositionTopRight")
+        self._position_group = QButtonGroup(self)
+        self._position_group.setExclusive(True)
+        self._position_group.addButton(self.position_left)
+        self._position_group.addButton(self.position_right)
+        if normalize_branding_position(config.get("position")) == POSITION_TOP_LEFT:
+            self.position_left.setChecked(True)
+        else:
+            self.position_right.setChecked(True)
+        position_row = QWidget(self)
+        position_layout = QHBoxLayout(position_row)
+        position_layout.setContentsMargins(0, 0, 0, 0)
+        position_layout.addWidget(self.position_left)
+        position_layout.addWidget(self.position_right)
+        position_layout.addStretch()
+
         form.addRow("", self.enabled)
         form.addRow(
             self._text("branding.institution_name", "Institution name:"),
             self.name,
         )
-        form.addRow(self._text("branding.logo", "Logo:"), logo_row)
-        outer.addLayout(form)
-        self.preview = QLabel()
-        self.preview.setWordWrap(True)
-        outer.addWidget(self.preview)
-        self.preview_logo = QLabel()
-        self.preview_logo.setMinimumHeight(132)
-        self.preview_logo.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        form.addRow(self._text("branding.logo", "Logo:"), self._logo_controls)
+        form.addRow(
+            self._text("branding.position", "Header position:"),
+            position_row,
         )
-        outer.addWidget(self.preview_logo)
+        outer.addLayout(form)
+        self.preview = _BrandingPreview(self)
+        outer.addWidget(self.preview, 1)
         self.name.textChanged.connect(self._refresh_preview)
         self.enabled.toggled.connect(self._refresh_preview)
+        self.position_left.toggled.connect(self._refresh_preview)
+        self.position_right.toggled.connect(self._refresh_preview)
+        self._set_logo_controls_compact(False)
         self._refresh_preview()
         for widget in (
             self.enabled,
@@ -313,6 +496,8 @@ class InstitutionBrandingDialog(QDialog):
             self.logo,
             self.choose_button,
             self.remove_button,
+            self.position_left,
+            self.position_right,
         ):
             widget.setEnabled(self.authorized)
         if not self.embedded:
@@ -323,6 +508,33 @@ class InstitutionBrandingDialog(QDialog):
             buttons.accepted.connect(self._save)
             buttons.rejected.connect(self.reject)
             outer.addWidget(buttons)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt API name
+        super().resizeEvent(event)
+        self._set_logo_controls_compact(self.width() < 560)
+
+    def _set_logo_controls_compact(self, compact: bool) -> None:
+        compact = bool(compact)
+        if self._logo_controls_compact == compact:
+            return
+        layout = self._logo_controls_layout
+        for widget in (self.logo, self.choose_button, self.remove_button):
+            layout.removeWidget(widget)
+        if compact:
+            layout.addWidget(self.logo, 0, 0, 1, 2)
+            layout.addWidget(self.choose_button, 1, 0)
+            layout.addWidget(self.remove_button, 1, 1)
+            layout.setColumnStretch(0, 1)
+            layout.setColumnStretch(1, 1)
+        else:
+            layout.addWidget(self.logo, 0, 0)
+            layout.addWidget(self.choose_button, 0, 1)
+            layout.addWidget(self.remove_button, 0, 2)
+            layout.setColumnStretch(0, 1)
+            layout.setColumnStretch(1, 0)
+            layout.setColumnStretch(2, 0)
+        self._logo_controls_compact = compact
+        self._logo_controls.updateGeometry()
 
     def _text(self, key: str, fallback: str) -> str:
         return str(self.messages.get(key, fallback))
@@ -345,34 +557,19 @@ class InstitutionBrandingDialog(QDialog):
         self._refresh_preview()
 
     def _refresh_preview(self) -> None:
-        state = (
-            self._text("branding.state.enabled", "Enabled")
-            if self.enabled.isChecked()
-            else self._text("branding.state.disabled", "Disabled")
-        )
-        name = self.name.text().strip() or self._text(
-            "branding.no_name", "(no institution name)"
-        )
-        self.preview.setText(
-            self._text(
-                "branding.preview",
-                "Preview — {state}: {name}\n"
-                "The logo keeps its aspect ratio inside a bounded PDF header.",
-            ).format(state=state, name=name)
-        )
-        self.preview_logo.clear()
         logo_path = Path(self.logo.text()) if self.logo.text() else self.service.logo_path()
-        if not self._remove_logo and logo_path and logo_path.is_file():
-            from PyQt6.QtGui import QPixmap
-            pixmap = QPixmap(str(logo_path))
-            if not pixmap.isNull():
-                self.preview_logo.setPixmap(
-                    pixmap.scaled(
-                        288, 126,
-                        aspectRatioMode=Qt.AspectRatioMode.KeepAspectRatio,
-                        transformMode=Qt.TransformationMode.SmoothTransformation,
-                    )
-                )
+        if self._remove_logo:
+            logo_path = None
+        self.preview.set_preview(
+            enabled=self.enabled.isChecked(),
+            facility_name=self.name.text(),
+            logo_path=logo_path,
+            position=(
+                POSITION_TOP_LEFT
+                if self.position_left.isChecked()
+                else POSITION_TOP_RIGHT
+            ),
+        )
 
     def save_embedded(self) -> bool:
         unchanged = (
@@ -382,6 +579,12 @@ class InstitutionBrandingDialog(QDialog):
             == self.enabled.isChecked()
             and str(self._initial_config.get("facility_name", "")).strip()
             == self.name.text().strip()
+            and normalize_branding_position(self._initial_config.get("position"))
+            == (
+                POSITION_TOP_LEFT
+                if self.position_left.isChecked()
+                else POSITION_TOP_RIGHT
+            )
         )
         if unchanged:
             return True
@@ -390,6 +593,11 @@ class InstitutionBrandingDialog(QDialog):
                 enabled=self.enabled.isChecked(),
                 facility_name=self.name.text(),
                 logo_source=self.logo.text(),
+                position=(
+                    POSITION_TOP_LEFT
+                    if self.position_left.isChecked()
+                    else POSITION_TOP_RIGHT
+                ),
                 actor=self.actor,
                 authorized=self.authorized,
                 remove_logo=self._remove_logo,
@@ -406,6 +614,7 @@ class InstitutionBrandingDialog(QDialog):
         self._initial_config = dict(saved)
         self.logo.clear()
         self._remove_logo = False
+        self._refresh_preview()
         return True
 
     def _save(self) -> None:

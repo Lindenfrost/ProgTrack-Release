@@ -231,6 +231,12 @@ only in role tabs whose configured blocks support them. Its icon picker shows
 every packaged SVG in `icons/ui`; custom role labels are facility-owned text
 and do not require additions to the shipped language catalogs.
 
+The filter row below the main animal list combines a short-name prefix search
+with three icon checkboxes for female, male, and unknown sex. All three sex
+filters start enabled. Clear one or more checkboxes to hide those animals; the
+result is combined immediately with the name, role, project, species, archive,
+and active-plugin filters rather than changing any animal record.
+
 <table>
   <thead><tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">UI icon</th><th>Current role</th><th>Typical use</th></tr></thead>
   <tbody>
@@ -381,11 +387,13 @@ graphics at the root of `icons/` may remain PNG assets.
 Lord, Master, and Manager users can open `Settings -> Conventions ->
 Institution branding` and
 store an institution name plus an optional PNG/JPEG logo in backend-managed
-storage. Branding is applied to every supported PDF export, right-aligned in a
-bounded header area. The logo keeps its aspect ratio and is automatically
-scaled down when the source image is too large; it cannot fill or cover the
-whole page. The setting is shared by the selected backend and is included in
-backend interchange packages.
+storage. A shared position setting places the complete branding block at the
+top left or top right of every supported PDF page; top right remains the
+default for older configurations. The grey page preview shows the effective
+institution name, logo, and selected edge before saving. The logo keeps its
+aspect ratio and is automatically scaled down when the source image is too
+large, so it cannot fill or cover the page. The setting is shared by the
+selected backend and is included in backend interchange packages.
 
 PDF exports are available across Animal Reports, Medi Track, Sample Track, Cage
 Track, Flow Track, and Master Track audit logs. XLSX exports use plain text

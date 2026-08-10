@@ -85,6 +85,7 @@ from Plugins.core.backend_configuration import (
 )
 from Plugins.core.ui_icons import (
     apply_icon,
+    canonical_icon_value,
     icon as ui_icon,
     resolve_icon_path as ui_icon_path,
 )
@@ -148,6 +149,7 @@ from Plugins.core.identity_conventions import (
     relationship_candidates,
     relationship_display_label,
     regenerated_id_for_edit,
+    sex_token,
 )
 from Plugins.core.lifecycle_events import (
     add_lifecycle_event,
@@ -347,6 +349,8 @@ class Phase(Enum):
 # Adjust these two values to change ALL create/edit animal dialogs.
 UI_STD_DIALOG_WIDTH: int = 520     # overall dialog width
 UI_STD_FIELD_MIN_WIDTH: int = 180   # minimum width for input widgets
+_MAIN_ANIMAL_SIDEBAR_WIDTH: int = 200
+_MAIN_ANIMAL_LIST_MIN_WIDTH: int = 130
 
 # # ================================================================ #
 # # 4. Qt Import                                                       #
@@ -1027,6 +1031,76 @@ class GenotypeCatalogEditor(QWidget):
         }
 
 
+class _ConventionsCollapsibleSection(QWidget):
+    """One full-width conventions section using the Project Track affordance."""
+
+    def __init__(
+        self,
+        title: str,
+        *,
+        collapsed: bool = True,
+        object_name: str = "",
+        on_toggled=None,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._title = str(title)
+        self._on_toggled = on_toggled
+        self.setObjectName(object_name)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+
+        self._button = QPushButton(self)
+        self._button.setObjectName(f"{object_name}Toggle" if object_name else "")
+        self._button.setCheckable(True)
+        self._button.setChecked(not collapsed)
+        self._button.setFlat(True)
+        self._button.setStyleSheet(
+            "QPushButton { text-align: left; font-weight: bold; border: none; padding: 4px; }"
+        )
+
+        self._content = QWidget(self)
+        self._content.setObjectName(f"{object_name}Content" if object_name else "")
+        self._content_layout = QVBoxLayout(self._content)
+        self._content_layout.setContentsMargins(12, 4, 4, 6)
+        self._content_layout.setSpacing(4)
+        self._content.setVisible(not collapsed)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(self._button)
+        outer.addWidget(self._content)
+        self._button.toggled.connect(self._set_expanded)
+        self._update_button(not collapsed)
+
+    def _update_button(self, expanded: bool) -> None:
+        self._button.setText(self._title)
+        apply_icon(
+            self._button,
+            "toggle.collapse" if expanded else "toggle.expand",
+            fallback=self._title,
+        )
+
+    def _set_expanded(self, expanded: bool) -> None:
+        self._content.setVisible(bool(expanded))
+        self._update_button(bool(expanded))
+        self.updateGeometry()
+        parent = self.parentWidget()
+        if parent is not None:
+            parent.updateGeometry()
+        if callable(self._on_toggled):
+            QTimer.singleShot(0, self._on_toggled)
+
+    def content_layout(self) -> QVBoxLayout:
+        return self._content_layout
+
+    def is_expanded(self) -> bool:
+        return self._button.isChecked()
+
+    def set_expanded(self, expanded: bool) -> None:
+        self._button.setChecked(bool(expanded))
+
+
 class _CurrentPageTabWidget(QTabWidget):
     """Report geometry for the visible page instead of the widest page.
 
@@ -1579,38 +1653,24 @@ class StyleSettingsDialog(QDialog):
         self._identity_component_columns = columns
         layout.invalidate()
         self._identity_component_row.adjustSize()
-        self._identity_form.invalidate()
+        if hasattr(self, "_identity_sections_layout"):
+            self._identity_sections_layout.invalidate()
         self._identity_content.updateGeometry()
 
     def _apply_conventions_reflow(self, page_width: int) -> None:
         """Reflow the two naturally horizontal pages for the usable width."""
         usable = max(1, int(page_width))
         self._set_visual_compact(usable < 680)
-        # Five selectors in one row only remain comfortable on genuinely
-        # wide work areas.  A normal 1366px laptop uses a readable 3+2 grid
-        # instead of forcing the whole dialog to monitor width.
-        if usable >= 1320:
+        # The five equally sized ID selectors form one compact row on a normal
+        # laptop.  Smaller work areas retain equal widths while reflowing to
+        # 3+2 or 2-column rows instead of widening the dialog off-screen.
+        if usable >= 780:
             component_columns = 5
-        elif usable >= 780:
+        elif usable >= 560:
             component_columns = 3
         else:
             component_columns = 2
         self._set_identity_component_columns(component_columns)
-        # At laptop/narrow-window widths, a QFormLayout's normal side-by-side
-        # label/field calculation adds both natural widths and can make a
-        # perfectly scrollable catalogue dictate the entire dialog width.
-        # Wrap fields below their labels instead; the catalogues then consume
-        # the available width and retain vertical/horizontal scrolling only
-        # for genuinely long entries.
-        row_policy = (
-            QFormLayout.RowWrapPolicy.WrapLongRows
-            if usable < 780
-            else QFormLayout.RowWrapPolicy.DontWrapRows
-        )
-        if self._identity_form.rowWrapPolicy() != row_policy:
-            self._identity_form.setRowWrapPolicy(row_policy)
-            self._identity_form.invalidate()
-            self._identity_content.updateGeometry()
 
     @staticmethod
     def _activated_widget_hint(widget: QWidget) -> QSize:
@@ -1656,10 +1716,9 @@ class StyleSettingsDialog(QDialog):
             return self._role_setup_natural_size()
         if current is self._identity_lifecycle_tab:
             content = self._activated_widget_hint(self._identity_content)
-            # A modest working-width floor prevents avoidable horizontal
-            # scrolling for the 3+2 ID selector grid without inheriting the
-            # much wider Role setup table.
-            return QSize(max(content.width() + 28, 780), content.height() + 28)
+            # Keep the normal five-selector row readable, while the section
+            # content remains independently collapsible and scrollable.
+            return QSize(max(content.width() + 28, 900), content.height() + 28)
         if current is self._branding_editor:
             return self._activated_widget_hint(self._branding_editor)
         return self._activated_widget_hint(current)
@@ -1801,12 +1860,12 @@ class StyleSettingsDialog(QDialog):
         header = self.role_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
-        for column, width in ((2, 270), (3, 220)):
+        for column, width in ((2, 230), (3, 220)):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
             self.role_table.setColumnWidth(column, width)
         for column in (7, 8):
-            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
-            self.role_table.setColumnWidth(column, 245)
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
+            self.role_table.setColumnWidth(column, 165)
         self.role_table.setColumnHidden(5, True)
         self.role_table.setColumnHidden(6, True)
         self.role_table.verticalHeader().setVisible(False)
@@ -1859,11 +1918,11 @@ class StyleSettingsDialog(QDialog):
         )
         content = QWidget(scroll)
         content.setObjectName("conventionsIdentityContent")
-        form = QFormLayout(content)
-        form.setFieldGrowthPolicy(
-            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
-        )
-        self._identity_form = form
+        sections_layout = QVBoxLayout(content)
+        sections_layout.setContentsMargins(4, 4, 4, 4)
+        sections_layout.setSpacing(3)
+        self._identity_sections_layout = sections_layout
+        self._identity_sections: Dict[str, _ConventionsCollapsibleSection] = {}
         self._identity_conventions = (
             self.parent_app._load_identity_conventions()
         )
@@ -1890,6 +1949,12 @@ class StyleSettingsDialog(QDialog):
         self._id_component_combos: List[QComboBox] = []
         for component_index, configured in enumerate(configured_components):
             combo = QComboBox(component_row)
+            combo.setObjectName(f"identityIdComponent{component_index + 1}")
+            combo.setSizeAdjustPolicy(
+                QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            )
+            combo.setMinimumContentsLength(13)
+            combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             for value, label in component_options:
                 combo.addItem(label, value)
             index = combo.findData(configured)
@@ -1901,9 +1966,31 @@ class StyleSettingsDialog(QDialog):
         self._identity_component_layout = component_layout
         self._identity_component_row = component_row
         self._identity_component_columns = 5
-        form.addRow(
-            self.messages.get("settings.identity.id_pattern", "Animal ID pattern:"),
+
+        def add_section(
+            section_id: str,
+            title: str,
+            widget: QWidget,
+            *,
+            collapsed: bool = True,
+        ) -> _ConventionsCollapsibleSection:
+            section = _ConventionsCollapsibleSection(
+                title,
+                collapsed=collapsed,
+                object_name=f"identitySection_{section_id}",
+                on_toggled=self._schedule_current_tab_fit,
+                parent=content,
+            )
+            section.content_layout().addWidget(widget)
+            sections_layout.addWidget(section)
+            self._identity_sections[section_id] = section
+            return section
+
+        add_section(
+            "id_pattern",
+            self.messages.get("settings.identity.id_pattern", "Animal ID pattern"),
             component_row,
+            collapsed=False,
         )
 
         def species_changed(values: List[str]) -> None:
@@ -1927,7 +2014,8 @@ class StyleSettingsDialog(QDialog):
             ),
             parent=content,
         )
-        form.addRow(
+        add_section(
+            "species",
             self.messages.get("settings.identity.species", "Registered species:"),
             self._species_catalog_editor,
         )
@@ -1937,7 +2025,8 @@ class StyleSettingsDialog(QDialog):
             messages=self.messages,
             parent=content,
         )
-        form.addRow(
+        add_section(
+            "animal_origins",
             self.messages.get("settings.identity.animal_origins", "Animal origins:"),
             self._origin_catalog_editor,
         )
@@ -1948,7 +2037,8 @@ class StyleSettingsDialog(QDialog):
             messages=self.messages,
             parent=content,
         )
-        form.addRow(
+        add_section(
+            "genotypes",
             self.messages.get("settings.identity.genotypes", "Genotypes by species:"),
             self._genotype_catalog_editor,
         )
@@ -1966,7 +2056,12 @@ class StyleSettingsDialog(QDialog):
                 parent=content,
             )
             self._lifecycle_catalog_edits[key] = edit
-            form.addRow(self.messages.get(f"settings.identity.{key}", fallback), edit)
+            add_section(
+                key,
+                self.messages.get(f"settings.identity.{key}", fallback),
+                edit,
+            )
+        sections_layout.addStretch()
         scroll.setWidget(content)
         outer.addWidget(scroll)
         self._identity_scroll = scroll
@@ -2033,12 +2128,13 @@ class StyleSettingsDialog(QDialog):
     def _set_role_icon_button_visual(self, button, icon_value: str) -> None:
         from PyQt6.QtCore import QSize
 
+        icon_value = canonical_icon_value(icon_value)
         path = self._role_icon_path(icon_value)
         button.setIcon(QIcon(str(path)) if path is not None else QIcon())
-        button.setIconSize(QSize(42, 42))
+        button.setIconSize(QSize(36, 36))
         # An unresolved legacy key remains recoverable through the tooltip but
         # is never presented as if it were normal icon artwork.
-        button.setText("" if path is not None else "?")
+        button.setText("" if path is not None or not icon_value else "?")
         button.setToolTip(
             str(icon_value or self.messages.get(
                 "settings.role_setup.representation.no_icon", "No icon selected"
@@ -2048,11 +2144,12 @@ class StyleSettingsDialog(QDialog):
     def _make_role_icon_picker_cell(self, icon_value: str):
         button = QPushButton(self.role_table)
         button.setObjectName("roleIconPickerButton")
-        button.setFixedSize(56, 56)
+        button.setFixedSize(46, 46)
         button.setEnabled(self._role_setup_editable)
         button.setStyleSheet("QPushButton { padding: 2px; }")
-        button.setProperty("roleIconValue", str(icon_value or ""))
-        self._set_role_icon_button_visual(button, str(icon_value or ""))
+        canonical = canonical_icon_value(icon_value)
+        button.setProperty("roleIconValue", canonical)
+        self._set_role_icon_button_visual(button, canonical)
         button.clicked.connect(
             lambda _checked=False, picker=button: self._open_role_icon_picker(picker)
         )
@@ -2060,13 +2157,12 @@ class StyleSettingsDialog(QDialog):
 
     def _make_role_representation_cell(self, role):
         container = QWidget(self.role_table)
-        outer = QVBoxLayout(container)
+        outer = QHBoxLayout(container)
         outer.setContentsMargins(2, 2, 2, 2)
-        outer.setSpacing(2)
+        outer.setSpacing(4)
         group = QButtonGroup(container)
         group.setExclusive(True)
 
-        icon_row = QHBoxLayout()
         icon_radio = QRadioButton(
             self.messages.get("settings.role_setup.representation.svg", "SVG"),
             container,
@@ -2074,12 +2170,9 @@ class StyleSettingsDialog(QDialog):
         icon_radio.setObjectName("roleRepresentationIconRadio")
         icon_button = self._make_role_icon_picker_cell(str(role.get("icon") or ""))
         group.addButton(icon_radio)
-        icon_row.addWidget(icon_radio)
-        icon_row.addWidget(icon_button)
-        icon_row.addStretch()
-        outer.addLayout(icon_row)
+        outer.addWidget(icon_radio)
+        outer.addWidget(icon_button)
 
-        text_row = QHBoxLayout()
         text_radio = QRadioButton(
             self.messages.get("settings.role_setup.representation.text", "Text"),
             container,
@@ -2090,10 +2183,10 @@ class StyleSettingsDialog(QDialog):
         text_edit.setPlaceholderText(
             self.messages.get("settings.role_setup.representation.text_placeholder", "Role text")
         )
+        text_edit.setMinimumWidth(72)
         group.addButton(text_radio)
-        text_row.addWidget(text_radio)
-        text_row.addWidget(text_edit, 1)
-        outer.addLayout(text_row)
+        outer.addWidget(text_radio)
+        outer.addWidget(text_edit, 1)
 
         mode = str(role.get("representation_mode") or REPRESENTATION_ICON)
         if mode == REPRESENTATION_TEXT:
@@ -2132,7 +2225,14 @@ class StyleSettingsDialog(QDialog):
     def _role_representation_from_table(self, row: int):
         container = self.role_table.cellWidget(row, 2) if self.role_table else None
         item = self.role_table.item(row, 2) if self.role_table else None
-        icon = (item.text() if item is not None else "").strip()
+        icon_button = (
+            container.findChild(QPushButton, "roleIconPickerButton")
+            if container is not None else None
+        )
+        stored_icon = icon_button.property("roleIconValue") if icon_button is not None else None
+        if not stored_icon and item is not None:
+            stored_icon = item.data(Qt.ItemDataRole.UserRole) or item.text()
+        icon = canonical_icon_value(stored_icon)
         if container is None:
             return REPRESENTATION_ICON, icon, ""
         mode = str(container.property("roleRepresentationMode") or REPRESENTATION_ICON)
@@ -2160,7 +2260,8 @@ class StyleSettingsDialog(QDialog):
             return
         item = self.role_table.item(row, 2)
         if item is not None:
-            item.setText(str(icon_value))
+            item.setText("")
+            item.setData(Qt.ItemDataRole.UserRole, str(icon_value))
         button.setProperty("roleIconValue", str(icon_value))
         self._set_role_icon_button_visual(button, str(icon_value))
         container = self.role_table.cellWidget(row, 2)
@@ -2246,13 +2347,20 @@ class StyleSettingsDialog(QDialog):
                 lambda _checked=False, color_button=button: self._choose_role_color(color_button)
             )
             layout.addWidget(button)
-        reset = QPushButton("?", container)
+        reset = QPushButton("", container)
         reset.setObjectName("roleColorResetButton")
         reset.setFixedSize(30, 34)
         reset.setEnabled(self._role_setup_editable)
         reset.setToolTip(self.messages.get(
             "settings.role_setup.color.reset", "Reset role colors to defaults"
         ))
+        apply_icon(
+            reset,
+            "action.refresh",
+            fallback=self.messages.get(
+                "settings.role_setup.color.reset", "Reset role colors to defaults"
+            ),
+        )
         reset.clicked.connect(
             lambda _checked=False, cell=container, role_data=dict(role): self._reset_role_colors(
                 cell, role_data
@@ -2356,6 +2464,7 @@ class StyleSettingsDialog(QDialog):
         blocks_text: str,
         mode: str,
         custom_name: str = "",
+        preferred_preset: str = "",
     ):
         current_blocks = self.parent_app._normalize_role_dialog_blocks(blocks_text)
         combo = RolePresetCombo()
@@ -2371,6 +2480,7 @@ class StyleSettingsDialog(QDialog):
         combo.setProperty("roleSetupPreviousIndex", 0)
 
         matched_index = -1
+        preferred_index = -1
         for preset_id, label in self._role_block_preset_options():
             preset_blocks = self._blocks_for_preset(preset_id, mode)
             combo.addItem(
@@ -2378,7 +2488,13 @@ class StyleSettingsDialog(QDialog):
                 {"preset": preset_id, "blocks": preset_blocks, "name": label},
             )
             if preset_blocks == current_blocks:
-                matched_index = combo.count() - 1
+                if matched_index < 0:
+                    matched_index = combo.count() - 1
+                if preset_id == str(preferred_preset or "").strip():
+                    preferred_index = combo.count() - 1
+
+        if preferred_index >= 0:
+            matched_index = preferred_index
 
         saved_name = normalized_preset_name(custom_name)
         for preset in self._custom_role_block_presets:
@@ -2564,11 +2680,13 @@ class StyleSettingsDialog(QDialog):
         blocks_text: str,
         mode: str,
         custom_name: str,
+        preferred_preset: str = "",
     ) -> QWidget:
         combo = self._make_role_block_preset_combo(
             blocks_text,
             mode,
             custom_name,
+            preferred_preset,
         )
         delete_button = combo.delete_button
         delete_button.setToolTip(
@@ -2734,7 +2852,7 @@ class StyleSettingsDialog(QDialog):
     def _add_role_table_row(self, role):
         row = self.role_table.rowCount()
         self.role_table.insertRow(row)
-        self.role_table.setRowHeight(row, 88)
+        self.role_table.setRowHeight(row, 58)
 
         active_item = QTableWidgetItem("")
         active_item.setCheckState(
@@ -2760,10 +2878,16 @@ class StyleSettingsDialog(QDialog):
         custom_preset_names = role.get("custom_preset_names", {}) if isinstance(role.get("custom_preset_names"), dict) else {}
         for col in range(1, 9):
             value = values_by_column[col]
-            item = QTableWidgetItem("" if col in (3, 7, 8) else value)
+            item = QTableWidgetItem("" if col in (2, 3, 7, 8) else value)
+            if col == 2:
+                item.setData(
+                    Qt.ItemDataRole.UserRole,
+                    canonical_icon_value(value),
+                )
             if col in (7, 8):
                 item.setData(Qt.ItemDataRole.UserRole + 1, value)
-            item.setData(Qt.ItemDataRole.UserRole, dict(role))
+            if col != 2:
+                item.setData(Qt.ItemDataRole.UserRole, dict(role))
             immutable = col in (2, 3, 5, 6)
             if immutable or not self._role_setup_editable:
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -2779,6 +2903,7 @@ class StyleSettingsDialog(QDialog):
                     values_by_column[col],
                     mode,
                     str(custom_preset_names.get(mode, "")),
+                    str(role.get("field_preset", "basic")),
                 ),
             )
 
@@ -6939,11 +7064,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.lst = QListWidget()
         self.lst.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
         self.lst.itemSelectionChanged.connect(self._on_select)
-        self.lst.setMinimumWidth(200)
+        self.lst.setMinimumWidth(_MAIN_ANIMAL_LIST_MIN_WIDTH)
         content_layout.addWidget(self.lst, 1)  # Stretch factor
 
         sidebar.addWidget(content_container, 1)  # Add to main sidebar with stretch
 
+        self.animal_filter_row = QWidget()
+        animal_filter_layout = QHBoxLayout(self.animal_filter_row)
+        animal_filter_layout.setContentsMargins(0, 0, 0, 0)
+        animal_filter_layout.setSpacing(2)
         self._animal_name_filter = ""
         self.animal_name_filter_edit = QLineEdit()
         self.animal_name_filter_edit.setPlaceholderText(
@@ -6951,8 +7080,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.animal_name_filter_edit.setToolTip(
             self.messages.get("sidebar.animal_name_filter.tooltip", "Filter the visible animal list by short name"))
         self.animal_name_filter_edit.setClearButtonEnabled(True)
+        self.animal_name_filter_edit.setMinimumWidth(64)
         self.animal_name_filter_edit.textChanged.connect(self._on_animal_name_filter_changed)
-        sidebar.addWidget(self.animal_name_filter_edit)
+        animal_filter_layout.addWidget(self.animal_name_filter_edit, 1)
+        self.sex_filter_widget = self._create_animal_sex_filter_widget()
+        animal_filter_layout.addWidget(self.sex_filter_widget)
+        sidebar.addWidget(self.animal_filter_row)
 
         # Sidebar action buttons with dynamic visibility
         self.btn_new = QPushButton(self.messages["button.sidebar.new_animal"])
@@ -7915,13 +8048,23 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # 7.15 Build UI
     #     Initialize and assemble sidebar and main content areas.
     # ------------------------
+    def _make_main_sidebar_widget(self, sidebar: QVBoxLayout) -> QWidget:
+        """Wrap the sidebar at the compact tester-approved working width."""
+        widget = QWidget()
+        widget.setObjectName("mainAnimalSidebar")
+        widget.setLayout(sidebar)
+        widget.setFixedWidth(_MAIN_ANIMAL_SIDEBAR_WIDTH)
+        widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        return widget
+
     def _build_ui(self) -> None:
         """Build the main user interface."""
         content_layout = QHBoxLayout()
         self.main_layout.addLayout(content_layout)
 
         sidebar = self._build_sidebar()
-        content_layout.addLayout(sidebar)
+        self.sidebar_widget = self._make_main_sidebar_widget(sidebar)
+        content_layout.addWidget(self.sidebar_widget)
 
         # Create tab widget to hold Plots and Reports
         self.main_tabs = QTabWidget()
@@ -8696,6 +8839,66 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _on_animal_name_filter_changed(self, text: str) -> None:
         self._animal_name_filter = text
         self._refresh_list()
+
+    def _create_animal_sex_filter_widget(self) -> QWidget:
+        """Build the compact, icon-based main-list sex filter."""
+        widget = QWidget()
+        widget.setObjectName("animalSexFilterWidget")
+        self.sex_filter_widget = widget
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+        self.sex_filter_checkboxes = {}
+        for token, semantic_id in (
+            ("F", "role.female"),
+            ("M", "role.male"),
+            ("U", "heritage.placeholder_animal"),
+        ):
+            checkbox = QCheckBox()
+            checkbox.setObjectName(f"animalSexFilter{token}")
+            checkbox.setChecked(True)
+            apply_icon(checkbox, semantic_id)
+            checkbox.setIconSize(QSize(20, 20))
+            checkbox.setFixedWidth(36)
+            checkbox.setStyleSheet(
+                "QCheckBox { spacing: 0px; }"
+                "QCheckBox::indicator { width: 14px; height: 14px; }"
+            )
+            checkbox.toggled.connect(self._on_animal_sex_filter_changed)
+            self.sex_filter_checkboxes[token] = checkbox
+            layout.addWidget(checkbox)
+        self._update_animal_sex_filter_texts()
+        return widget
+
+    def _update_animal_sex_filter_texts(self) -> None:
+        """Refresh localized labels, tooltips, and accessibility text."""
+        group_text = self.messages.get("sidebar.sex_filter.label", "Sex:").rstrip(":")
+        self.sex_filter_widget.setAccessibleName(group_text)
+        self.sex_filter_widget.setAccessibleDescription(group_text)
+        specs = {
+            "F": ("sidebar.sex_filter.female.tooltip", "Show female animals"),
+            "M": ("sidebar.sex_filter.male.tooltip", "Show male animals"),
+            "U": ("sidebar.sex_filter.unknown.tooltip", "Show animals with unknown sex"),
+        }
+        for token, checkbox in getattr(self, "sex_filter_checkboxes", {}).items():
+            key, fallback = specs[token]
+            text = self.messages.get(key, fallback)
+            checkbox.setToolTip(text)
+            checkbox.setAccessibleName(text)
+            checkbox.setAccessibleDescription(text)
+
+    def _on_animal_sex_filter_changed(self, _checked: bool) -> None:
+        self._refresh_list()
+
+    def _animal_matches_sex_filter(self, animal_data: Dict[str, Any]) -> bool:
+        checkboxes = getattr(self, "sex_filter_checkboxes", None)
+        if not checkboxes:
+            return True
+        token = sex_token(animal_data.get("sex"))
+        checkbox = checkboxes.get(token)
+        return checkbox is None or checkbox.isChecked()
+
 
     def _can_configure_animal_roles(self) -> bool:
         mt = getattr(self, "master_track", None)
@@ -11810,6 +12013,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         show_all_animals_tab = idx == all_idx
 
         def _visible_in_animal_sidebar(data: Dict[str, Any]) -> bool:
+            if not self._animal_matches_sex_filter(data):
+                return False
             if show_all_animals_tab:
                 return True
             return animal_visible_by_project_scope(data, unrestricted_projects, visible_projects)
@@ -11959,6 +12164,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                 heritage_plugin.store.is_heritage_only(name)
                                 and name not in self.animals
                                 and name not in self.archived
+                                and self._animal_matches_sex_filter(data)
                             )
                         }
                         if active_species:
@@ -16873,6 +17079,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.messages.get("sidebar.animal_name_filter.placeholder", "Filter animals by name"))
             self.animal_name_filter_edit.setToolTip(
                 self.messages.get("sidebar.animal_name_filter.tooltip", "Filter the visible animal list by short name"))
+        self._update_animal_sex_filter_texts()
         self.btn_restore.setText(self.messages["button.sidebar.restore"])
         self.btn_delete.setText(self.messages["button.sidebar.delete"])
         if hasattr(self, 'archive_toggle_btn'):

@@ -32,6 +32,14 @@ LEGACY_ROLE_ICON_ALIASES = {
     "\U0001f43e": "role.partner",
     "\u26a4": "role.breeding",
     "\U0001f4a1": "role.experimental",
+    # Early Role Setup builds could persist the shortened semantic text that
+    # was visible underneath the SVG picker.  Keep those records rendering
+    # while the next authorized Role Setup save writes the canonical value.
+    "role.fem": "role.female",
+    "role.mal": "role.male",
+    "role.off": "role.offspring",
+    "role.par": "role.partner",
+    "role.bre": "role.breeding",
 }
 
 

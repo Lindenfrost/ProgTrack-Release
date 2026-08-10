@@ -770,38 +770,20 @@ class HeritageTrackWidget(QWidget):
             self.ax.axhline(y, color="#d9d9d9", linewidth=0.6, alpha=0.45, zorder=0)
             y += grid_spacing
 
-    def _legend_gutter_pixels(self) -> float:
-        """Return a compact, content-aware legend reservation in pixels."""
-        if not getattr(self, "_legend_gutter_active", False):
-            return 0.0
-        canvas_width, _canvas_height = self.canvas.get_width_height()
-        if canvas_width <= 0:
-            return 112.0
-        no_genotype = self.messages.get(
-            "heritage_track.legend.no_genotype", "(no genotype)"
-        )
-        labels = [
-            self.messages.get("heritage_track.legend.title", "Genotype legend"),
-            no_genotype,
-        ]
-        route_plan = getattr(self, "_route_plan", None)
-        if route_plan is not None:
-            for node in route_plan.animal_positions:
-                record = self._get_node_record(node)
-                labels.append(str(record.get("genotype", "") or no_genotype))
-        longest = max((len(str(label).strip()) for label in labels), default=14)
-        wanted = 30.0 + (longest * 5.25)
-        return min(canvas_width * 0.28, max(88.0, min(156.0, wanted)))
-
     def _configure_subplot_geometry(self, chronological: bool) -> None:
-        """Reserve only the pixels actually needed by axes and legend."""
+        """Give the pedigree the full canvas except for real axis furniture.
+
+        The genotype legend is an in-axes overlay.  It must never create a
+        permanent blank column: large pedigrees need that horizontal space,
+        while a small legend can be placed over whichever corner is clear in
+        the current frame.
+        """
         canvas_width, canvas_height = self.canvas.get_width_height()
         if canvas_width <= 0 or canvas_height <= 0:
             return
         left_px = 58.0 if chronological else 4.0
         bottom_px = 16.0 if chronological else 4.0
-        gutter_px = self._legend_gutter_pixels()
-        right_px = (20.0 + gutter_px) if gutter_px else 4.0
+        right_px = 4.0
         top_px = 4.0
         left = min(0.22, left_px / canvas_width)
         right = max(left + 0.35, 1.0 - (right_px / canvas_width))
@@ -871,15 +853,22 @@ class HeritageTrackWidget(QWidget):
         self.ax.grid(axis="y", which="minor", color="#ededed", linewidth=0.35, zorder=0)
         self._configure_subplot_geometry(True)
 
-    def _place_legend_in_clear_gutter(self, legend) -> None:
-        """Choose a right-gutter slot that does not cover overhanging names."""
+    def _place_legend_overlay(self, legend) -> None:
+        """Place an in-axes legend where it hides the least pedigree content.
+
+        Candidate locations are all constrained to the Axes rectangle, so a
+        long localized genotype can neither be clipped at the figure edge nor
+        force a dedicated right-hand gutter.  Real rendered marker and text
+        extents decide the location deterministically.
+        """
         try:
             renderer = self.canvas.get_renderer()
-            label_boxes: List[Bbox] = []
+            content_boxes: List[Bbox] = []
             for meta in self.node_meta.values():
                 if meta.get("kind") != "animal":
                     continue
                 artists = [
+                    meta.get("marker_artist"),
                     meta.get("label_artist"),
                     meta.get("f_artist"),
                     meta.get("undated_artist"),
@@ -890,37 +879,43 @@ class HeritageTrackWidget(QWidget):
                     if artist is not None and artist.get_visible()
                 ]
                 if boxes:
-                    label_boxes.append(Bbox.union(boxes))
+                    content_boxes.append(Bbox.union(boxes))
 
             candidates = (
-                ("lower left", (1.01, 0.0)),
-                ("upper left", (1.01, 1.0)),
-                ("center left", (1.01, 0.5)),
+                "lower right",
+                "upper right",
+                "lower left",
+                "upper left",
+                "center right",
+                "center left",
             )
             best = None
-            for preference, (location, anchor) in enumerate(candidates):
+            axes_anchor = (0.0, 0.0, 1.0, 1.0)
+            for preference, location in enumerate(candidates):
                 legend.set_loc(location)
-                legend.set_bbox_to_anchor(anchor)
+                legend.set_bbox_to_anchor(axes_anchor, transform=self.ax.transAxes)
                 legend_box = legend.get_window_extent(renderer)
                 overlap_count = 0
                 overlap_area = 0.0
-                for label_box in label_boxes:
-                    overlap = Bbox.intersection(legend_box, label_box)
+                for content_box in content_boxes:
+                    overlap = Bbox.intersection(legend_box, content_box)
                     if overlap is None or overlap.width <= 1.0 or overlap.height <= 1.0:
                         continue
                     overlap_count += 1
                     overlap_area += overlap.width * overlap.height
                 score = (overlap_count, round(overlap_area, 3), preference)
                 if best is None or score < best[0]:
-                    best = (score, location, anchor)
+                    best = (score, location)
             if best is not None:
                 legend.set_loc(best[1])
-                legend.set_bbox_to_anchor(best[2])
+                legend.set_bbox_to_anchor(axes_anchor, transform=self.ax.transAxes)
         except Exception:
-            # Legend placement is cosmetic; retain the safe centre-gutter
-            # default if a backend cannot provide text extents yet.
-            legend.set_loc("center left")
-            legend.set_bbox_to_anchor((1.01, 0.5))
+            # Legend placement is cosmetic; the lower-right fallback is still
+            # guaranteed to stay inside the plotting rectangle.
+            legend.set_loc("lower right")
+            legend.set_bbox_to_anchor(
+                (0.0, 0.0, 1.0, 1.0), transform=self.ax.transAxes
+            )
 
     def _snap_to_grid(self, x: float, y: float) -> Tuple[float, float]:
         if not self.settings.get("snap_to_grid", False):
@@ -1529,6 +1524,37 @@ class HeritageTrackWidget(QWidget):
             )
         return None
 
+    def _view_data_aspect(self) -> float:
+        """Return the display ratio of one vertical to one horizontal unit.
+
+        Focused pedigrees may carry several generations of context around only
+        a handful of selected animals.  Keeping the historical 1:1 data aspect
+        while fitting that complete vertical context compressed names and
+        sibling branches horizontally.  A reduced vertical/horizontal display
+        ratio retains a full generation row at a readable height. Chronology
+        receives a little more horizontal capacity because nearby dates may
+        not be separated by moving their Y coordinates.
+        """
+
+        selected = {
+            str(node)
+            for node in list(getattr(self.app, "selected_animals", []) or [])
+            + list(getattr(self.app, "_selected_heritage_only", []) or [])
+            if str(node).strip()
+        }
+        if 0 < len(selected) <= 8:
+            # Chronological rows need extra horizontal capacity because dates
+            # close in time cannot be separated vertically.  Normalized rows
+            # already stagger those conflicts and retain the more compact
+            # half-height aspect.
+            return (
+                0.60
+                if self.settings.get("vertical_layout_mode")
+                == VERTICAL_LAYOUT_CHRONOLOGICAL
+                else 0.5
+            )
+        return 1.0
+
     def _apply_aspect_fill(
         self,
         xlim: Tuple[float, float],
@@ -1544,15 +1570,16 @@ class HeritageTrackWidget(QWidget):
             return xlim, ylim
 
         fig_ratio = axes_width / axes_height
+        target_data_ratio = fig_ratio * self._view_data_aspect()
         data_ratio = x_range / y_range
         x_center = (xlim[0] + xlim[1]) / 2.0
         y_center = (ylim[0] + ylim[1]) / 2.0
 
-        if data_ratio > fig_ratio:
-            new_y_range = x_range / fig_ratio
+        if data_ratio > target_data_ratio:
+            new_y_range = x_range / target_data_ratio
             return xlim, (y_center - new_y_range / 2.0, y_center + new_y_range / 2.0)
 
-        new_x_range = y_range * fig_ratio
+        new_x_range = y_range * target_data_ratio
         return (x_center - new_x_range / 2.0, x_center + new_x_range / 2.0), ylim
 
     def _order_partner_component(
@@ -2416,9 +2443,12 @@ class HeritageTrackWidget(QWidget):
             for node in positions
             if not self._is_family_node(node)
         ]
-        label_margin_x = max(label_half_widths, default=0.48) + 0.30
+        label_margin_x = max(label_half_widths, default=0.48) + 0.45
         margin_x = max(1.15, min(2.4, max(span_x * 0.08, label_margin_x)))
-        margin_y = max(1.15, min(1.8, span_y * 0.08))
+        # Marker labels extend about 30 screen pixels below the data point.
+        # The former 1.8-unit cap could clip the detail line at the bottom of
+        # a focused view after its compressed vertical aspect was applied.
+        margin_y = max(1.6, min(2.4, span_y * 0.08))
         full_xlim = (min(xs) - margin_x, max(xs) + margin_x)
         full_ylim = (min(ys) - margin_y, max(ys) + margin_y)
 
@@ -2429,20 +2459,37 @@ class HeritageTrackWidget(QWidget):
         axes_width, axes_height = self._effective_axes_pixels()
         if axes_width <= 0 or axes_height <= 0:
             return full_xlim, full_ylim
-        min_pixels_per_unit = 36.0
-        max_width = max(16.0, axes_width / min_pixels_per_unit)
-        max_height = max(11.0, axes_height / min_pixels_per_unit)
-        full_width = full_xlim[1] - full_xlim[0]
-        full_height = full_ylim[1] - full_ylim[0]
-        if full_width <= max_width and full_height <= max_height:
-            return full_xlim, full_ylim
-
         selected = [
             node
             for node in list(getattr(self.app, "selected_animals", []) or [])
             + list(getattr(self.app, "_selected_heritage_only", []) or [])
             if node in positions and not self._is_family_node(node)
         ]
+        min_pixels_per_unit = 36.0
+        focused = bool(selected and len(selected) <= 8)
+        horizontal_pixels_per_unit = (
+            25.0
+            if focused
+            and self.settings.get("vertical_layout_mode")
+            == VERTICAL_LAYOUT_CHRONOLOGICAL
+            else min_pixels_per_unit
+        )
+        max_width = max(16.0, axes_width / horizontal_pixels_per_unit)
+        # A focused pedigree has few semantic anchors but may include a deep
+        # ancestry context. At 36 px/unit the viewport cut through complete
+        # family routes, leaving Elladan/Elrohir with misleading short stubs.
+        # Generation rows remain clearly separated at 16 px/unit (57.6 px per
+        # standard 3.6-unit generation), so focused views may fit the complete
+        # vertical context while large all-animal trees remain pannable.
+        vertical_pixels_per_unit = (
+            16.0 if focused else min_pixels_per_unit
+        )
+        max_height = max(11.0, axes_height / vertical_pixels_per_unit)
+        full_width = full_xlim[1] - full_xlim[0]
+        full_height = full_ylim[1] - full_ylim[0]
+        if full_width <= max_width and full_height <= max_height:
+            return full_xlim, full_ylim
+
         if selected and len(selected) <= 8:
             center_x = sum(positions[node][0] for node in selected) / len(selected)
             center_y = sum(positions[node][1] for node in selected) / len(selected)
@@ -2752,12 +2799,28 @@ class HeritageTrackWidget(QWidget):
             for node in animal_positions
         }
         has_secondary_label = self.settings.get("animal_label_detail", "inbreeding_f") != "nothing"
-        if self.settings.get("show_legend", True):
-            self._pedigree_router.label_width_scale = (
-                1.55 if chronological_mode else 1.22
-            )
-        else:
-            self._pedigree_router.label_width_scale = 1.0
+        # The legend is an in-axes overlay and does not narrow the geometry.
+        # Keep the label estimate independent of whether the overlay is shown.
+        focused_aspect = self._view_data_aspect()
+        is_focused = focused_aspect < 1.0
+        axes_pixel_width, _axes_pixel_height = self._effective_axes_pixels()
+        # A typical 1360-wide application leaves roughly 1000 px for the
+        # Heritage canvas after the animal sidebar. Chronological focus cannot
+        # move close birth dates vertically, so use a modest responsive artist
+        # scale below that threshold rather than merging neighbouring names.
+        focused_artist_scale = (
+            0.86
+            if is_focused
+            and chronological_mode
+            and axes_pixel_width < 1050.0
+            else 1.0
+        )
+        self._pedigree_router.label_width_scale = 1.0
+        # Focused views deliberately show substantially more vertical data per
+        # pixel. Reserve the renderer's true marker + two-line point offsets
+        # before routing, independent of the slightly wider chronological
+        # aspect used to separate animals born close together.
+        self._pedigree_router.label_height_scale = 3.0 if is_focused else 1.0
         route_plan = self._pedigree_router.plan(
             animal_positions,
             families,
@@ -2865,9 +2928,6 @@ class HeritageTrackWidget(QWidget):
 
         self._force_relayout = False
 
-        self._legend_gutter_active = bool(
-            self.settings.get("show_legend", True) and animal_positions
-        )
         self._configure_subplot_geometry(chronological_mode)
 
         prev_xlim = self.current_xlim
@@ -2884,9 +2944,38 @@ class HeritageTrackWidget(QWidget):
         view_xlim, view_ylim = self._apply_aspect_fill(view_xlim, view_ylim)
 
         self.ax.clear()
-        self.ax.set_aspect("equal", adjustable="box")
+        self.ax.set_aspect(self._view_data_aspect(), adjustable="box")
         self.ax.set_xlim(view_xlim)
         self.ax.set_ylim(view_ylim)
+
+        # Route planning happens in data coordinates, while marker and text
+        # sizes are expressed in points. Once the final responsive viewport is
+        # known, rebuild only the visual masks with a footprint calibrated to
+        # the actual pixels per data unit. Without this final pass a correctly
+        # routed rail could leave a short visible dash through a foreign name
+        # (for example the misleading ``Arwen - Isildur`` small-window case).
+        x0, y0 = self.ax.transData.transform((0.0, 0.0))
+        x1, _ = self.ax.transData.transform((1.0, 0.0))
+        _, y1 = self.ax.transData.transform((0.0, 1.0))
+        x_pixels_per_unit = max(1.0, abs(float(x1 - x0)))
+        y_pixels_per_unit = max(1.0, abs(float(y1 - y0)))
+        saved_width_scale = self._pedigree_router.label_width_scale
+        saved_height_scale = self._pedigree_router.label_height_scale
+        try:
+            self._pedigree_router.label_width_scale = max(
+                saved_width_scale, 36.0 / x_pixels_per_unit
+            )
+            self._pedigree_router.label_height_scale = max(
+                saved_height_scale, 40.0 / (0.78 * y_pixels_per_unit)
+            )
+            self._pedigree_router.recompute_line_gaps(
+                route_plan,
+                labels=obstacle_labels,
+                show_inbreeding=has_secondary_label,
+            )
+        finally:
+            self._pedigree_router.label_width_scale = saved_width_scale
+            self._pedigree_router.label_height_scale = saved_height_scale
 
         if self.settings.get("show_grid", False):
             self._draw_grid()
@@ -3042,7 +3131,7 @@ class HeritageTrackWidget(QWidget):
                 [y],
                 linestyle="None",
                 marker=shape,
-                markersize=16.7,
+                markersize=16.7 * focused_artist_scale,
                 markeredgecolor=node_edge_color,
                 markerfacecolor=node_face_color,
                 markeredgewidth=lw,
@@ -3055,7 +3144,7 @@ class HeritageTrackWidget(QWidget):
                 textcoords="offset points",
                 ha="center",
                 va="top",
-                fontsize=9,
+                fontsize=9 * focused_artist_scale,
                 color=text_color,
                 fontstyle="italic" if is_heritage_only else "normal",
                 fontweight="normal" if (is_dead or is_ghost) else "bold",
@@ -3073,7 +3162,7 @@ class HeritageTrackWidget(QWidget):
                     textcoords="offset points",
                     ha="center",
                     va="top",
-                    fontsize=7,
+                    fontsize=7 * focused_artist_scale,
                     color="#777777" if not is_ghost else "#bbbbbb",
                     zorder=4,
                     path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
@@ -3088,7 +3177,7 @@ class HeritageTrackWidget(QWidget):
                     textcoords="offset points",
                     ha="left",
                     va="bottom",
-                    fontsize=7,
+                    fontsize=7 * focused_artist_scale,
                     color="#777777" if not is_ghost else "#aaaaaa",
                     zorder=5,
                     path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
@@ -3123,9 +3212,6 @@ class HeritageTrackWidget(QWidget):
                 "undated_artist": undated_artist,
             }
 
-        self._legend_gutter_active = bool(
-            self.settings.get("show_legend", True) and legend_entries
-        )
         if chronological_mode:
             self._configure_chronological_axis()
         else:
@@ -3155,16 +3241,18 @@ class HeritageTrackWidget(QWidget):
 
             legend = self.ax.legend(
                 handles=legend_handles,
-                loc="center left",
-                bbox_to_anchor=(1.01, 0.5),
-                borderaxespad=0.0,
+                loc="lower right",
+                bbox_to_anchor=(0.0, 0.0, 1.0, 1.0),
+                bbox_transform=self.ax.transAxes,
+                borderaxespad=0.55,
                 title=self.messages.get("heritage_track.legend.title", "Genotype legend"),
                 fontsize=8,
                 title_fontsize=8,
                 frameon=True,
             )
             legend.set_zorder(12)
-            self._place_legend_in_clear_gutter(legend)
+            legend.get_frame().set_alpha(0.86)
+            self._place_legend_overlay(legend)
 
         self.current_xlim = self.ax.get_xlim()
         self.current_ylim = self.ax.get_ylim()
