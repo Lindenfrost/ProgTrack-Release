@@ -551,7 +551,6 @@ class ProjectsTrackPlugin:
         self._discover_species()
         self._sidebar_visible = self._load_sidebar_visibility()
 
-        btn_w  = _SidebarToggleButton.TOGGLE_W   # 18 px
         cont_w = 35                               # each content column width
 
         sp_lbl   = self.app.messages.get('projects.sidebar.toggle.species',  'Species')
@@ -725,18 +724,34 @@ class ProjectsTrackPlugin:
         self._save_sidebar_visibility()
 
     def _update_container_width(self) -> None:
-        """Set container fixed width based on toggle state."""
+        """Give hidden filter columns no horizontal layout footprint.
+
+        The toggle's own size hint is the authoritative collapsed width. In
+        the expanded state both real content widgets contribute their fixed
+        width, including the useful All-species column when no concrete
+        species has been discovered yet.
+        """
         if not self.tabs_container:
             return
-        btn_w  = _SidebarToggleButton.TOGGLE_W
-        cont_w = 35
-        w = btn_w  # toggle always present
+        toggle = self._sidebar_toggle_btn
+        toggle_width = (
+            max(toggle.minimumWidth(), toggle.sizeHint().width())
+            if toggle is not None
+            else _SidebarToggleButton.TOGGLE_W
+        )
+        width = toggle_width
         if self._sidebar_visible:
-            has_species = bool(self.all_species)
-            if has_species:
-                w += cont_w  # species column
-            w += cont_w      # project column always
-        self.tabs_container.setFixedWidth(w)
+            for content in (self._sp_content_w, self._proj_content_w):
+                if content is not None and not content.isHidden():
+                    width += content.width()
+        self.tabs_container.setFixedWidth(width)
+        layout = self.tabs_container.layout()
+        if layout is not None:
+            layout.activate()
+        self.tabs_container.updateGeometry()
+        parent = self.tabs_container.parentWidget()
+        if parent is not None:
+            parent.updateGeometry()
 
     def on_user_login(self) -> None:
         """Reload per-user sidebar toggle state after login/logout."""

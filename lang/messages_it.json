@@ -1643,7 +1643,7 @@
   "master_track.label.profession": "Professione:",
   "master_track.manage.col_profile": "Profilo",
   "sidebar.show_archived": "Mostra archiviati",
-  "sidebar.animal_name_filter.placeholder": "Filtra animali per nome",
+  "sidebar.animal_name_filter.placeholder": "Nome animale",
   "sidebar.animal_name_filter.tooltip": "Filtra l'elenco visibile per nome breve",
   "sidebar.sex_filter.label": "Sesso:",
   "sidebar.sex_filter.female.tooltip": "Mostra animali femmina",

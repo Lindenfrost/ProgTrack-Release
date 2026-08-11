@@ -346,11 +346,11 @@ authority. Typical responsibilities are:
 <table>
   <thead><tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">UI icon</th><th>Job</th><th>Typical focus</th></tr></thead>
   <tbody>
-    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/job_vet.png" width="28" alt="Vet"></td><td><code>vet</code></td><td>Medical review, health status, Medi Track, reports, and welfare-relevant visibility.</td></tr>
-    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/job_keeper.png" width="28" alt="Keeper"></td><td><code>keeper</code></td><td>Housing, cage placement/inspection, animal core data, and permitted measurements.</td></tr>
-    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/job_manager.png" width="28" alt="Manager"></td><td><code>manager</code></td><td>Animal creation, imports, archiving/deletion, projects, cages, documents, and role configuration.</td></tr>
-    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/job_researcher.png" width="28" alt="Researcher"></td><td><code>researcher</code></td><td>Research measurements, imports/exports, reports, PdG, planning, flow, samples, and associated projects.</td></tr>
-    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/job_tester.png" width="28" alt="Tester"></td><td><code>tester</code></td><td>Restricted verification workflows and selected plugin access.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_veterinarian.svg" width="28" alt="Vet"></td><td><code>vet</code></td><td>Medical review, health status, Medi Track, reports, and welfare-relevant visibility.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/accountkeeper.svg" width="28" alt="Keeper"></td><td><code>keeper</code></td><td>Housing, cage placement/inspection, animal core data, and permitted measurements.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_manager.svg" width="28" alt="Manager"></td><td><code>manager</code></td><td>Animal creation, imports, archiving/deletion, projects, cages, documents, and role configuration.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_researcher.svg" width="28" alt="Researcher"></td><td><code>researcher</code></td><td>Research measurements, imports/exports, reports, PdG, planning, flow, samples, and associated projects.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_it_specialist.svg" width="28" alt="Tester"></td><td><code>tester</code></td><td>Restricted verification workflows and selected plugin access.</td></tr>
   </tbody>
 </table>
 

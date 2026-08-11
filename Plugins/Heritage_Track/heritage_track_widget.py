@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
+# Copyright Â© 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
 # Part of: ProgTrack 0.1.0 RC
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
@@ -84,7 +84,12 @@ from .layout_pipeline import (
     parse_complete_birth_date_ordinal,
 )
 from .pedigree_engine import PedigreeEngine
-from .pedigree_router import PedigreeRouter, RoutePlan
+from .pedigree_router import (
+    LAYOUT_MODE_FOCUSED,
+    LAYOUT_MODE_OVERVIEW,
+    PedigreeRouter,
+    RoutePlan,
+)
 from .scope_provider import ProjectsTrackScopeProvider
 from .ui_parent_fields import ParentSelector, build_parent_group, extract_parent_values
 
@@ -110,6 +115,7 @@ class NodeEditDialog(QDialog):
         species_options: Optional[List[str]] = None,
         birth_date: str = "",
         sex_editable: bool = True,
+        genotype_editable: bool = True,
         parent_options_provider: Optional[Callable[[str, str], List[str]]] = None,
     ):
         super().__init__(parent)
@@ -221,6 +227,15 @@ class NodeEditDialog(QDialog):
         form.addRow(messages.get("heritage_track.node.edit.fill_color", "Fill color:"), color_row)
 
         self.genotype_edit = QLineEdit(genotype or "")
+        self.genotype_edit.setEnabled(bool(genotype_editable))
+        if not genotype_editable:
+            self.genotype_edit.setToolTip(messages.get(
+                "heritage_track.genotype.read_only_core",
+                "Genotype is maintained by the main animal record.",
+            ))
+            self.genotype_edit.setStyleSheet(
+                "QLineEdit { background: #f0f0f0; color: #666; }"
+            )
         form.addRow(messages.get("heritage_track.node.edit.genotype", "Genotype:"), self.genotype_edit)
 
         root.addLayout(form)
@@ -277,9 +292,9 @@ class NodeEditDialog(QDialog):
         text = str(value or "").strip().lower()
         if not text:
             return ""
-        if text in {"m", "male", "man", "maschio", "maschile", "männlich", "mannlich", "м", "муж", "мужской", "самец"}:
+        if text in {"m", "male", "man", "maschio", "maschile", "mÃ¤nnlich", "mannlich", "Ð¼", "Ð¼ÑƒÐ¶", "Ð¼ÑƒÐ¶ÑÐºÐ¾Ð¹", "ÑÐ°Ð¼ÐµÑ†"}:
             return "male"
-        if text in {"f", "female", "woman", "femmina", "femminile", "weiblich", "w", "ж", "жен", "женский", "самка"}:
+        if text in {"f", "female", "woman", "femmina", "femminile", "weiblich", "w", "Ð¶", "Ð¶ÐµÐ½", "Ð¶ÐµÐ½ÑÐºÐ¸Ð¹", "ÑÐ°Ð¼ÐºÐ°"}:
             return "female"
         if text in {"u", "unknown", "unknown sex", "unbekannt", "sconosciuto", "sconosciuta"}:
             return "unknown"
@@ -338,7 +353,7 @@ class CoefficientDialog(QDialog):
         self.tabs.clear()
         self.tabs.addTab(
             self._build_table(lambda a, b: self.calculator.kinship_phi(a, b)),
-            self.messages.get("heritage_track.compare.tab.phi", "Kinship φ"),
+            self.messages.get("heritage_track.compare.tab.phi", "Kinship Ï†"),
         )
         self.tabs.addTab(
             self._build_table(lambda a, b: self.calculator.relationship_r(a, b)),
@@ -393,6 +408,13 @@ class HeritageTrackWidget(QWidget):
         self.node_meta: Dict[str, Dict[str, Any]] = {}
         self._pedigree_router = PedigreeRouter()
         self._route_plan: Optional[RoutePlan] = None
+        self._route_collections: List[LineCollection] = []
+        self._relationship_highlight_collections: List[LineCollection] = []
+        self._rendered_families: Dict[str, Dict[str, object]] = {}
+        self._rendered_engine: Optional[Any] = None
+        self._route_gap_pixel_scale: Tuple[float, float] = (1.0, 1.0)
+        self._route_gap_radius_pixels = 2.75
+        self._rendered_artist_scale = 1.0
         self.coeff_dialog: Optional[CoefficientDialog] = None
         self._coeff_dialog_pos = None  # type: Optional[Any]  # QPoint
         self._ghost_nodes: Set[str] = set()
@@ -416,6 +438,14 @@ class HeritageTrackWidget(QWidget):
         self.drag_threshold = 0.05
         self._drag_background: Optional[Any] = None
         self._drag_artist_map: Dict[str, Tuple[Any, ...]] = {}
+        # The genotype legend is an in-axes overlay. Keep its artist and
+        # normalized lower-left anchor separate from node dragging so a click
+        # on the legend never starts a tree pan or node move.
+        self._legend_artist: Optional[Any] = None
+        self._legend_anchor_axes: Optional[Tuple[float, float]] = None
+        self._legend_dragging = False
+        self._legend_drag_start_px: Optional[Tuple[float, float]] = None
+        self._legend_drag_start_anchor: Optional[Tuple[float, float]] = None
         # Screen-independent spatial index for hover/click hit testing.  The
         # previous implementation transformed every node on every mouse move,
         # which made dense trees increasingly sluggish.  A small data-space
@@ -424,6 +454,10 @@ class HeritageTrackWidget(QWidget):
         self._hit_grid: Dict[Tuple[int, int], List[str]] = {}
         self._hit_grid_cell_size = 2.0
         self.all_animals_mode = True
+        # all_animals_mode remains the no-selection persistence flag;
+        # layout_mode is the visible Focused/Overview decision for large
+        # explicit selections as well.
+        self.layout_mode = LAYOUT_MODE_OVERVIEW
         self._force_relayout = False
 
         # Double-click detection state (timer-based for reliability across backends)
@@ -770,6 +804,151 @@ class HeritageTrackWidget(QWidget):
             self.ax.axhline(y, color="#d9d9d9", linewidth=0.6, alpha=0.45, zorder=0)
             y += grid_spacing
 
+    def _animal_text_path_effects(self) -> List[Any]:
+        """Return a DPI-correct three-pixel white halo for animal text."""
+        dpi = max(1.0, float(self.figure.dpi))
+        return [
+            path_effects.withStroke(
+                linewidth=3.0 * 72.0 / dpi,
+                foreground="white",
+            )
+        ]
+
+    def _route_pixel_scale(self) -> Tuple[float, float]:
+        x0, y0 = self.ax.transData.transform((0.0, 0.0))
+        x1, _ = self.ax.transData.transform((1.0, 0.0))
+        _, y1 = self.ax.transData.transform((0.0, 1.0))
+        return (
+            max(1.0, abs(float(x1 - x0))),
+            max(1.0, abs(float(y1 - y0))),
+        )
+
+    def _recompute_route_visual_gaps(self) -> None:
+        """Rebuild marker/crossing gaps for the final current pixel scale."""
+        if self._route_plan is None:
+            return
+        x_pixels_per_unit, y_pixels_per_unit = self._route_pixel_scale()
+        self._route_gap_pixel_scale = (x_pixels_per_unit, y_pixels_per_unit)
+        marker_radius_pixels = (
+            (16.7 * self._rendered_artist_scale * float(self.figure.dpi) / 72.0)
+            / 2.0
+        ) + 1.5
+        marker_obstacles = self._pedigree_router.marker_obstacles(
+            self._route_plan.animal_positions,
+            half_width=marker_radius_pixels / x_pixels_per_unit,
+            half_height=marker_radius_pixels / y_pixels_per_unit,
+        )
+        junction_radius_pixels = (
+            (8.4 * float(self.figure.dpi) / 72.0) / 2.0
+        ) + 1.2
+        raw_junction_obstacles = self._pedigree_router.marker_obstacles(
+            self._route_plan.family_positions,
+            half_width=junction_radius_pixels / x_pixels_per_unit,
+            half_height=junction_radius_pixels / y_pixels_per_unit,
+        )
+        junction_obstacles = {
+            f"@{family_id}": rect
+            for family_id, rect in raw_junction_obstacles.items()
+        }
+        self._pedigree_router.recompute_line_gaps(
+            self._route_plan,
+            animal_gap_obstacles=marker_obstacles,
+            junction_gap_obstacles=junction_obstacles,
+            recompute_crossings=False,
+        )
+
+    def _replace_route_collections(self) -> None:
+        """Redraw only genealogy lines after masks or zoom scale change."""
+        for collection in self._route_collections:
+            if collection.axes is self.ax:
+                collection.remove()
+        self._route_collections = []
+        if self._route_plan is None:
+            return
+
+        route_batches: Dict[
+            Tuple[str, float, float],
+            List[List[Tuple[float, float]]],
+        ] = defaultdict(list)
+        for family_id, family in self._rendered_families.items():
+            if family_id not in self._route_plan.family_positions:
+                continue
+            mother = str(family.get("mother", "")).strip()
+            father = str(family.get("father", "")).strip()
+            for parent in (mother, father):
+                if parent not in self._route_plan.animal_positions:
+                    continue
+                color = "#cccccc" if parent in self._ghost_nodes else "#666666"
+                for first, second in self._route_plan.draw_segments(
+                    family_id,
+                    parent,
+                    gap_radius_pixels=self._route_gap_radius_pixels,
+                    pixel_scale=self._route_gap_pixel_scale,
+                ):
+                    route_batches[(color, 0.9, 1.1)].append([first, second])
+            for child in family.get("children", []):
+                if child not in self._route_plan.animal_positions:
+                    continue
+                color = "#cccccc" if child in self._ghost_nodes else "black"
+                for first, second in self._route_plan.draw_segments(
+                    family_id,
+                    child,
+                    gap_radius_pixels=self._route_gap_radius_pixels,
+                    pixel_scale=self._route_gap_pixel_scale,
+                ):
+                    route_batches[(color, 1.0, 1.0)].append([first, second])
+
+        for (color, linewidth, zorder), segments in route_batches.items():
+            if not segments:
+                continue
+            collection = LineCollection(
+                segments,
+                colors=[color],
+                linewidths=[linewidth],
+                zorder=zorder,
+            )
+            self.ax.add_collection(collection)
+            self._route_collections.append(collection)
+
+    def _replace_relationship_highlights(self) -> None:
+        """Redraw the selected relationship path with current pixel gaps."""
+        for collection in self._relationship_highlight_collections:
+            if collection.axes is self.ax:
+                collection.remove()
+        self._relationship_highlight_collections = []
+        if (
+            self._route_plan is None
+            or self._rendered_engine is None
+            or len(self.selected_nodes) != 2
+        ):
+            return
+
+        selected = sorted(self.selected_nodes, key=str.casefold)
+        calculator = InbreedingCalculator(
+            self._rendered_engine.get_genetic_parent_map()
+        )
+        if calculator.kinship_phi(selected[0], selected[1]) <= 0:
+            return
+        segments = self._bfs_relationship_path(
+            selected[0],
+            selected[1],
+            self._rendered_engine,
+            self._route_plan.animal_positions,
+            self._route_plan.family_positions,
+            self._rendered_families,
+        )
+        if not segments:
+            return
+        collection = LineCollection(
+            segments,
+            colors=["#e67e22"],
+            linewidths=[2.5],
+            zorder=1.8,
+        )
+        collection.set_capstyle("round")
+        self.ax.add_collection(collection)
+        self._relationship_highlight_collections.append(collection)
+
     def _configure_subplot_geometry(self, chronological: bool) -> None:
         """Give the pedigree the full canvas except for real axis furniture.
 
@@ -854,12 +1033,14 @@ class HeritageTrackWidget(QWidget):
         self._configure_subplot_geometry(True)
 
     def _place_legend_overlay(self, legend) -> None:
-        """Place an in-axes legend where it hides the least pedigree content.
+        """Place an in-axes legend in the least obstructed free rectangle.
 
-        Candidate locations are all constrained to the Axes rectangle, so a
-        long localized genotype can neither be clipped at the figure edge nor
-        force a dedicated right-hand gutter.  Real rendered marker and text
-        extents decide the location deterministically.
+        The legend is an overlay, never a layout column. Corner-only
+        placement is insufficient for dense overview trees because a corner
+        can contain a real node while the middle of the canvas is free. A
+        small deterministic grid of lower-left anchors is therefore scored
+        against valid rendered animal boxes; the chosen rectangle remains
+        fully inside the Axes and cannot clip the plot.
         """
         try:
             renderer = self.canvas.get_renderer()
@@ -867,55 +1048,164 @@ class HeritageTrackWidget(QWidget):
             for meta in self.node_meta.values():
                 if meta.get("kind") != "animal":
                     continue
-                artists = [
+                artists = (
                     meta.get("marker_artist"),
                     meta.get("label_artist"),
                     meta.get("f_artist"),
                     meta.get("undated_artist"),
-                ]
-                boxes = [
-                    artist.get_window_extent(renderer)
-                    for artist in artists
-                    if artist is not None and artist.get_visible()
-                ]
-                if boxes:
-                    content_boxes.append(Bbox.union(boxes))
-
-            candidates = (
-                "lower right",
-                "upper right",
-                "lower left",
-                "upper left",
-                "center right",
-                "center left",
-            )
-            best = None
-            axes_anchor = (0.0, 0.0, 1.0, 1.0)
-            for preference, location in enumerate(candidates):
-                legend.set_loc(location)
-                legend.set_bbox_to_anchor(axes_anchor, transform=self.ax.transAxes)
-                legend_box = legend.get_window_extent(renderer)
-                overlap_count = 0
-                overlap_area = 0.0
-                for content_box in content_boxes:
-                    overlap = Bbox.intersection(legend_box, content_box)
-                    if overlap is None or overlap.width <= 1.0 or overlap.height <= 1.0:
+                )
+                for artist in artists:
+                    if artist is None or not artist.get_visible():
                         continue
-                    overlap_count += 1
-                    overlap_area += overlap.width * overlap.height
-                score = (overlap_count, round(overlap_area, 3), preference)
-                if best is None or score < best[0]:
-                    best = (score, location)
-            if best is not None:
-                legend.set_loc(best[1])
-                legend.set_bbox_to_anchor(axes_anchor, transform=self.ax.transAxes)
+                    box = artist.get_window_extent(renderer)
+                    # Matplotlib may expose a 1x1 placeholder before a real
+                    # data transform is assigned; it is not an obstruction.
+                    if box.width > 1.0 and box.height > 1.0:
+                        content_boxes.append(box)
+
+            axes_box = self.ax.get_window_extent(renderer)
+            if axes_box.width <= 2.0 or axes_box.height <= 2.0:
+                raise RuntimeError("invalid axes bounds")
+
+            legend.set_loc("lower left")
+            legend.set_bbox_to_anchor((0.0, 0.0), transform=self.ax.transAxes)
+            legend_box = legend.get_window_extent(renderer)
+            width_norm = min(0.98, max(0.02, legend_box.width / axes_box.width))
+            height_norm = min(0.98, max(0.02, legend_box.height / axes_box.height))
+            # Leave room for Matplotlib borderaxespad so the rendered box
+            # remains inside the Axes rather than only its anchor point.
+            edge_margin = 0.03
+            max_x = max(0.0, 1.0 - width_norm - edge_margin)
+            max_y = max(0.0, 1.0 - height_norm - edge_margin)
+
+            stored_position = self.settings.get("legend_pos")
+            if isinstance(stored_position, (list, tuple)) and len(stored_position) == 2:
+                try:
+                    x = float(stored_position[0])
+                    y = float(stored_position[1])
+                except (TypeError, ValueError):
+                    x = y = 0.0
+                x = min(max_x, max(0.0, x))
+                y = min(max_y, max(0.0, y))
+                legend.set_loc("lower left")
+                legend.set_bbox_to_anchor((x, y), transform=self.ax.transAxes)
+                self._legend_anchor_axes = (x, y)
+                return
+
+            grid = (0.0, 0.12, 0.25, 0.38, 0.52, 0.66, 0.80, 1.0)
+            best = None
+            for y_index, y_fraction in enumerate(grid):
+                for x_index, x_fraction in enumerate(grid):
+                    x = min(max_x, max(0.0, x_fraction * max_x))
+                    y = min(max_y, max(0.0, y_fraction * max_y))
+                    legend.set_loc("lower left")
+                    legend.set_bbox_to_anchor((x, y), transform=self.ax.transAxes)
+                    candidate_box = legend.get_window_extent(renderer)
+                    overlap_count = 0
+                    overlap_area = 0.0
+                    for content_box in content_boxes:
+                        overlap = Bbox.intersection(candidate_box, content_box)
+                        if overlap is None or overlap.width <= 1.0 or overlap.height <= 1.0:
+                            continue
+                        overlap_count += 1
+                        overlap_area += overlap.width * overlap.height
+                    score = (
+                        overlap_count,
+                        round(overlap_area, 3),
+                        -round(y, 4),
+                        -round(x, 4),
+                        y_index * len(grid) + x_index,
+                    )
+                    if best is None or score < best[0]:
+                        best = (score, x, y)
+
+            if best is None:
+                best = ((0, 0.0, 0.0, 0.0, 0), 0.0, 0.0)
+            _score, x, y = best
+            legend.set_loc("lower left")
+            legend.set_bbox_to_anchor((x, y), transform=self.ax.transAxes)
+            self._legend_anchor_axes = (x, y)
         except Exception:
-            # Legend placement is cosmetic; the lower-right fallback is still
-            # guaranteed to stay inside the plotting rectangle.
-            legend.set_loc("lower right")
-            legend.set_bbox_to_anchor(
-                (0.0, 0.0, 1.0, 1.0), transform=self.ax.transAxes
-            )
+            # Cosmetic fallback, still constrained to the plotting rectangle.
+            legend.set_loc("lower left")
+            legend.set_bbox_to_anchor((0.0, 0.0), transform=self.ax.transAxes)
+            self._legend_anchor_axes = (0.0, 0.0)
+
+    def _legend_hit(self, event: Any) -> bool:
+        """Return whether a canvas event falls inside the visible legend."""
+        legend = self._legend_artist
+        if legend is None or not legend.get_visible() or event.inaxes != self.ax:
+            return False
+        try:
+            renderer = self.canvas.get_renderer()
+            bbox = legend.get_window_extent(renderer)
+            return bool(bbox.contains(float(event.x), float(event.y)))
+        except (AttributeError, TypeError, ValueError):
+            return False
+
+    def _legend_anchor_from_artist(self) -> Tuple[float, float]:
+        """Recover the current lower-left anchor when no cached value exists."""
+        if self._legend_anchor_axes is not None:
+            return self._legend_anchor_axes
+        legend = self._legend_artist
+        try:
+            renderer = self.canvas.get_renderer()
+            axes_box = self.ax.get_window_extent(renderer)
+            legend_box = legend.get_window_extent(renderer)
+            if axes_box.width > 1.0 and axes_box.height > 1.0:
+                return (
+                    (legend_box.x0 - axes_box.x0) / axes_box.width,
+                    (legend_box.y0 - axes_box.y0) / axes_box.height,
+                )
+        except (AttributeError, TypeError, ValueError):
+            pass
+        return (0.0, 0.0)
+
+    def _finish_legend_drag(self, event: Any) -> None:
+        """Persist a bounded axes-coordinate legend move and redraw."""
+        try:
+            if (
+                self._legend_drag_start_px is None
+                or self._legend_drag_start_anchor is None
+                or self._legend_artist is None
+            ):
+                return
+            renderer = self.canvas.get_renderer()
+            axes_box = self.ax.get_window_extent(renderer)
+            if axes_box.width <= 1.0 or axes_box.height <= 1.0:
+                return
+            dx = (float(event.x) - self._legend_drag_start_px[0]) / axes_box.width
+            dy = (float(event.y) - self._legend_drag_start_px[1]) / axes_box.height
+            x = self._legend_drag_start_anchor[0] + dx
+            y = self._legend_drag_start_anchor[1] + dy
+
+            # Measure the current legend footprint at the origin, then clamp
+            # the lower-left anchor so the frame remains inside the Axes.
+            legend = self._legend_artist
+            legend.set_loc("lower left")
+            legend.set_bbox_to_anchor((0.0, 0.0), transform=self.ax.transAxes)
+            legend_box = legend.get_window_extent(renderer)
+            width_norm = legend_box.width / axes_box.width
+            height_norm = legend_box.height / axes_box.height
+            edge_margin = 0.03
+            max_x = max(0.0, 1.0 - width_norm - edge_margin)
+            max_y = max(0.0, 1.0 - height_norm - edge_margin)
+            x = min(max_x, max(0.0, x))
+            y = min(max_y, max(0.0, y))
+            self._legend_anchor_axes = (x, y)
+            # Preserve the live widget settings (label detail, layout mode,
+            # grid and visibility) while persisting only the moved legend.
+            # Reloading the plugin record here could overwrite an in-memory
+            # setting changed immediately before the drag.
+            settings = dict(self.settings)
+            settings["legend_pos"] = [x, y]
+            self.settings = settings
+            self.plugin.set_settings(settings)
+            self.refresh_graph(keep_view=True)
+        finally:
+            self._legend_dragging = False
+            self._legend_drag_start_px = None
+            self._legend_drag_start_anchor = None
 
     def _snap_to_grid(self, x: float, y: float) -> Tuple[float, float]:
         if not self.settings.get("snap_to_grid", False):
@@ -1155,8 +1445,13 @@ class HeritageTrackWidget(QWidget):
             except Exception:
                 pass
 
-        # Clear previous positions cache to force proper layout of new animals
-        # This ensures placement rules distribute new animals properly
+        # A ghost's coordinates belong to the previous display graph.  Once it
+        # becomes an active selection, every visible branch can be re-ordered;
+        # retaining the old temporary map would re-inject stale ghost positions
+        # before the router sees the expanded graph.  Clear the transient cache
+        # together with the relayout request. Persistent Overview positions are
+        # still kept in the backend and are handled separately by refresh_graph.
+        self.temp_positions.clear()
         self._force_relayout = True
 
         # Refresh graph to show the updated selection
@@ -1594,7 +1889,7 @@ class HeritageTrackWidget(QWidget):
             if len(ordered_members) == 2 and node_x:
                 # Preserve the family-tree side already chosen by the layout.
                 # Alphabetical ordering flipped Arwen/Aragorn and
-                # Dorothea/Dáin, forcing their connectors through siblings.
+                # Dorothea/DÃ¡in, forcing their connectors through siblings.
                 def ancestry_center(node: str) -> float:
                     parent_values = (
                         engine.child_to_parents.get(node, {}) if engine else {}
@@ -1854,7 +2149,7 @@ class HeritageTrackWidget(QWidget):
     def _get_node_birth_date_text(self, node: str) -> str:
         ordinal = self._get_node_birth_ordinal(node)
         if ordinal is None:
-            return self.messages.get("heritage_track.node.detail.missing", "—")
+            return self.messages.get("heritage_track.node.detail.missing", "â€”")
         return datetime.fromordinal(ordinal).strftime("%d.%m.%Y")
 
     def _get_node_public_id(self, node: str, record: Optional[Dict[str, Any]] = None) -> str:
@@ -1863,7 +2158,7 @@ class HeritageTrackWidget(QWidget):
             value = str(source.get(key, "") or "").strip()
             if value:
                 return value
-        return self.messages.get("heritage_track.node.detail.missing", "—")
+        return self.messages.get("heritage_track.node.detail.missing", "â€”")
 
     def _get_node_detail_text(
         self,
@@ -2297,24 +2592,24 @@ class HeritageTrackWidget(QWidget):
     ) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
         """Path between two animals routed via their last common ancestor (LCA).
 
-        Uses two independent upward BFS passes (child→family→parent) rather than
+        Uses two independent upward BFS passes (childâ†’familyâ†’parent) rather than
         a single undirected BFS.  Undirected BFS fails in inbreeding cases because
         equal-length shortcuts through a shared parent are found before the path
         that passes through the actual LCA.
 
         Algorithm:
-          1. BFS strictly upward from node_a → prev_a, ancestor_set_a
-          2. BFS strictly upward from node_b → prev_b, ancestor_set_b
+          1. BFS strictly upward from node_a â†’ prev_a, ancestor_set_a
+          2. BFS strictly upward from node_b â†’ prev_b, ancestor_set_b
           3. LCA = common ancestor with minimum (hops_from_a + hops_from_b)
-          4. Full path = node_a →(up)→ LCA →(down)→ node_b
+          4. Full path = node_a â†’(up)â†’ LCA â†’(down)â†’ node_b
         """
         from collections import deque
 
         # Index which family each animal belongs to as a child or parent.
-        fam_parents: Dict[str, Set[str]] = {}   # fid → {mother, father}
-        fam_children: Dict[str, Set[str]] = {}  # fid → {children}
-        child_in: Dict[str, Set[str]] = defaultdict(set)   # animal → fids where it is a child
-        parent_in: Dict[str, Set[str]] = defaultdict(set)  # animal → fids where it is a parent
+        fam_parents: Dict[str, Set[str]] = {}   # fid â†’ {mother, father}
+        fam_children: Dict[str, Set[str]] = {}  # fid â†’ {children}
+        child_in: Dict[str, Set[str]] = defaultdict(set)   # animal â†’ fids where it is a child
+        parent_in: Dict[str, Set[str]] = defaultdict(set)  # animal â†’ fids where it is a parent
 
         for fid, fdata in families.items():
             mother = str(fdata.get("mother", "")).strip()
@@ -2330,21 +2625,21 @@ class HeritageTrackWidget(QWidget):
                 child_in[c].add(fid)
 
         def _bfs_up(start: str) -> Dict[str, str]:
-            """BFS strictly upward (child→family→parent). Returns prev[] map."""
+            """BFS strictly upward (childâ†’familyâ†’parent). Returns prev[] map."""
             prev: Dict[str, str] = {}
             visited: Set[str] = {start}
             q: deque = deque([start])
             while q:
                 cur = q.popleft()
                 if cur in fam_parents:
-                    # family node → go to its parent animals
+                    # family node â†’ go to its parent animals
                     for parent in sorted(fam_parents[cur]):
                         if parent not in visited:
                             visited.add(parent)
                             prev[parent] = cur
                             q.append(parent)
                 else:
-                    # animal → go to family nodes where it is a child
+                    # animal â†’ go to family nodes where it is a child
                     for fid in sorted(child_in.get(cur, set())):
                         if fid not in visited:
                             visited.add(fid)
@@ -2392,9 +2687,9 @@ class HeritageTrackWidget(QWidget):
             path.reverse()
             return path
 
-        path_up_a = _reconstruct_up(best_lca, prev_a, node_a)   # node_a → LCA
-        path_up_b = _reconstruct_up(best_lca, prev_b, node_b)   # node_b → LCA
-        path_down_b = list(reversed(path_up_b))                  # LCA → node_b
+        path_up_a = _reconstruct_up(best_lca, prev_a, node_a)   # node_a â†’ LCA
+        path_up_b = _reconstruct_up(best_lca, prev_b, node_b)   # node_b â†’ LCA
+        path_down_b = list(reversed(path_up_b))                  # LCA â†’ node_b
 
         full_path = path_up_a + path_down_b[1:]  # join at LCA (avoid duplicate)
 
@@ -2405,13 +2700,34 @@ class HeritageTrackWidget(QWidget):
         for i in range(len(full_path) - 1):
             n1, n2 = full_path[i], full_path[i + 1]
             route_segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
+            route_known = False
             if self._route_plan is not None:
-                if n1 in animal_positions and n2 in family_positions:
-                    drawn = self._route_plan.draw_segments(n2, n1)
+                if (
+                    n1 in animal_positions
+                    and n2 in family_positions
+                    and n1 in self._route_plan.routes.get(n2, {})
+                ):
+                    route_known = True
+                    drawn = self._route_plan.draw_segments(
+                        n2,
+                        n1,
+                        gap_radius_pixels=self._route_gap_radius_pixels,
+                        pixel_scale=self._route_gap_pixel_scale,
+                    )
                     route_segments = [(second, first) for first, second in reversed(drawn)]
-                elif n1 in family_positions and n2 in animal_positions:
-                    route_segments = self._route_plan.draw_segments(n1, n2)
-            if route_segments:
+                elif (
+                    n1 in family_positions
+                    and n2 in animal_positions
+                    and n2 in self._route_plan.routes.get(n1, {})
+                ):
+                    route_known = True
+                    route_segments = self._route_plan.draw_segments(
+                        n1,
+                        n2,
+                        gap_radius_pixels=self._route_gap_radius_pixels,
+                        pixel_scale=self._route_gap_pixel_scale,
+                    )
+            if route_known:
                 segments.extend(route_segments)
                 continue
 
@@ -2525,6 +2841,21 @@ class HeritageTrackWidget(QWidget):
             center_y + (visible_height / 2.0),
         )
 
+    @staticmethod
+    def _layout_mode_for_selection(selected_animals: List[str]) -> str:
+        """Return the visible layout mode for the current selection.
+
+        A single or small selection stays in the focused relationship view.
+        A large selection uses the all-animals/Overview presentation even
+        though its selected IDs still define the authorized display scope.
+        The threshold is shared with the router plan.
+        """
+        return (
+            LAYOUT_MODE_FOCUSED
+            if 0 < len(selected_animals) <= 8
+            else LAYOUT_MODE_OVERVIEW
+        )
+
     def _build_display_context(
         self,
         engine: PedigreeEngine,
@@ -2624,6 +2955,7 @@ class HeritageTrackWidget(QWidget):
         selected_heritage_only = list(getattr(self.app, "_selected_heritage_only", []) or [])
         if selected_heritage_only:
             selected_animals = selected_animals + selected_heritage_only
+        self.layout_mode = self._layout_mode_for_selection(selected_animals)
         self.all_animals_mode = len(selected_animals) == 0
 
         # No-selection mode only shows the splash screen.  Avoid building the
@@ -2815,7 +3147,9 @@ class HeritageTrackWidget(QWidget):
             and axes_pixel_width < 1050.0
             else 1.0
         )
-        self._pedigree_router.label_width_scale = 1.0
+        self._pedigree_router.label_width_scale = (
+            1.08 if is_focused and chronological_mode else 1.0
+        )
         # Focused views deliberately show substantially more vertical data per
         # pixel. Reserve the renderer's true marker + two-line point offsets
         # before routing, independent of the slightly wider chronological
@@ -2944,38 +3278,21 @@ class HeritageTrackWidget(QWidget):
         view_xlim, view_ylim = self._apply_aspect_fill(view_xlim, view_ylim)
 
         self.ax.clear()
+        self._legend_artist = None
+        self._legend_anchor_axes = None
         self.ax.set_aspect(self._view_data_aspect(), adjustable="box")
         self.ax.set_xlim(view_xlim)
         self.ax.set_ylim(view_ylim)
-
-        # Route planning happens in data coordinates, while marker and text
-        # sizes are expressed in points. Once the final responsive viewport is
-        # known, rebuild only the visual masks with a footprint calibrated to
-        # the actual pixels per data unit. Without this final pass a correctly
-        # routed rail could leave a short visible dash through a foreign name
-        # (for example the misleading ``Arwen - Isildur`` small-window case).
-        x0, y0 = self.ax.transData.transform((0.0, 0.0))
-        x1, _ = self.ax.transData.transform((1.0, 0.0))
-        _, y1 = self.ax.transData.transform((0.0, 1.0))
-        x_pixels_per_unit = max(1.0, abs(float(x1 - x0)))
-        y_pixels_per_unit = max(1.0, abs(float(y1 - y0)))
-        saved_width_scale = self._pedigree_router.label_width_scale
-        saved_height_scale = self._pedigree_router.label_height_scale
-        try:
-            self._pedigree_router.label_width_scale = max(
-                saved_width_scale, 36.0 / x_pixels_per_unit
-            )
-            self._pedigree_router.label_height_scale = max(
-                saved_height_scale, 40.0 / (0.78 * y_pixels_per_unit)
-            )
-            self._pedigree_router.recompute_line_gaps(
-                route_plan,
-                labels=obstacle_labels,
-                show_inbreeding=has_secondary_label,
-            )
-        finally:
-            self._pedigree_router.label_width_scale = saved_width_scale
-            self._pedigree_router.label_height_scale = saved_height_scale
+        self._route_collections = []
+        self._rendered_families = {
+            family_id: dict(family) for family_id, family in families.items()
+        }
+        self._rendered_engine = engine
+        self._rendered_artist_scale = focused_artist_scale
+        # Text stays readable through its white halo and never generates a
+        # broken route. Only marker footprints and true line intersections are
+        # calibrated to the final axes pixels.
+        self._recompute_route_visual_gaps()
 
         if self.settings.get("show_grid", False):
             self._draw_grid()
@@ -2985,55 +3302,8 @@ class HeritageTrackWidget(QWidget):
         self.node_positions = positions
         self._rebuild_hit_test_index()
         self.node_meta.clear()
-
-        route_batches: Dict[
-            Tuple[str, float, float],
-            List[List[Tuple[float, float]]],
-        ] = defaultdict(list)
-        for family_id, family in families.items():
-            family_pos = family_positions.get(family_id)
-            if family_pos is None:
-                continue
-
-            mother = str(family.get("mother", "")).strip()
-            father = str(family.get("father", "")).strip()
-
-            for parent in (mother, father):
-                if parent not in animal_positions:
-                    continue
-                _lc = "#cccccc" if parent in ghost_nodes else "#666666"
-                for (x1, y1), (x2, y2) in route_plan.draw_segments(family_id, parent):
-                    route_batches[(_lc, 0.9, 1.1)].append([(x1, y1), (x2, y2)])
-
-            for child in family.get("children", []):
-                if child not in animal_positions:
-                    continue
-                _lc = "#cccccc" if child in ghost_nodes else "black"
-                for (x1, y1), (x2, y2) in route_plan.draw_segments(family_id, child):
-                    route_batches[(_lc, 1.0, 1.0)].append([(x1, y1), (x2, y2)])
-
-        for (color, linewidth, zorder), segments in route_batches.items():
-            self.ax.add_collection(
-                LineCollection(
-                    segments,
-                    colors=[color],
-                    linewidths=[linewidth],
-                    zorder=zorder,
-                )
-            )
-
-        # --- Relationship path highlight (exactly 2 selected) ---
-        # Only draw the orange path when the two animals share common descent
-        # (kinship_phi > 0). Unrelated animals must never show a connecting line.
-        if len(self.selected_nodes) == 2:
-            sel_list = list(self.selected_nodes)
-            calculator = InbreedingCalculator(engine.get_genetic_parent_map())
-            if calculator.kinship_phi(sel_list[0], sel_list[1]) > 0:
-                path_edges = self._bfs_relationship_path(
-                    sel_list[0], sel_list[1], engine, animal_positions, family_positions, families)
-                for (x1, y1), (x2, y2) in path_edges:
-                    self.ax.plot([x1, x2], [y1, y2],
-                                 color="#e67e22", linewidth=2.5, zorder=1.8, solid_capstyle="round")
+        self._replace_route_collections()
+        self._replace_relationship_highlights()
 
         for family_id, (fx, fy) in family_positions.items():
             family_fill = "black" if family_id in collapsed_family_nodes else "white"
@@ -3149,7 +3419,7 @@ class HeritageTrackWidget(QWidget):
                 fontstyle="italic" if is_heritage_only else "normal",
                 fontweight="normal" if (is_dead or is_ghost) else "bold",
                 zorder=4,
-                path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
+                path_effects=self._animal_text_path_effects(),
             )
 
             detail_text = self._get_node_detail_text(node, record, f_values.get(node))
@@ -3165,7 +3435,7 @@ class HeritageTrackWidget(QWidget):
                     fontsize=7 * focused_artist_scale,
                     color="#777777" if not is_ghost else "#bbbbbb",
                     zorder=4,
-                    path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
+                    path_effects=self._animal_text_path_effects(),
                 )
 
             undated_artist = None
@@ -3180,7 +3450,7 @@ class HeritageTrackWidget(QWidget):
                     fontsize=7 * focused_artist_scale,
                     color="#777777" if not is_ghost else "#aaaaaa",
                     zorder=5,
-                    path_effects=[path_effects.withStroke(linewidth=1, foreground="white")],
+                    path_effects=self._animal_text_path_effects(),
                 )
 
             genotype_value = str(visual.get("genotype", "")).strip() or self.messages.get(
@@ -3252,15 +3522,16 @@ class HeritageTrackWidget(QWidget):
             )
             legend.set_zorder(12)
             legend.get_frame().set_alpha(0.86)
+            self._legend_artist = legend
             self._place_legend_overlay(legend)
 
         self.current_xlim = self.ax.get_xlim()
         self.current_ylim = self.ax.get_ylim()
 
         mode_text = (
-            self.messages.get("heritage_track.status.mode_selected", "Selection mode")
-            if selected_animals
-            else self.messages.get("heritage_track.status.mode_all", "All animals mode")
+            self.messages.get("heritage_track.status.mode_all", "All animals mode")
+            if self.layout_mode == LAYOUT_MODE_OVERVIEW
+            else self.messages.get("heritage_track.status.mode_selected", "Selection mode")
         )
         selected_text = self.messages.get("heritage_track.status.selected", "Selected in graph: {count}").format(
             count=len(self.selected_nodes)
@@ -3300,6 +3571,15 @@ class HeritageTrackWidget(QWidget):
         self.family_positions = {}
         self.family_routes = {}
         self._route_plan = None
+        self._route_collections = []
+        self._relationship_highlight_collections = []
+        self._legend_artist = None
+        self._legend_anchor_axes = None
+        self._legend_dragging = False
+        self._legend_drag_start_px = None
+        self._legend_drag_start_anchor = None
+        self._rendered_families = {}
+        self._rendered_engine = None
         self.node_meta.clear()
         self._ghost_nodes = set()
         self._chronological_undated_nodes = set()
@@ -3388,6 +3668,12 @@ class HeritageTrackWidget(QWidget):
         if event.inaxes != self.ax:
             return
 
+        if event.button == 1 and self._legend_hit(event):
+            self._legend_dragging = True
+            self._legend_drag_start_px = (float(event.x), float(event.y))
+            self._legend_drag_start_anchor = self._legend_anchor_from_artist()
+            return
+
         node = self._node_at_mouse(event)
         node_kind = str(self.node_meta.get(node, {}).get("kind", "animal")) if node else ""
 
@@ -3473,6 +3759,11 @@ class HeritageTrackWidget(QWidget):
             self._drag_artist_map.clear()
 
     def _on_mouse_move(self, event) -> None:
+        # Legend movement is committed on release, like CageTrack. Do not
+        # let the same motion also pan the graph or move a node.
+        if self._legend_dragging:
+            return
+
         # Pan with middle button held.
         if self.pan_active and self.pan_start is not None:
             if event.inaxes != self.ax or event.xdata is None or event.ydata is None:
@@ -3650,6 +3941,10 @@ class HeritageTrackWidget(QWidget):
         self._drag_artist_map.clear()
 
     def _on_mouse_release(self, event) -> None:
+        if event.button == 1 and self._legend_dragging:
+            self._finish_legend_drag(event)
+            return
+
         if event.button == 2:
             self.pan_active = False
             self.pan_start = None
@@ -3759,6 +4054,9 @@ class HeritageTrackWidget(QWidget):
         if self.settings.get("show_grid", False):
             self.refresh_graph(keep_view=True)
         else:
+            self._recompute_route_visual_gaps()
+            self._replace_route_collections()
+            self._replace_relationship_highlights()
             self.canvas.draw_idle()
 
     def _on_resize(self, _event) -> None:
@@ -3771,6 +4069,9 @@ class HeritageTrackWidget(QWidget):
         self.current_ylim = new_ylim
         if self.settings.get("vertical_layout_mode") == VERTICAL_LAYOUT_CHRONOLOGICAL:
             self._configure_chronological_axis()
+        self._recompute_route_visual_gaps()
+        self._replace_route_collections()
+        self._replace_relationship_highlights()
         self.canvas.draw_idle()
 
     def _open_node_editor(self, node: str) -> None:
@@ -3816,6 +4117,7 @@ class HeritageTrackWidget(QWidget):
             allow_remove=is_heritage_only,
             animal_species=animal_species,
             sex_editable=is_heritage_only,
+            genotype_editable=is_heritage_only,
             parent_options_provider=lambda required, species: self.plugin.parent_candidate_options(
                 required,
                 species,
@@ -4470,7 +4772,7 @@ class HeritageTrackPlugin:
         # keep store up-to-date with native fields for offspring/zuchttier etc.
         self.store.sync_from_animals(animals)
 
-        # Build base-name → [(key, species)] map for resolving same-name animals by species.
+        # Build base-name â†’ [(key, species)] map for resolving same-name animals by species.
         _base_to_variants: Dict[str, List[tuple]] = {}
         _heritage_entries = self.store.get_all_entries()
         _identity_records = dict(_heritage_entries)

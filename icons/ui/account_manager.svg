@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="64"
+   height="64"
+   viewBox="0 0 64 64"
+   version="1.1"
+   id="svg5"
+   sodipodi:docname="account_manager.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs5" />
+  <sodipodi:namedview
+     id="namedview5"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="4.4580873"
+     inkscape:cx="-16.599047"
+     inkscape:cy="48.339116"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g5" />
+  <style
+     id="style1">
+    .line{fill:none;stroke:#25364a;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+    .blue{fill:#2f80ed;stroke:#25364a;stroke-width:4;stroke-linejoin:round}
+    .light{fill:#f7fafc;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
+    .green{fill:#4caf82;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
+    .amber{fill:#f4b942;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
+    .red{fill:#df5b5b;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
+    .purple{fill:#9b7ad0;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
+  </style>
+  <circle
+     class="blue"
+     cx="32"
+     cy="23"
+     r="11"
+     id="circle1" />
+  <path
+     class="blue"
+     d="M13 54c2-16 36-16 38 0z"
+     id="path1" />
+  <!-- pen -->
+  <g
+     transform="rotate(54.593076,41.429168,32.319326)"
+     id="g5">
+    <path
+       class="amber"
+       d="m 44.339172,30.511322 h 6 v 25 h -6 z"
+       id="path2"
+       style="stroke-width:2;stroke-dasharray:none" />
+    <path
+       class="light"
+       d="m 44.339172,55.511322 h 6 l -3,7 z"
+       id="path3"
+       style="stroke-width:2;stroke-dasharray:none" />
+    <path
+       class="line"
+       style="stroke-width:2"
+       d="m 47.339172,30.511322 v 25"
+       id="path4" />
+    <path
+       class="amber"
+       d="m 44.339172,27.511322 h 6 v 5 h -6 z"
+       id="path5"
+       style="stroke-width:2;stroke-dasharray:none" />
+  </g>
+</svg>

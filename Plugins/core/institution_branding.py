@@ -409,6 +409,7 @@ class InstitutionBrandingDialog(QDialog):
         self.messages = messages or {}
         self.embedded = bool(embedded)
         self._remove_logo = False
+        self._logo_source_path: Path | None = None
         self._logo_controls_compact: bool | None = None
         self.setWindowTitle(self._text("branding.title", "Institution branding"))
         if self.embedded:
@@ -432,6 +433,9 @@ class InstitutionBrandingDialog(QDialog):
         self.name = QLineEdit(str(config.get("facility_name", "")))
         self.logo = QLineEdit()
         self.logo.setReadOnly(True)
+        existing_logo = service.logo_path(config)
+        if existing_logo is not None:
+            self.logo.setText(existing_logo.name)
         self.choose_button = QPushButton(
             self._text("branding.choose", "Choose PNG/JPEG…")
         )
@@ -547,17 +551,19 @@ class InstitutionBrandingDialog(QDialog):
             self._text("branding.image_filter", "Images (*.png *.jpg *.jpeg)"),
         )
         if filename:
-            self.logo.setText(filename)
+            self._logo_source_path = Path(filename)
+            self.logo.setText(self._logo_source_path.name)
             self._remove_logo = False
             self._refresh_preview()
 
     def _remove_selected_logo(self) -> None:
         self.logo.clear()
+        self._logo_source_path = None
         self._remove_logo = True
         self._refresh_preview()
 
     def _refresh_preview(self) -> None:
-        logo_path = Path(self.logo.text()) if self.logo.text() else self.service.logo_path()
+        logo_path = self._logo_source_path or self.service.logo_path()
         if self._remove_logo:
             logo_path = None
         self.preview.set_preview(
@@ -573,7 +579,7 @@ class InstitutionBrandingDialog(QDialog):
 
     def save_embedded(self) -> bool:
         unchanged = (
-            not self.logo.text()
+            self._logo_source_path is None
             and not self._remove_logo
             and bool(self._initial_config.get("enabled"))
             == self.enabled.isChecked()
@@ -592,7 +598,7 @@ class InstitutionBrandingDialog(QDialog):
             saved = self.service.save(
                 enabled=self.enabled.isChecked(),
                 facility_name=self.name.text(),
-                logo_source=self.logo.text(),
+                logo_source=str(self._logo_source_path or ""),
                 position=(
                     POSITION_TOP_LEFT
                     if self.position_left.isChecked()
@@ -612,7 +618,9 @@ class InstitutionBrandingDialog(QDialog):
             )
             return False
         self._initial_config = dict(saved)
-        self.logo.clear()
+        self._logo_source_path = None
+        saved_logo = self.service.logo_path(saved)
+        self.logo.setText(saved_logo.name if saved_logo is not None else "")
         self._remove_logo = False
         self._refresh_preview()
         return True

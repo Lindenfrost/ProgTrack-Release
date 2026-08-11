@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
@@ -39,6 +40,7 @@ class HeritageStore:
             "exclude_archived": False,
             "vertical_layout_mode": "partner_normalized",
             "animal_label_detail": "inbreeding_f",
+            "legend_pos": None,
         }
 
     @staticmethod
@@ -54,6 +56,19 @@ class HeritageStore:
         if normalized in {"nothing", "inbreeding_f", "birth_date", "animal_id"}:
             return normalized
         return "inbreeding_f"
+
+    @staticmethod
+    def _normalize_legend_pos(value: Any) -> Optional[List[float]]:
+        """Normalize a persisted legend anchor in axes coordinates."""
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            return None
+        try:
+            x, y = float(value[0]), float(value[1])
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(x) or not math.isfinite(y):
+            return None
+        return [max(0.0, min(1.0, x)), max(0.0, min(1.0, y))]
 
     def _default_data(self) -> Dict[str, Any]:
         return {
@@ -187,6 +202,9 @@ class HeritageStore:
             ),
             "animal_label_detail": self._normalize_animal_label_detail(
                 raw_settings.get("animal_label_detail", default_settings["animal_label_detail"])
+            ),
+            "legend_pos": self._normalize_legend_pos(
+                raw_settings.get("legend_pos", default_settings["legend_pos"])
             ),
         }
 
@@ -355,6 +373,9 @@ class HeritageStore:
             "animal_label_detail": self._normalize_animal_label_detail(
                 settings.get("animal_label_detail", default_settings["animal_label_detail"])
             ),
+            "legend_pos": self._normalize_legend_pos(
+                settings.get("legend_pos", default_settings["legend_pos"])
+            ),
         }
 
     def set_settings(self, settings: Dict[str, Any]) -> None:
@@ -374,6 +395,8 @@ class HeritageStore:
             current["animal_label_detail"] = self._normalize_animal_label_detail(
                 settings.get("animal_label_detail")
             )
+        if "legend_pos" in settings:
+            current["legend_pos"] = self._normalize_legend_pos(settings.get("legend_pos"))
 
         data["settings"] = current
         self._save_settings()

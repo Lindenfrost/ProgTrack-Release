@@ -349,7 +349,7 @@ class Phase(Enum):
 # Adjust these two values to change ALL create/edit animal dialogs.
 UI_STD_DIALOG_WIDTH: int = 520     # overall dialog width
 UI_STD_FIELD_MIN_WIDTH: int = 180   # minimum width for input widgets
-_MAIN_ANIMAL_SIDEBAR_WIDTH: int = 200
+_MAIN_ANIMAL_SIDEBAR_WIDTH: int = 300
 _MAIN_ANIMAL_LIST_MIN_WIDTH: int = 130
 
 # # ================================================================ #
@@ -1054,6 +1054,11 @@ class _ConventionsCollapsibleSection(QWidget):
         self._button.setCheckable(True)
         self._button.setChecked(not collapsed)
         self._button.setFlat(True)
+        # Keep the ProjectTrack-style affordance stable in both states; the
+        # icon/text state must not change the row height or width.
+        self._button.setFixedHeight(30)
+        self._button.setIconSize(QSize(18, 18))
+        self._button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._button.setStyleSheet(
             "QPushButton { text-align: left; font-weight: bold; border: none; padding: 4px; }"
         )
@@ -6341,6 +6346,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """)
         return dlg, v, form
 
+    @staticmethod
+    def _add_scrollable_animal_form(
+        dlg: QDialog, outer: QVBoxLayout, form: QFormLayout
+    ) -> QScrollArea:
+        """Keep animal fields usable on small screens without shrinking controls."""
+        body = QWidget(dlg)
+        body.setLayout(form)
+        scroll = QScrollArea(dlg)
+        scroll.setObjectName("animalDialogFormScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(body)
+        outer.addWidget(scroll, 1)
+        return scroll
+
     def _apply_dialog_width(self, dlg: QDialog, width: Optional[int] = None) -> None:
         """Finalize the dialog width *after* content has been added.
         This ensures edits to UI_STD_DIALOG_WIDTH actually reflect in window size.
@@ -6804,7 +6824,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Checkable 'Parents' group with natural/embryo radio toggle inside."""
         # Create outer checkable group (Address-style toggle)
         outer = QGroupBox(self.messages.get("dialog.offspring.parents", "Parents"))
+        outer.setObjectName("animalOptionalParentageSection")
         outer.setCheckable(True)
+        outer.setStyleSheet(
+            "QGroupBox#animalOptionalParentageSection {"
+            " border: 1px solid palette(mid); border-radius: 3px; margin-top: 8px;"
+            " padding-top: 4px; }"
+            "QGroupBox#animalOptionalParentageSection::indicator {"
+            " width: 18px; height: 18px; }"
+        )
 
         outer_layout = QVBoxLayout(outer)
         outer_layout.setContentsMargins(4, 2, 4, 4)
@@ -7076,7 +7104,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._animal_name_filter = ""
         self.animal_name_filter_edit = QLineEdit()
         self.animal_name_filter_edit.setPlaceholderText(
-            self.messages.get("sidebar.animal_name_filter.placeholder", "Filter animals by name"))
+            self.messages.get("sidebar.animal_name_filter.placeholder", "Animal name"))
         self.animal_name_filter_edit.setToolTip(
             self.messages.get("sidebar.animal_name_filter.tooltip", "Filter the visible animal list by short name"))
         self.animal_name_filter_edit.setClearButtonEnabled(True)
@@ -8853,7 +8881,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         for token, semantic_id in (
             ("F", "role.female"),
             ("M", "role.male"),
-            ("U", "heritage.placeholder_animal"),
+            ("U", "role.unknown"),
         ):
             checkbox = QCheckBox()
             checkbox.setObjectName(f"animalSexFilter{token}")
@@ -17076,7 +17104,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                                           "Archived Animals:"))
         if hasattr(self, 'animal_name_filter_edit'):
             self.animal_name_filter_edit.setPlaceholderText(
-                self.messages.get("sidebar.animal_name_filter.placeholder", "Filter animals by name"))
+                self.messages.get("sidebar.animal_name_filter.placeholder", "Animal name"))
             self.animal_name_filter_edit.setToolTip(
                 self.messages.get("sidebar.animal_name_filter.tooltip", "Filter the visible animal list by short name"))
         self._update_animal_sex_filter_texts()
@@ -18351,7 +18379,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         form.addRow(self.messages.get("dialog.partner.health_status", "Health Status:"), _health_w_p)
         self._wire_status_checkboxes(chk_sick, chk_abnormal, name, rec, dlg)
 
-        vbox.addLayout(form)
+        self._add_scrollable_animal_form(dlg, vbox, form)
 
         # --- Weights tab ---
         tabs = QTabWidget(dlg)
@@ -18931,7 +18959,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self._std_widen(parent_widget)
             self._add_parent_mode_selector(form, _heritage_group, heritage_parent_fields, default_mode="hide")
 
-        v.addLayout(form)
+        self._add_scrollable_animal_form(dlg, v, form)
 
         # --- Tabbed editors for sperm and weight ---
         tabs = QTabWidget()
@@ -19628,7 +19656,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
         self._wire_status_checkboxes(sick_chk, chk_abnormal_o, name, rec, dlg)
 
-        layout.addLayout(form)
+        self._add_scrollable_animal_form(dlg, layout, form)
         
         # Tabs for weight and events
         tabs = QTabWidget()
@@ -20325,7 +20353,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         }
         self._add_parent_mode_selector(form, parents_group, zuchttier_parent_fields, default_mode="hide")
         
-        layout.addLayout(form)
+        self._add_scrollable_animal_form(dlg, layout, form)
         
         # Tabs for weight and events (hidden while creating)
         tabs = QTabWidget()
@@ -20972,7 +21000,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             _health_w_vt)
         self._wire_status_checkboxes(sick_chk_vt, chk_abnormal_vt, name, rec, dlg)
 
-        layout.addLayout(form)
+        self._add_scrollable_animal_form(dlg, layout, form)
 
         # ── Tabs: Weights + Events ─────────────────────────────────────────────
         tabs = QTabWidget()
@@ -21493,7 +21521,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             health_l.addStretch()
             form.addRow(self.messages.get("dialog.offspring.health_status", "Health Status:"), health_w)
 
-        v.addLayout(form)
+        self._add_scrollable_animal_form(dlg, v, form)
         save_btn = QPushButton(self.messages.get("button.save", "Save"))
         save_btn.setEnabled(not read_only and (
             self._master_can('core.create_animals') if creating else self._master_can('core.edit_animal_core')
@@ -21945,7 +21973,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self._std_widen(parent_widget)
             self._add_parent_mode_selector(form, _heritage_group, heritage_parent_fields, default_mode="hide")
 
-        v.addLayout(form)
+        self._add_scrollable_animal_form(dlg, v, form)
 
         # Tabs (hidden while creating)
         tabs = QTabWidget()

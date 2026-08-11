@@ -56,3 +56,14 @@ not shipped.  Editable masters are maintained in
 directly without a PNG fallback.  Optional raster review evidence outside the
 release is not a runtime asset.  The shared Qt loader may adapt only the
 canonical outline colour in memory when required by the active palette.
+
+## Additional account and sex-filter SVG masters
+
+- `ui/account_it_specialist.svg`
+- `ui/account_manager.svg`
+- `ui/account_researcher.svg`
+- `ui/account_veterinarian.svg`
+- `ui/accountkeeper.svg`
+- `ui/role_unknown.svg`
+
+These SVGs are GPL-3.0-or-later ProgTrack artwork owned by Deutsches Primatenzentrum GmbH and are used only in the documented README or unknown-sex filter contexts.

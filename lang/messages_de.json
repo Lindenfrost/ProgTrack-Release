@@ -1691,7 +1691,7 @@
   "master_track.label.profession": "Beruf:",
   "master_track.manage.col_profile": "Profil",
   "sidebar.show_archived": "Archivierte anzeigen",
-  "sidebar.animal_name_filter.placeholder": "Tiere nach Name filtern",
+  "sidebar.animal_name_filter.placeholder": "Tiername",
   "sidebar.animal_name_filter.tooltip": "Die sichtbare Tierliste nach Kurzname filtern",
   "sidebar.sex_filter.label": "Geschlecht:",
   "sidebar.sex_filter.female.tooltip": "Weibliche Tiere anzeigen",

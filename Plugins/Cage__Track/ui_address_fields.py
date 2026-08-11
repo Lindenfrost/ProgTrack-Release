@@ -37,7 +37,15 @@ def build_address_group(
         The group widget and a mapping for all four address levels.
     """
     group = QGroupBox(messages.get("address.label", "Address"))
+    group.setObjectName("animalOptionalAddressSection")
     group.setCheckable(True)
+    group.setStyleSheet(
+        "QGroupBox#animalOptionalAddressSection {"
+        " border: 1px solid palette(mid); border-radius: 3px; margin-top: 8px;"
+        " padding-top: 4px; }"
+        "QGroupBox#animalOptionalAddressSection::indicator {"
+        " width: 18px; height: 18px; }"
+    )
     has_address = any(v for v in current_address.values() if v)
     group.setChecked(has_address)
 

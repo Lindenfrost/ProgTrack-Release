@@ -2,59 +2,305 @@
   "version": 2,
   "size": 64,
   "icons": {
-    "action.add": {"file": "action_add.svg", "fallback": "Add", "usage": "Create/add action"},
-    "action.edit": {"file": "action_edit.svg", "fallback": "Edit", "usage": "Edit animal action"},
-    "action.edit_role": {"file": "action_edit_role.svg", "fallback": "Edit role", "usage": "Edit animal role action"},
-    "action.archive": {"file": "action_archive.svg", "fallback": "Archive", "usage": "Archive action"},
-    "action.restore": {"file": "action_restore.svg", "fallback": "Restore", "usage": "Restore action"},
-    "action.delete": {"file": "action_delete.svg", "fallback": "Delete", "usage": "Delete action"},
-    "action.refresh": {"file": "action_refresh.svg", "fallback": "Refresh", "usage": "Refresh/reload"},
-    "action.settings": {"file": "action_settings.svg", "fallback": "Settings", "usage": "Settings action"},
-    "measure.blood": {"file": "measure_blood.svg", "fallback": "Blood values", "usage": "Blood measurement import"},
-    "measure.urine": {"file": "measure_urine.svg", "fallback": "Urine values", "usage": "Urine measurement import"},
-    "measure.sperm": {"file": "measure_sperm.svg", "fallback": "Sperm values", "usage": "Sperm measurement import"},
-    "measure.weight": {"file": "measure_weight.svg", "fallback": "Weights", "usage": "Weight measurement import"},
-    "toggle.expand": {"file": "toggle_expand.svg", "fallback": "Expand", "usage": "Expand section"},
-    "toggle.collapse": {"file": "toggle_collapse.svg", "fallback": "Collapse", "usage": "Collapse section"},
-    "control.increment": {"file": "control_increment.svg", "fallback": "Increase", "usage": "Increase a numeric control"},
-    "control.decrement": {"file": "control_decrement.svg", "fallback": "Decrease", "usage": "Decrease a numeric control"},
-    "heritage.placeholder_animal": {"file": "heritage_placeholder.svg", "fallback": "Add placeholder", "usage": "Heritage placeholder"},
-    "role.female": {"file": "role_female.svg", "fallback": "Female donor or surrogate", "usage": "Female role tab"},
-    "role.male": {"file": "role_male.svg", "fallback": "Sperm donor", "usage": "Male role tab"},
-    "role.offspring": {"file": "role_offspring.svg", "fallback": "Offspring", "usage": "Offspring role tab"},
-    "role.partner": {"file": "role_partner.svg", "fallback": "Partner", "usage": "Partner role tab"},
-    "role.breeding": {"file": "pedigree_symbol.svg", "fallback": "Breeding", "usage": "Breeding role tab; shared pedigree artwork"},
-    "role.experimental": {"file": "role_experimental.svg", "fallback": "Experimental", "usage": "Experimental role tab"},
-    "status.pregnant_confirmed": {"file": "status_pregnant.svg", "fallback": "Pregnant", "usage": "Confirmed pregnancy"},
-    "status.pregnant_possible": {"file": "status_possible.svg", "fallback": "Possibly pregnant", "usage": "Possible pregnancy"},
-    "status.has_young_offspring": {"file": "status_offspring.svg", "fallback": "Young offspring", "usage": "Young offspring"},
-    "status.not_pregnant": {"file": "status_not_pregnant.svg", "fallback": "Not pregnant", "usage": "No current pregnancy"},
-    "status.sick": {"file": "status_sick.svg", "fallback": "Sick", "usage": "Sick/recovery status or filter"},
-    "status.abnormal": {"file": "status_abnormal.svg", "fallback": "Abnormal", "usage": "Abnormal status or filter"},
-    "status.in_experiment": {"file": "status_in_experiment.svg", "fallback": "In experiment", "usage": "Animal currently assigned to an active experiment"},
-    "medi_track.filter.current_experiment": {"file": "role_experimental.svg", "fallback": "Currently in experiment", "usage": "Medi Track current experiment filter; shared experimental-bottle artwork"},
-    "medi_track.filter.ever_experiment": {"file": "medi_ever_experiment.svg", "fallback": "Was in experiment", "usage": "Medi Track previous experiment filter"},
-    "medi_track.filter.current_sick": {"file": "status_sick.svg", "fallback": "Currently sick", "usage": "Medi Track current sickness filter; shared sickness artwork"},
-    "medi_track.filter.ever_sick": {"file": "medi_ever_sick.svg", "fallback": "Ever sick", "usage": "Medi Track sickness history filter"},
-    "medi_track.filter.current_abnormal": {"file": "status_abnormal.svg", "fallback": "Currently abnormal", "usage": "Medi Track current abnormality filter; shared abnormality artwork"},
-    "medi_track.filter.ever_abnormal": {"file": "medi_ever_abnormal.svg", "fallback": "Ever abnormal", "usage": "Medi Track abnormality history filter"},
-    "status.deceased": {"file": "status_deceased.svg", "fallback": "Deceased", "usage": "Deceased status"},
-    "status.partner": {"file": "role_partner.svg", "fallback": "Partner", "usage": "Partner status; shared partner artwork"},
-    "status.ok": {"file": "status_ok.svg", "fallback": "OK", "usage": "Positive diagnostic status"},
-    "status.warning": {"file": "status_abnormal.svg", "fallback": "Warning", "usage": "Warning status; shared abnormality artwork"},
-    "account.lord": {"file": "account_lord.svg", "fallback": "Lord", "usage": "Lord account status"},
-    "account.master": {"file": "account_master.svg", "fallback": "Master", "usage": "Master account status"},
-    "account.user": {"file": "account_user.svg", "fallback": "User", "usage": "Signed-in user status"},
-    "account.awo": {"file": "account_awo.svg", "fallback": "AWO", "usage": "Animal Welfare Officer account"},
-    "account.guest_locked": {"file": "account_guest_locked.svg", "fallback": "Guest", "usage": "Restricted guest status"},
-    "language.en": {"file": "flag_gb.svg", "fallback": "English", "usage": "English language selection"},
-    "language.de": {"file": "flag_de.svg", "fallback": "Deutsch", "usage": "German language selection"},
-    "language.it": {"file": "flag_it.svg", "fallback": "Italiano", "usage": "Italian language selection"},
-    "language.ru": {"file": "flag_ru.svg", "fallback": "Russian", "usage": "Russian language selection"},
-    "network.insert_symbol": {"file": "network_insert_symbol.svg", "fallback": "Insert symbol", "usage": "Network Track composer"},
-    "flow.freezer": {"file": "flow_freezer.svg", "fallback": "Freezer", "usage": "Flow Track freezer control"},
-    "status.pregnant": {"file": "status_pregnant.svg", "fallback": "Pregnant", "usage": "Compatibility alias"},
-    "status.possibly_pregnant": {"file": "status_possible.svg", "fallback": "Possibly pregnant", "usage": "Compatibility alias"},
-    "status.offspring": {"file": "status_offspring.svg", "fallback": "Young offspring", "usage": "Compatibility alias"}
+    "action.add": {
+      "file": "action_add.svg",
+      "fallback": "Add",
+      "usage": "Create/add action"
+    },
+    "action.edit": {
+      "file": "action_edit.svg",
+      "fallback": "Edit",
+      "usage": "Edit animal action"
+    },
+    "action.edit_role": {
+      "file": "action_edit_role.svg",
+      "fallback": "Edit role",
+      "usage": "Edit animal role action"
+    },
+    "action.archive": {
+      "file": "action_archive.svg",
+      "fallback": "Archive",
+      "usage": "Archive action"
+    },
+    "action.restore": {
+      "file": "action_restore.svg",
+      "fallback": "Restore",
+      "usage": "Restore action"
+    },
+    "action.delete": {
+      "file": "action_delete.svg",
+      "fallback": "Delete",
+      "usage": "Delete action"
+    },
+    "action.refresh": {
+      "file": "action_refresh.svg",
+      "fallback": "Refresh",
+      "usage": "Refresh/reload"
+    },
+    "action.settings": {
+      "file": "action_settings.svg",
+      "fallback": "Settings",
+      "usage": "Settings action"
+    },
+    "measure.blood": {
+      "file": "measure_blood.svg",
+      "fallback": "Blood values",
+      "usage": "Blood measurement import"
+    },
+    "measure.urine": {
+      "file": "measure_urine.svg",
+      "fallback": "Urine values",
+      "usage": "Urine measurement import"
+    },
+    "measure.sperm": {
+      "file": "measure_sperm.svg",
+      "fallback": "Sperm values",
+      "usage": "Sperm measurement import"
+    },
+    "measure.weight": {
+      "file": "measure_weight.svg",
+      "fallback": "Weights",
+      "usage": "Weight measurement import"
+    },
+    "toggle.expand": {
+      "file": "toggle_expand.svg",
+      "fallback": "Expand",
+      "usage": "Expand section"
+    },
+    "toggle.collapse": {
+      "file": "toggle_collapse.svg",
+      "fallback": "Collapse",
+      "usage": "Collapse section"
+    },
+    "control.increment": {
+      "file": "control_increment.svg",
+      "fallback": "Increase",
+      "usage": "Increase a numeric control"
+    },
+    "control.decrement": {
+      "file": "control_decrement.svg",
+      "fallback": "Decrease",
+      "usage": "Decrease a numeric control"
+    },
+    "heritage.placeholder_animal": {
+      "file": "heritage_placeholder.svg",
+      "fallback": "Add placeholder",
+      "usage": "Heritage placeholder"
+    },
+    "role.female": {
+      "file": "role_female.svg",
+      "fallback": "Female donor or surrogate",
+      "usage": "Female role tab"
+    },
+    "role.male": {
+      "file": "role_male.svg",
+      "fallback": "Sperm donor",
+      "usage": "Male role tab"
+    },
+    "role.unknown": {
+      "file": "role_unknown.svg",
+      "fallback": "Unknown sex",
+      "usage": "Unknown-sex filter"
+    },
+    "role.offspring": {
+      "file": "role_offspring.svg",
+      "fallback": "Offspring",
+      "usage": "Offspring role tab"
+    },
+    "role.partner": {
+      "file": "role_partner.svg",
+      "fallback": "Partner",
+      "usage": "Partner role tab"
+    },
+    "role.breeding": {
+      "file": "pedigree_symbol.svg",
+      "fallback": "Breeding",
+      "usage": "Breeding role tab; shared pedigree artwork"
+    },
+    "role.experimental": {
+      "file": "role_experimental.svg",
+      "fallback": "Experimental",
+      "usage": "Experimental role tab"
+    },
+    "status.pregnant_confirmed": {
+      "file": "status_pregnant.svg",
+      "fallback": "Pregnant",
+      "usage": "Confirmed pregnancy"
+    },
+    "status.pregnant_possible": {
+      "file": "status_possible.svg",
+      "fallback": "Possibly pregnant",
+      "usage": "Possible pregnancy"
+    },
+    "status.has_young_offspring": {
+      "file": "status_offspring.svg",
+      "fallback": "Young offspring",
+      "usage": "Young offspring"
+    },
+    "status.not_pregnant": {
+      "file": "status_not_pregnant.svg",
+      "fallback": "Not pregnant",
+      "usage": "No current pregnancy"
+    },
+    "status.sick": {
+      "file": "status_sick.svg",
+      "fallback": "Sick",
+      "usage": "Sick/recovery status or filter"
+    },
+    "status.abnormal": {
+      "file": "status_abnormal.svg",
+      "fallback": "Abnormal",
+      "usage": "Abnormal status or filter"
+    },
+    "status.in_experiment": {
+      "file": "status_in_experiment.svg",
+      "fallback": "In experiment",
+      "usage": "Animal currently assigned to an active experiment"
+    },
+    "medi_track.filter.current_experiment": {
+      "file": "role_experimental.svg",
+      "fallback": "Currently in experiment",
+      "usage": "Medi Track current experiment filter; shared experimental-bottle artwork"
+    },
+    "medi_track.filter.ever_experiment": {
+      "file": "medi_ever_experiment.svg",
+      "fallback": "Was in experiment",
+      "usage": "Medi Track previous experiment filter"
+    },
+    "medi_track.filter.current_sick": {
+      "file": "status_sick.svg",
+      "fallback": "Currently sick",
+      "usage": "Medi Track current sickness filter; shared sickness artwork"
+    },
+    "medi_track.filter.ever_sick": {
+      "file": "medi_ever_sick.svg",
+      "fallback": "Ever sick",
+      "usage": "Medi Track sickness history filter"
+    },
+    "medi_track.filter.current_abnormal": {
+      "file": "status_abnormal.svg",
+      "fallback": "Currently abnormal",
+      "usage": "Medi Track current abnormality filter; shared abnormality artwork"
+    },
+    "medi_track.filter.ever_abnormal": {
+      "file": "medi_ever_abnormal.svg",
+      "fallback": "Ever abnormal",
+      "usage": "Medi Track abnormality history filter"
+    },
+    "status.deceased": {
+      "file": "status_deceased.svg",
+      "fallback": "Deceased",
+      "usage": "Deceased status"
+    },
+    "status.partner": {
+      "file": "role_partner.svg",
+      "fallback": "Partner",
+      "usage": "Partner status; shared partner artwork"
+    },
+    "status.ok": {
+      "file": "status_ok.svg",
+      "fallback": "OK",
+      "usage": "Positive diagnostic status"
+    },
+    "status.warning": {
+      "file": "status_abnormal.svg",
+      "fallback": "Warning",
+      "usage": "Warning status; shared abnormality artwork"
+    },
+    "account.lord": {
+      "file": "account_lord.svg",
+      "fallback": "Lord",
+      "usage": "Lord account status"
+    },
+    "account.master": {
+      "file": "account_master.svg",
+      "fallback": "Master",
+      "usage": "Master account status"
+    },
+    "account.user": {
+      "file": "account_user.svg",
+      "fallback": "User",
+      "usage": "Signed-in user status"
+    },
+    "account.awo": {
+      "file": "account_awo.svg",
+      "fallback": "AWO",
+      "usage": "Animal Welfare Officer account"
+    },
+    "account.guest_locked": {
+      "file": "account_guest_locked.svg",
+      "fallback": "Guest",
+      "usage": "Restricted guest status"
+    },
+    "language.en": {
+      "file": "flag_gb.svg",
+      "fallback": "English",
+      "usage": "English language selection"
+    },
+    "language.de": {
+      "file": "flag_de.svg",
+      "fallback": "Deutsch",
+      "usage": "German language selection"
+    },
+    "language.it": {
+      "file": "flag_it.svg",
+      "fallback": "Italiano",
+      "usage": "Italian language selection"
+    },
+    "language.ru": {
+      "file": "flag_ru.svg",
+      "fallback": "Russian",
+      "usage": "Russian language selection"
+    },
+    "network.insert_symbol": {
+      "file": "network_insert_symbol.svg",
+      "fallback": "Insert symbol",
+      "usage": "Network Track composer"
+    },
+    "flow.freezer": {
+      "file": "flow_freezer.svg",
+      "fallback": "Freezer",
+      "usage": "Flow Track freezer control"
+    },
+    "status.pregnant": {
+      "file": "status_pregnant.svg",
+      "fallback": "Pregnant",
+      "usage": "Compatibility alias"
+    },
+    "status.possibly_pregnant": {
+      "file": "status_possible.svg",
+      "fallback": "Possibly pregnant",
+      "usage": "Compatibility alias"
+    },
+    "status.offspring": {
+      "file": "status_offspring.svg",
+      "fallback": "Young offspring",
+      "usage": "Compatibility alias"
+    },
+    "readme.role.it_specialist": {
+      "file": "account_it_specialist.svg",
+      "fallback": "IT Specialist account",
+      "usage": "README role table only"
+    },
+    "readme.role.manager": {
+      "file": "account_manager.svg",
+      "fallback": "Manager account",
+      "usage": "README role table only"
+    },
+    "readme.role.researcher": {
+      "file": "account_researcher.svg",
+      "fallback": "Researcher account",
+      "usage": "README role table only"
+    },
+    "readme.role.veterinarian": {
+      "file": "account_veterinarian.svg",
+      "fallback": "Veterinarian account",
+      "usage": "README role table only"
+    },
+    "readme.role.keeper": {
+      "file": "accountkeeper.svg",
+      "fallback": "Keeper account",
+      "usage": "README role table only"
+    }
   }
 }

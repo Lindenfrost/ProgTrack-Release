@@ -522,17 +522,38 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
         ("Giovanni", "10.05.2024", "Male", "Fredegar"),
         ("Sofia", "10.06.2024", "Female", "Elanor"),
     ]
+    partner_keys: dict[str, str] = {}
     for name, birth, sex, paired_name in partner_specs:
         paired_key = child_keys[paired_name]
         partner_key = add_mouse_animal(
             core, key_map, name, birth, sex, "breeding_animal",
         )
+        partner_keys[name] = partner_key
         if sex == "Male":
             core["animals"][paired_key]["partner_von"] = partner_key
             core["animals"][partner_key]["partner_von"] = paired_key
         else:
             core["animals"][paired_key]["verpaart_mit"] = partner_key
             core["animals"][partner_key]["partner_von"] = paired_key
+
+    # Experimental Ringbearer animals are deliberately housed and paired in
+    # same-sex study pairs. Their ordinary breeding partners remain in the
+    # breeding colony; this relationship never creates offspring.
+    for left_name, right_name in (("Frodo", "Sam"), ("Merry", "Pippin")):
+        left_key, right_key = child_keys[left_name], child_keys[right_name]
+        for key, other in ((left_key, right_key), (right_key, left_key)):
+            core["animals"][key]["partner_von"] = other
+            core["animals"][key]["verpaart_mit"] = other
+    for external_name in ("Giulia", "Rosie", "Chiara", "Diamond"):
+        external = next(
+            (record for record in core["animals"].values()
+             if record.get("name") == external_name
+             and record.get("species") == "Mus musculus"),
+            None,
+        )
+        if external is not None:
+            external["partner_von"] = ""
+            external["verpaart_mit"] = ""
 
     # Keep the remaining Italian examples as unpaired breeding animals so the
     # colony still exercises ordinary male/female records without inventing
@@ -993,9 +1014,10 @@ def complete_housing(
         },
     })
     for cage_id, display_name, order in (
-        ("cage_mus_experimental", "Mouse Experimental Group", 0),
-        ("cage_mus_breeding", "Mouse Breeding Group", 1),
-        ("cage_mus_bilbo", "Mouse Single Housing - Bilbo", 2),
+        ("cage_mus_experimental_frodo_sam", "Mouse Experimental Pair - Frodo and Sam", 0),
+        ("cage_mus_experimental_merry_pippin", "Mouse Experimental Pair - Merry and Pippin", 1),
+        ("cage_mus_breeding", "Mouse Breeding Group", 2),
+        ("cage_mus_bilbo", "Mouse Single Housing - Bilbo", 3),
     ):
         cages.setdefault(cage_id, {
             "display_name": display_name, "id": cage_id, "order": order,
@@ -1043,8 +1065,12 @@ def complete_housing(
             name = str(animal.get("name") or "")
             if name == "Bilbo":
                 cage_id = "cage_mus_bilbo"
+            elif name in {"Frodo", "Sam"}:
+                cage_id = "cage_mus_experimental_frodo_sam"
+            elif name in {"Merry", "Pippin"}:
+                cage_id = "cage_mus_experimental_merry_pippin"
             elif animal.get("in_experiment"):
-                cage_id = "cage_mus_experimental"
+                cage_id = "cage_mus_experimental_frodo_sam"
             else:
                 cage_id = "cage_mus_breeding"
         else:
@@ -1913,7 +1939,10 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         occupant = housing.get("occupants", {}).get(ipid, {})
         expected_cage = (
             "cage_mus_bilbo" if record.get("name") == "Bilbo"
-            else "cage_mus_experimental" if record.get("in_experiment")
+            else "cage_mus_experimental_frodo_sam"
+            if record.get("name") in {"Frodo", "Sam"}
+            else "cage_mus_experimental_merry_pippin"
+            if record.get("name") in {"Merry", "Pippin"}
             else "cage_mus_breeding"
         )
         if occupant.get("cage_id") != expected_cage:
@@ -2019,8 +2048,8 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | Weight history | Every active and archived animal through its latest researcher-entered scientific/clinical record |
 | Species | Callitrix, Macaca, Papio, Mus |
 | Mus musculus | Canonical Hobbit-derived genealogy (Drogo + Primula -> Frodo), Italian partner names, realistic mouse weights and connected ancestry |
-| Ringbearer | Frodo, Sam, Merry and Pippin are adult experimental mice in one project and one group cage |
-| Mouse House | Dedicated building/unit/room; breeding group, Ringbearer group, and Bilbo's deliberate single cage |
+| Ringbearer | Frodo/Sam and Merry/Pippin are adult experimental mice in one project and two pair cages |
+| Mouse House | Dedicated building/unit/room; two Ringbearer pair cages, breeding group, and Bilbo's deliberate single cage |
 | Denethor family | Elros descendant; Boromir and Faramir with distinct donors/surrogates |
 | OTOF- success | Two complete transfer, pregnancy-verification, and live-birth paths |
 | OTOF- failure | Poor yield, low embryo development, repeated negative pregnancy verification, two verified pregnancies followed by abortions |

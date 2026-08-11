@@ -1699,7 +1699,7 @@
   "master_track.label.profession": "Профессия:",
   "master_track.manage.col_profile": "Профиль",
   "sidebar.show_archived": "Показать архив",
-  "sidebar.animal_name_filter.placeholder": "Filter animals by name",
+  "sidebar.animal_name_filter.placeholder": "\u0418\u043c\u044f \u0436\u0438\u0432\u043e\u0442\u043d\u043e\u0433\u043e",
   "sidebar.animal_name_filter.tooltip": "Filter the visible animal list by short name",
   "sidebar.sex_filter.label": "Пол:",
   "sidebar.sex_filter.female.tooltip": "Показывать самок",
