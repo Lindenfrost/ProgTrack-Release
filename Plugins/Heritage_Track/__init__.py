@@ -1,28 +1,24 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.2.1
 # Required ProgTrack version: see plugin manifest.
-# Required Launcher version: 0.1.0 RC or newer.
+# Required Launcher version: see release metadata.
 # Module: Heritage Track plugin bootstrap.
 
-from .adaptive_spacer import AdaptiveSpacer
+import logging
+
 from .display_context import DisplayContext, DisplayContextBuilder
 from .display_strategies import (
-    AllAnimalsStrategy,
     CompositeDisplayStrategy,
     DisplaySetStrategy,
     SelectedAnimalsStrategy,
 )
-from .edge_bundler import BundledEdge, EdgeBundler
 from .engine_cache import PedigreeEngineCache
-from .family_optimizer import FamilyPositionOptimizer
-from .force_layout import ForceDirectedLayout, OverlapDetector
 from .ghost_strategies import (
     ArchivedGhostStrategy,
     CompositeGhostStrategy,
     GhostNodeStrategy,
     NoGhostStrategy,
-    ScopeGhostStrategy,
 )
 from .heritage_track_widget import HeritageTrackPlugin
 from .layout_pipeline import LayoutPipeline
@@ -34,7 +30,6 @@ from .scope_provider import (
     ScopeFilter,
     ScopeProvider,
 )
-from .viewport_manager import ViewportManager
 
 __all__ = [
     # Main plugin
@@ -46,10 +41,8 @@ __all__ = [
     # Strategies
     "DisplaySetStrategy",
     "SelectedAnimalsStrategy",
-    "AllAnimalsStrategy",
     "CompositeDisplayStrategy",
     "GhostNodeStrategy",
-    "ScopeGhostStrategy",
     "ArchivedGhostStrategy",
     "CompositeGhostStrategy",
     "NoGhostStrategy",
@@ -65,13 +58,6 @@ __all__ = [
     "RoutePlan",
     # Performance & Layout Improvements
     "PedigreeEngineCache",
-    "ForceDirectedLayout",
-    "OverlapDetector",
-    "EdgeBundler",
-    "BundledEdge",
-    "FamilyPositionOptimizer",
-    "AdaptiveSpacer",
-    "ViewportManager",
 ]
 
 
@@ -80,7 +66,5 @@ def initialize(app):
     try:
         return HeritageTrackPlugin(app)
     except Exception:
-        import traceback
-
-        traceback.print_exc()
+        logging.getLogger(__name__).exception("HeritageTrack plugin initialization failed")
         return None

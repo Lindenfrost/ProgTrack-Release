@@ -1,20 +1,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.2.1
 # Required ProgTrack version: see plugin manifest.
-# Required Launcher version: 0.1.0 RC or newer.
+# Required Launcher version: see release metadata.
 # Module: Heritage Track display-set strategies.
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set
+from collections import deque
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 from .pedigree_engine import PedigreeEngine
-
-if TYPE_CHECKING:
-    from .scope_provider import ScopeProvider
 
 
 def _norm_name(value: Any) -> str:
@@ -79,7 +76,9 @@ class SelectedAnimalsStrategy(DisplaySetStrategy):
         selected_names = [_norm_name(name) for name in selected if _norm_name(name)]
 
         if not selected_names:
-            return set(engine.all_nodes)
+            # Empty selection is the splash/empty state; never substitute a
+            # hidden all-animals scope here.
+            return set()
 
         archived = archived_set or set()
         # Start with selected animals - these are ALWAYS shown even if disconnected
@@ -95,10 +94,10 @@ class SelectedAnimalsStrategy(DisplaySetStrategy):
             # received its full ``max_generations`` walk.  Keep cycle guards
             # local to a seed and union the results into the display set.
             visited_ancestors: Set[str] = {seed}
-            current_level: List[tuple[str, int]] = [(seed, 0)]
+            current_level: deque[tuple[str, int]] = deque([(seed, 0)])
 
             while current_level:
-                node, gen = current_level.pop(0)
+                node, gen = current_level.popleft()
                 if gen >= max_generations:
                     continue
 
@@ -116,142 +115,6 @@ class SelectedAnimalsStrategy(DisplaySetStrategy):
                         current_level.append((parent, gen + 1))
 
         return display
-
-
-class AllAnimalsStrategy(DisplaySetStrategy):
-    """Display strategy when no animals are selected (show all animals mode).
-
-    This strategy incorporates:
-    - Scope filtering (project/species)
-    - Generation level cutoff
-    - Sibling level alignment
-    """
-
-    def __init__(self, scope_provider: Optional["ScopeProvider"] = None):
-        self.scope_provider = scope_provider
-
-    def compute(
-        self,
-        engine: PedigreeEngine,
-        selected: List[str],
-        max_generations: int = 999,
-        exclude_archived: bool = False,
-        archived_set: Optional[Set[str]] = None,
-    ) -> Set[str]:
-        # Get scope filter if available
-        scope_animals: Optional[Set[str]] = None
-        if self.scope_provider:
-            scope_animals = self._get_scoped_animals(engine)
-
-        # If no scope filter active, return empty set (signals "no specific selection")
-        if scope_animals is None:
-            return set()
-
-        # Start with all nodes in scope
-        candidates: Set[str] = set()
-        for node in engine.all_nodes:
-            if scope_animals is not None and node not in scope_animals:
-                continue
-            candidates.add(node)
-
-        if not candidates:
-            return set(engine.all_nodes)
-
-        # Compute generation levels
-        levels = engine.compute_levels(candidates)
-        if not levels:
-            return candidates
-
-        max_level = max(levels.values(), default=0)
-
-        # Apply sibling level alignment
-        candidates, levels = self._align_sibling_levels(
-            candidates, levels, engine, max_level
-        )
-
-        # Apply generation cutoff
-        cutoff_level = max(0, max_level - max_generations)
-        result: Set[str] = set()
-        archived = archived_set or set()
-        for node in candidates:
-            node_level = levels.get(node, 0)
-            if node_level >= cutoff_level:
-                # Skip archived animals if exclude_archived is enabled
-                if exclude_archived and node in archived:
-                    continue
-                result.add(node)
-
-        return result
-
-    def _get_scoped_animals(self, engine: PedigreeEngine) -> Optional[Set[str]]:
-        """Get animals matching the current scope."""
-        if not self.scope_provider:
-            return None
-
-        scope = self.scope_provider.get_scope()
-        if not scope.is_active:
-            return None
-
-        # Need access to app animals - this is handled via the scope provider
-        # which has access to the app
-        return self.scope_provider.get_scoped_animals({}, {})
-
-    def _align_sibling_levels(
-        self,
-        candidates: Set[str],
-        levels: Dict[str, int],
-        engine: PedigreeEngine,
-        max_level: int,
-    ) -> tuple[Set[str], Dict[str, int]]:
-        """Align sibling nodes to consistent levels."""
-
-        def _get_siblings(n: str) -> Set[str]:
-            pvals = engine.child_to_parents.get(n, {})
-            parents = {v for k, v in pvals.items()
-                       if k in ("egg_donor", "sperm_donor") and v}
-            siblings: Set[str] = set()
-            for p in parents:
-                siblings.update(engine.parent_to_children.get(p, set()))
-            siblings.discard(n)
-            return siblings & candidates
-
-        # Build parent -> children map
-        parent_to_children_local: Dict[str, Set[str]] = defaultdict(set)
-        for c in candidates:
-            pvals = engine.child_to_parents.get(c, {})
-            for k, v in pvals.items():
-                if k in ("egg_donor", "sperm_donor") and v:
-                    parent_to_children_local[v].add(c)
-
-        def _has_children_in_candidates(n: str) -> bool:
-            return bool(parent_to_children_local.get(n, set()) & candidates)
-
-        # Multi-pass alignment
-        for _ in range(10):
-            changed = False
-            for node in list(candidates):
-                if _has_children_in_candidates(node):
-                    continue
-
-                siblings = _get_siblings(node)
-                if not siblings:
-                    continue
-
-                sibling_levels = [levels.get(s, 0) for s in siblings]
-                if not sibling_levels:
-                    continue
-
-                max_sibling_level = max(sibling_levels)
-                current_level = levels.get(node, 0)
-
-                if max_sibling_level > current_level:
-                    levels[node] = max_sibling_level
-                    changed = True
-
-            if not changed:
-                break
-
-        return candidates, levels
 
 
 class CompositeDisplayStrategy(DisplaySetStrategy):
@@ -273,4 +136,4 @@ class CompositeDisplayStrategy(DisplaySetStrategy):
             result = strategy.compute(engine, selected, max_generations, exclude_archived, archived_set)
             if result:
                 return result
-        return set(engine.all_nodes)
+        return set()

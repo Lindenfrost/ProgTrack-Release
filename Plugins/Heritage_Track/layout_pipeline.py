@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.2.1
 # Required ProgTrack version: see plugin manifest.
-# Required Launcher version: 0.1.0 RC or newer.
+# Required Launcher version: see release metadata.
 # Module: Heritage Track pedigree layout pipeline.
 
 from __future__ import annotations
@@ -164,54 +164,6 @@ def parse_complete_birth_date_ordinal(raw_value: Any) -> Optional[int]:
     return None
 
 
-def nudge_nodes_off_child_line_segments(
-    animal_positions: Dict[str, Tuple[float, float]],
-    families: Dict[str, Dict[str, Any]],
-    family_positions: Dict[str, Tuple[float, float]],
-    protected_nodes: Optional[Set[str]] = None,
-    *,
-    nudge: float = DEFAULT_PARTNER_LINE_NUDGE,
-    vertical_threshold: float = 0.18,
-    horizontal_margin: float = 0.25,
-) -> Dict[str, Tuple[float, float]]:
-    """Move automatic non-family nodes away from horizontal child connector lines."""
-    protected = set(protected_nodes or set())
-    segments: List[Tuple[float, float, float, Set[str]]] = []
-
-    for family_id, family in families.items():
-        family_pos = family_positions.get(family_id)
-        if family_pos is None:
-            continue
-        fx, _fy = family_pos
-        mother = str(family.get("mother", "")).strip()
-        father = str(family.get("father", "")).strip()
-        excluded = {name for name in (mother, father) if name}
-        for child in family.get("children", []):
-            if child not in animal_positions:
-                continue
-            cx, cy = animal_positions[child]
-            x_min = min(fx, cx) - horizontal_margin
-            x_max = max(fx, cx) + horizontal_margin
-            segments.append((cy, x_min, x_max, excluded | {child}))
-
-    if not segments:
-        return animal_positions
-
-    adjusted = dict(animal_positions)
-    for node in sorted(adjusted, key=str.lower):
-        if node in protected:
-            continue
-        x, y = adjusted[node]
-        shift = 0.0
-        for seg_y, x_min, x_max, excluded in segments:
-            if node in excluded:
-                continue
-            if x_min <= x <= x_max and abs((y + shift) - seg_y) <= vertical_threshold:
-                shift -= nudge
-        if shift:
-            adjusted[node] = (x, y + shift)
-
-    return adjusted
 
 
 class GroupGrouper:

@@ -44,3 +44,6 @@ Plugins/Projects_Track/documents/
 Plugins/Projects_Track/sop/
 Plugins/Medi_Track/medi_track/
 Plugins/Master_Track/sessions/*.json
+
+# Local immutable release backups (never package or commit).
+archive/

@@ -1,8 +1,8 @@
 {
   "name": "Heritage_Track",
   "display_name": "Heritage Track",
-  "version": "0.1.0",
-  "description": "Advanced pedigree visualization and genetic analysis plugin. Displays interactive genealogy graphs with parent-child relationships, computes kinship and inbreeding coefficients, supports heritage-only animal creation, and provides intelligent layout optimization. Features include force-directed positioning, edge bundling, viewport-based rendering for large datasets, engine caching for performance, draggable nodes, genotype annotations with color legends, species filtering, and family node collapsing.",
+  "version": "0.2.1",
+  "description": "Interactive pedigree visualization with parent-child relationships, kinship and inbreeding analysis, heritage-only animals, genotype annotations, species filtering, family-node collapsing, and draggable nodes.",
   "author": "DLL",
   "SPDX-License-Identifier": "GPL-3.0-or-later",
   "Copyright": "Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH",
@@ -13,7 +13,7 @@
     "numpy"
   ],
   "data_files": [],
-  "min_progtrack_version": "RC 0.1.0",
+  "min_progtrack_version": "0.2.1",
   "menu_location": "Tab",
   "icon": "progtrack_icon.ico",
   "optional": true,
@@ -26,18 +26,6 @@
     "genotype_annotations",
     "species_filtering",
     "family_node_collapsing",
-    "optimized_large_pedigree_rendering"
-  ],
-  "performance_features": {
-    "engine_caching": "Intelligent PedigreeEngine caching with automatic invalidation (3-5x speedup)",
-    "fast_level_computation": "Kahn's algorithm for O(V+E) level computation vs O(V²)",
-    "viewport_culling": "Only renders visible nodes for large datasets (1000+ animals)",
-    "batch_persistence": "Deferred disk writes for improved responsiveness"
-  },
-  "layout_features": {
-    "force_directed_layout": "Physics-based overlap resolution with pedigree constraints",
-    "edge_bundling": "Groups parallel edges to reduce visual clutter",
-    "smart_family_placement": "Median-based family node positioning",
-    "adaptive_spacing": "Dynamic spacing based on label lengths"
-  }
+    "draggable_nodes"
+  ]
 }

@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.2.1
 # Required ProgTrack version: see plugin manifest.
-# Required Launcher version: 0.1.0 RC or newer.
+# Required Launcher version: see release metadata.
 # Module: Heritage Track kinship and inbreeding helpers.
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 
 class InbreedingCalculator:
@@ -15,6 +15,7 @@ class InbreedingCalculator:
 
     def __init__(self, genetic_parents: Dict[str, Tuple[Optional[str], Optional[str]]]):
         self.parents: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
+        self._malformed_nodes: Set[str] = set()
         referenced_parents: set[str] = set()
 
         for raw_child, raw_pair in (genetic_parents or {}).items():
@@ -34,9 +35,9 @@ class InbreedingCalculator:
             father = self._norm(father_raw) or None
 
             if mother == child:
-                mother = None
+                self._malformed_nodes.add(child)
             if father == child:
-                father = None
+                self._malformed_nodes.add(child)
 
             self.parents[child] = (mother, father)
             if mother:
@@ -51,6 +52,38 @@ class InbreedingCalculator:
         self._stack: set[Tuple[str, str]] = set()
         self._depth_cache: Dict[str, int] = {}
         self._depth_stack: set[str] = set()
+        self._cycle_nodes: Set[str] = set(self._malformed_nodes)
+        self._detect_cycle_nodes()
+
+    @property
+    def cycle_nodes(self) -> Set[str]:
+        """Return nodes participating in a cyclic or self-parent pedigree."""
+        return set(self._cycle_nodes)
+
+    def _detect_cycle_nodes(self) -> None:
+        state: Dict[str, int] = {}
+        stack: List[str] = []
+
+        def visit(node: str) -> None:
+            if state.get(node, 0) == 2:
+                return
+            if state.get(node, 0) == 1:
+                try:
+                    start = stack.index(node)
+                except ValueError:
+                    start = 0
+                self._cycle_nodes.update(stack[start:])
+                return
+            state[node] = 1
+            stack.append(node)
+            for parent in self.parents.get(node, (None, None)):
+                if parent:
+                    visit(parent)
+            stack.pop()
+            state[node] = 2
+
+        for node in sorted(self.parents, key=str.casefold):
+            visit(node)
 
     def _norm(self, name: Optional[str]) -> str:
         if name is None:

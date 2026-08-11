@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright Â© 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
+# Part of: ProgTrack 0.2.1
 # Required ProgTrack version: see plugin manifest.
-# Required Launcher version: 0.1.0 RC or newer.
+# Required Launcher version: see release metadata.
 # Module: Heritage Track main plugin implementation.
 
 from __future__ import annotations
 
+import logging
 import math
 import os
 import time
@@ -18,6 +19,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from PyQt6.QtCore import QSize, Qt, QTimer
 from PyQt6.QtGui import QColor, QPixmap
 from PyQt6.QtWidgets import (
+    QApplication,
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
@@ -65,12 +67,11 @@ from Plugins.core.resource_catalogs import (
 )
 
 from .display_context import DisplayContext, DisplayContextBuilder
-from .display_strategies import AllAnimalsStrategy, SelectedAnimalsStrategy
+from .display_strategies import SelectedAnimalsStrategy
 from .ghost_strategies import (
     ArchivedGhostStrategy,
     CompositeGhostStrategy,
     OffspringAndSiblingsGhostStrategy,
-    ScopeGhostStrategy,
     VisibleFamilyCompletenessGhostStrategy,
 )
 from .engine_cache import PedigreeEngineCache
@@ -90,7 +91,6 @@ from .pedigree_router import (
     PedigreeRouter,
     RoutePlan,
 )
-from .scope_provider import ProjectsTrackScopeProvider
 from .ui_parent_fields import ParentSelector, build_parent_group, extract_parent_values
 
 
@@ -292,9 +292,9 @@ class NodeEditDialog(QDialog):
         text = str(value or "").strip().lower()
         if not text:
             return ""
-        if text in {"m", "male", "man", "maschio", "maschile", "mÃ¤nnlich", "mannlich", "Ð¼", "Ð¼ÑƒÐ¶", "Ð¼ÑƒÐ¶ÑÐºÐ¾Ð¹", "ÑÐ°Ð¼ÐµÑ†"}:
+        if text in {"m", "male", "man", "maschio", "maschile", "männlich", "mannlich", "м", "муж", "мужской", "самец"}:
             return "male"
-        if text in {"f", "female", "woman", "femmina", "femminile", "weiblich", "w", "Ð¶", "Ð¶ÐµÐ½", "Ð¶ÐµÐ½ÑÐºÐ¸Ð¹", "ÑÐ°Ð¼ÐºÐ°"}:
+        if text in {"f", "female", "woman", "femmina", "femminile", "weiblich", "w", "\u0436", "\u0436\u0435\u043d", "\u0436\u0435\u043d\u0441\u043a\u0438\u0439", "\u0441\u0430\u043c\u043a\u0430"}:
             return "female"
         if text in {"u", "unknown", "unknown sex", "unbekannt", "sconosciuto", "sconosciuta"}:
             return "unknown"
@@ -442,6 +442,7 @@ class HeritageTrackWidget(QWidget):
         # normalized lower-left anchor separate from node dragging so a click
         # on the legend never starts a tree pan or node move.
         self._legend_artist: Optional[Any] = None
+        self._cycle_nodes: Set[str] = set()
         self._legend_anchor_axes: Optional[Tuple[float, float]] = None
         self._legend_dragging = False
         self._legend_drag_start_px: Optional[Tuple[float, float]] = None
@@ -453,6 +454,9 @@ class HeritageTrackWidget(QWidget):
         # semantics.
         self._hit_grid: Dict[Tuple[int, int], List[str]] = {}
         self._hit_grid_cell_size = 2.0
+        # One precedence-resolved store snapshot per refresh.  Lookups outside
+        # a refresh continue to read the store normally.
+        self._render_store_animals: Optional[Dict[str, Dict[str, Any]]] = None
         self.all_animals_mode = True
         # all_animals_mode remains the no-selection persistence flag;
         # layout_mode is the visible Focused/Overview decision for large
@@ -478,8 +482,11 @@ class HeritageTrackWidget(QWidget):
                 if self.app.master_track.current_username:
                     sess_data = sess.load(self.app.master_track.current_username)
                     session_max = sess_data.get('max_parent_generations')
-            except Exception:
-                pass
+            except (AttributeError, KeyError, OSError, TypeError, ValueError):
+                logging.getLogger(__name__).debug(
+                    "Could not restore HeritageTrack generation limit",
+                    exc_info=True,
+                )
         self._max_generations: int = int(session_max) if session_max is not None else 3
 
         self.figure = Figure(figsize=(11, 7))
@@ -643,124 +650,14 @@ class HeritageTrackWidget(QWidget):
                     data = sess.load(uname)
                     data['max_parent_generations'] = value
                     sess.save(uname, data)
-            except Exception:
-                pass
+            except (AttributeError, KeyError, OSError, TypeError, ValueError):
+                logging.getLogger(__name__).debug(
+                    "Could not persist HeritageTrack generation limit",
+                    exc_info=True,
+                )
         # Mark for relayout on next refresh; do not auto-refresh
         self._force_relayout = True
 
-    def _get_no_selection_seed_set(self, engine: "PedigreeEngine") -> Set[str]:
-        """Compute the display set for no-selection (all-animals) mode.
-
-        Strategy:
-        1. Include ALL animals (alive and dead), optionally filtered by project/species scope.
-        2. Assign generation levels: 0 = founders (oldest), max = youngest offshoots.
-        3. Promote isolated nodes (no parents AND no children) to max_level so they
-           appear alongside the youngest generation.
-        4. Apply spinbox cutoff: only show animals within _max_generations ancestor
-           levels of the youngest generation, i.e. level >= (max_level - _max_generations).
-        """
-        all_nodes = engine.all_nodes
-
-        # Determine scope filter from Project_Track / session
-        scope_animals: Optional[Set[str]] = None
-        pt = getattr(self.app, 'projects_plugin', None)
-        if pt is not None:
-            current_project = getattr(pt, 'current_project', 'All')
-            active_species  = getattr(pt, 'active_species', None)
-            animals = getattr(self.app, 'animals', {}) or {}
-            archived = getattr(self.app, 'archived', {}) or {}
-            project_filter  = current_project and current_project != 'All'
-            species_filter  = bool(active_species)
-            # Build scope when at least one filter is active
-            if project_filter or species_filter:
-                scope_animals = set()
-                # Include both active and archived animals matching filter
-                for src in (animals, archived):
-                    for name, rec in src.items():
-                        if not isinstance(rec, dict):
-                            continue
-                        if project_filter and rec.get('project') != current_project:
-                            continue
-                        if species_filter and rec.get('species', '') != active_species:
-                            continue
-                        scope_animals.add(name)
-
-        # When NO filter is active (All species + All projects), return empty set.
-        # If at least one filter (project or species) is selected, proceed with filtering.
-        if not project_filter and not species_filter:
-            return set()
-
-        # Collect ALL nodes in scope (alive and dead)
-        candidates: Set[str] = set()
-        for node in all_nodes:
-            if scope_animals is not None and node not in scope_animals:
-                continue
-            candidates.add(node)
-
-        if not candidates:
-            return set(all_nodes)
-
-        # Compute generation levels: 0 = oldest founders, max = youngest offshoots
-        levels = engine.compute_levels(candidates)
-        if not levels:
-            return candidates
-
-        max_level = max(levels.values(), default=0)
-
-        # Helper to get siblings (share at least one parent)
-        def _get_siblings(n: str) -> Set[str]:
-            pvals = engine.child_to_parents.get(n, {})
-            parents = {v for k, v in pvals.items()
-                       if k in ('egg_donor', 'sperm_donor') and v}
-            siblings: Set[str] = set()
-            for p in parents:
-                siblings.update(engine.parent_to_children.get(p, set()))
-            siblings.discard(n)
-            return siblings & candidates
-
-        # Build parent -> children map from candidates for quick lookup
-        parent_to_children_local: Dict[str, Set[str]] = defaultdict(set)
-        for c in candidates:
-            pvals = engine.child_to_parents.get(c, {})
-            for k, v in pvals.items():
-                if k in ('egg_donor', 'sperm_donor') and v:
-                    parent_to_children_local[v].add(c)
-
-        def _has_children_in_candidates(n: str) -> bool:
-            return bool(parent_to_children_local.get(n, set()) & candidates)
-
-        # Multi-pass: keep adjusting until stable, max 10 iterations
-        for _ in range(10):
-            changed = False
-            for node in list(candidates):
-                if _has_children_in_candidates(node):
-                    continue  # Nodes with children keep their level
-
-                siblings = _get_siblings(node)
-                if not siblings:
-                    continue
-
-                # Find max level among all siblings (with or without children)
-                # that have been assigned a level already
-                sibling_levels = [levels.get(s, 0) for s in siblings]
-                if not sibling_levels:
-                    continue
-
-                max_sibling_level = max(sibling_levels)
-                current_level = levels.get(node, 0)
-
-                # If any sibling is at a higher level, move to that level
-                if max_sibling_level > current_level:
-                    levels[node] = max_sibling_level
-                    changed = True
-
-            if not changed:
-                break
-
-        # Spinbox N = number of ancestor generations to show above the youngest.
-        # Show only nodes at compute_level >= (max_level - N).
-        cutoff = max(0, max_level - self._max_generations)
-        return {node for node, lvl in levels.items() if lvl >= cutoff}
 
     def _connect_canvas_events(self) -> None:
         self.canvas.mpl_connect("button_press_event", self._on_mouse_press)
@@ -1125,7 +1022,11 @@ class HeritageTrackWidget(QWidget):
             legend.set_loc("lower left")
             legend.set_bbox_to_anchor((x, y), transform=self.ax.transAxes)
             self._legend_anchor_axes = (x, y)
-        except Exception:
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            logging.getLogger(__name__).debug(
+                "Could not place HeritageTrack legend using the overlap scorer",
+                exc_info=True,
+            )
             # Cosmetic fallback, still constrained to the plotting rectangle.
             legend.set_loc("lower left")
             legend.set_bbox_to_anchor((0.0, 0.0), transform=self.ax.transAxes)
@@ -1368,7 +1269,9 @@ class HeritageTrackWidget(QWidget):
             try:
                 self.app._on_select()
             except Exception:
-                pass
+                logging.getLogger(__name__).exception(
+                    "HeritageTrack selection callback failed while clearing selection"
+                )
 
         # Force relayout when switching modes
         self._force_relayout = True
@@ -1443,7 +1346,9 @@ class HeritageTrackWidget(QWidget):
             try:
                 self.app._on_select()
             except Exception:
-                pass
+                logging.getLogger(__name__).exception(
+                    "HeritageTrack selection callback failed while adding animal"
+                )
 
         # A ghost's coordinates belong to the previous display graph.  Once it
         # becomes an active selection, every visible branch can be re-ordered;
@@ -1521,6 +1426,11 @@ class HeritageTrackWidget(QWidget):
     def _clear_all_saved_positions(self) -> None:
         """Clear all saved animal positions (for reset functionality)."""
         engine = self.plugin.build_engine()
+        raw_store = self.plugin.store.load()
+        raw_store_animals = raw_store.get("animals", {}) if isinstance(raw_store, dict) else {}
+        self._render_store_animals = (
+            raw_store_animals if isinstance(raw_store_animals, dict) else {}
+        )
         selected_animals = list(getattr(self.app, "selected_animals", []) or [])
         display_nodes = engine.get_display_nodes(selected_animals)
         
@@ -1889,7 +1799,7 @@ class HeritageTrackWidget(QWidget):
             if len(ordered_members) == 2 and node_x:
                 # Preserve the family-tree side already chosen by the layout.
                 # Alphabetical ordering flipped Arwen/Aragorn and
-                # Dorothea/DÃ¡in, forcing their connectors through siblings.
+                # Dorothea/Dáin, forcing their connectors through siblings.
                 def ancestry_center(node: str) -> float:
                     parent_values = (
                         engine.child_to_parents.get(node, {}) if engine else {}
@@ -1997,44 +1907,6 @@ class HeritageTrackWidget(QWidget):
 
         return arranged
 
-    def _build_partner_components(
-        self,
-        level_nodes: List[str],
-        nodes_subset: Set[str],
-        engine: PedigreeEngine,
-        node_x: Optional[Dict[str, float]] = None,
-    ) -> List[List[str]]:
-        level_set = set(level_nodes)
-        adjacency: Dict[str, Set[str]] = defaultdict(set)
-
-        for child in nodes_subset:
-            parent_values = engine.child_to_parents.get(child, {})
-            mother = str(parent_values.get("egg_donor", "")).strip()
-            father = str(parent_values.get("sperm_donor", "")).strip()
-            if mother and father and mother in level_set and father in level_set:
-                adjacency[mother].add(father)
-                adjacency[father].add(mother)
-
-        components: List[List[str]] = []
-        visited: Set[str] = set()
-        for node in level_nodes:
-            if node in visited or node not in adjacency:
-                continue
-            stack = [node]
-            component: List[str] = []
-            while stack:
-                cur = stack.pop()
-                if cur in visited:
-                    continue
-                visited.add(cur)
-                component.append(cur)
-                for nxt in adjacency.get(cur, set()):
-                    if nxt not in visited:
-                        stack.append(nxt)
-
-            components.append(self._order_partner_component(component, adjacency, engine, node_x))
-
-        return components
 
     def _resolve_shape(
         self,
@@ -2117,7 +1989,9 @@ class HeritageTrackWidget(QWidget):
             if isinstance(record, dict):
                 records.append(record)
 
-        store_animals = self.plugin.store.load().get("animals", {})
+        store_animals = self._render_store_animals
+        if store_animals is None:
+            store_animals = self.plugin.store.load().get("animals", {})
         if isinstance(store_animals, dict):
             store_record = store_animals.get(node)
             if isinstance(store_record, dict):
@@ -2149,7 +2023,7 @@ class HeritageTrackWidget(QWidget):
     def _get_node_birth_date_text(self, node: str) -> str:
         ordinal = self._get_node_birth_ordinal(node)
         if ordinal is None:
-            return self.messages.get("heritage_track.node.detail.missing", "â€”")
+            return self.messages.get("heritage_track.node.detail.missing", "—")
         return datetime.fromordinal(ordinal).strftime("%d.%m.%Y")
 
     def _get_node_public_id(self, node: str, record: Optional[Dict[str, Any]] = None) -> str:
@@ -2158,13 +2032,15 @@ class HeritageTrackWidget(QWidget):
             value = str(source.get(key, "") or "").strip()
             if value:
                 return value
-        return self.messages.get("heritage_track.node.detail.missing", "â€”")
+        return self.messages.get("heritage_track.node.detail.missing", "—")
 
     def _get_node_detail_text(
         self,
         node: str,
         record: Optional[Dict[str, Any]] = None,
         f_value: Optional[float] = None,
+        *,
+        inbreeding_unavailable: bool = False,
     ) -> str:
         mode = str(self.settings.get("animal_label_detail", "inbreeding_f"))
         if mode == "nothing":
@@ -2173,6 +2049,11 @@ class HeritageTrackWidget(QWidget):
             return self._get_node_birth_date_text(node)
         if mode == "animal_id":
             return self._get_node_public_id(node, record)
+        if inbreeding_unavailable:
+            return self.messages.get(
+                "heritage_track.node.inbreeding_unavailable",
+                "F: unavailable (cyclic pedigree)",
+            )
         if f_value is None:
             return ""
         rounded = round(float(f_value), 4)
@@ -2196,7 +2077,14 @@ class HeritageTrackWidget(QWidget):
         elif mode == "animal_id":
             detail = self._get_node_public_id(node, source)
         else:
-            detail = "F: ~0.0000"
+            detail = (
+                self.messages.get(
+                    "heritage_track.node.inbreeding_unavailable",
+                    "F: unavailable (cyclic pedigree)",
+                )
+                if node in self._cycle_nodes
+                else "F: ~0.0000"
+            )
         return max((primary, detail), key=len)
 
     def _get_node_birth_year(self, node: str) -> Optional[int]:
@@ -2271,38 +2159,6 @@ class HeritageTrackWidget(QWidget):
 
         return descendants
 
-    def _compute_collapsed_family_positions(
-        self,
-        collapsed_families: Dict[str, Dict[str, Any]],
-        animal_positions: Dict[str, Tuple[float, float]],
-    ) -> Tuple[Dict[str, Tuple[float, float]], Dict[str, Set[str]]]:
-        family_positions: Dict[str, Tuple[float, float]] = {}
-        family_members: Dict[str, Set[str]] = {}
-
-        for family_id, family in collapsed_families.items():
-            mother = str(family.get("mother", "")).strip()
-            father = str(family.get("father", "")).strip()
-            parent_points = [
-                animal_positions[parent]
-                for parent in (mother, father)
-                if parent in animal_positions
-            ]
-            if not parent_points:
-                continue
-
-            family_x = sum(point[0] for point in parent_points) / len(parent_points)
-            parent_center_y = sum(point[1] for point in parent_points) / len(parent_points)
-            family_y = parent_center_y - 0.8
-            family_positions[family_id] = (family_x, family_y)
-
-            members: Set[str] = set()
-            if mother in animal_positions:
-                members.add(mother)
-            if father in animal_positions:
-                members.add(father)
-            family_members[family_id] = members
-
-        return family_positions, family_members
 
     def _build_family_units(
         self,
@@ -2342,71 +2198,6 @@ class HeritageTrackWidget(QWidget):
         return families
 
 
-    def _compute_family_positions(
-        self,
-        families: Dict[str, Dict[str, Any]],
-        animal_positions: Dict[str, Tuple[float, float]],
-    ) -> Tuple[Dict[str, Tuple[float, float]], Dict[str, Set[str]]]:
-        family_positions: Dict[str, Tuple[float, float]] = {}
-        family_members: Dict[str, Set[str]] = {}
-
-        grouped: Dict[Tuple[float, float], List[Tuple[str, float, float, float, Set[str]]]] = defaultdict(list)
-
-        for family_id, family in families.items():
-            mother = str(family.get("mother", "")).strip()
-            father = str(family.get("father", "")).strip()
-            children = [child for child in family.get("children", []) if child in animal_positions]
-            if not children:
-                continue
-
-            parent_points = [
-                animal_positions[parent]
-                for parent in (mother, father)
-                if parent in animal_positions
-            ]
-            if not parent_points:
-                continue
-
-            child_points = [animal_positions[child] for child in children]
-            child_center_x = sum(point[0] for point in child_points) / len(child_points)
-            child_center_y = sum(point[1] for point in child_points) / len(child_points)
-            parent_center_x = sum(point[0] for point in parent_points) / len(parent_points)
-            parent_center_y = sum(point[1] for point in parent_points) / len(parent_points)
-
-            combined_x = [point[0] for point in child_points] + [point[0] for point in parent_points]
-            min_x = min(combined_x)
-            max_x = max(combined_x)
-            family_x = (child_center_x + parent_center_x) / 2.0
-            family_x = max(min_x, min(max_x, family_x))
-
-            members = set(children)
-            if mother in animal_positions:
-                members.add(mother)
-            if father in animal_positions:
-                members.add(father)
-            family_members[family_id] = members
-
-            band_key = (round(parent_center_y, 6), round(child_center_y, 6))
-            grouped[band_key].append((family_id, family_x, parent_center_y, child_center_y, members))
-
-        for (_, _), band_families in grouped.items():
-            band_families.sort(key=lambda item: (item[1], item[0].lower()))
-            count = len(band_families)
-            for idx, (family_id, family_x, parent_y, child_y, _members) in enumerate(band_families):
-                low_y = min(parent_y, child_y)
-                high_y = max(parent_y, child_y)
-                span = high_y - low_y
-                if span <= 1e-9:
-                    family_y = low_y
-                else:
-                    if count == 1:
-                        frac = 0.50
-                    else:
-                        frac = 0.32 + (0.36 * idx / (count - 1))
-                    family_y = low_y + (span * frac)
-                family_positions[family_id] = (family_x, family_y)
-
-        return family_positions, family_members
 
     def _compute_birth_year_bins(
         self,
@@ -2592,24 +2383,24 @@ class HeritageTrackWidget(QWidget):
     ) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
         """Path between two animals routed via their last common ancestor (LCA).
 
-        Uses two independent upward BFS passes (childâ†’familyâ†’parent) rather than
+        Uses two independent upward BFS passes (child→family→parent) rather than
         a single undirected BFS.  Undirected BFS fails in inbreeding cases because
         equal-length shortcuts through a shared parent are found before the path
         that passes through the actual LCA.
 
         Algorithm:
-          1. BFS strictly upward from node_a â†’ prev_a, ancestor_set_a
-          2. BFS strictly upward from node_b â†’ prev_b, ancestor_set_b
+          1. BFS strictly upward from node_a → prev_a, ancestor_set_a
+          2. BFS strictly upward from node_b → prev_b, ancestor_set_b
           3. LCA = common ancestor with minimum (hops_from_a + hops_from_b)
-          4. Full path = node_a â†’(up)â†’ LCA â†’(down)â†’ node_b
+          4. Full path = node_a →(up)→ LCA →(down)→ node_b
         """
         from collections import deque
 
         # Index which family each animal belongs to as a child or parent.
-        fam_parents: Dict[str, Set[str]] = {}   # fid â†’ {mother, father}
-        fam_children: Dict[str, Set[str]] = {}  # fid â†’ {children}
-        child_in: Dict[str, Set[str]] = defaultdict(set)   # animal â†’ fids where it is a child
-        parent_in: Dict[str, Set[str]] = defaultdict(set)  # animal â†’ fids where it is a parent
+        fam_parents: Dict[str, Set[str]] = {}   # fid → {mother, father}
+        fam_children: Dict[str, Set[str]] = {}  # fid → {children}
+        child_in: Dict[str, Set[str]] = defaultdict(set)   # animal → fids where it is a child
+        parent_in: Dict[str, Set[str]] = defaultdict(set)  # animal → fids where it is a parent
 
         for fid, fdata in families.items():
             mother = str(fdata.get("mother", "")).strip()
@@ -2625,21 +2416,21 @@ class HeritageTrackWidget(QWidget):
                 child_in[c].add(fid)
 
         def _bfs_up(start: str) -> Dict[str, str]:
-            """BFS strictly upward (childâ†’familyâ†’parent). Returns prev[] map."""
+            """BFS strictly upward (child→family→parent). Returns prev[] map."""
             prev: Dict[str, str] = {}
             visited: Set[str] = {start}
             q: deque = deque([start])
             while q:
                 cur = q.popleft()
                 if cur in fam_parents:
-                    # family node â†’ go to its parent animals
+                    # family node → go to its parent animals
                     for parent in sorted(fam_parents[cur]):
                         if parent not in visited:
                             visited.add(parent)
                             prev[parent] = cur
                             q.append(parent)
                 else:
-                    # animal â†’ go to family nodes where it is a child
+                    # animal → go to family nodes where it is a child
                     for fid in sorted(child_in.get(cur, set())):
                         if fid not in visited:
                             visited.add(fid)
@@ -2687,9 +2478,9 @@ class HeritageTrackWidget(QWidget):
             path.reverse()
             return path
 
-        path_up_a = _reconstruct_up(best_lca, prev_a, node_a)   # node_a â†’ LCA
-        path_up_b = _reconstruct_up(best_lca, prev_b, node_b)   # node_b â†’ LCA
-        path_down_b = list(reversed(path_up_b))                  # LCA â†’ node_b
+        path_up_a = _reconstruct_up(best_lca, prev_a, node_a)   # node_a → LCA
+        path_up_b = _reconstruct_up(best_lca, prev_b, node_b)   # node_b → LCA
+        path_down_b = list(reversed(path_up_b))                  # LCA → node_b
 
         full_path = path_up_a + path_down_b[1:]  # join at LCA (avoid duplicate)
 
@@ -2874,34 +2665,15 @@ class HeritageTrackWidget(QWidget):
         archived_animals: Set[str] = set(archived.keys()) if isinstance(archived, dict) else set()
         exclude_archived = self.settings.get("exclude_archived", False)
 
-        # Determine display strategy based on mode
-        all_animals_mode = len(selected_animals) == 0
+        # The graph is always selection-driven.  An empty selection returns
+        # through refresh_graph's splash state before this builder is called;
+        # project/species filters never become an independent graph scope.
+        display_strategy = SelectedAnimalsStrategy()
 
-        if all_animals_mode:
-            # All-animals mode with scope filtering
-            scope_provider = ProjectsTrackScopeProvider(self.app)
-            display_strategy = AllAnimalsStrategy(scope_provider=scope_provider)
-        else:
-            # Selected animals mode
-            display_strategy = SelectedAnimalsStrategy()
-
-        # Build ghost detection strategy
+        # Offspring and siblings remain ghosts around explicitly selected
+        # animals.
         ghost_strategies: list = []
-
-        # Scope ghosts (when project/species filter is active)
-        if all_animals_mode:
-            pt = getattr(self.app, "projects_plugin", None)
-            scope_active = (
-                pt is not None and (
-                    (getattr(pt, "current_project", "All") or "All") != "All"
-                    or bool(getattr(pt, "active_species", None))
-                )
-            )
-            if scope_active:
-                ghost_strategies.append(ScopeGhostStrategy(families=all_graph_families))
-
-        # Offspring and siblings ghosts (when specific animals are selected)
-        if not all_animals_mode and selected_animals:
+        if selected_animals:
             ghost_strategies.append(
                 OffspringAndSiblingsGhostStrategy(selected_animals=set(selected_animals))
             )
@@ -2928,7 +2700,7 @@ class HeritageTrackWidget(QWidget):
             settings=settings,
             display_strategy=display_strategy,
             ghost_strategy=ghost_strategy,
-            scope_provider=ProjectsTrackScopeProvider(self.app) if all_animals_mode else None,
+            scope_provider=None,
         )
 
         context = builder.build(
@@ -2939,11 +2711,6 @@ class HeritageTrackWidget(QWidget):
         # Handle heritage-only filtering (needs plugin access)
         if not self.settings.get("show_heritage_only", True):
             display_nodes = {n for n in context.display_nodes if not self.plugin.is_heritage_only(n)}
-            context = context.copy_with(display_nodes=display_nodes)
-
-        # Handle archived exclusion in all-animals mode
-        if all_animals_mode and exclude_archived and archived_animals:
-            display_nodes = context.display_nodes - archived_animals
             context = context.copy_with(display_nodes=display_nodes)
 
         return context
@@ -2963,6 +2730,8 @@ class HeritageTrackWidget(QWidget):
         # discard them a few lines later.
         if self.all_animals_mode:
             self._show_splash_screen()
+            self._render_store_animals = None
+            self.plugin.schedule_store_flush()
             return
 
         all_graph_nodes = engine.get_display_nodes([])
@@ -3333,18 +3102,25 @@ class HeritageTrackWidget(QWidget):
 
         legend_entries: Dict[str, Dict[str, str]] = {}
 
-        # Compute F only when it is the selected secondary label.  The other
-        # modes avoid an unnecessary full kinship calculation during redraw.
+        # Build the cycle diagnostic for every label mode.  Malformed pedigrees
+        # must be warned about even when the user is showing birth dates or
+        # animal IDs rather than the inbreeding-F detail.
         label_detail_mode = str(self.settings.get("animal_label_detail", "inbreeding_f"))
         show_f = label_detail_mode == "inbreeding_f"
         f_values: Dict[str, float] = {}
+        _genetic_map = engine.get_genetic_parent_map()
+        _f_calculator = InbreedingCalculator(_genetic_map)
+        self._cycle_nodes = _f_calculator.cycle_nodes
         if show_f:
-            _genetic_map = engine.get_genetic_parent_map()
-            _f_calculator = InbreedingCalculator(_genetic_map)
             _store_anims = self.plugin.store.load().get("animals", {})
             _f_to_save: Dict[str, float] = {}
             for _node in display_nodes:
                 if self._is_family_node(_node):
+                    continue
+                if _node in self._cycle_nodes:
+                    # Do not persist or display a plausible numeric F for a
+                    # malformed cyclic pedigree. The visible detail text and
+                    # status warning carry the actionable diagnostic.
                     continue
                 _anim_entry = _store_anims.get(_node, {}) if isinstance(_store_anims, dict) else {}
                 _cached_f = _anim_entry.get("inbreeding_f") if isinstance(_anim_entry, dict) else None
@@ -3358,7 +3134,7 @@ class HeritageTrackWidget(QWidget):
                 f_values[_node] = _f_val
                 _f_to_save[_node] = _f_val
             if _f_to_save:
-                self.plugin.store.set_inbreeding_f_batch(_f_to_save)
+                self.plugin.store.set_inbreeding_f_batch(_f_to_save, persist=False)
 
         for node in sorted(display_nodes, key=str.lower):
             x, y = animal_positions.get(node, (0.0, 0.0))
@@ -3422,7 +3198,12 @@ class HeritageTrackWidget(QWidget):
                 path_effects=self._animal_text_path_effects(),
             )
 
-            detail_text = self._get_node_detail_text(node, record, f_values.get(node))
+            detail_text = self._get_node_detail_text(
+                node,
+                record,
+                f_values.get(node),
+                inbreeding_unavailable=node in self._cycle_nodes,
+            )
             f_artist = None
             if detail_text:
                 f_artist = self.ax.annotate(
@@ -3537,15 +3318,32 @@ class HeritageTrackWidget(QWidget):
             count=len(self.selected_nodes)
         )
         status_text = f"{mode_text} | {selected_text}"
+        tooltip_lines: List[str] = []
         if route_plan.unresolved:
             routing_warning = self.messages.get(
                 "heritage_track.status.routing_warning",
                 "Warning: {count} pedigree route conflicts remain",
             ).format(count=len(route_plan.unresolved))
             status_text = f"{status_text} | {routing_warning}"
-            self.status_label.setToolTip("\n".join(route_plan.unresolved))
-        else:
-            self.status_label.setToolTip("")
+            tooltip_lines.extend(route_plan.unresolved)
+        visible_cycle_nodes = sorted(
+            set(display_nodes) & set(self._cycle_nodes), key=str.casefold
+        )
+        if visible_cycle_nodes:
+            cycle_warning = self.messages.get(
+                "heritage_track.status.cycle_warning",
+                "Warning: {count} cyclic or malformed pedigree records; inbreeding F is unavailable",
+            ).format(count=len(visible_cycle_nodes))
+            status_text = f"{status_text} | {cycle_warning}"
+            tooltip_lines.append(
+                ", ".join(visible_cycle_nodes)
+                + " — "
+                + self.messages.get(
+                    "heritage_track.node.inbreeding_unavailable",
+                    "F: unavailable (cyclic pedigree)",
+                )
+            )
+        self.status_label.setToolTip("\n".join(tooltip_lines))
         self.status_label.setText(status_text)
 
         # DEFERRED PERSISTENCE: Save collapsed families and temp positions once at the end
@@ -3557,9 +3355,16 @@ class HeritageTrackWidget(QWidget):
 
         self._hover_annotation.set_visible(False)
         self.canvas.draw_idle()
+        self._render_store_animals = None
+        self.plugin.schedule_store_flush()
+
+    def closeEvent(self, event) -> None:
+        '''Flush derived Heritage data before the window is closed.'''
+        self.plugin.flush_pending_store()
+        super().closeEvent(event)
 
     def _show_splash_screen(self) -> None:
-        """Show splash screen when no animals are selected or no scope filter is active.
+        """Show the splash screen when no animals are selected.
 
         Similar to ProgTrack main window behavior when no animal is selected.
         Displays the splash.png image with legal disclaimer text.
@@ -4239,7 +4044,11 @@ class HeritageTrackWidget(QWidget):
                         continue
                     seen_lower.add(entry_lower)
                     values.append(entry)
-        except Exception:
+        except (OSError, UnicodeError):
+            logging.getLogger(__name__).debug(
+                "Could not load the HeritageTrack species catalog",
+                exc_info=True,
+            )
             return []
         return ordered_species_for_display(values)
 
@@ -4427,8 +4236,30 @@ class HeritageTrackPlugin:
         self.store = HeritageStore(self.plugin_dir, app.backend)
         self.store.load()
         self._engine_cache = PedigreeEngineCache()
+        self._store_flush_scheduled = False
 
         self.window: Optional[HeritageTrackWidget] = None
+        app_instance = QApplication.instance()
+        if app_instance is not None:
+            app_instance.aboutToQuit.connect(self.flush_pending_store)
+
+    def flush_pending_store(self) -> None:
+        """Persist queued derived Heritage changes without raising into Qt."""
+        try:
+            self.store.flush_pending()
+        except Exception:
+            logging.getLogger(__name__).exception("Failed to flush pending HeritageTrack data")
+
+    def _flush_scheduled_store(self) -> None:
+        self._store_flush_scheduled = False
+        self.flush_pending_store()
+
+    def schedule_store_flush(self) -> None:
+        """Coalesce derived writes until the event loop is idle."""
+        if not self.store.has_pending_changes() or self._store_flush_scheduled:
+            return
+        self._store_flush_scheduled = True
+        QTimer.singleShot(0, self._flush_scheduled_store)
 
     def update_language(self, messages: Dict[str, Any]) -> None:
         self.messages = messages or {}
@@ -4770,9 +4601,11 @@ class HeritageTrackPlugin:
         if isinstance(archived, dict):
             animals = {**animals, **archived}
         # keep store up-to-date with native fields for offspring/zuchttier etc.
-        self.store.sync_from_animals(animals)
+        sync_changed = self.store.sync_from_animals(animals, persist=False)
+        if sync_changed:
+            self.schedule_store_flush()
 
-        # Build base-name â†’ [(key, species)] map for resolving same-name animals by species.
+        # Build base-name → [(key, species)] map for resolving same-name animals by species.
         _base_to_variants: Dict[str, List[tuple]] = {}
         _heritage_entries = self.store.get_all_entries()
         _identity_records = dict(_heritage_entries)

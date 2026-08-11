@@ -1,14 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.2.1
 # Required ProgTrack version: see plugin manifest.
-# Required Launcher version: 0.1.0 RC or newer.
+# Required Launcher version: see release metadata.
 # Module: Heritage Track persistence layer.
 
 from __future__ import annotations
 
 import math
-from datetime import datetime
+from copy import deepcopy
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from Plugins.core.animal_identity import animal_base_name
@@ -30,6 +31,9 @@ class HeritageStore:
     def __init__(self, plugin_dir: str, backend: Any):
         self.backend_store = BackendJsonStore(backend, "heritage", "graph")
         self._data: Optional[Dict[str, Any]] = None
+        self._pending_animal_save = False
+        self._pending_settings_save = False
+        self._genotype_colors_cache: Optional[Dict[str, str]] = None
 
     def _default_settings(self) -> Dict[str, Any]:
         return {
@@ -70,10 +74,15 @@ class HeritageStore:
             return None
         return [max(0.0, min(1.0, x)), max(0.0, min(1.0, y))]
 
+    @staticmethod
+    def _utc_now_iso() -> str:
+        # Keep the historical naive-UTC-plus-Z wire format stable.
+        return datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
+
     def _default_data(self) -> Dict[str, Any]:
         return {
             "version": "1.0.0",
-            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": self._utc_now_iso(),
             "settings": self._default_settings(),
             "node_positions": {},
             "collapsed_families": [],
@@ -161,23 +170,25 @@ class HeritageStore:
 
         raw = self._load_raw()
         if raw is None:
+            # Do not create a backend record merely because a read/render occurred.
             self._data = self._default_data()
-            self.save()
+            self._genotype_colors_cache = None
             return self._data
 
         return self._normalize_and_cache(raw)
 
     def _load_raw(self) -> Optional[Dict[str, Any]]:
         """Load the combined Heritage record from the shared backend."""
-        return self.backend_store.load(self._default_data())
+        return self.backend_store.load(None)
 
     def _normalize_and_cache(self, raw: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize a raw combined dict, populate self._data, and trigger save."""
+        original = deepcopy(raw) if isinstance(raw, dict) else None
         if not isinstance(raw, dict):
             raw = self._default_data()
 
         raw.setdefault("version", "1.0.0")
-        raw.setdefault("updated_at", datetime.utcnow().isoformat() + "Z")
+        raw.setdefault("updated_at", self._utc_now_iso())
         if not isinstance(raw.get("animals"), dict):
             raw["animals"] = {}
         if not isinstance(raw.get("node_positions"), dict):
@@ -297,25 +308,55 @@ class HeritageStore:
             if entry.get("node_fill_color", "") == mapped_color:
                 continue
             entry["node_fill_color"] = mapped_color
-            entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
+            entry["updated_at"] = self._utc_now_iso()
 
         raw["genotype_colors"] = genotype_colors
         raw["animals"] = normalized_animals
+        self._genotype_colors_cache = None
         self._data = raw
-        self.save()
+        if original != raw:
+            self._save_sections(animals=True, settings=True)
         return self._data
     # end _normalize_and_cache
 
-    def _save_sections(self, *, animals: bool, settings: bool) -> None:
-        """Persist the requested backend sections with one timestamp."""
+    def _mark_pending_sections(self, *, animals: bool = False, settings: bool = False) -> None:
+        self._pending_animal_save = self._pending_animal_save or animals
+        self._pending_settings_save = self._pending_settings_save or settings
+
+    def has_pending_changes(self) -> bool:
+        return self._pending_animal_save or self._pending_settings_save
+
+    def flush_pending(self) -> bool:
+        """Persist queued derived changes once, outside paint/resize handlers."""
+        if not self.has_pending_changes():
+            return False
+        self._save_sections(
+            animals=self._pending_animal_save,
+            settings=self._pending_settings_save,
+        )
+        return True
+
+    def _save_sections(
+        self,
+        *,
+        animals: bool,
+        settings: bool,
+        defer: bool = False,
+    ) -> None:
+        """Persist requested sections or queue them for an explicit flush."""
         if not animals and not settings:
+            return
+        if defer:
+            self._mark_pending_sections(animals=animals, settings=settings)
             return
 
         data = self.load()
-        now = datetime.utcnow().isoformat() + "Z"
-        data["updated_at"] = now
-
+        data["updated_at"] = self._utc_now_iso()
         self.backend_store.save(data)
+        if animals:
+            self._pending_animal_save = False
+        if settings:
+            self._pending_settings_save = False
 
     def _save_animals(self) -> None:
         """Persist only animal records and genotype colours."""
@@ -326,12 +367,7 @@ class HeritageStore:
         self._save_sections(animals=False, settings=True)
 
     def save(self) -> None:
-        """Persist the complete combined store.
-
-        Public callers retain the historical full-save behaviour. Internal
-        setters use the section-specific helpers when only one split file
-        changed.
-        """
+        """Persist the complete combined store."""
         self._save_sections(animals=True, settings=True)
 
     def _entry(self, animal_name: str) -> Dict[str, Any]:
@@ -350,7 +386,7 @@ class HeritageStore:
                 "species": "",
                 "heritage_only": False,
                 "source": "plugin",
-                "updated_at": datetime.utcnow().isoformat() + "Z",
+                "updated_at": self._utc_now_iso(),
                 "inbreeding_f": None,
             }
         return animals[key]
@@ -406,9 +442,12 @@ class HeritageStore:
         return data.get("animals", {})
 
     def get_genotype_colors(self) -> Dict[str, str]:
+        if self._genotype_colors_cache is not None:
+            return dict(self._genotype_colors_cache)
         data = self.load()
         colors = data.get("genotype_colors", {}) if isinstance(data, dict) else {}
         if not isinstance(colors, dict):
+            self._genotype_colors_cache = {}
             return {}
         normalized: Dict[str, str] = {}
         for genotype, color in colors.items():
@@ -416,7 +455,8 @@ class HeritageStore:
             if not key:
                 continue
             normalized[key] = self._normalize_text(color)
-        return normalized
+        self._genotype_colors_cache = normalized
+        return dict(normalized)
 
     def get_genotype_color(self, genotype: str) -> str:
         key = self._normalize_genotype_key(genotype)
@@ -431,7 +471,7 @@ class HeritageStore:
             return False
 
         changed = False
-        now_iso = datetime.utcnow().isoformat() + "Z"
+        now_iso = self._utc_now_iso()
         for entry in animals.values():
             if not isinstance(entry, dict):
                 continue
@@ -466,8 +506,12 @@ class HeritageStore:
         if self._apply_genotype_color_to_entries(genotype_key, color_value):
             changed = True
 
-        if changed and persist:
-            self._save_animals()
+        if changed:
+            self._genotype_colors_cache = None
+            if persist:
+                self._save_animals()
+            else:
+                self._mark_pending_sections(animals=True)
         return changed
 
     def get_node_positions(self) -> Dict[str, Tuple[float, float]]:
@@ -619,7 +663,7 @@ class HeritageStore:
         for parent_key, value in normalized.items():
             entry[parent_key] = value
         entry["source"] = self._normalize_text(source) or "plugin"
-        entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        entry["updated_at"] = self._utc_now_iso()
         entry["inbreeding_f"] = None
         self._save_animals()
 
@@ -630,12 +674,12 @@ class HeritageStore:
 
         entry = self._entry(key)
         entry["heritage_only"] = bool(heritage_only)
-        entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        entry["updated_at"] = self._utc_now_iso()
         self._save_animals()
 
     def set_heritage_only_batch(self, animal_names: Iterable[str], heritage_only: bool) -> None:
         changed = False
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = self._utc_now_iso()
         target = bool(heritage_only)
         for animal_name in animal_names:
             key = self._normalize_text(animal_name)
@@ -675,7 +719,7 @@ class HeritageStore:
                     entry[parent_key] = ""
                     entry_changed = True
             if entry_changed:
-                entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
+                entry["updated_at"] = self._utc_now_iso()
 
         self.save()
         return True
@@ -695,7 +739,7 @@ class HeritageStore:
             return
         entry = self._entry(key)
         entry["species"] = self._normalize_text(species)
-        entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        entry["updated_at"] = self._utc_now_iso()
         self._save_animals()
 
     def set_identity_fields(
@@ -727,7 +771,7 @@ class HeritageStore:
         else:
             entry.pop("identity_review_required", None)
             entry.pop("identity_review_reason", None)
-        entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        entry["updated_at"] = self._utc_now_iso()
         self._save_animals()
 
     def get_species(self, animal_name: str) -> str:
@@ -746,12 +790,12 @@ class HeritageStore:
 
         entry = self._entry(key)
         entry["sex"] = self._normalize_sex(sex)
-        entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        entry["updated_at"] = self._utc_now_iso()
         self._save_animals()
 
     def set_manual_sex_batch(self, updates: Dict[str, str]) -> None:
         changed = False
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = self._utc_now_iso()
         for animal_name, sex in updates.items():
             key = self._normalize_text(animal_name)
             if not key:
@@ -831,7 +875,7 @@ class HeritageStore:
                 changed = True
 
         if changed:
-            entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
+            entry["updated_at"] = self._utc_now_iso()
             self._save_animals()
 
     def get_node_visual(self, animal_name: str, fallback_genotype: str = "") -> Dict[str, str]:
@@ -960,7 +1004,7 @@ class HeritageStore:
                     changed = True
 
         if changed:
-            entry["updated_at"] = datetime.utcnow().isoformat() + "Z"
+            entry["updated_at"] = self._utc_now_iso()
             if persist:
                 self._save_animals()
 
@@ -981,21 +1025,38 @@ class HeritageStore:
         except (TypeError, ValueError):
             return None
 
-    def set_inbreeding_f_batch(self, updates: Dict[str, float]) -> None:
-        """Set inbreeding_f for multiple animals in a single save() call."""
+    def set_inbreeding_f_batch(
+        self, updates: Dict[str, float], *, persist: bool = True
+    ) -> bool:
+        """Set derived F values, optionally queueing the write outside rendering."""
         if not updates:
-            return
-        now_iso = datetime.utcnow().isoformat() + "Z"
+            return False
+        now_iso = self._utc_now_iso()
+        changed = False
         for name, f_value in updates.items():
             key = self._normalize_text(name)
             if not key:
                 continue
             entry = self._entry(key)
-            entry["inbreeding_f"] = float(f_value)
+            value = float(f_value)
+            try:
+                current = float(entry.get("inbreeding_f"))
+            except (TypeError, ValueError):
+                current = None
+            if current == value:
+                continue
+            entry["inbreeding_f"] = value
             entry["updated_at"] = now_iso
-        self._save_animals()
+            changed = True
+        if not changed:
+            return False
+        if persist:
+            self._save_animals()
+        else:
+            self._mark_pending_sections(animals=True)
+        return True
 
-    def sync_from_animals(self, animals: Any) -> None:
+    def sync_from_animals(self, animals: Any, *, persist: bool = True) -> bool:
         if not isinstance(animals, dict):
             return
 
@@ -1020,7 +1081,7 @@ class HeritageStore:
         # present only in this store are Heritage-only regardless of a stale
         # serialized flag.
         if isinstance(store_animals, dict):
-            timestamp = datetime.utcnow().isoformat() + "Z"
+            timestamp = self._utc_now_iso()
             for key, entry in store_animals.items():
                 if not isinstance(entry, dict):
                     continue
@@ -1032,4 +1093,8 @@ class HeritageStore:
                 changed = True
 
         if changed:
-            self._save_animals()
+            if persist:
+                self._save_animals()
+            else:
+                self._mark_pending_sections(animals=True)
+        return changed

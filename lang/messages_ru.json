@@ -1270,6 +1270,8 @@
   "heritage_track.status.mode_all": "Режим всех животных",
   "heritage_track.status.selected": "Выбрано в графе: {count}",
   "heritage_track.status.routing_warning": "Предупреждение: осталось конфликтов маршрутов родословной: {count}",
+  "heritage_track.status.cycle_warning": "Предупреждение: {count} циклических или некорректных записей родословной; F инбридинга недоступен",
+  "heritage_track.node.inbreeding_unavailable": "F: недоступно (циклическая родословная)",
   "heritage_track.parents.group": "Родители",
   "heritage_track.field.egg_donor": "Донор яйцеклетки:",
   "heritage_track.field.sperm_donor": "Донор спермы:",

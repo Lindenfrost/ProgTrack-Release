@@ -1224,6 +1224,8 @@
   "heritage_track.status.mode_all": "Modalità tutti gli animali",
   "heritage_track.status.selected": "Selezionati nel grafico: {count}",
   "heritage_track.status.routing_warning": "Avviso: rimangono {count} conflitti nei percorsi genealogici",
+  "heritage_track.status.cycle_warning": "Avviso: {count} record genealogici ciclici o non validi; F di consanguineità non disponibile",
+  "heritage_track.node.inbreeding_unavailable": "F: non disponibile (genealogia ciclica)",
   "heritage_track.parents.group": "Genitori",
   "heritage_track.field.egg_donor": "Donatrice ovociti:",
   "heritage_track.field.sperm_donor": "Donatore sperma:",

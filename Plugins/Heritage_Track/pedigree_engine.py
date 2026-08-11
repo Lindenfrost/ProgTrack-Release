@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.2.1
 # Required ProgTrack version: see plugin manifest.
-# Required Launcher version: 0.1.0 RC or newer.
+# Required Launcher version: see release metadata.
 # Module: Heritage Track pedigree graph engine.
 
 from __future__ import annotations
@@ -136,10 +136,10 @@ class PedigreeEngine:
         display: Set[str] = set(selected_names)
 
         # Phase 1: Collect all descendants of selected animals (no limit on descendants)
-        queue = list(selected_names)
+        queue = deque(selected_names)
         visited_descendants = set(selected_names)
         while queue:
-            current = queue.pop(0)
+            current = queue.popleft()
             for child in self.parent_to_children.get(current, set()):
                 if child not in visited_descendants:
                     visited_descendants.add(child)
@@ -152,7 +152,7 @@ class PedigreeEngine:
         seeds_for_ancestors = list(display)  # Include selected + all descendants
         for seed in seeds_for_ancestors:
             # BFS from this seed up to max_generations
-            current_level: List[Tuple[str, int]] = [(seed, 0)]  # (node, generation_from_seed)
+            current_level: deque[Tuple[str, int]] = deque([(seed, 0)])  # (node, generation_from_seed)
             # Generation depth is relative to *each* seed.  Sharing one
             # visited set between seeds made the returned scope depend on the
             # order of the selected animals whenever one was an ancestor of
@@ -161,7 +161,7 @@ class PedigreeEngine:
             visited_ancestors: Set[str] = {seed}
 
             while current_level:
-                node, gen = current_level.pop(0)
+                node, gen = current_level.popleft()
                 if gen >= max_generations:
                     continue
 
@@ -305,124 +305,6 @@ class PedigreeEngine:
 
         return memo
 
-    def compute_levels_fast(self, nodes_subset: Set[str]) -> Dict[str, int]:
-        """Compute generation-like levels using Kahn's algorithm (O(V+E)).
-        
-        This is significantly faster than the recursive DFS approach for large datasets
-        (1000+ nodes) because it uses topological sorting instead of repeated traversal.
-        
-        Args:
-            nodes_subset: Set of nodes to compute levels for
-            
-        Returns:
-            Dictionary mapping node names to their level (0 = founders)
-        """
-        if not nodes_subset:
-            return {}
-        
-        # Build in-degree map (number of parents in the subset)
-        in_degree: Dict[str, int] = defaultdict(int)
-        for node in nodes_subset:
-            for parent in _iter_genetic_parent_names(self.child_to_parents.get(node, {})):
-                if parent and parent in nodes_subset:
-                    in_degree[node] += 1
-        
-        # Kahn's algorithm: start with nodes that have no parents in subset
-        levels: Dict[str, int] = {}
-        queue = deque([n for n in nodes_subset if in_degree[n] == 0])
-        
-        for node in queue:
-            # Compute level based on parents
-            parent_levels = [
-                levels.get(p, 0) 
-                for p in _iter_genetic_parent_names(self.child_to_parents.get(node, {}))
-                if p and p in nodes_subset
-            ]
-            levels[node] = max(parent_levels, default=-1) + 1
-            
-            # Reduce in-degree for children
-            for child in self.parent_to_children.get(node, set()):
-                if child in nodes_subset:
-                    in_degree[child] -= 1
-                    if in_degree[child] == 0:
-                        queue.append(child)
-        
-        # Handle any remaining nodes (cycles or disconnected)
-        for node in nodes_subset:
-            if node not in levels:
-                parent_levels = [
-                    levels.get(p, 0)
-                    for p in _iter_genetic_parent_names(self.child_to_parents.get(node, {}))
-                    if p and p in nodes_subset
-                ]
-                levels[node] = max(parent_levels, default=-1) + 1
-        
-        # Partner alignment (same as original)
-        partner_adj: Dict[str, Set[str]] = defaultdict(set)
-        for child in nodes_subset:
-            parent_values = self.child_to_parents.get(child, {})
-            mother = _norm_name(parent_values.get("egg_donor", ""))
-            father = _norm_name(parent_values.get("sperm_donor", ""))
-            if not mother or not father:
-                continue
-            if mother not in nodes_subset or father not in nodes_subset:
-                continue
-            
-            # Check for ancestor relationship
-            def _is_ancestor(anc: str, desc: str) -> bool:
-                visited: Set[str] = set()
-                stack = [anc]
-                while stack:
-                    cur = stack.pop()
-                    if cur == desc:
-                        return True
-                    if cur in visited:
-                        continue
-                    visited.add(cur)
-                    for c in self.parent_to_children.get(cur, set()):
-                        if c in nodes_subset and c not in visited:
-                            stack.append(c)
-                return False
-            
-            if _is_ancestor(mother, father) or _is_ancestor(father, mother):
-                continue
-            
-            partner_adj[mother].add(father)
-            partner_adj[father].add(mother)
-        
-        # Align partners to same level
-        def _align_partners() -> bool:
-            changed = False
-            visited: Set[str] = set()
-            for seed in partner_adj:
-                if seed in visited:
-                    continue
-                component: List[str] = []
-                stack = [seed]
-                while stack:
-                    cur = stack.pop()
-                    if cur in visited:
-                        continue
-                    visited.add(cur)
-                    component.append(cur)
-                    for nxt in partner_adj.get(cur, set()):
-                        if nxt not in visited:
-                            stack.append(nxt)
-                
-                if len(component) > 1:
-                    target = max(levels.get(n, 0) for n in component)
-                    for n in component:
-                        if levels.get(n, 0) != target:
-                            levels[n] = target
-                            changed = True
-            return changed
-        
-        # Iterative refinement
-        for _ in range(10):
-            if not _align_partners():
-                break
-        
-        return levels
 
     def get_genetic_parent_map(self) -> Dict[str, Tuple[Optional[str], Optional[str]]]:
         """Return map used for kinship/inbreeding calculations.

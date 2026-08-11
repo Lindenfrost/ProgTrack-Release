@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.2.1
 # Required ProgTrack version: see plugin manifest.
-# Required Launcher version: 0.1.0 RC or newer.
+# Required Launcher version: see release metadata.
 # Module: Heritage Track ghost-node detection strategies.
 
 from __future__ import annotations
@@ -39,40 +39,6 @@ class GhostNodeStrategy(ABC):
             Set of ghost node names
         """
         pass
-
-
-class ScopeGhostStrategy(GhostNodeStrategy):
-    """Ghosts from project/species scope boundaries.
-
-    When a scope filter is active (e.g., specific project or species),
-    parents that exist in the full graph but are outside the scope
-    become ghost nodes.
-    """
-
-    def __init__(self, families: Optional[Dict[str, Dict[str, Any]]] = None):
-        self.families = families or {}
-
-    def find_ghosts(
-        self,
-        display_nodes: Set[str],
-        engine: PedigreeEngine,
-        archived_animals: Optional[Set[str]] = None,
-    ) -> Set[str]:
-        ghost_nodes: Set[str] = set()
-
-        for _fid, _fam in self.families.items():
-            _mother = str(_fam.get("mother", "")).strip()
-            _father = str(_fam.get("father", "")).strip()
-            _parents = {p for p in (_mother, _father) if p}
-            _children = set(_fam.get("children", []))
-
-            # If any parent or child is in display, add missing parents as ghosts
-            if (_parents | _children) & display_nodes:
-                for _p in _parents:
-                    if _p and _p not in display_nodes:
-                        ghost_nodes.add(_p)
-
-        return ghost_nodes
 
 
 class VisibleFamilyCompletenessGhostStrategy(GhostNodeStrategy):
