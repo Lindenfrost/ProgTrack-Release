@@ -836,6 +836,17 @@ class PedigreeRouter:
                                 for node in adjusted
                             ) <= 1e-6:
                                 break
+                    # Re-form a split parentless-mate fan only for an
+                    # indirectly focused hub. Directly selected hubs retain
+                    # their established layout.
+                    self._compact_focused_parentless_multi_mate_fans(
+                        adjusted,
+                        families,
+                        labels,
+                        set(focus_nodes),
+                        show_inbreeding,
+                        chronological=preserve_y,
+                    )
                 self._compact_disconnected_family_components(
                     adjusted,
                     families,
@@ -2222,6 +2233,261 @@ class PedigreeRouter:
             changed = True
         return changed
 
+    def _layout_geometry_score(
+        self,
+        candidate: Mapping[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        show_inbreeding: bool,
+        *,
+        chronological: bool = False,
+    ) -> Tuple[int, int, int]:
+        """Return rendered-node hits, route-marker hits, and crossings."""
+        obstacles = self.node_obstacles(candidate, labels, show_inbreeding)
+        nodes = sorted(candidate, key=str.casefold)
+        node_hits = 0
+        for first, second in combinations(nodes, 2):
+            left, right = obstacles[first], obstacles[second]
+            if (
+                left.right > right.left
+                and right.right > left.left
+                and left.top > right.bottom
+                and right.top > left.bottom
+            ):
+                node_hits += 1
+
+        junctions = self._place_junctions(
+            candidate, families, obstacles, chronological=chronological
+        )
+        proxies: List[Tuple[str, Set[str], Segment]] = []
+        for family_id in sorted(junctions, key=str.casefold):
+            family = families[family_id]
+            parents = [node for node in self._parents(family) if node in candidate]
+            children = [node for node in self._children(family) if node in candidate]
+            members = set(parents) | set(children)
+            junction = junctions[family_id]
+            for parent in parents:
+                point = candidate[parent]
+                proxies.extend(
+                    (
+                        (family_id, members, (junction, (point[0], junction[1]))),
+                        (family_id, members, ((point[0], junction[1]), point)),
+                    )
+                )
+            for child in children:
+                proxies.append((family_id, members, (junction, candidate[child])))
+
+        markers = self.marker_obstacles(candidate)
+        marker_hits = sum(
+            1
+            for _family_id, members, segment in proxies
+            for node, rect in markers.items()
+            if node not in members
+            and _path_length(segment) > _EPSILON
+            and rect.intersects(segment, margin=0.04)
+        )
+        crossings = sum(
+            1
+            for first, second in combinations(proxies, 2)
+            if first[0] != second[0]
+            and not (first[1] & second[1])
+            and _segment_relation(first[2], second[2])[0] in {"cross", "overlap"}
+        )
+        return node_hits, marker_hits, crossings
+
+    def _compact_focused_parentless_multi_mate_fans(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        focus_nodes: Set[str],
+        show_inbreeding: bool,
+        *,
+        chronological: bool = False,
+    ) -> bool:
+        """Keep parentless mates together around an indirectly focused hub.
+
+        Ghost status is deliberately irrelevant. The pass handles only an
+        unselected hub whose terminal child lies on the selected ancestry
+        line, so directly selected hubs and overview layouts retain their
+        current geometry. Candidate fans may share one shoulder when that is
+        the least disruptive collision-free arrangement.
+        """
+        if not focus_nodes:
+            return False
+        parent_families: Dict[str, List[str]] = defaultdict(list)
+        origin_families: Dict[str, List[str]] = defaultdict(list)
+        parents_by_child: Dict[str, Set[str]] = defaultdict(set)
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            parents = [node for node in self._parents(family) if node in positions]
+            children = [node for node in self._children(family) if node in positions]
+            if len(parents) != 2 or not children:
+                continue
+            for parent in parents:
+                parent_families[parent].append(family_id)
+            for child in children:
+                origin_families[child].append(family_id)
+                parents_by_child[child].update(parents)
+
+        lineage = set(focus_nodes)
+        pending = sorted(focus_nodes, key=str.casefold, reverse=True)
+        while pending:
+            child = pending.pop()
+            for parent in sorted(
+                parents_by_child.get(child, set()), key=str.casefold, reverse=True
+            ):
+                if parent not in lineage:
+                    lineage.add(parent)
+                    pending.append(parent)
+
+        changed = False
+        partner_gap = self.node_gap + 0.18
+        for hub in sorted(parent_families, key=str.casefold):
+            if hub in focus_nodes or len(parent_families[hub]) < 2:
+                continue
+            records: List[Tuple[str, str, str]] = []
+            for family_id in sorted(parent_families[hub], key=str.casefold):
+                family = families[family_id]
+                parents = [node for node in self._parents(family) if node in positions]
+                children = [node for node in self._children(family) if node in positions]
+                if len(parents) != 2 or len(children) != 1:
+                    continue
+                mate = parents[0] if parents[1] == hub else parents[1]
+                child = children[0]
+                if origin_families.get(mate) or parent_families.get(child):
+                    continue
+                records.append((family_id, mate, child))
+            if (
+                len(records) < 2
+                or len(records) > 4
+                or not any(child in lineage for _fid, _mate, child in records)
+            ):
+                continue
+
+            moved = {
+                node for _family_id, mate, child in records for node in (mate, child)
+            }
+            baseline_geometry = self._layout_geometry_score(
+                positions,
+                families,
+                labels,
+                show_inbreeding,
+                chronological=chronological,
+            )
+            baseline_span = max(positions[node][0] for node in moved | {hub}) - min(
+                positions[node][0] for node in moved | {hub}
+            )
+            hub_x = positions[hub][0]
+            hub_half = self._estimated_label_width(str(labels.get(hub, hub))) / 2.0
+            candidates: List[
+                Tuple[
+                    Tuple[float, float, int, float, int, int, Tuple[str, ...]],
+                    Dict[str, Point],
+                ]
+            ] = []
+            for side in (-1.0, 1.0):
+                for ordered in permutations(records):
+                    candidate = dict(positions)
+                    previous_mate_x = hub_x
+                    previous_mate_half = hub_half
+                    previous_child_half: Optional[float] = None
+                    for order_index, (_family_id, mate, child) in enumerate(ordered):
+                        mate_half = self._estimated_label_width(
+                            str(labels.get(mate, mate))
+                        ) / 2.0
+                        child_half = self._estimated_label_width(
+                            str(labels.get(child, child))
+                        ) / 2.0
+                        step = previous_mate_half + mate_half + partner_gap
+                        if previous_child_half is not None:
+                            step = max(
+                                step,
+                                2.0 * (
+                                    previous_child_half + child_half + self.node_gap
+                                ),
+                            )
+                        mate_x = previous_mate_x + (side * step)
+                        child_x = (hub_x + mate_x) / 2.0
+                        candidate[mate] = (mate_x, candidate[mate][1])
+                        child_y = candidate[child][1]
+                        if not chronological and order_index:
+                            # Stagger an outer terminal ghost by less than one
+                            # normalized lane so its knot stays below its label.
+                            child_y += min(0.8, order_index * 0.8)
+                        candidate[child] = (child_x, child_y)
+                        previous_mate_x = mate_x
+                        previous_mate_half = mate_half
+                        previous_child_half = child_half
+
+                    # Use the real obstacle-aware family knots as the final
+                    # direct-child axes. Same-side mate intervals share a
+                    # hub and therefore use separate route lanes; aligning
+                    # after lane allocation prevents a new diagonal child
+                    # ray while retaining the compact fan.
+                    for _align_pass in range(2):
+                        candidate_obstacles = self.node_obstacles(
+                            candidate, labels, show_inbreeding
+                        )
+                        candidate_junctions = self._place_junctions(
+                            candidate,
+                            families,
+                            candidate_obstacles,
+                            chronological=chronological,
+                        )
+                        for candidate_family, _mate, child in ordered:
+                            if candidate_family in candidate_junctions:
+                                candidate[child] = (
+                                    candidate_junctions[candidate_family][0],
+                                    candidate[child][1],
+                                )
+                    geometry = self._layout_geometry_score(
+                        candidate, families, labels, show_inbreeding,
+                        chronological=chronological,
+                    )
+                    span = max(candidate[node][0] for node in moved | {hub}) - min(
+                        candidate[node][0] for node in moved | {hub}
+                    )
+                    displacement = sum(
+                        abs(candidate[node][0] - positions[node][0]) for node in moved
+                    )
+                    focus_order_penalty = sum(
+                        index
+                        for index, (_fid, _mate, child) in enumerate(ordered)
+                        if child in focus_nodes
+                    )
+                    candidates.append(
+                        (
+                            (
+                                float(geometry[0]),
+                                round(span, 9),
+                                focus_order_penalty,
+                                round(displacement, 9),
+                                geometry[1],
+                                geometry[2],
+                                tuple(
+                                    f"{side:+.0f}:{mate.casefold()}"
+                                    for _fid, mate, _child in ordered
+                                ),
+                            ),
+                            candidate,
+                        )
+                    )
+
+            score, best = min(candidates, key=lambda item: item[0])
+            if int(score[0]) > baseline_geometry[0]:
+                continue
+            if int(score[4]) > baseline_geometry[1]:
+                continue
+            if int(score[5]) > baseline_geometry[2] + 1:
+                continue
+            if float(score[1]) + 0.75 >= baseline_span:
+                continue
+            for node in moved:
+                positions[node] = best[node]
+            changed = True
+        return changed
+
     def _align_single_child_axes_conservatively(
         self,
         positions: Dict[str, Point],
@@ -2524,11 +2790,19 @@ class PedigreeRouter:
             group_obstacles = self.node_obstacles(
                 positions, labels, show_inbreeding
             )
+            group_markers = self.marker_obstacles(
+                positions, half_width=0.30, half_height=0.42
+            )
             group_children_ordered = sorted(group_children, key=str.casefold)
             group_collision = any(
-                overlaps(group_obstacles[first], group_obstacles[second])
-                for index, first in enumerate(group_children_ordered)
-                for second in group_children_ordered[index + 1 :]
+                (
+                    overlaps(group_obstacles[child], group_obstacles[other])
+                    or overlaps(group_obstacles[child], group_markers[other])
+                    or overlaps(group_obstacles[other], group_markers[child])
+                )
+                for child in group_children_ordered
+                for other in positions
+                if other != child
             )
             if group_collision:
                 positions.update(original_group_positions)
@@ -3802,6 +4076,28 @@ class PedigreeRouter:
             if point is None:
                 continue
             target = second if _point_is_interior(second.segment, point) else first
+            # A horizontal first segment is the visible partner/family
+            # shoulder between the junction and an animal. If a foreign
+            # vertical continuation crosses that shoulder, keep the family
+            # connection continuous and place the small crossing gap in the
+            # vertical route instead. This is deliberately a rendering
+            # priority only: it does not move either family or perturb the
+            # otherwise good local layout.
+            first_horizontal_shoulder = (
+                first.index == 0
+                and abs(first.segment[0][1] - first.segment[1][1]) <= _EPSILON
+            )
+            second_horizontal_shoulder = (
+                second.index == 0
+                and abs(second.segment[0][1] - second.segment[1][1]) <= _EPSILON
+            )
+            if first_horizontal_shoulder != second_horizontal_shoulder:
+                foreign = second if first_horizontal_shoulder else first
+                foreign_is_vertical = (
+                    abs(foreign.segment[0][0] - foreign.segment[1][0]) <= _EPSILON
+                )
+                if foreign_is_vertical and _point_is_interior(foreign.segment, point):
+                    target = foreign
             if not _point_is_interior(target.segment, point):
                 problems.append(
                     f"{first.family_id}/{second.family_id}: different families touch without a routable gap"
