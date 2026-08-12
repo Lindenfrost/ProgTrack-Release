@@ -105,6 +105,9 @@ CAGE_PAD = 5
 CAGE_MIN_W = 90
 CAGE_MIN_H = 50
 OCCUPANT_LINE_H = 14
+# Keep a half-row of breathing room below every cage header before the
+# first project-colored occupant row.
+OCCUPANT_TOP_GAP = OCCUPANT_LINE_H * 0.5
 TITLE_H = 20
 SPACING = 10
 
@@ -1758,7 +1761,7 @@ class CageTrackWidget(QWidget):
 
     def _measure_cage(self, cage: Dict[str, Any], animals_dict: Dict[str, Any]) -> Tuple[float, float]:
         occupants = cage.get("occupants", [])
-        h = TITLE_H + max(len(occupants), 1) * OCCUPANT_LINE_H + CAGE_PAD * 2
+        h = TITLE_H + OCCUPANT_TOP_GAP + max(len(occupants), 1) * OCCUPANT_LINE_H + CAGE_PAD * 2
         h = max(h, CAGE_MIN_H)
 
         # Calculate width based on longest occupant name
@@ -1944,7 +1947,7 @@ class CageTrackWidget(QWidget):
         )
         column_width = max(78, min(170, longest * 7 + 26))
         w = max(180, cols * column_width + CAGE_PAD * 2)
-        h = TITLE_H + OCCUPANT_LINE_H * rows + CAGE_PAD * 2
+        h = TITLE_H + OCCUPANT_TOP_GAP + OCCUPANT_LINE_H * rows + CAGE_PAD * 2
 
         container_patch = self._draw_flat_rect(x, y, w, h, UNASSIGNED_BG, UNASSIGNED_BORDER, linewidth=1.5, zorder=2)
         arrow = "▼"
@@ -1957,7 +1960,7 @@ class CageTrackWidget(QWidget):
         # Keep circles batched for speed, but draw names per row so they stay
         # aligned with the corresponding circle.
         ox = x + CAGE_PAD
-        oy = y + TITLE_H + CAGE_PAD
+        oy = y + TITLE_H + CAGE_PAD + OCCUPANT_TOP_GAP
         scatter_x: List[float] = []
         scatter_y: List[float] = []
         face_colors: List[str] = []
@@ -2193,7 +2196,7 @@ class CageTrackWidget(QWidget):
 
         # Keep circles batched for speed, but draw names per row so they stay
         # aligned with the corresponding circle.
-        oy = y + TITLE_H + CAGE_PAD
+        oy = y + TITLE_H + CAGE_PAD + OCCUPANT_TOP_GAP
         scatter_x: List[float] = []
         scatter_y: List[float] = []
         face_colors: List[str] = []

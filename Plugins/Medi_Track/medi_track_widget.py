@@ -1363,6 +1363,7 @@ class MediTrackWidget(QWidget):
             btn.clicked.connect(lambda checked, k=fkey: self._on_filter_clicked(k))
             self._filter_btns[fkey] = btn
             filter_row.addWidget(btn)
+        self._equalize_filter_button_sizes()
         filter_row.addStretch()
         root.addLayout(filter_row)
 
@@ -1533,6 +1534,20 @@ class MediTrackWidget(QWidget):
         self._btn_export.setEnabled(visible and self._can_export())
         self._btn_add_doc.setEnabled(visible and can_upload)
 
+    def _equalize_filter_button_sizes(self) -> None:
+        """Keep every medical-status filter control equally sized.
+
+        The All control has no status icon, so its natural width was shorter
+        than the icon-backed filters. Recompute after localization so every
+        language keeps one consistent control row without a hard-coded width.
+        """
+        if not self._filter_btns:
+            return
+        width = max(button.sizeHint().width() for button in self._filter_btns.values())
+        height = max(button.sizeHint().height() for button in self._filter_btns.values())
+        for button in self._filter_btns.values():
+            button.setMinimumSize(width, height)
+
     def update_language(self, messages: Dict[str, Any], lang_code: str = "") -> None:
         """Refresh all static UI texts after a language change."""
         self.messages = messages
@@ -1575,6 +1590,7 @@ class MediTrackWidget(QWidget):
                     }.get(fkey)
                     if semantic_id:
                         apply_icon(btn, semantic_id, fallback=fb)
+        self._equalize_filter_button_sizes()
         # Group box titles
         self._header_group.setTitle(_msg(messages, "medi_track.section.animal_info", "Animal Information"))
         self._hist_group.setTitle(_msg(messages, "medi_track.section.history", "Medical History"))

@@ -1014,10 +1014,10 @@ def complete_housing(
         },
     })
     for cage_id, display_name, order in (
-        ("cage_mus_experimental_frodo_sam", "Mouse Experimental Pair - Frodo and Sam", 0),
-        ("cage_mus_experimental_merry_pippin", "Mouse Experimental Pair - Merry and Pippin", 1),
-        ("cage_mus_breeding", "Mouse Breeding Group", 2),
-        ("cage_mus_bilbo", "Mouse Single Housing - Bilbo", 3),
+        ("cage_mus_experimental_frodo_sam", "C001", 0),
+        ("cage_mus_experimental_merry_pippin", "C002", 1),
+        ("cage_mus_breeding", "C003", 2),
+        ("cage_mus_bilbo", "C004", 3),
     ):
         cages.setdefault(cage_id, {
             "display_name": display_name, "id": cage_id, "order": order,
