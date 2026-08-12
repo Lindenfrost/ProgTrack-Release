@@ -1341,29 +1341,14 @@ class MediTrackWidget(QWidget):
                 "Was in experiment",
             ),
         ]
-        filter_icons = {
-            self.FILTER_SICK: "medi_track.filter.current_sick",
-            self.FILTER_EVER_SICK: "medi_track.filter.ever_sick",
-            self.FILTER_ABNORMAL: "medi_track.filter.current_abnormal",
-            self.FILTER_EVER_ABNORMAL: "medi_track.filter.ever_abnormal",
-            self.FILTER_IN_EXPERIMENT: "medi_track.filter.current_experiment",
-            self.FILTER_EVER_EXPERIMENT: "medi_track.filter.ever_experiment",
-        }
         for fkey, msg_key, fallback in _filters:
-            label = _msg(self.messages, msg_key, fallback)
-            btn = QPushButton(label)
-            semantic_id = filter_icons.get(fkey)
-            if semantic_id:
-                apply_icon(btn, semantic_id, fallback=label)
-                btn.setIconSize(QSize(27, 27))
+            btn = QPushButton()
+            self._configure_filter_button(btn, fkey, msg_key, fallback)
             btn.setCheckable(True)
-            if fkey in (self.FILTER_IN_EXPERIMENT, self.FILTER_EVER_EXPERIMENT):
-                btn.setToolTip(_msg(self.messages, msg_key, fallback))
             btn.setChecked(fkey == self.FILTER_ALL)
             btn.clicked.connect(lambda checked, k=fkey: self._on_filter_clicked(k))
             self._filter_btns[fkey] = btn
             filter_row.addWidget(btn)
-        self._equalize_filter_button_sizes()
         filter_row.addStretch()
         root.addLayout(filter_row)
 
@@ -1534,19 +1519,56 @@ class MediTrackWidget(QWidget):
         self._btn_export.setEnabled(visible and self._can_export())
         self._btn_add_doc.setEnabled(visible and can_upload)
 
-    def _equalize_filter_button_sizes(self) -> None:
-        """Keep every medical-status filter control equally sized.
+    def _configure_filter_button(
+        self,
+        button: QPushButton,
+        filter_key: str,
+        message_key: str,
+        fallback: str,
+        messages: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Apply the compact, localized presentation of one filter control.
 
-        The All control has no status icon, so its natural width was shorter
-        than the icon-backed filters. Recompute after localization so every
-        language keeps one consistent control row without a hard-coded width.
+        All remains a normal text button. Every other filter is an icon-only
+        control: the localized status text is kept in its tooltip (and
+        accessible name), so the row stays compact without losing meaning.
+        Keeping this in one helper prevents a language refresh from restoring
+        the old text/equalized-width layout.
         """
-        if not self._filter_btns:
+        source = self.messages if messages is None else messages
+        label = _msg(source, message_key, fallback)
+        button.setMinimumWidth(0)
+        button.setToolTip("")
+        button.setAccessibleName(label)
+
+        if filter_key == self.FILTER_ALL:
+            button.setText(label)
+            button.setIcon(QIcon())
+            button.setSizePolicy(
+                QSizePolicy.Policy.Preferred,
+                QSizePolicy.Policy.Fixed,
+            )
+            button.adjustSize()
             return
-        width = max(button.sizeHint().width() for button in self._filter_btns.values())
-        height = max(button.sizeHint().height() for button in self._filter_btns.values())
-        for button in self._filter_btns.values():
-            button.setMinimumSize(width, height)
+
+        semantic_id = {
+            self.FILTER_SICK: "medi_track.filter.current_sick",
+            self.FILTER_EVER_SICK: "medi_track.filter.ever_sick",
+            self.FILTER_ABNORMAL: "medi_track.filter.current_abnormal",
+            self.FILTER_EVER_ABNORMAL: "medi_track.filter.ever_abnormal",
+            self.FILTER_IN_EXPERIMENT: "medi_track.filter.current_experiment",
+            self.FILTER_EVER_EXPERIMENT: "medi_track.filter.ever_experiment",
+        }.get(filter_key)
+        if semantic_id:
+            apply_icon(button, semantic_id, fallback="")
+            button.setIconSize(QSize(27, 27))
+        button.setText("")
+        button.setToolTip(label)
+        button.setSizePolicy(
+            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Fixed,
+        )
+        button.adjustSize()
 
     def update_language(self, messages: Dict[str, Any], lang_code: str = "") -> None:
         """Refresh all static UI texts after a language change."""
@@ -1572,25 +1594,7 @@ class MediTrackWidget(QWidget):
         for fkey, btn in self._filter_btns.items():
             if fkey in _filter_map:
                 k, fb = _filter_map[fkey]
-                if fkey == self.FILTER_IN_EXPERIMENT:
-                    btn.setText(_msg(messages, k, fb))
-                    apply_icon(btn, "medi_track.filter.current_experiment", fallback=fb)
-                    btn.setToolTip(_msg(messages, k, "Currently in experiment"))
-                elif fkey == self.FILTER_EVER_EXPERIMENT:
-                    btn.setText(_msg(messages, k, fb))
-                    apply_icon(btn, "medi_track.filter.ever_experiment", fallback=fb)
-                    btn.setToolTip(_msg(messages, k, "Was in experiment"))
-                else:
-                    btn.setText(_msg(messages, k, fb))
-                    semantic_id = {
-                        self.FILTER_SICK: "medi_track.filter.current_sick",
-                        self.FILTER_EVER_SICK: "medi_track.filter.ever_sick",
-                        self.FILTER_ABNORMAL: "medi_track.filter.current_abnormal",
-                        self.FILTER_EVER_ABNORMAL: "medi_track.filter.ever_abnormal",
-                    }.get(fkey)
-                    if semantic_id:
-                        apply_icon(btn, semantic_id, fallback=fb)
-        self._equalize_filter_button_sizes()
+                self._configure_filter_button(btn, fkey, k, fb, messages)
         # Group box titles
         self._header_group.setTitle(_msg(messages, "medi_track.section.animal_info", "Animal Information"))
         self._hist_group.setTitle(_msg(messages, "medi_track.section.history", "Medical History"))
