@@ -1349,6 +1349,7 @@ class MediTrackWidget(QWidget):
             btn.clicked.connect(lambda checked, k=fkey: self._on_filter_clicked(k))
             self._filter_btns[fkey] = btn
             filter_row.addWidget(btn)
+        self._sync_filter_button_heights()
         filter_row.addStretch()
         root.addLayout(filter_row)
 
@@ -1537,6 +1538,11 @@ class MediTrackWidget(QWidget):
         """
         source = self.messages if messages is None else messages
         label = _msg(source, message_key, fallback)
+        # Clear the previous synchronized height before recalculating after a
+        # language/style change. Otherwise the old fixed height would become
+        # part of the next size hint and could never shrink again.
+        button.setMinimumHeight(0)
+        button.setMaximumHeight(16777215)
         button.setMinimumWidth(0)
         button.setToolTip("")
         button.setAccessibleName(label)
@@ -1570,6 +1576,21 @@ class MediTrackWidget(QWidget):
         )
         button.adjustSize()
 
+    def _sync_filter_button_heights(self) -> None:
+        """Give every filter control the same platform/style-aware height.
+
+        The text-only ``All`` button and the icon-only status controls have
+        different natural size hints. Using the tallest current hint keeps
+        the row aligned without hard-coding a pixel value, and is reapplied
+        after localization or style changes.
+        """
+        buttons = tuple(self._filter_btns.values())
+        if not buttons:
+            return
+        height = max(button.sizeHint().height() for button in buttons)
+        for button in buttons:
+            button.setFixedHeight(height)
+
     def update_language(self, messages: Dict[str, Any], lang_code: str = "") -> None:
         """Refresh all static UI texts after a language change."""
         self.messages = messages
@@ -1595,6 +1616,7 @@ class MediTrackWidget(QWidget):
             if fkey in _filter_map:
                 k, fb = _filter_map[fkey]
                 self._configure_filter_button(btn, fkey, k, fb, messages)
+        self._sync_filter_button_heights()
         # Group box titles
         self._header_group.setTitle(_msg(messages, "medi_track.section.animal_info", "Animal Information"))
         self._hist_group.setTitle(_msg(messages, "medi_track.section.history", "Medical History"))

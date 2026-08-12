@@ -49,6 +49,7 @@ partially transparent icon artwork readable in both light and dark viewers.
 - [Quick start](#quick-start)
 - [Starter accounts](#starter-accounts)
 - [What is included](#what-is-included)
+- [Platform support and release artifacts](#platform-support-and-release-artifacts)
 - [Portable launcher](#portable-launcher)
 - [Folder layout](#folder-layout)
 - [Backend profiles and data ownership](#backend-profiles-and-data-ownership)
@@ -126,6 +127,22 @@ To select a script explicitly:
 ```text
 Launcher.exe --script ProgTrack.v.0.2.1.py
 ```
+
+## Platform support and release artifacts
+
+The `0.2.1` release published here is a native Windows portable release. Its
+`Launcher.exe`, Windows Qt/Python runtime, and bundled native libraries must be
+kept together; this ZIP is not a native Linux package and is not supported
+through Wine.
+
+Linux support is planned as a separate native build using the same application
+payload and backend contracts, but a Linux launcher and Linux runtime are not
+included in this release. Issue #49 defines the later Linux deliverable,
+including Linux-specific Qt/Python/SQLite/PostgreSQL libraries, font and PDF
+verification, XDG/read-only-path handling, and a dedicated
+`ProgTrack-<version>-linux-x86_64.tar.gz` archive. Windows and Linux artifacts
+will therefore be published separately rather than combining incompatible
+`.dll`/`.pyd` and `.so` runtimes in one package.
 
 ## Folder layout
 
