@@ -538,6 +538,22 @@ class PedigreeRouter:
                     span * 0.22,
                     max(0.0, (span / 2.0) - 0.08),
                 )
+                visible_children = [
+                    child for child in self._children(family)
+                    if child in plan.animal_positions
+                ]
+                if len(visible_children) == 1:
+                    child_x = plan.animal_positions[visible_children[0]][0]
+                    child_clearance = max(0.35, self.node_gap)
+                    if (
+                        parent_xs[0] + child_clearance
+                        <= child_x
+                        <= parent_xs[1] - child_clearance
+                    ):
+                        allowed_shift = min(
+                            max(allowed_shift, abs(child_x - midpoint) + self.route_clearance),
+                            max(0.0, (span / 2.0) - 0.08),
+                        )
                 if not parent_xs[0] < junction[0] < parent_xs[1]:
                     problems.append(
                         f"{family_id}: junction is not between both parents"
@@ -3206,12 +3222,34 @@ class PedigreeRouter:
                 # toward the median child/subtree centre avoids long diagonal
                 # fans and extreme compensating sibling placements.  The knot
                 # always remains visibly between both parent endpoints.
-                maximum_shift = min(
-                    1.35,
-                    parent_span * 0.22,
-                    max(0.0, (parent_span / 2.0) - 0.08),
+                # A sole visible child should receive a near-perpendicular
+                # family rail whenever the parent interval permits it.  The
+                # former universal 1.35-unit cap could leave a wide-parent,
+                # single-child family diagonally detached even though the
+                # child was safely between both parents.  Keep the historic
+                # cap for sibling groups; only a one-child family may expand
+                # to the child's bounded corridor (with marker clearance).
+                corridor_limit = max(
+                    0.0, (parent_span / 2.0) - 0.08
                 )
-                desired_shift = (child_x - parent_x) * 0.55
+                child_clearance = max(0.35, self.node_gap)
+                child_inside_corridor = (
+                    len(children) == 1
+                    and parent_left + child_clearance <= child_x <= parent_right - child_clearance
+                )
+                if child_inside_corridor:
+                    maximum_shift = min(
+                        corridor_limit,
+                        max(1.35, abs(child_x - parent_x) + self.route_clearance),
+                    )
+                    desired_shift = child_x - parent_x
+                else:
+                    maximum_shift = min(
+                        1.35,
+                        parent_span * 0.22,
+                        corridor_limit,
+                    )
+                    desired_shift = (child_x - parent_x) * 0.55
                 base_x = parent_x + max(
                     -maximum_shift, min(maximum_shift, desired_shift)
                 )

@@ -196,22 +196,37 @@ class OffspringAndSiblingsGhostStrategy(GhostNodeStrategy):
                 if child not in display_nodes and child not in self.selected_animals:
                     ghost_nodes.add(child)
 
-        # Find siblings of selected animals (but NOT their partners/offspring)
+        # Find siblings of selected animals.  For a half-sibling, also add
+        # the missing co-parent as a ghost so the shared-parent family is a
+        # real drawable unit rather than a detached sibling marker.
         for selected in self.selected_animals:
-            # Get parents of the selected animal
             parents = engine.child_to_parents.get(selected, {})
-            for parent_key in ("egg_donor", "sperm_donor"):
-                parent = parents.get(parent_key, "")
-                if not parent:
-                    continue
-
-                # Get all children of this parent (siblings)
-                siblings = engine.parent_to_children.get(parent, set())
-                for sibling in siblings:
-                    # Add sibling as ghost if not in display and not selected
-                    if sibling != selected and sibling not in display_nodes:
+            selected_parents = {
+                str(parents.get(parent_key, "") or "").strip()
+                for parent_key in ("egg_donor", "sperm_donor")
+            } - {""}
+            for common_parent in sorted(selected_parents, key=str.casefold):
+                siblings = engine.parent_to_children.get(common_parent, set())
+                for sibling in sorted(siblings, key=str.casefold):
+                    if sibling == selected:
+                        continue
+                    if sibling not in display_nodes and sibling not in self.selected_animals:
                         ghost_nodes.add(sibling)
-                    # Note: We explicitly do NOT add the siblings' partners or offspring
-                    # unless those siblings are also selected (handled in next iteration)
+                    sibling_parents = engine.child_to_parents.get(sibling, {})
+                    sibling_parent_names = {
+                        str(sibling_parents.get(parent_key, "") or "").strip()
+                        for parent_key in ("egg_donor", "sperm_donor")
+                    } - {""}
+                    # Keep the common parent plus the sibling's other genetic
+                    # parent.  This produces one family knot and a connected
+                    # ghost route without recursively expanding that parent's
+                    # ancestry or the sibling's partners/offspring.
+                    ghost_nodes.update(
+                        parent
+                        for parent in sibling_parent_names
+                        if parent != common_parent
+                        and parent not in display_nodes
+                        and parent not in self.selected_animals
+                    )
 
         return ghost_nodes
