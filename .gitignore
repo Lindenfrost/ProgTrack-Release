@@ -1,6 +1,7 @@
 __pycache__/
 # Native `.pyd` files are generated PyInstaller runtime artifacts too. Release
-# ZIPs must be assembled with `source/package_release.ps1`, not `git archive`.
+# ZIPs must be assembled with `source/launcher/windows/package_release.ps1`,
+# not `git archive`.
 *.py[cod]
 # The checked-in root portable bundle intentionally carries its complete
 # native runtime. Keep those extension modules versioned; build outputs under

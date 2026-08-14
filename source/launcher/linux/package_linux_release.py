@@ -53,7 +53,8 @@ MANUAL_FILES = (
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    # source/launcher/linux/package_linux_release.py -> repository root
+    return Path(__file__).resolve().parents[3]
 
 
 def _git_commit(repo: Path, requested: str | None) -> str:
@@ -116,7 +117,7 @@ def _copy_payload(archive_root: Path, stage: Path) -> None:
         stage / "launcher",
     )
     _copy_tree(
-        archive_root / "source" / "requirements-linux-managed.txt",
+        archive_root / "source" / "launcher" / "linux" / "requirements-linux-managed.txt",
         stage / "requirements-linux-managed.txt",
     )
 

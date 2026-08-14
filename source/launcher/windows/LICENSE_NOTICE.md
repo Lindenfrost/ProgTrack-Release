@@ -9,8 +9,8 @@ notice is provided for an individual file, these resources are the property of
 Deutsches Primatenzentrum GmbH and are distributed with ProgTrack under the
 same project license: GNU General Public License version 3.0 or later.
 
-This notice supplements the repository-level license files `../LICENSE` and
-`../LICENSE_NOTICE.md`. Ownership remains with Deutsches Primatenzentrum
+This notice supplements the repository-level license files `../../LICENSE` and
+`../../LICENSE_NOTICE.md`. Ownership remains with Deutsches Primatenzentrum
 GmbH; the GPL grants the rights to use, modify, and redistribute these resources
 as part of the ProgTrack distribution under its terms.
 

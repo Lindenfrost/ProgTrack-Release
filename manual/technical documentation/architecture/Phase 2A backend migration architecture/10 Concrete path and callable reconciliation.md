@@ -51,7 +51,7 @@ Raw inventory classes reconcile to the architecture as follows:
 | `info*.json` | Historically named HTML About-page resources; parse as text, never as JSON data. |
 | `lang/messages_*.json`, `Plugins/*/lang/*.json`, `Plugins/Sample_Track/samples_*.json` | Packaged localization/control vocabulary; not facility records. |
 | `Plugins/*/manifest.json` | Packaged plugin manifest/resource; entry modules were verified for all 13 plugins. |
-| `third_party_licenses/**`, `source/hiddenimports.txt`, `source/launcher_version_info.txt` | Packaged build/license metadata. |
+| `third_party_licenses/**`, `source/launcher/windows/hiddenimports.txt`, `source/launcher/windows/launcher_version_info.txt` | Packaged build/license metadata. |
 | `Plugins/Animal_Reports/animal_report_data.json` | Authoritative report override/data source → `ReportService`. |
 | `Plugins/Cage__Track/cage.json`, `inspection.json` | Authoritative housing/inspection data → `HousingService`. |
 | `Plugins/Embryo_Track/cranimetry_reference.json` | Versioned scientific reference configuration → `ReferenceDataService`. |

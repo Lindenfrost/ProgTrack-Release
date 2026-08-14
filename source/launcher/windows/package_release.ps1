@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repository = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$repository = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $runtime = (Resolve-Path $RuntimeDirectory).Path
 $outputRoot = [IO.Path]::GetFullPath($OutputDirectory)
 $releaseName = "ProgTrack-$Version"

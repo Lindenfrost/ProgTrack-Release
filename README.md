@@ -491,30 +491,37 @@ interchange contracts are versioned below
 ## Build source
 
 Launcher build sources are in source/ and are not part of the compact release
-ZIP. Windows and Linux launcher sources are kept in separate trees.
+ZIP. Each platform has one self-contained source tree: `source/launcher/windows/`
+and `source/launcher/linux/`.
 
-Windows build inputs include:
+Windows build inputs are all under `source/launcher/windows/`:
 
-- source/launcher.py
-- source/launcher_small.spec
-- source/hiddenimports.txt
-- source/build_launcher_small.bat
-- source/package_release.ps1
-- source/progtrack_icon.ico
+- source/launcher/windows/launcher.py
+- source/launcher/windows/launcher_small.spec
+- source/launcher/windows/hiddenimports.txt
+- source/launcher/windows/launcher_version_info.txt
+- source/launcher/windows/build_launcher_small.bat
+- source/launcher/windows/package_release.ps1
+- source/launcher/windows/progtrack_icon.ico
+- source/launcher/windows/requirements-windows-build.txt
+- source/launcher/windows/frozen_runtime_smoke.py
+- source/launcher/windows/generate_component_inventory.py
+- source/launcher/windows/LAUNCHER_VERSIONS.md
+- source/launcher/windows/LICENSE_NOTICE.md
 
 The Windows build uses the repository-local Python environment created by the
 build script. The resulting frozen runtime is verified with the backend and
 frozen-runtime smoke tests before release packaging.
 
-Linux build inputs are kept under source/launcher/linux/:
+Linux build inputs are all under `source/launcher/linux/`:
 
 - source/launcher/linux/ProgTrack — POSIX launcher entry point
 - source/launcher/linux/launcher.py — Linux launcher and runtime-path logic
 - source/launcher/linux/progtrack.desktop — optional desktop integration
 - source/launcher/linux/progtrack.png — Linux application icon
 - source/launcher/linux/README.md
-- source/package_linux_release.py
-- source/requirements-linux-managed.txt
+- source/launcher/linux/package_linux_release.py
+- source/launcher/linux/requirements-linux-managed.txt
 
 The Linux tree is intentionally independent of the Windows .exe, .dll, and
 .pyd runtime. Issue #49 tracks the remaining work for the final
