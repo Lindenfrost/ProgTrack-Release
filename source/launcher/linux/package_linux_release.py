@@ -361,8 +361,10 @@ def _write_tar(stage: Path, archive: Path, epoch: int) -> None:
             info.uname = info.gname = ""
             info.mtime = epoch
             if path.is_file():
-                if relative.startswith("launcher/") or relative.startswith("runtime/bin/"):
-                    info.mode = 0o755 if info.mode & 0o111 else 0o644
+                if relative in {"launcher/ProgTrack", "launcher/launcher.py"} or relative.startswith("runtime/bin/"):
+                    info.mode = 0o755
+                elif relative.startswith("launcher/"):
+                    info.mode = 0o644
                 with path.open("rb") as handle:
                     tar.addfile(info, handle)
             else:
