@@ -1,4 +1,0 @@
-# Requires distribution-provided libpq development headers and a C compiler.
-psycopg[c]==3.3.4
-psycopg_pool==3.3.1
-pypdf==6.14.2

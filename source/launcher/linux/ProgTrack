@@ -2,5 +2,25 @@
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+BUNDLE_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+BUNDLED_PYTHON="$BUNDLE_ROOT/runtime/bin/python3"
+
+if [ -x "$BUNDLED_PYTHON" ]; then
+    export PYTHONHOME="$BUNDLE_ROOT/runtime"
+    export PYTHONNOUSERSITE=1
+    export PROGTRACK_BUNDLED_RUNTIME=1
+    export QT_PLUGIN_PATH="$BUNDLE_ROOT/runtime/lib/python3.13/site-packages/PyQt6/Qt6/plugins"
+    export QT_QPA_PLATFORM_PLUGIN_PATH="$BUNDLE_ROOT/runtime/lib/python3.13/site-packages/PyQt6/Qt6/plugins/platforms"
+    export QT_QPA_FONTDIR="$BUNDLE_ROOT/fonts/matplotlib"
+    export LD_LIBRARY_PATH="$BUNDLE_ROOT/runtime/lib:$BUNDLE_ROOT/runtime/lib/python3.13/site-packages/PyQt6/Qt6/lib:$BUNDLE_ROOT/runtime/lib/python3.13/site-packages/psycopg_binary.libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    exec "$BUNDLED_PYTHON" "$SCRIPT_DIR/launcher.py" "$@"
+fi
+
+if [ "${PROGTRACK_ALLOW_EXTERNAL_PYTHON:-}" != "1" ]; then
+    echo "ProgTrack bundled Linux runtime is missing or incomplete: $BUNDLED_PYTHON" >&2
+    echo "This package must be repaired or rebuilt; no host Python is used automatically." >&2
+    exit 78
+fi
+
 PYTHON_BIN=${PROGTRACK_PYTHON:-python3}
 exec "$PYTHON_BIN" "$SCRIPT_DIR/launcher.py" "$@"

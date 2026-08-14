@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build the reproducible, folder-portable Linux ProgTrack tarball.
+"""Build the self-contained Linux ProgTrack tarball.
 
-This builder intentionally runs on Windows as well as Linux. It does not try
-to cross-compile Qt or Python; the managed Linux artifact carries the shared
-ProgTrack payload and native Linux launcher while the target system supplies
-the pinned Python/Qt/Psycopg C runtime described in the package.
+The builder is deliberately platform-neutral: a Linux build host may run it
+directly, while a Windows build host may assemble the exact Linux CPython and
+manylinux wheels for a pre-release artifact.  Native Linux execution remains a
+separate acceptance gate because an ELF runtime cannot be executed on Windows.
 """
 
 from __future__ import annotations
@@ -15,14 +15,24 @@ import json
 import os
 import shutil
 import stat
-import subprocess
 import tarfile
 import tempfile
+import urllib.request
+import zipfile
 from pathlib import Path, PurePosixPath
 
 
 VERSION = "0.3.0"
 ARCH = "x86_64"
+PYTHON_TAG = "cp313"
+LINUX_FILES = (
+    "ProgTrack",
+    "launcher.py",
+    "progtrack.desktop",
+    "progtrack.png",
+    "README.md",
+    "requirements-linux-bundled.txt",
+)
 PAYLOAD_FILES = (
     "README.md",
     "LICENSE",
@@ -41,60 +51,167 @@ PAYLOAD_DIRECTORIES = (
     "Resources",
     "icons",
     "lang",
+    "manual",
     "third_party_licenses",
 )
-MANUAL_FILES = (
-    "manual/LICENSE_NOTICE.md",
-    "manual/ProgTrack_User_Guide - de.html",
-    "manual/ProgTrack_User_Guide - en.html",
-    "manual/ProgTrack_User_Guide - it.html",
-    "manual/ProgTrack_User_Guide - ru.html",
-)
+MANIFEST_PATH = Path(__file__).with_name("linux_runtime_manifest.json")
 
 
 def _repo_root() -> Path:
-    # source/launcher/linux/package_linux_release.py -> repository root
     return Path(__file__).resolve().parents[3]
 
 
-def _git_commit(repo: Path, requested: str | None) -> str:
-    value = requested or "HEAD"
-    result = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--verify", f"{value}^{{commit}}"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return result.stdout.strip()
+def _load_manifest() -> dict:
+    return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
 
-def _commit_epoch(repo: Path, commit: str) -> int:
-    result = subprocess.run(
-        ["git", "-C", str(repo), "show", "-s", "--format=%ct", commit],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return int(result.stdout.strip())
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
-def _safe_extract_archive(repo: Path, commit: str, destination: Path) -> None:
-    archive = destination.parent / "repository.tar"
-    with archive.open("wb") as handle:
-        subprocess.run(
-            ["git", "-C", str(repo), "archive", "--format=tar", commit],
-            check=True,
-            stdout=handle,
-        )
-    with tarfile.open(archive, "r:") as tar:
+def _verify(path: Path, expected: str) -> None:
+    actual = _sha256(path)
+    if actual.lower() != expected.lower():
+        raise RuntimeError(f"SHA-256 mismatch for {path.name}: {actual} != {expected}")
+
+
+def _download(url: str, destination: Path, expected: str) -> Path:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        try:
+            _verify(destination, expected)
+            return destination
+        except RuntimeError:
+            destination.unlink()
+    partial = destination.with_suffix(destination.suffix + ".part")
+    if partial.exists():
+        partial.unlink()
+    urllib.request.urlretrieve(url, partial)
+    _verify(partial, expected)
+    partial.replace(destination)
+    return destination
+
+
+def _runtime_archive(manifest: dict, cache: Path, supplied: Path | None) -> Path:
+    spec = manifest["python"]
+    if supplied is not None:
+        _verify(supplied, spec["sha256"])
+        return supplied
+    return _download(spec["url"], cache / spec["filename"], spec["sha256"])
+
+
+def _wheel_paths(manifest: dict, cache: Path, supplied: Path | None) -> list[Path]:
+    result = []
+    for wheel in manifest["wheels"]:
+        filename = wheel["filename"]
+        path = (supplied / filename) if supplied is not None else cache / "wheels" / filename
+        if supplied is None:
+            path = _download(wheel["url"], path, wheel["sha256"])
+        elif not path.exists():
+            raise FileNotFoundError(path)
+        _verify(path, wheel["sha256"])
+        result.append(path)
+    return result
+
+
+def _safe_member_path(root: Path, name: str) -> Path:
+    relative = PurePosixPath(name)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise RuntimeError(f"Unsafe archive member: {name}")
+    target = (root / Path(*relative.parts)).resolve()
+    if not target.is_relative_to(root.resolve()):
+        raise RuntimeError(f"Archive traversal: {name}")
+    return target
+
+
+def _extract_python(archive: Path, destination: Path) -> None:
+    """Extract regular files and materialize symlinks as portable copies."""
+    pending: list[tuple[Path, str]] = []
+    destination.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive, "r:*") as tar:
         for member in tar.getmembers():
-            relative = PurePosixPath(member.name)
-            if relative.is_absolute() or ".." in relative.parts:
-                raise RuntimeError(f"Unsafe archive member: {member.name}")
-            target = destination / Path(*relative.parts)
-            if not target.resolve().is_relative_to(destination.resolve()):
-                raise RuntimeError(f"Archive traversal: {member.name}")
-        tar.extractall(destination)
+            target = _safe_member_path(destination, member.name)
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            if member.issym() or member.islnk():
+                pending.append((target, member.linkname))
+                continue
+            if not member.isfile():
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = tar.extractfile(member)
+            if source is None:
+                raise RuntimeError(f"Cannot read runtime member: {member.name}")
+            with target.open("wb") as handle:
+                shutil.copyfileobj(source, handle)
+            target.chmod(stat.S_IMODE(member.mode) or 0o644)
+    for target, linkname in pending:
+        link_target = _safe_member_path(target.parent, linkname)
+        if not link_target.exists():
+            raise RuntimeError(f"Broken runtime link: {target} -> {linkname}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(link_target, target)
+        target.chmod(link_target.stat().st_mode & 0o777)
+
+
+def _extract_wheel(wheel: Path, site_packages: Path) -> None:
+    with zipfile.ZipFile(wheel) as archive:
+        for info in archive.infolist():
+            target = _safe_member_path(site_packages, info.filename)
+            if info.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(info) as source, target.open("wb") as output:
+                shutil.copyfileobj(source, output)
+            if target.suffix == ".so" or ".so." in target.name:
+                target.chmod(0o755)
+
+
+def _prepare_runtime(stage: Path, archive: Path, wheels: list[Path], manifest: dict) -> None:
+    extraction = stage.parent / "python-extracted"
+    _extract_python(archive, extraction)
+    python_root = extraction / "python"
+    runtime = stage / "runtime"
+    shutil.copytree(python_root, runtime)
+    site_packages = runtime / "lib" / "python3.13" / "site-packages"
+    site_packages.mkdir(parents=True, exist_ok=True)
+    for wheel in wheels:
+        _extract_wheel(wheel, site_packages)
+    for executable in ("pip", "pip3", "pip3.13", "idle3", "idle3.13", "pydoc3", "pydoc3.13"):
+        path = runtime / "bin" / executable
+        if path.exists():
+            path.unlink()
+    for path in runtime.rglob("*"):
+        if path.is_file() and (path.suffix == ".so" or ".so." in path.name):
+            path.chmod(0o755)
+    for executable in ("python", "python3", "python3.13"):
+        path = runtime / "bin" / executable
+        if path.exists():
+            path.chmod(0o755)
+    font_source = site_packages / "matplotlib" / "mpl-data" / "fonts" / "ttf"
+    font_target = stage / "fonts" / "matplotlib"
+    if font_source.exists():
+        shutil.copytree(font_source, font_target)
+    (stage / "fonts" / "README.md").write_text(
+        "Bundled Matplotlib/DejaVu and STIX fonts used for portable Linux PDF and UI fallback.\n",
+        encoding="utf-8",
+    )
+    metadata = {
+        "python": manifest["python"],
+        "python_abi": PYTHON_TAG,
+        "wheels": [{"name": item["name"], "version": item["version"], "sha256": item["sha256"]} for item in manifest["wheels"]],
+        "runtime_mode": "self-contained CPython, PyQt6, scientific stack, and Psycopg binary client",
+        "native_validation": "requires Linux Mint 22.3 x86_64 manual gate",
+    }
+    (runtime / "runtime_metadata.json").write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
 
 def _copy_tree(source: Path, destination: Path) -> None:
@@ -108,35 +225,46 @@ def _copy_tree(source: Path, destination: Path) -> None:
 
 
 def _copy_payload(archive_root: Path, stage: Path) -> None:
-    for relative in (*PAYLOAD_FILES, *MANUAL_FILES):
+    for relative in PAYLOAD_FILES:
         _copy_tree(archive_root / relative, stage / relative)
     for relative in PAYLOAD_DIRECTORIES:
         _copy_tree(archive_root / relative, stage / relative)
-    _copy_tree(
-        archive_root / "source" / "launcher" / "linux",
-        stage / "launcher",
-    )
-    _copy_tree(
-        archive_root / "source" / "launcher" / "linux" / "requirements-linux-managed.txt",
-        stage / "requirements-linux-managed.txt",
-    )
+    for relative in LINUX_FILES:
+        _copy_tree(archive_root / "source" / "launcher" / "linux" / relative, stage / "launcher" / relative)
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+def _safe_extract_archive(repo: Path, commit: str, destination: Path) -> None:
+    archive = destination.parent / "repository.tar"
+    with archive.open("wb") as handle:
+        import subprocess
+        subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", commit], check=True, stdout=handle)
+    with tarfile.open(archive, "r:") as tar:
+        for member in tar.getmembers():
+            _safe_member_path(destination, member.name)
+        tar.extractall(destination)
 
 
-def _set_linux_modes(stage: Path) -> None:
-    for relative in ("launcher/ProgTrack", "launcher/launcher.py"):
+def _git_commit(repo: Path, requested: str | None) -> str:
+    import subprocess
+    value = requested or "HEAD"
+    result = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", f"{value}^{{commit}}"], check=True, capture_output=True, text=True)
+    return result.stdout.strip()
+
+
+def _commit_epoch(repo: Path, commit: str) -> int:
+    import subprocess
+    result = subprocess.run(["git", "-C", str(repo), "show", "-s", "--format=%ct", commit], check=True, capture_output=True, text=True)
+    return int(result.stdout.strip())
+
+
+def _set_modes(stage: Path) -> None:
+    for relative in ("launcher/ProgTrack", "launcher/launcher.py", "runtime/bin/python", "runtime/bin/python3", "runtime/bin/python3.13"):
         path = stage / relative
-        path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        if path.exists():
+            path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def _write_metadata(stage: Path, commit: str, epoch: int) -> None:
+def _write_metadata(stage: Path, commit: str, epoch: int, manifest: dict) -> None:
     metadata = {
         "artifact": f"ProgTrack-{VERSION}-linux-{ARCH}.tar.gz",
         "artifact_version": VERSION,
@@ -145,52 +273,37 @@ def _write_metadata(stage: Path, commit: str, epoch: int) -> None:
         "source_date_epoch": epoch,
         "platform": f"linux-{ARCH}",
         "launcher": "launcher/ProgTrack",
-        "runtime_mode": "managed Linux system Python/Qt/Psycopg C",
-        "status": "pre-release; manual Linux validation required",
+        "runtime_mode": "self-contained CPython 3.13.15 / PyQt6 6.7.1 / Psycopg binary",
+        "python_abi": PYTHON_TAG,
+        "glibc_baseline": "manylinux_2_28; Linux Mint 22.3 x86_64 acceptance target",
+        "native_runtime_bundled": True,
+        "postgresql_client": "psycopg-binary 3.3.4 with bundled libpq/TLS libraries",
+        "native_linux_validation": "required before public support claim",
         "portable_mode": "PROGTRACK_PORTABLE=1 only in a writable folder",
         "xdg_mode": "default; XDG data/config/cache/state roots",
-        "native_runtime_bundled": False,
+        "python_runtime_sha256": manifest["python"]["sha256"],
     }
-    (stage / "release_metadata.json").write_text(
-        json.dumps(metadata, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    (stage / "release_metadata.json").write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def _write_inventory(stage: Path, commit: str, epoch: int) -> None:
+def _write_inventory(stage: Path, commit: str, epoch: int, manifest: dict) -> None:
     files = []
     for path in sorted(p for p in stage.rglob("*") if p.is_file()):
         relative = path.relative_to(stage).as_posix()
-        if relative == "linux_component_inventory.json":
-            continue
-        files.append(
-            {
-                "path": relative,
-                "sha256": _sha256(path),
-                "mode": oct(stat.S_IMODE(path.stat().st_mode)),
-            }
-        )
+        files.append({"path": relative, "sha256": _sha256(path), "mode": oct(stat.S_IMODE(path.stat().st_mode))})
     inventory = {
         "source_commit": commit,
         "source_date_epoch": epoch,
         "platform": f"linux-{ARCH}",
-        "python": "3.13 (distribution-managed, pinned by IT test environment)",
-        "requirements": "requirements-linux-managed.txt",
-        "native_runtime_bundled": [],
-        "external_prerequisites": [
-            "Python 3.13",
-            "PyQt6 and Qt6 platform/font packages",
-            "psycopg[c]==3.3.4",
-            "psycopg_pool==3.3.1",
-            "pypdf==6.14.2",
-            "distribution libpq development/runtime libraries",
-        ],
+        "python": "3.13.15 bundled CPython",
+        "python_abi": PYTHON_TAG,
+        "glibc_baseline": "manylinux_2_28",
+        "native_runtime_bundled": True,
+        "postgresql_client": "psycopg-binary 3.3.4; libpq/OpenSSL bundled in wheel",
+        "external_prerequisites": ["Linux kernel and graphical session", "glibc compatible with manylinux_2_28"],
         "files": files,
     }
-    (stage / "linux_component_inventory.json").write_text(
-        json.dumps(inventory, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    (stage / "linux_component_inventory.json").write_text(json.dumps(inventory, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def _validate_stage(stage: Path) -> None:
@@ -201,20 +314,17 @@ def _validate_stage(stage: Path) -> None:
             raise RuntimeError(f"Development/runtime data leaked into package: {relative}")
         if path.is_file() and path.suffix.lower() in {".exe", ".dll", ".pyd"}:
             raise RuntimeError(f"Windows runtime leaked into Linux package: {relative}")
-    folded: dict[str, str] = {}
-    for path in stage.rglob("*"):
-        relative = path.relative_to(stage).as_posix()
-        previous = folded.setdefault(relative.casefold(), relative)
-        if previous != relative:
-            raise RuntimeError(f"Case-folded path collision: {previous} / {relative}")
     for required in (
         "launcher/ProgTrack",
         "launcher/launcher.py",
-        "ProgTrack.v.0.2.1.py",
-        "Plugins",
+        "runtime/bin/python3",
+        "runtime/lib/python3.13/site-packages/PyQt6",
+        "runtime/lib/python3.13/site-packages/numpy",
+        "runtime/lib/python3.13/site-packages/psycopg",
+        "runtime/lib/python3.13/site-packages/psycopg_binary",
+        "fonts/matplotlib",
         "Resources/Seed/progtrack_seed.ptdb",
         "icons/ui/manifest.json",
-        "requirements-linux-managed.txt",
         "release_metadata.json",
         "linux_component_inventory.json",
     ):
@@ -222,42 +332,40 @@ def _validate_stage(stage: Path) -> None:
             raise RuntimeError(f"Linux package is missing {required}")
 
 
-def _write_reproducible_tar(stage: Path, archive: Path, epoch: int) -> None:
+def _write_tar(stage: Path, archive: Path, epoch: int) -> None:
+    import gzip
     root_name = archive.name.removesuffix(".tar.gz")
-    with archive.open("wb") as raw:
-        import gzip
-
-        with gzip.GzipFile(fileobj=raw, mode="wb", mtime=epoch) as gz:
-            with tarfile.open(fileobj=gz, mode="w") as tar:
-                for path in sorted(stage.rglob("*")):
-                    relative = path.relative_to(stage).as_posix()
-                    info = tar.gettarinfo(
-                        str(path), arcname=f"{root_name}/{relative}"
-                    )
-                    info.uid = info.gid = 0
-                    info.uname = info.gname = ""
-                    info.mtime = epoch
-                    if relative in {"launcher/ProgTrack", "launcher/launcher.py"}:
-                        info.mode = 0o755
-                    if path.is_file():
-                        with path.open("rb") as handle:
-                            tar.addfile(info, handle)
-                    else:
-                        tar.addfile(info)
+    with archive.open("wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", mtime=epoch) as gz, tarfile.open(fileobj=gz, mode="w") as tar:
+        for path in sorted(stage.rglob("*")):
+            relative = path.relative_to(stage).as_posix()
+            info = tar.gettarinfo(str(path), arcname=f"{root_name}/{relative}")
+            info.uid = info.gid = 0
+            info.uname = info.gname = ""
+            info.mtime = epoch
+            if path.is_file():
+                if relative.startswith("launcher/") or relative.startswith("runtime/bin/"):
+                    info.mode = 0o755 if info.mode & 0o111 else 0o644
+                with path.open("rb") as handle:
+                    tar.addfile(info, handle)
+            else:
+                tar.addfile(info)
 
 
-def build(output: Path, commit: str | None) -> dict[str, object]:
+def build(output: Path, commit: str | None, python_archive: Path | None, wheelhouse: Path | None) -> dict[str, object]:
     repo = _repo_root()
     resolved = _git_commit(repo, commit)
     epoch = _commit_epoch(repo, resolved)
+    manifest = _load_manifest()
+    cache = Path(os.environ.get("PROGTRACK_LINUX_BUILD_CACHE", str(Path.home() / ".cache" / "progtrack-linux")))
+    archive_path = _runtime_archive(manifest, cache, python_archive)
+    wheel_paths = _wheel_paths(manifest, cache, wheelhouse)
     output.mkdir(parents=True, exist_ok=True)
     archive = output / f"ProgTrack-{VERSION}-linux-{ARCH}.tar.gz"
     checksum = output / f"{archive.name}.sha256"
-    if archive.exists():
-        archive.unlink()
-    if checksum.exists():
-        checksum.unlink()
-    with tempfile.TemporaryDirectory(prefix="progtrack-linux-") as temporary:
+    for path in (archive, checksum):
+        if path.exists():
+            path.unlink()
+    with tempfile.TemporaryDirectory(prefix="progtrack-linux-turnkey-") as temporary:
         temp_root = Path(temporary)
         archive_root = temp_root / "repository"
         stage = temp_root / "stage"
@@ -265,32 +373,25 @@ def build(output: Path, commit: str | None) -> dict[str, object]:
         stage.mkdir()
         _safe_extract_archive(repo, resolved, archive_root)
         _copy_payload(archive_root, stage)
-        _set_linux_modes(stage)
-        _write_metadata(stage, resolved, epoch)
-        _write_inventory(stage, resolved, epoch)
+        _prepare_runtime(stage, archive_path, wheel_paths, manifest)
+        _set_modes(stage)
+        _write_metadata(stage, resolved, epoch, manifest)
+        _write_inventory(stage, resolved, epoch, manifest)
         _validate_stage(stage)
-        _write_reproducible_tar(stage, archive, epoch)
+        _write_tar(stage, archive, epoch)
     digest = _sha256(archive)
     checksum.write_text(f"{digest}  {archive.name}\n", encoding="utf-8")
-    return {
-        "archive": str(archive),
-        "sha256": digest,
-        "bytes": archive.stat().st_size,
-        "source_commit": resolved,
-        "source_date_epoch": epoch,
-    }
+    return {"archive": str(archive), "sha256": digest, "bytes": archive.stat().st_size, "source_commit": resolved, "source_date_epoch": epoch, "native_runtime_bundled": True}
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build the ProgTrack Linux tar.gz")
+    parser = argparse.ArgumentParser(description="Build the self-contained ProgTrack Linux tar.gz")
     parser.add_argument("--commit", default=None)
-    parser.add_argument(
-        "--output",
-        default=str(_repo_root() / "source" / "release" / "linux"),
-    )
+    parser.add_argument("--output", default=str(_repo_root() / "source" / "launcher" / "linux" / "release"))
+    parser.add_argument("--python-archive", type=Path, default=None)
+    parser.add_argument("--wheelhouse", type=Path, default=None)
     args = parser.parse_args()
-    result = build(Path(args.output).resolve(), args.commit)
-    print(json.dumps(result, indent=2))
+    print(json.dumps(build(Path(args.output).resolve(), args.commit, args.python_archive, args.wheelhouse), indent=2))
     return 0
 
 

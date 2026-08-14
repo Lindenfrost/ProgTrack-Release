@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Native Linux launcher for the folder-portable ProgTrack payload.
+"""Native Linux launcher for the self-contained ProgTrack payload.
 
-The Linux artifact deliberately keeps the application payload editable and
-uses the distribution's Python/Qt stack.  Runtime data never default to the
-read-only bundle: XDG data/config/cache/state roots are used unless the user
-explicitly opts into ``PROGTRACK_PORTABLE=1`` in a writable folder.
+The Linux artifact bundles CPython, Qt, the scientific/PDF stack, fonts, and
+Psycopg's binary PostgreSQL client. Runtime data never default to the read-only
+bundle: XDG data/config/cache/state roots are used unless the user explicitly
+opts into ``PROGTRACK_PORTABLE=1`` in a writable folder.
 """
 
 from __future__ import annotations
@@ -89,8 +89,31 @@ def setup_environment(bundle_root: Path, *, diagnose: bool = False) -> tuple[Pat
     return bundle_root, state_root
 
 
+def _configure_bundled_runtime(bundle_root: Path) -> None:
+    """Expose bundled Python, Qt, fonts, and native libraries before imports."""
+    runtime = bundle_root / "runtime"
+    site_packages = runtime / "lib" / "python3.13" / "site-packages"
+    if not site_packages.is_dir():
+        return
+    if str(site_packages) not in sys.path:
+        sys.path.insert(0, str(site_packages))
+    qt_root = site_packages / "PyQt6" / "Qt6"
+    qt_lib = qt_root / "lib"
+    qt_plugins = qt_root / "plugins"
+    os.environ.setdefault("PYTHONNOUSERSITE", "1")
+    os.environ.setdefault("QT_PLUGIN_PATH", str(qt_plugins))
+    os.environ.setdefault("QT_QPA_PLATFORM_PLUGIN_PATH", str(qt_plugins / "platforms"))
+    font_root = bundle_root / "fonts" / "matplotlib"
+    if font_root.is_dir():
+        os.environ.setdefault("QT_QPA_FONTDIR", str(font_root))
+    library_paths = [runtime / "lib", qt_lib, site_packages / "psycopg_binary.libs"]
+    existing = os.environ.get("LD_LIBRARY_PATH", "")
+    os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(
+        [str(path) for path in library_paths if path.is_dir()] + ([existing] if existing else [])
+    )
+
 def _missing_dependencies() -> list[str]:
-    required = ("PyQt6", "matplotlib", "numpy", "pandas", "openpyxl", "pypdf", "psycopg", "psycopg_pool")
+    required = ("PyQt6.QtWidgets", "matplotlib", "numpy", "pandas", "scipy", "openpyxl", "reportlab", "PIL", "pypdf", "psycopg", "psycopg_pool")
     missing: list[str] = []
     for name in required:
         try:
@@ -121,13 +144,11 @@ def _write_error(message: str, details: str) -> None:
 
 def _bundle_root() -> Path:
     here = Path(__file__).resolve()
-    packaged = here.parent.parent
-    if _discover_payload(packaged) is not None:
-        return packaged
-    source_tree = here.parents[2]
-    if _discover_payload(source_tree) is not None:
-        return source_tree
-    return source_tree
+    candidates = (here.parent.parent, here.parents[3], here.parents[2])
+    for candidate in candidates:
+        if _discover_payload(candidate) is not None:
+            return candidate
+    return candidates[0]
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="ProgTrack Linux launcher")
@@ -136,6 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("script_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     bundle_root = _bundle_root()
+    _configure_bundled_runtime(bundle_root)
     setup_environment(bundle_root, diagnose=args.diagnose_paths)
     if args.diagnose_paths:
         return 0
@@ -143,10 +165,9 @@ def main(argv: list[str] | None = None) -> int:
         missing = _missing_dependencies()
         if missing:
             print(
-                "Missing Linux runtime dependencies: "
+                "Bundled Linux runtime is incomplete; missing imports: "
                 + ", ".join(missing)
-                + ". Install the pinned requirements from "
-                "requirements-linux-managed.txt and the distribution Qt/font prerequisites.",
+                + ". Rebuild the release from its pinned runtime manifest.",
                 file=sys.stderr,
             )
             return 78
