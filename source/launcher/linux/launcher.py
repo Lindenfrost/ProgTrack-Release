@@ -119,13 +119,24 @@ def _write_error(message: str, details: str) -> None:
         pass
 
 
+def _bundle_root() -> Path:
+    here = Path(__file__).resolve()
+    packaged = here.parent.parent
+    if _discover_payload(packaged) is not None:
+        return packaged
+    source_tree = here.parents[2]
+    if _discover_payload(source_tree) is not None:
+        return source_tree
+    return packaged
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="ProgTrack Linux launcher")
     parser.add_argument("--diagnose-paths", action="store_true")
     parser.add_argument("--skip-dependency-check", action="store_true")
     parser.add_argument("script_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
-    bundle_root = Path(__file__).resolve().parents[2]
+    bundle_root = _bundle_root()
     setup_environment(bundle_root, diagnose=args.diagnose_paths)
     if args.diagnose_paths:
         return 0
