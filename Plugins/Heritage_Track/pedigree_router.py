@@ -11,7 +11,7 @@ import math
 from collections import defaultdict
 from itertools import combinations, permutations
 from dataclasses import dataclass, field
-from typing import Dict, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import Dict, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
 
 Point = Tuple[float, float]
 Segment = Tuple[Point, Point]
@@ -242,6 +242,14 @@ class PedigreeRouter:
             if len(adjusted) > 256
             else None
         )
+        # Route scoring is incremental: for a large sparse pedigree, testing
+        # every new segment against every already-owned segment is needlessly
+        # quadratic. Keep a conservative bounding-box index for this path.
+        # Normal/current-seed graphs retain the exact all-segment scorer; large
+        # graphs only narrow the candidates (the relation test is unchanged).
+        owned_segment_index = (
+            defaultdict(list) if len(adjusted) > 256 else None
+        )
         if cycle_nodes:
             unresolved.append(
                 "invalid directed parentage cycle: "
@@ -274,6 +282,7 @@ class PedigreeRouter:
                     owned_segments,
                     parent_entry=endpoint in parents,
                     obstacle_index=route_obstacle_index,
+                    owned_segment_index=owned_segment_index,
                 )
                 endpoint_routes[endpoint] = path
                 if path_hits_obstacle:
@@ -287,6 +296,9 @@ class PedigreeRouter:
 
             routes[family_id] = endpoint_routes
             owned_segments.extend(new_owned)
+            if owned_segment_index is not None:
+                for owned in new_owned:
+                    self._index_owned_segment(owned_segment_index, owned)
 
         plan = RoutePlan(
             animal_positions=adjusted,
@@ -3851,6 +3863,9 @@ class PedigreeRouter:
         *,
         parent_entry: bool,
         obstacle_index: Optional[Mapping[Tuple[int, int], Sequence[Tuple[str, Rect]]]] = None,
+        owned_segment_index: Optional[
+            Mapping[Tuple[int, int], Sequence[_OwnedSegment]]
+        ] = None,
     ) -> Tuple[List[Point], bool, bool]:
         if not parent_entry:
             path = [start, end]
@@ -3861,6 +3876,7 @@ class PedigreeRouter:
                 obstacles,
                 owned_segments,
                 obstacle_index=obstacle_index,
+                owned_segment_index=owned_segment_index,
             )
             return path, overlap, obstacle_hit
 
@@ -3878,6 +3894,7 @@ class PedigreeRouter:
             obstacles,
             owned_segments,
             obstacle_index=obstacle_index,
+            owned_segment_index=owned_segment_index,
         )
         return canonical, overlap, obstacle_hit
 
@@ -3890,6 +3907,9 @@ class PedigreeRouter:
         owned_segments: Sequence[_OwnedSegment],
         *,
         obstacle_index: Optional[Mapping[Tuple[int, int], Sequence[Tuple[str, Rect]]]] = None,
+        owned_segment_index: Optional[
+            Mapping[Tuple[int, int], Sequence[_OwnedSegment]]
+        ] = None,
     ) -> Tuple[float, bool, bool]:
         segments = _path_segments(path)
         score = _path_length(path) + (max(0, len(segments) - 1) * 0.30)
@@ -3910,7 +3930,14 @@ class PedigreeRouter:
                     break
             if obstacle_hit:
                 continue
-            for other in owned_segments:
+            if owned_segment_index is None:
+                prior_segments = owned_segments
+            else:
+                prior_segments = self._owned_segment_candidates(
+                    segment,
+                    owned_segment_index,
+                )
+            for other in prior_segments:
                 relation, point = _segment_relation(segment, other.segment)
                 if relation == "none":
                     continue
@@ -3926,6 +3953,39 @@ class PedigreeRouter:
                 else:
                     score += 850.0
         return score, overlap, obstacle_hit
+
+    @staticmethod
+    def _index_owned_segment(
+        index: MutableMapping[Tuple[int, int], List[_OwnedSegment]],
+        owned: _OwnedSegment,
+        cell_size: float = 2.0,
+    ) -> None:
+        (x1, y1), (x2, y2) = owned.segment
+        low_x = math.floor(min(x1, x2) / cell_size)
+        high_x = math.floor(max(x1, x2) / cell_size)
+        low_y = math.floor(min(y1, y2) / cell_size)
+        high_y = math.floor(max(y1, y2) / cell_size)
+        for ix in range(low_x, high_x + 1):
+            for iy in range(low_y, high_y + 1):
+                index[(ix, iy)].append(owned)
+
+    @staticmethod
+    def _owned_segment_candidates(
+        segment: Segment,
+        index: Mapping[Tuple[int, int], Sequence[_OwnedSegment]],
+        cell_size: float = 2.0,
+    ) -> Sequence[_OwnedSegment]:
+        (x1, y1), (x2, y2) = segment
+        low_x = math.floor(min(x1, x2) / cell_size)
+        high_x = math.floor(max(x1, x2) / cell_size)
+        low_y = math.floor(min(y1, y2) / cell_size)
+        high_y = math.floor(max(y1, y2) / cell_size)
+        found: Dict[Tuple[str, str, int], _OwnedSegment] = {}
+        for ix in range(low_x, high_x + 1):
+            for iy in range(low_y, high_y + 1):
+                for owned in index.get((ix, iy), ()):
+                    found[(owned.family_id, owned.endpoint, owned.index)] = owned
+        return tuple(found.values())
 
     def _find_obstacle_gaps(
         self,

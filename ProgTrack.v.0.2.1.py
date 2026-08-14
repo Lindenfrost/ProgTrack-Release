@@ -16536,6 +16536,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.messages,
                 authorized=authorized,
                 audit_callback=audit,
+                backend=self.backend,
+                actor_login=actor,
                 parent=self,
             ).exec()
         except BackendConfigurationPermissionError:

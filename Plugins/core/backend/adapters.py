@@ -179,6 +179,32 @@ class SQLiteAdapter:
     def close(self) -> None:
         self.process_lock.release()
 
+    def get_installation_value(self, key: str, default: Any = None) -> Any:
+        with self.transaction() as connection:
+            row = connection.execute(
+                "SELECT value_json FROM installation WHERE key=?", (str(key),)
+            ).fetchone()
+        if row is None:
+            return default
+        try:
+            return json.loads(row[0])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return default
+
+    def set_installation_value(self, key: str, value: Any) -> None:
+        with self.transaction(write=True) as connection:
+            connection.execute(
+                """
+                INSERT INTO installation(key,value_json,revision,updated_at)
+                VALUES(?,?,1,?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value_json=excluded.value_json,
+                    revision=installation.revision+1,
+                    updated_at=excluded.updated_at
+                """,
+                (str(key), json.dumps(value, ensure_ascii=False), utc_now()),
+            )
+
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(
             self.path,
@@ -272,6 +298,38 @@ class PostgreSQLAdapter:
 
     def close(self) -> None:
         self.pool.close()
+
+    def get_installation_value(self, key: str, default: Any = None) -> Any:
+        with self.transaction() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT value_json FROM installation WHERE key=%s", (str(key),)
+                )
+                row = cursor.fetchone()
+        if row is None:
+            return default
+        value = row["value_json"] if isinstance(row, dict) else row[0]
+        if isinstance(value, (dict, list, str, int, float, bool)):
+            return value
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return default
+
+    def set_installation_value(self, key: str, value: Any) -> None:
+        with self.transaction(write=True) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO installation(key,value_json,revision,updated_at)
+                    VALUES(%s,%s::jsonb,1,%s)
+                    ON CONFLICT(key) DO UPDATE SET
+                        value_json=EXCLUDED.value_json,
+                        revision=installation.revision+1,
+                        updated_at=EXCLUDED.updated_at
+                    """,
+                    (str(key), json.dumps(value, ensure_ascii=False), utc_now()),
+                )
 
     @contextmanager
     def transaction(self, *, write: bool = False) -> Iterator[Any]:

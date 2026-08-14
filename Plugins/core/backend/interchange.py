@@ -179,6 +179,19 @@ class InterchangeService:
                         errors.append(f"Size mismatch: {entry['package_path']}")
                     if _sha256_bytes(payload) != entry["sha256"]:
                         errors.append(f"Checksum mismatch: {entry['package_path']}")
+                expected = {"manifest.json", *manifest.get("records", {}).keys()}
+                expected.update(
+                    str(entry.get("package_path") or "")
+                    for entry in manifest.get("managed_files", [])
+                )
+                unexpected = [
+                    name for name in names
+                    if not name.endswith("/") and name not in expected
+                ]
+                if unexpected:
+                    errors.append(
+                        "Unexpected interchange members: " + ", ".join(sorted(unexpected))
+                    )
                 counts.update({
                     key: int(value)
                     for key, value in manifest.get("counts", {}).items()
@@ -193,48 +206,86 @@ class InterchangeService:
         if not preview.valid:
             return preview
         existing = self.backend.load_core_data()
+        existing_records = self.backend.records.list_all()
         if require_empty and (
             existing.get("animals")
             or existing.get("archived_animals")
             or self.backend.records.namespace_names()
         ):
             raise ConflictError("Interchange import requires an empty backend.")
-        with zipfile.ZipFile(package) as archive:
-            animals: dict[str, Any] = {}
-            archived: dict[str, Any] = {}
-            for line in archive.read("records/animals.jsonl").decode("utf-8").splitlines():
-                if not line.strip():
-                    continue
-                record = json.loads(line)
-                (archived if record["archived"] else animals)[record["ipid"]] = record["payload"]
-            settings_line = next(
-                line for line in archive.read("records/settings.jsonl").decode("utf-8").splitlines()
-                if line.strip()
-            )
-            settings = json.loads(settings_line)["payload"]
-            self.backend.save_core_data({
-                "animals": animals,
-                "archived_animals": archived,
-                "settings": settings,
-            })
-            domain_content = archive.read("records/domain.jsonl").decode("utf-8")
-            for line in domain_content.splitlines():
-                if not line.strip():
-                    continue
-                record = json.loads(line)
-                self.backend.records.put(
-                    record["namespace"], record["record_id"], record["payload"]
+        imported_documents: list[str] = []
+        imported_records: list[tuple[str, str]] = []
+        try:
+            with zipfile.ZipFile(package) as archive:
+                animals: dict[str, Any] = {}
+                archived: dict[str, Any] = {}
+                for line in archive.read("records/animals.jsonl").decode("utf-8").splitlines():
+                    if not line.strip():
+                        continue
+                    record = json.loads(line)
+                    (archived if record["archived"] else animals)[record["ipid"]] = record["payload"]
+                settings_line = next(
+                    line for line in archive.read("records/settings.jsonl").decode("utf-8").splitlines()
+                    if line.strip()
                 )
-            # Payload import intentionally uses the same managed roots and safe
-            # paths, but preserves document IDs through metadata registration.
-            manifest = json.loads(archive.read("manifest.json"))
-            for entry in manifest.get("managed_files", []):
-                suffix = Path(entry["original_name"]).suffix
-                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
-                    temp.write(archive.read(entry["package_path"]))
-                    temp_path = Path(temp.name)
-                try:
-                    self.managed_files.import_preserving_identity(temp_path, entry)
-                finally:
-                    temp_path.unlink(missing_ok=True)
-        return preview
+                settings = json.loads(settings_line)["payload"]
+                self.backend.save_core_data({
+                    "animals": animals,
+                    "archived_animals": archived,
+                    "settings": settings,
+                })
+                domain_content = archive.read("records/domain.jsonl").decode("utf-8")
+                for line in domain_content.splitlines():
+                    if not line.strip():
+                        continue
+                    record = json.loads(line)
+                    self.backend.records.put(
+                        record["namespace"], record["record_id"], record["payload"]
+                    )
+                    imported_records.append(
+                        (record["namespace"], record["record_id"])
+                    )
+                manifest = json.loads(archive.read("manifest.json"))
+                for entry in manifest.get("managed_files", []):
+                    suffix = Path(entry["original_name"]).suffix
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
+                        temp.write(archive.read(entry["package_path"]))
+                        temp_path = Path(temp.name)
+                    try:
+                        imported = self.managed_files.import_preserving_identity(
+                            temp_path, entry
+                        )
+                        imported_documents.append(str(imported["document_id"]))
+                    finally:
+                        temp_path.unlink(missing_ok=True)
+            return preview
+        except Exception:
+            # Empty-target imports can be rolled back deterministically.  This
+            # also makes a retry safe after a process interruption or a failed
+            # payload checksum/publication step.
+            try:
+                self.backend.save_core_data(existing)
+                for namespace, record_id in imported_records:
+                    self.backend.records.delete(namespace, record_id)
+                for document_id in imported_documents:
+                    self.managed_files.remove(document_id)
+            except Exception:
+                # Preserve the original failure; the caller receives a clear
+                # error and the next integrity/reconcile pass can identify any
+                # quarantined payload.
+                pass
+            raise
+
+    def transfer_to_backend(
+        self,
+        target_backend: Any,
+        *,
+        package_path: str | Path,
+        package_id: str | None = None,
+    ) -> ImportPreview:
+        """Export this backend, preview it, and import it atomically into target."""
+        package = self.export_package(package_path, package_id=package_id)
+        preview = target_backend.interchange.preview(package)
+        if not preview.valid:
+            return preview
+        return target_backend.interchange.import_package(package, require_empty=True)

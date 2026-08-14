@@ -11,6 +11,7 @@ from .errors import (
     ValidationError,
 )
 from .facade import ProgTrackBackend
+from .postgresql_admin import PostgreSQLAdministrationService, PostgreSQLDatabaseInfo
 
 __all__ = [
     "BackendConfigurationError",
@@ -20,6 +21,8 @@ __all__ = [
     "LockConflictError",
     "PermissionDeniedError",
     "ProgTrackBackend",
+    "PostgreSQLAdministrationService",
+    "PostgreSQLDatabaseInfo",
     "StandaloneLockError",
     "ValidationError",
 ]

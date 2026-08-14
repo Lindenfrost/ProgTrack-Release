@@ -191,10 +191,15 @@ interchange format:
 
 Only a Lord account can open `Settings -> Backend`. The dialog can select the
 profile and edit the SQLite database name/local folder or the PostgreSQL host, port,
-database, user, TLS, timeout, managed-storage, and pool settings. PostgreSQL
-passwords are kept in the operating-system credential store. Connection
-testing is non-mutating. Saving selects the profile
-for the next clean restart; it does not transfer data. If the selected backend
+database, user, TLS, CA bundle, optional client certificate/private key,
+timeout, server-managed storage, and pool settings. PostgreSQL passwords and
+client-key passphrases are kept in the operating-system credential store.
+Connection testing exercises the selected TLS configuration and is
+non-mutating. A Lord can list authorized server databases, create/select one,
+archive, back up, restore, or delete it after the required confirmations.
+The dialog also provides the preflighted canonical SQLite-to-PostgreSQL
+transfer. Saving selects the profile for the next clean restart; it does not
+silently transfer or overwrite data. If the selected backend
 cannot be opened, startup fails with a diagnostic instead of silently using
 the other profile. The release contains the PostgreSQL client driver, not a
 PostgreSQL server; server provisioning and PostgreSQL/Linux deployment checks

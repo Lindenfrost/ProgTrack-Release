@@ -107,6 +107,10 @@ class PostgreSQLSettings:
     database: str = ""
     user: str = ""
     sslmode: str = "require"
+    server_name: str = ""
+    ca_file: str = ""
+    client_cert_file: str = ""
+    client_key_file: str = ""
     connect_timeout: int = 10
     managed_root: str = ""
     pool_min: int = 1
@@ -163,6 +167,10 @@ class BackendConfigurationService:
             database=str(raw.get("database") or ""),
             user=str(raw.get("user") or ""),
             sslmode=str(raw.get("sslmode") or "require"),
+            server_name=str(raw.get("server_name") or ""),
+            ca_file=str(raw.get("ca_file") or ""),
+            client_cert_file=str(raw.get("client_cert_file") or ""),
+            client_key_file=str(raw.get("client_key_file") or ""),
             connect_timeout=int(raw.get("connect_timeout") or 10),
             managed_root=str(
                 raw.get("managed_root")
@@ -175,6 +183,22 @@ class BackendConfigurationService:
 
     def read_password(self) -> str:
         return self.credential_store.read(self.credential_target)
+
+
+    def client_key_passphrase_target(self) -> str:
+        return f"{self.credential_target}/client-key-passphrase"
+
+    def read_client_key_passphrase(self) -> str:
+        return self.credential_store.read(self.client_key_passphrase_target())
+
+    @staticmethod
+    def _validate_certificate_file(value: str, label: str) -> str:
+        path = Path(str(value or "")).expanduser()
+        if not path.is_file() or not os.access(path, os.R_OK):
+            raise BackendConfigurationValidationError(
+                f"{label} must point to a readable certificate/key file."
+            )
+        return str(path.resolve())
 
     def environment_overrides(self) -> list[str]:
         keys = (
@@ -227,6 +251,28 @@ class BackendConfigurationService:
             raise BackendConfigurationValidationError("PostgreSQL user is required.")
         if settings.sslmode not in self.SSL_MODES:
             raise BackendConfigurationValidationError("PostgreSQL SSL mode is invalid.")
+        if settings.sslmode in {"verify-ca", "verify-full"} and not settings.ca_file.strip():
+            raise BackendConfigurationValidationError(
+                "A CA certificate/bundle is required for certificate verification."
+            )
+        ca_file = settings.ca_file.strip()
+        client_cert = settings.client_cert_file.strip()
+        client_key = settings.client_key_file.strip()
+        if ca_file:
+            self._validate_certificate_file(ca_file, "CA certificate/bundle")
+        if bool(client_cert) != bool(client_key):
+            raise BackendConfigurationValidationError(
+                "Client certificate and private key must be provided together."
+            )
+        if client_cert:
+            self._validate_certificate_file(client_cert, "Client certificate")
+            self._validate_certificate_file(client_key, "Client private key")
+        if settings.sslmode == "verify-full" and not (
+            settings.server_name.strip() or settings.host.strip()
+        ):
+            raise BackendConfigurationValidationError(
+                "A server name is required for verify-full TLS validation."
+            )
         if not 1 <= int(settings.connect_timeout) <= 300:
             raise BackendConfigurationValidationError(
                 "Connection timeout must be between 1 and 300 seconds."
@@ -247,6 +293,7 @@ class BackendConfigurationService:
         settings: PostgreSQLSettings,
         *,
         password: str = "",
+        client_key_passphrase: str = "",
         allow_environment: bool = True,
     ) -> str:
         if allow_environment:
@@ -260,20 +307,32 @@ class BackendConfigurationService:
             raise BackendConfigurationValidationError(
                 "Psycopg 3 is not installed."
             ) from exc
-        return make_conninfo(
-            host=validated.host,
-            port=validated.port,
-            dbname=validated.database,
-            user=validated.user,
-            password=password,
-            sslmode=validated.sslmode,
-            connect_timeout=validated.connect_timeout,
-        )
+        options = {
+            "host": validated.host,
+            "port": validated.port,
+            "dbname": validated.database,
+            "user": validated.user,
+            "password": password,
+            "sslmode": validated.sslmode,
+            "connect_timeout": validated.connect_timeout,
+        }
+        if validated.server_name.strip():
+            options["hostaddr"] = validated.host
+            options["host"] = validated.server_name.strip()
+        if validated.ca_file.strip():
+            options["sslrootcert"] = validated.ca_file
+        if validated.client_cert_file.strip():
+            options["sslcert"] = validated.client_cert_file
+            options["sslkey"] = validated.client_key_file
+        if client_key_passphrase:
+            options["sslpassword"] = client_key_passphrase
+        return make_conninfo(**options)
 
     def effective_postgres_dsn(self) -> str:
         return self.connection_dsn(
             self.saved_postgresql(),
             password=self.read_password(),
+            client_key_passphrase=self.read_client_key_passphrase(),
             allow_environment=True,
         )
 
@@ -289,11 +348,15 @@ class BackendConfigurationService:
         settings: PostgreSQLSettings,
         *,
         password: str,
+        client_key_passphrase: str = "",
         authorized: bool,
     ) -> None:
         self.require_lord(authorized)
         dsn = self.connection_dsn(
-            settings, password=password, allow_environment=False
+            settings,
+            password=password,
+            client_key_passphrase=client_key_passphrase,
+            allow_environment=False,
         )
         try:
             import psycopg
@@ -318,6 +381,7 @@ class BackendConfigurationService:
         sqlite_folder: str | Path | None = None,
         postgresql: PostgreSQLSettings,
         password: str,
+        client_key_passphrase: str = "",
         authorized: bool,
     ) -> dict[str, Any]:
         self.require_lord(authorized)
@@ -353,12 +417,20 @@ class BackendConfigurationService:
                     "A PostgreSQL password or deployment DSN override is required."
                 )
             managed_root = str(Path(pg.managed_root).expanduser())
+            if client_key_passphrase:
+                self.credential_store.write(
+                    self.client_key_passphrase_target(), client_key_passphrase
+                )
             pg_document = {
                 "host": pg.host.strip(),
                 "port": int(pg.port),
                 "database": pg.database.strip(),
                 "user": pg.user.strip(),
                 "sslmode": pg.sslmode,
+                "server_name": pg.server_name.strip(),
+                "ca_file": str(Path(pg.ca_file).expanduser().resolve()) if pg.ca_file.strip() else "",
+                "client_cert_file": str(Path(pg.client_cert_file).expanduser().resolve()) if pg.client_cert_file.strip() else "",
+                "client_key_file": str(Path(pg.client_key_file).expanduser().resolve()) if pg.client_key_file.strip() else "",
                 "connect_timeout": int(pg.connect_timeout),
                 "managed_root": managed_root,
                 "pool_min": int(pg.pool_min),
