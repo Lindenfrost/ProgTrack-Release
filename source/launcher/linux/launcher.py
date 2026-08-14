@@ -90,7 +90,7 @@ def setup_environment(bundle_root: Path, *, diagnose: bool = False) -> tuple[Pat
 
 
 def _missing_dependencies() -> list[str]:
-    required = ("PyQt6", "matplotlib", "numpy", "pandas", "openpyxl", "pypdf", "psycopg")
+    required = ("PyQt6", "matplotlib", "numpy", "pandas", "openpyxl", "pypdf", "psycopg", "psycopg_pool")
     missing: list[str] = []
     for name in required:
         try:
