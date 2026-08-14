@@ -490,13 +490,36 @@ interchange contracts are versioned below
 
 ## Build source
 
-Launcher build sources are in `source/` and are not part of the compact release
-ZIP. Important files include `launcher.py`, `launcher_small.spec`,
-`hiddenimports.txt`, `build_launcher_small.bat`, and `progtrack_icon.ico`.
-The build uses the repository-local Python environment created by the build
-script. The resulting frozen runtime is verified with the backend and frozen
-runtime smoke tests before release packaging.
+Launcher build sources are in source/ and are not part of the compact release
+ZIP. Windows and Linux launcher sources are kept in separate trees.
 
+Windows build inputs include:
+
+- source/launcher.py
+- source/launcher_small.spec
+- source/hiddenimports.txt
+- source/build_launcher_small.bat
+- source/package_release.ps1
+- source/progtrack_icon.ico
+
+The Windows build uses the repository-local Python environment created by the
+build script. The resulting frozen runtime is verified with the backend and
+frozen-runtime smoke tests before release packaging.
+
+Linux build inputs are kept under source/launcher/linux/:
+
+- source/launcher/linux/ProgTrack — POSIX launcher entry point
+- source/launcher/linux/launcher.py — Linux launcher and runtime-path logic
+- source/launcher/linux/progtrack.desktop — optional desktop integration
+- source/launcher/linux/progtrack.png — Linux application icon
+- source/launcher/linux/README.md
+- source/package_linux_release.py
+- source/requirements-linux-managed.txt
+
+The Linux tree is intentionally independent of the Windows .exe, .dll, and
+.pyd runtime. Issue #49 tracks the remaining work for the final
+self-contained, double-click-and-run Linux release; the current Linux artifact
+is a pre-release engineering package and is not yet advertised as supported.
 ## Roadmap and release history
 
 | Version / phase | Focus |
