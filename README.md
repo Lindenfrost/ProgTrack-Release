@@ -135,13 +135,13 @@ The `0.2.1` release published here is a native Windows portable release. Its
 kept together; this ZIP is not a native Linux package and is not supported
 through Wine.
 
-Linux support is planned as a separate native build using the same application
-payload and backend contracts, but a Linux launcher and Linux runtime are not
-included in this release. Issue #49 defines the later Linux deliverable,
-including Linux-specific Qt/Python/SQLite/PostgreSQL libraries, font and PDF
-verification, XDG/read-only-path handling, and a dedicated
-`ProgTrack-<version>-linux-x86_64.tar.gz` archive. Windows and Linux artifacts
-will therefore be published separately rather than combining incompatible
+Issue #49 defines a separate native Linux artifact using the same application
+payload and backend contracts. A local engineering archive is now assembled as
+`ProgTrack-0.3.0-linux-x86_64.tar.gz`: it contains a pinned CPython runtime, Qt/PyQt6,
+scientific/PDF/XLSX dependencies, bundled fonts, and the Psycopg binary client.
+It is kept local until the required native Linux Mint 22.3 x86_64 workstation gate
+(ELF/linker, GUI, PDF, SQLite, PostgreSQL/TLS, XDG, and clean-machine checks) passes.
+Windows and Linux artifacts remain separate rather than combining incompatible
 `.dll`/`.pyd` and `.so` runtimes in one package.
 
 ## Folder layout
@@ -521,12 +521,13 @@ Linux build inputs are all under `source/launcher/linux/`:
 - source/launcher/linux/progtrack.png — Linux application icon
 - source/launcher/linux/README.md
 - source/launcher/linux/package_linux_release.py
-- source/launcher/linux/requirements-linux-managed.txt
+- source/launcher/linux/requirements-linux-bundled.txt
 
-The Linux tree is intentionally independent of the Windows .exe, .dll, and
-.pyd runtime. Issue #49 tracks the remaining work for the final
-self-contained, double-click-and-run Linux release; the current Linux artifact
-is a pre-release engineering package and is not yet advertised as supported.
+The Linux tree is intentionally independent of the Windows `.exe`, `.dll`, and
+`.pyd` runtime. `package_linux_release.py` now assembles the self-contained CPython/Qt
+artifact from `linux_runtime_manifest.json`; the local tarball is an engineering
+pre-release and remains unsupported until the native Linux acceptance gate in #49
+is completed.
 ## Roadmap and release history
 
 | Version / phase | Focus |

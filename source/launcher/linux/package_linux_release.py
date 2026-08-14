@@ -150,12 +150,18 @@ def _extract_python(archive: Path, destination: Path) -> None:
             with target.open("wb") as handle:
                 shutil.copyfileobj(source, handle)
             target.chmod(stat.S_IMODE(member.mode) or 0o644)
+    root = destination.resolve()
     for target, linkname in pending:
-        link_target = _safe_member_path(target.parent, linkname)
+        # Terminfo and a few CPython support files use ../ links. Resolve them
+        # relative to the link parent while keeping the final target in runtime.
+        link_target = (target.parent / Path(*PurePosixPath(linkname).parts)).resolve()
+        if not link_target.is_relative_to(root):
+            raise RuntimeError(f"Runtime link escapes extraction root: {target} -> {linkname}")
         if not link_target.exists():
             raise RuntimeError(f"Broken runtime link: {target} -> {linkname}")
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(link_target, target)
+        with link_target.open("rb") as source, target.open("wb") as output:
+            shutil.copyfileobj(source, output)
         target.chmod(link_target.stat().st_mode & 0o777)
 
 
@@ -183,11 +189,23 @@ def _prepare_runtime(stage: Path, archive: Path, wheels: list[Path], manifest: d
     site_packages.mkdir(parents=True, exist_ok=True)
     for wheel in wheels:
         _extract_wheel(wheel, site_packages)
+    # The standalone interpreter ships pip and its cross-platform distlib
+    # helpers.  The release is intentionally not user-extensible at runtime;
+    # removing them also prevents Windows helper executables from leaking into
+    # this Linux-only archive.
+    for path in site_packages.glob("pip*"):
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+        elif path.exists():
+            path.unlink()
     for executable in ("pip", "pip3", "pip3.13", "idle3", "idle3.13", "pydoc3", "pydoc3.13"):
         path = runtime / "bin" / executable
         if path.exists():
             path.unlink()
     for path in runtime.rglob("*"):
+        if path.is_file() and path.suffix.lower() in {".exe", ".dll", ".pyd"}:
+            path.unlink()
+            continue
         if path.is_file() and (path.suffix == ".so" or ".so." in path.name):
             path.chmod(0o755)
     for executable in ("python", "python3", "python3.13"):
