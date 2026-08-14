@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ProgTrack
+Comment=Portable animal research data management
+Exec=ProgTrack
+Terminal=false
+Categories=Science;Education;
+Icon=progtrack
