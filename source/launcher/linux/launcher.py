@@ -127,8 +127,7 @@ def _bundle_root() -> Path:
     source_tree = here.parents[2]
     if _discover_payload(source_tree) is not None:
         return source_tree
-    return packaged
-
+    return source_tree
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="ProgTrack Linux launcher")
