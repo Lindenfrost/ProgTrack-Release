@@ -236,6 +236,8 @@ def _write_reproducible_tar(stage: Path, archive: Path, epoch: int) -> None:
                     info.uid = info.gid = 0
                     info.uname = info.gname = ""
                     info.mtime = epoch
+                    if relative in {"launcher/ProgTrack", "launcher/launcher.py"}:
+                        info.mode = 0o755
                     if path.is_file():
                         with path.open("rb") as handle:
                             tar.addfile(info, handle)
