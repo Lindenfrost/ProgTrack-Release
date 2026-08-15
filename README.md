@@ -135,7 +135,7 @@ The `0.2.1` release published here is a native Windows portable release. Its
 kept together; this ZIP is not a native Linux package and is not supported
 through Wine.
 
-Issue #49 defines a separate native Linux artifact using the same application
+A separate native Linux artifact uses the same application
 payload and backend contracts. A local engineering archive is now assembled as
 `ProgTrack-0.3.0-linux-x86_64.tar.gz`: it contains a pinned CPython runtime, Qt/PyQt6,
 scientific/PDF/XLSX dependencies, bundled fonts, and the Psycopg binary client.
@@ -526,7 +526,7 @@ Linux build inputs are all under `source/launcher/linux/`:
 The Linux tree is intentionally independent of the Windows `.exe`, `.dll`, and
 `.pyd` runtime. `package_linux_release.py` now assembles the self-contained CPython/Qt
 artifact from `linux_runtime_manifest.json`; the local tarball is an engineering
-pre-release and remains unsupported until the native Linux acceptance gate in #49
+pre-release and remains unsupported until the native Linux acceptance gate
 is completed.
 ## Roadmap and release history
 
