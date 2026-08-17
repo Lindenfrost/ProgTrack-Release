@@ -258,6 +258,66 @@
       "mapped_to": ""
     },
     {
+      "role_id": "experimental_offspring",
+      "value": "experimental_offspring",
+      "label": "Experimental offspring",
+      "label_key": "role.experimental_offspring",
+      "icon": "role.experimental_offspring",
+      "order": 45,
+      "active": true,
+      "built_in": true,
+      "base_editor": "experimental_animal",
+      "field_preset": "experimental",
+      "dialog_blocks": {
+        "new": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "limits_measurements",
+          "health_flags",
+          "procedure_events",
+          "experimental_fields"
+        ],
+        "edit": [
+          "identity",
+          "cage_address",
+          "weight",
+          "parenting",
+          "id_chip_origin",
+          "project_severity",
+          "lifecycle",
+          "reference_weight",
+          "limits_measurements",
+          "health_flags",
+          "procedure_events",
+          "experimental_fields"
+        ]
+      },
+      "custom_preset_names": {
+        "new": "",
+        "edit": ""
+      },
+      "event_recipe": {
+        "available_events": [
+          "surgery",
+          "measurement"
+        ],
+        "default_event": "surgery"
+      },
+      "eligibility": {},
+      "status_display": {},
+      "show_new_animal_button": true,
+      "imported": false,
+      "review_state": "",
+      "original_label": "",
+      "mapped_to": ""
+    },
+    {
       "role_id": "partner_animal",
       "value": "partner_animal",
       "label": "Partner animal",

@@ -113,6 +113,7 @@ from Plugins.core.animal_roles import (
     REQUIRED_DIALOG_BLOCKS,
     RoleOrderValidationError,
     canonical_role_value,
+    ROLE_VALUE_EXPERIMENTAL_OFFSPRING,
     clear_deleted_role_assignments,
     default_dialog_blocks,
     default_role_colors,
@@ -6361,7 +6362,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         outer.addWidget(scroll, 1)
         return scroll
 
-    def _apply_dialog_width(self, dlg: QDialog, width: Optional[int] = None) -> None:
+    def _apply_dialog_width(
+        self,
+        dlg: QDialog,
+        width: Optional[int] = None,
+        *,
+        minimum_height: int = 220,
+    ) -> None:
         """Finalize the dialog width *after* content has been added.
         This ensures edits to UI_STD_DIALOG_WIDTH actually reflect in window size.
         """
@@ -6372,7 +6379,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # screen/frame guard here so their title bar is also kept on-screen
             # when the user resizes or reopens them.
             if not hasattr(dlg, "_progtrack_geometry_guard"):
-                install_dialog_geometry_guard(dlg, minimum=QSize(w, 220))
+                install_dialog_geometry_guard(
+                    dlg, minimum=QSize(w, max(0, int(minimum_height)))
+                )
             dlg.setMinimumWidth(w)
             dlg.adjustSize()
             dlg.resize(max(w, dlg.sizeHint().width()), dlg.sizeHint().height())
@@ -7495,7 +7504,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         lay = QVBoxLayout(dlg)
         
         # Use localized animal label with name
-        public_id = str(a.get("id") or self._display_name(animal_name)).strip()
+        public_id = str(a.get("ipid") or self._display_name(animal_name)).strip()
         lay.addWidget(QLabel(
             self.messages.get("dialog.animal_label", "Animal: {name}").format(
                 name=public_id)))
@@ -7537,8 +7546,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         btns.accepted.connect(dlg.accept)
         btns.rejected.connect(dlg.reject)
         # finalize width so constants take effect
-        self._apply_dialog_width(dlg)
-
+        self._apply_dialog_width(dlg, width=360, minimum_height=0)
 
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
@@ -9349,6 +9357,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return self._dlg_samenspender
         if role_value == Role.OFFSPRING.value:
             return self._dlg_offspring
+        if role_value == ROLE_VALUE_EXPERIMENTAL_OFFSPRING:
+            return self._dlg_versuchstier
         if role_value == Role.PARTNER.value:
             return self._dlg_partner
         if role_value == Role.ZUCHTTIER.value:

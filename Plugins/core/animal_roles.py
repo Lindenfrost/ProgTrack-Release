@@ -24,6 +24,7 @@ ROLE_VALUE_SPENDER = "egg_cell_donor"
 ROLE_VALUE_AMME = "surrogate"
 ROLE_VALUE_SAMENSP = "sperm_donor"
 ROLE_VALUE_OFFSPRING = "offspring"
+ROLE_VALUE_EXPERIMENTAL_OFFSPRING = "experimental_offspring"
 ROLE_VALUE_PARTNER = "partner_animal"
 ROLE_VALUE_ZUCHTTIER = "breeding_animal"
 ROLE_VALUE_EXPERIMENTAL = "experimental_animal"
@@ -44,6 +45,8 @@ LEGACY_ROLE_VALUE_MAP: Dict[str, str] = {
     "Nachkomme": ROLE_VALUE_OFFSPRING,
     "nachkomme": ROLE_VALUE_OFFSPRING,
     "offspring": ROLE_VALUE_OFFSPRING,
+    "experimental_offspring": ROLE_VALUE_EXPERIMENTAL_OFFSPRING,
+    "experimental offspring": ROLE_VALUE_EXPERIMENTAL_OFFSPRING,
     "Partnertier": ROLE_VALUE_PARTNER,
     "partnertier": ROLE_VALUE_PARTNER,
     "partner": ROLE_VALUE_PARTNER,
@@ -66,6 +69,7 @@ ROLE_DISPLAY_LABELS: Dict[str, str] = {
     ROLE_VALUE_AMME: "Surrogate",
     ROLE_VALUE_SAMENSP: "Sperm donor",
     ROLE_VALUE_OFFSPRING: "Offspring",
+    ROLE_VALUE_EXPERIMENTAL_OFFSPRING: "Experimental offspring",
     ROLE_VALUE_PARTNER: "Partner animal",
     ROLE_VALUE_ZUCHTTIER: "Breeding animal",
     ROLE_VALUE_EXPERIMENTAL: "Experimental animal",
@@ -77,6 +81,7 @@ ROLE_LABEL_KEYS: Dict[str, str] = {
     ROLE_VALUE_AMME: "role.surrogate",
     ROLE_VALUE_SAMENSP: "role.sperm_donor",
     ROLE_VALUE_OFFSPRING: "role.offspring",
+    ROLE_VALUE_EXPERIMENTAL_OFFSPRING: "role.experimental_offspring",
     ROLE_VALUE_PARTNER: "role.partner_animal",
     ROLE_VALUE_ZUCHTTIER: "role.breeding_animal",
     ROLE_VALUE_EXPERIMENTAL: "role.experimental_animal",
@@ -96,6 +101,12 @@ DEFAULT_ROLE_COLORS: Dict[str, Dict[str, str]] = {
         "male": "#1A1AFF",
         "female": "#FF69B4",
         "unknown": "#808080",
+    },
+    ROLE_VALUE_EXPERIMENTAL_OFFSPRING: {
+        "mode": COLOR_MODE_SEX,
+        "male": "#00CCAA",
+        "female": "#FF7788",
+        "unknown": "#00AAAA",
     },
     ROLE_VALUE_PARTNER: {
         "mode": COLOR_MODE_SEX,
@@ -355,6 +366,19 @@ DEFAULT_ROLE_DEFINITIONS: List[Dict[str, Any]] = [
         "built_in": True,
         "base_editor": "offspring",
         "field_preset": "offspring",
+        "show_new_animal_button": True,
+    },
+    {
+        "role_id": ROLE_VALUE_EXPERIMENTAL_OFFSPRING,
+        "value": ROLE_VALUE_EXPERIMENTAL_OFFSPRING,
+        "label": ROLE_DISPLAY_LABELS[ROLE_VALUE_EXPERIMENTAL_OFFSPRING],
+        "label_key": ROLE_LABEL_KEYS[ROLE_VALUE_EXPERIMENTAL_OFFSPRING],
+        "icon": "role.experimental_offspring",
+        "order": 45,
+        "active": True,
+        "built_in": True,
+        "base_editor": "experimental_animal",
+        "field_preset": "experimental",
         "show_new_animal_button": True,
     },
     {

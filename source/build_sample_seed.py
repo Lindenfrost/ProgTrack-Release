@@ -55,6 +55,10 @@ ELDARION_BIRTH_DATE = date(2026, 3, 1)
 # assignments are cleared instead of leaving orphaned project names in the
 # database; deleting a project must not silently move animals to another one.
 SEED_PROJECTS = frozenset({"Backcrossing", "OTOF-", "Oakshield", "Ringbearer"})
+
+OTOF_EXPERIMENTAL_ANIMAL_NAMES = frozenset({
+    "Thranduil", "Ekaterina", "Olga", "Svetlana", "Legolas",
+})
 # Disposable probes and superseded examples must never return when the
 # canonical package is rebuilt from the archived authoring snapshot.  Keep
 # this list in one place so Core and every domain payload are pruned by the
@@ -1212,7 +1216,7 @@ PROJECT_DATA_PROFILES: dict[str, dict[str, Any]] = {
             "egg_cell_donor": 5,
             "partner_animal": 3,
             "sperm_donor": 2,
-            "offspring": 1,
+            "experimental_offspring": 1,
             "breeding_animal": 1,
         },
     },
@@ -1302,6 +1306,25 @@ def _normalise_project_history_entries(entries: Any) -> list[dict[str, Any]]:
         seen.add(key)
         result.append(item)
     return result
+
+
+def _apply_otof_example_experiment_status(core: dict[str, Any]) -> None:
+    """Keep the reviewed OTOF example cohort marked as currently experimental."""
+    all_animals = {
+        **core.get("animals", {}),
+        **core.get("archived_animals", {}),
+    }
+    for record in all_animals.values():
+        if not isinstance(record, dict):
+            continue
+        name = str(record.get("name") or "").strip()
+        if name not in OTOF_EXPERIMENTAL_ANIMAL_NAMES:
+            continue
+        record["project"] = "OTOF-"
+        record["in_experiment"] = True
+        if name == "Legolas":
+            record["rolle"] = "experimental_offspring"
+            record["role_id"] = "experimental_offspring"
 
 
 def _normalise_seed_project_assignments(core: dict[str, Any]) -> None:
@@ -1901,6 +1924,18 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         )
         if not all((cage, room, unit, building)) or cage_id == "cage_unassigned":
             errors.append(f"incomplete four-level housing: {ipid}")
+    otof = {
+        str(record.get("name") or ""): record
+        for record in all_animals.values()
+        if str(record.get("project") or "") == "OTOF-"
+    }
+    for expected_name in OTOF_EXPERIMENTAL_ANIMAL_NAMES:
+        record = otof.get(expected_name)
+        if not record or not record.get("in_experiment"):
+            errors.append(f"OTOF example cohort is not currently experimental: {expected_name}")
+    if otof.get("Legolas", {}).get("rolle") != "experimental_offspring":
+        errors.append("OTOF example cohort role mismatch: Legolas")
+
     mice = {
         ipid: record for ipid, record in all_animals.items()
         if str(record.get("species") or "") == "Mus musculus"
@@ -1999,6 +2034,7 @@ def main() -> int:
     scenario["mouse"] = mouse_scenario
     normalize_mature_offspring_roles(core)
     _normalise_seed_project_assignments(core)
+    _apply_otof_example_experiment_status(core)
     _normalise_seed_partner_relationships(core)
     complete_scientific_histories(core)
     records = domain_records(core, key_map, scenario)

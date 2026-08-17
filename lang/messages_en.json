@@ -518,6 +518,7 @@
   "role.amme": "Surrogate",
   "role.samenspender": "Sperm donor",
   "role.offspring": "Offspring",
+  "role.experimental_offspring": "Experimental offspring",
   "role.partner": "Partner animal",
   "role.zuchttier": "Breeding animal",
   "role.experimental": "Experimental animal",
