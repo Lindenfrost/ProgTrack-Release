@@ -200,7 +200,7 @@ def apply_icon(widget: Any, semantic_id: str, *, fallback: str = "") -> bool:
                 # Explicitly sized controls (30px sidebar buttons, for
                 # example) are already at the enlarged target and must not
                 # grow again when translations are refreshed.
-                if current.width() <= 24 and current.height() <= 24:
+                if current.width() < 24 and current.height() < 24:
                     width = max(1, int(round(current.width() * DISPLAY_SCALE)))
                     height = max(1, int(round(current.height() * DISPLAY_SCALE)))
                     widget.setIconSize(QSize(width, height))
