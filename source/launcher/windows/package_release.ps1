@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repository = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$repository = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $runtime = (Resolve-Path $RuntimeDirectory).Path
 $outputRoot = [IO.Path]::GetFullPath($OutputDirectory)
 $releaseName = "ProgTrack-$Version"
@@ -111,7 +111,7 @@ $payloadPaths = @(
     "Username + 123456 password.png"
 )
 
-& git -C $repository archive --format=zip "--output=$payloadArchive" $resolvedCommit -- @payloadPaths
+& git -C $repository archive --format=zip "--output=$payloadArchive" $resolvedCommit -- $payloadPaths
 if ($LASTEXITCODE -ne 0) {
     throw "git archive failed"
 }
