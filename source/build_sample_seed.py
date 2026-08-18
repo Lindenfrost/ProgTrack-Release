@@ -1554,6 +1554,19 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
         records[key] = prune_removed_animal_references(
             rewrite_references(value, key_map)
         )
+    # Embryo Track reference curves are static seed material only.  They are
+    # copied into the backend-owned record so runtime reads never fall back to
+    # the plugin JSON after initialization.
+    try:
+        records[("embryo-track", "cranimetry-reference")] = json.loads(
+            (ROOT / "Plugins" / "Embryo_Track" / "cranimetry_reference.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    except (OSError, json.JSONDecodeError):
+        records[("embryo-track", "cranimetry-reference")] = {
+            "1_embryo": [], "2_embryo": [], "3_embryo": []
+        }
     project_catalog = records[("projects", "catalog")]
     project_catalog = _normalise_project_payload(project_catalog, history=False)
     records[("projects", "catalog")] = project_catalog

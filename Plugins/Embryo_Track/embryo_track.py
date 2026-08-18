@@ -209,6 +209,13 @@ class EmbryoTrackerWidget(QDialog):
         
         self.load_excel_button = QPushButton(self.messages.get("embryo_track.button.load_reference", "Load Reference Data (Excel/CSV)"))
         self.load_excel_button.clicked.connect(self._load_excel_data)
+        can_edit_reference = self._reference_data_edit_allowed()
+        self.load_excel_button.setEnabled(can_edit_reference)
+        self.load_excel_button.setToolTip(self.messages.get(
+            "embryo_track.tooltip.reference_edit_allowed"
+            if can_edit_reference else "embryo_track.tooltip.reference_edit_denied",
+            "Reference data editing is available only to Researchers and Lords.",
+        ))
         data_layout.addWidget(self.load_excel_button)
         
         # Debug/diagnostic button
@@ -222,21 +229,70 @@ class EmbryoTrackerWidget(QDialog):
         return widget
         
         
-    def _load_reference_data(self):
-        """Load reference data from the shared backend."""
+    @staticmethod
+    def _empty_reference_data() -> Dict[str, list]:
+        return {"1_embryo": [], "2_embryo": [], "3_embryo": []}
+
+    def _reference_data_edit_allowed(self) -> bool:
+        """Only Lords and Researcher users may import/replace reference data."""
+        master_track = getattr(self.parent(), "master_track", None)
+        if master_track is None:
+            return False
+        role = str(getattr(master_track, "current_role", "") or "").strip().casefold()
+        if role == "lord":
+            return bool(getattr(master_track, "is_logged_in", True))
+        if role != "user":
+            return False
+        jobs = getattr(master_track, "get_assigned_jobs", lambda: [])()
+        return "researcher" in {
+            str(job).strip().casefold() for job in (jobs or [])
+        }
+
+    def _load_packaged_reference_data(self) -> Optional[Dict[str, list]]:
+        """Read the static JSON only for first-time backend bootstrap."""
         try:
-            self.reference_data = self._reference_store.load({})
-            if self.reference_data:
-                self._build_prediction_models()
-                logger.info("Reference data loaded successfully")
+            with open(REFERENCE_DATA_FILE, "r", encoding="utf-8") as handle:
+                value = json.load(handle)
+            if not isinstance(value, dict):
+                return None
+            result = self._empty_reference_data()
+            for key in result:
+                entries = value.get(key, [])
+                if isinstance(entries, list):
+                    result[key] = entries
+            return result if any(result.values()) else None
+        except Exception as exc:
+            logger.warning("Could not bootstrap packaged Embryo Track reference data: %s", exc)
+            return None
+
+    @staticmethod
+    def _has_baseline_model(models: Dict[str, Any]) -> bool:
+        return bool(
+            isinstance(models, dict)
+            and (models.get("col_model") or models.get("ttl_model"))
+        )
+
+    def _load_reference_data(self):
+        """Load the authoritative reference record from the shared backend."""
+        try:
+            stored = self._reference_store.load(None)
+            if stored is None:
+                packaged = self._load_packaged_reference_data()
+                self.reference_data = packaged or self._empty_reference_data()
+                if packaged:
+                    self._build_prediction_models()
+                    if self._has_baseline_model(self.prediction_models.get(2, {})):
+                        self._reference_store.save(self.reference_data)
+                        logger.info("Bootstrapped Embryo Track reference data into the backend")
+                else:
+                    logger.info("No packaged reference data available for backend bootstrap")
             else:
-                # Create default data structure
-                self.reference_data = {
-                    "1_embryo": [],
-                    "2_embryo": [],
-                    "3_embryo": []
-                }
-                logger.info("No reference data found, using empty dataset")
+                self.reference_data = stored if isinstance(stored, dict) else self._empty_reference_data()
+                if self.reference_data:
+                    self._build_prediction_models()
+                    logger.info("Reference data loaded successfully from backend")
+                else:
+                    logger.info("Backend contains an empty Embryo Track reference record")
         except Exception as e:
             logger.error(f"Error loading reference data: {e}")
             show_message(self, "warning", "Error", self.messages.get("embryo_track.error.load_reference", "Failed to load reference data: {error}").format(error=e))
@@ -571,6 +627,17 @@ class EmbryoTrackerWidget(QDialog):
             
     def _load_excel_data(self):
         """Load reference data from Excel or CSV file."""
+        if not self._reference_data_edit_allowed():
+            show_message(
+                self,
+                "warning",
+                self.messages.get("error.title", "Permission denied"),
+                self.messages.get(
+                    "embryo_track.error.reference_edit_denied",
+                    "Only Researchers and Lords may load or replace Embryo Track reference data.",
+                ),
+            )
+            return
         _ensure_pandas()
         file_path, _ = QFileDialog.getOpenFileName(
             self, self.messages.get("embryo_track.dialog.load_reference_title", "Load Reference Data"), "",
@@ -679,15 +746,60 @@ class EmbryoTrackerWidget(QDialog):
                     skipped_rows += 1
                     continue
                 
-            # Update reference data
+            # Build and validate the candidate before touching the backend.
+            old_reference_data = self.reference_data
+            old_prediction_models = self.prediction_models
             self.reference_data = new_data
             self._build_prediction_models()
-            
-            # Auto-save the loaded data
+
+            if not self._has_baseline_model(self.prediction_models.get(2, {})):
+                self.reference_data = old_reference_data
+                self.prediction_models = old_prediction_models
+                show_message(
+                    self,
+                    "warning",
+                    self.messages.get("error.title", "Invalid reference data"),
+                    self.messages.get(
+                        "embryo_track.error.reference_no_baseline",
+                        "The imported data do not contain a valid two-embryo baseline model. Nothing was replaced.",
+                    ),
+                )
+                return
+
+            if old_reference_data:
+                result = show_message(
+                    self,
+                    "question",
+                    self.messages.get("embryo_track.dialog.load_reference_title", "Load Reference Data"),
+                    self.messages.get(
+                        "embryo_track.confirm.replace_reference",
+                        "Replace the stored Embryo Track reference dataset? The current backend data will be replaced after validation.",
+                    ),
+                    buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if result != QMessageBox.StandardButton.Yes:
+                    self.reference_data = old_reference_data
+                    self.prediction_models = old_prediction_models
+                    return
+
+            # Persist only after validation and confirmation. BackendJsonStore
+            # delegates to the backend record transaction.
             try:
                 self._reference_store.save(self.reference_data)
             except Exception as save_error:
-                logger.warning(f"Could not auto-save reference data: {save_error}")
+                self.reference_data = old_reference_data
+                self.prediction_models = old_prediction_models
+                logger.error(f"Could not replace reference data: {save_error}")
+                show_message(
+                    self,
+                    "error",
+                    self.messages.get("error.title", "Error"),
+                    self.messages.get(
+                        "embryo_track.error.replace_reference",
+                        "The reference data could not be replaced. The previous dataset remains active.",
+                    ),
+                )
+                return
             
             # Count entries with and without TTL
             total_entries = sum(len(v) for v in new_data.values())

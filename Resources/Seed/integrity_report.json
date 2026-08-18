@@ -3,7 +3,7 @@
     "active_animals": 167,
     "archived_animals": 90,
     "canonical_users": 7,
-    "domain_records": 15,
+    "domain_records": 16,
     "pregnancy_verifications": 6,
     "scientifically_current_weights": 257,
     "species": 4,
@@ -12,7 +12,7 @@
   },
   "errors": [],
   "fictional": true,
-  "package_sha256": "542339c48d0404126b6e445b95ed387e90e642ed070f4c039b78dce20c935fe7",
+  "package_sha256": "35dbbadaad47bb3af81f1477af2597cb14dcae1ae825e6fb07f488f670619bc5",
   "schema": "progtrack-seed-integrity/1",
   "seed_version": "0.2.1",
   "valid": true

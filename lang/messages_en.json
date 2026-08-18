@@ -2024,5 +2024,11 @@
   "backend.postgresql.restore_database": "Restore",
   "backend.postgresql.restore_database.title": "Restore PostgreSQL backup",
   "backend.postgresql.restore_database.confirm.title": "Confirm restore",
-  "backend.postgresql.restore_database.confirm": "Restore this complete backup into the selected database and replace its data?"
+  "backend.postgresql.restore_database.confirm": "Restore this complete backup into the selected database and replace its data?",
+  "embryo_track.error.reference_edit_denied": "Only Researchers and Lords may load or replace Embryo Track reference data.",
+  "embryo_track.tooltip.reference_edit_allowed": "Load or replace the stored Embryo Track reference dataset.",
+  "embryo_track.tooltip.reference_edit_denied": "Reference data editing is available only to Researchers and Lords.",
+  "embryo_track.error.reference_no_baseline": "The imported data do not contain a valid two-embryo baseline model. Nothing was replaced.",
+  "embryo_track.confirm.replace_reference": "Replace the stored Embryo Track reference dataset? The current backend data will be replaced after validation.",
+  "embryo_track.error.replace_reference": "The reference data could not be replaced. The previous dataset remains active."
 }

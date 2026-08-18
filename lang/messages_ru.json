@@ -1702,7 +1702,7 @@
   "master_track.label.profession": "Профессия:",
   "master_track.manage.col_profile": "Профиль",
   "sidebar.show_archived": "Показать архив",
-  "sidebar.animal_name_filter.placeholder": "\u0418\u043c\u044f \u0436\u0438\u0432\u043e\u0442\u043d\u043e\u0433\u043e",
+  "sidebar.animal_name_filter.placeholder": "Имя животного",
   "sidebar.animal_name_filter.tooltip": "Filter the visible animal list by short name",
   "sidebar.sex_filter.label": "Пол:",
   "sidebar.sex_filter.female.tooltip": "Показывать самок",
@@ -2016,5 +2016,11 @@
   "backend.postgresql.restore_database": "Восстановить",
   "backend.postgresql.restore_database.title": "Восстановить резервную копию PostgreSQL",
   "backend.postgresql.restore_database.confirm.title": "Подтвердить восстановление",
-  "backend.postgresql.restore_database.confirm": "Восстановить полную копию в выбранную базу, заменив её данные?"
+  "backend.postgresql.restore_database.confirm": "Восстановить полную копию в выбранную базу, заменив её данные?",
+  "embryo_track.error.reference_edit_denied": "Только Researcher и Lord могут загружать или заменять эталонные данные Embryo Track.",
+  "embryo_track.tooltip.reference_edit_allowed": "Загрузить или заменить сохранённые эталонные данные Embryo Track.",
+  "embryo_track.tooltip.reference_edit_denied": "Изменять эталонные данные могут только Researcher и Lord.",
+  "embryo_track.error.reference_no_baseline": "Импортированные данные не содержат действительной базовой модели для двух эмбрионов. Ничего не заменено.",
+  "embryo_track.confirm.replace_reference": "Заменить сохранённые эталонные данные Embryo Track? Текущие данные backend будут заменены только после проверки.",
+  "embryo_track.error.replace_reference": "Не удалось заменить эталонные данные. Предыдущий набор данных остаётся активным."
 }

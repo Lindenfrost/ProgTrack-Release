@@ -1960,5 +1960,11 @@
   "backend.postgresql.restore_database": "Ripristina",
   "backend.postgresql.restore_database.title": "Ripristina backup PostgreSQL",
   "backend.postgresql.restore_database.confirm.title": "Conferma ripristino",
-  "backend.postgresql.restore_database.confirm": "Ripristinare questo backup completo nel database selezionato sostituendone i dati?"
+  "backend.postgresql.restore_database.confirm": "Ripristinare questo backup completo nel database selezionato sostituendone i dati?",
+  "embryo_track.error.reference_edit_denied": "Solo Researcher e Lord possono caricare o sostituire i dati di riferimento di Embryo Track.",
+  "embryo_track.tooltip.reference_edit_allowed": "Carica o sostituisci i dati di riferimento di Embryo Track salvati.",
+  "embryo_track.tooltip.reference_edit_denied": "La modifica dei dati di riferimento è disponibile solo per Researcher e Lord.",
+  "embryo_track.error.reference_no_baseline": "I dati importati non contengono un modello di base valido per due embrioni. Nulla è stato sostituito.",
+  "embryo_track.confirm.replace_reference": "Sostituire i dati di riferimento di Embryo Track salvati? I dati correnti del backend saranno sostituiti solo dopo la convalida.",
+  "embryo_track.error.replace_reference": "Non è stato possibile sostituire i dati di riferimento. Il dataset precedente rimane attivo."
 }
