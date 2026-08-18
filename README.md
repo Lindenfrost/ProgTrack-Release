@@ -17,10 +17,11 @@ reproductive events, medical history, cage placement, pedigree data, sample
 tracking, projects, reports, and planning tools in one inspectable Windows
 bundle.
 
-Version `0.2.1` is the Phase 2B backend release. It uses one backend service
-contract for the complete application and provides a tiny local SQLite profile
-for one workstation or testing plus a shared PostgreSQL profile for networked
-facilities.
+Version `0.2.1` is a backend-based release built for a complete, traceable
+animal workflow. The application uses one service contract for every module and
+offers a tiny local SQLite profile for one workstation or testing, plus a shared
+PostgreSQL profile for networked facilities. The same animal identities, history,
+permissions, documents, and exports remain available whichever profile is used.
 
 ## At a glance
 
@@ -44,8 +45,30 @@ partially transparent icon artwork readable in both light and dark viewers.
   </tbody>
 </table>
 
+## How ProgTrack fits together
+
+ProgTrack is organized around the animal record rather than around isolated
+measurements. An animal is created once with an immutable identity, then its
+life-cycle events, scientific measurements, medical observations, housing,
+relationships, samples, projects, and reports are connected to that record.
+This keeps the same history available to researchers, keepers, veterinarians,
+animal-welfare staff, and administrators without copying data between modules.
+
+The workflow is deliberately continuous: configure the facility and users,
+register animals and their roles, place them in the Building → Unit → Room →
+Cage hierarchy, record measurements and events, associate animals with projects,
+and use the visual tracks and exports to review the resulting history.
+Permissions, project scope, locks, revisions, and audit events protect each
+step while still allowing every authorized job to work in the same data model.
+
+The application is modular but not fragmented. Master Track governs accounts,
+jobs, permissions, and backend settings; the scientific and operational tracks
+consume the same validated backend records; and the export tools present those
+records as reports, PDFs, spreadsheets, or interchange packages.
+
 ## Contents
 
+- [At a glance](#at-a-glance)
 - [Quick start](#quick-start)
 - [Starter accounts](#starter-accounts)
 - [What is included](#what-is-included)
@@ -63,8 +86,8 @@ partially transparent icon artwork readable in both light and dark viewers.
 - [Backups and backend interchange](#backups-and-backend-interchange)
 - [Troubleshooting](#troubleshooting)
 - [User guides and technical documentation](#user-guides-and-technical-documentation)
-- [Build source](#build-source)
-- [Roadmap and release history](#roadmap-and-release-history)
+- [Developer and packaging sources](#developer-and-packaging-sources)
+- [Release history](#release-history)
 - [License](#license)
 
 ## Quick start
@@ -399,7 +422,7 @@ role-dialog blocks.
 application and this README use the same SVG filenames; the UI does not rely
 on emoji or PNG fallbacks for these controls. Semantic identifiers provide the
 localized tooltip text while allowing several actions to share one canonical
-SVG. Editable masters are maintained under `Q:\GitHub\Graphics\SVG\UI`.
+SVG. Editable masters are maintained under `Graphics/SVG/UI`.
 Qt keeps the master colours on light palettes and adapts the canonical outline
 to the active palette when dark surfaces would otherwise hide icon details.
 This SVG-only rule applies to `icons/ui`; splash, message, job, and file-type
@@ -489,7 +512,7 @@ troubleshooting, and licensing. The approved backend architecture and
 interchange contracts are versioned below
 `manual/technical documentation/architecture/`.
 
-## Build source
+## Developer and packaging sources
 
 Launcher build sources are in source/ and are not part of the compact release
 ZIP. Each platform has one self-contained source tree: `source/launcher/windows/`
@@ -525,19 +548,18 @@ Linux build inputs are all under `source/launcher/linux/`:
 - source/launcher/linux/requirements-linux-bundled.txt
 
 The Linux tree is intentionally independent of the Windows `.exe`, `.dll`, and
-`.pyd` runtime. `package_linux_release.py` now assembles the self-contained CPython/Qt
-artifact from `linux_runtime_manifest.json`; the local tarball is an engineering
-pre-release and remains unsupported until the native Linux acceptance gate
-is completed.
-## Roadmap and release history
+`.pyd` runtime. `package_linux_release.py` assembles the Linux CPython/Qt
+artifact from `linux_runtime_manifest.json`; Windows and Linux distributions
+therefore remain separate packages with the same application data model.
+## Release history
 
-| Version / phase | Focus |
+| Version / generation | Focus |
 | --- | --- |
-| `0.2.1` / Phase 2B | Backend services and adapters, deterministic seed, runtime paths, immutable identities, locks, interchange packages, SVG icon registry, PDF branding, and launcher/runtime hardening. |
-| `0.2.0` / Phase 2A | Read-only backend migration audit, canonical data dictionary, storage matrix, interchange contract, and approved PostgreSQL/SQLite architecture. |
-| `0.1.2` / Phase 1 | Role tabs, Cage Track, Heritage Track, imports, reports, medical history, and the first portable workflow. Superseded by the backend-based 0.2.x architecture. |
-| `0.1.1` | Historical stabilization milestone before the shared backend architecture. |
-| `0.1.0 RC` | Historical initial public testing package. |
+| `0.2.1` / Backend release | Shared backend services and adapters, deterministic seed, runtime paths, immutable identities, locks, interchange packages, SVG icon registry, PDF branding, and launcher/runtime hardening. |
+| `0.2.0` / Backend foundation | Canonical data dictionary, storage matrix, interchange contract, and approved PostgreSQL/SQLite architecture. |
+| `0.1.2` / First portable workflow | Role tabs, Cage Track, Heritage Track, imports, reports, and medical history. |
+| `0.1.1` | Stabilized desktop workflow before the shared backend architecture. |
+| `0.1.0 RC` | Initial public testing package. |
 
 ## License
 
