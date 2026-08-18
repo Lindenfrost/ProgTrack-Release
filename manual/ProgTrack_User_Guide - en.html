@@ -201,7 +201,7 @@
     <li>The compiled launcher already contains the required Python runtime; users of the portable bundle do not need to install Python packages.</li>
   </ul>
   <div class="hint"><strong>Tip:</strong> If the application does not start, check <code>launcher_error.log</code> and <code>launcher_fault.log</code> under <code>ProgTrackData/state/logs</code> in a writable portable installation, or under the installed user-state root.</div>
-  
+
   <h3>2.2 Backend profiles and managed data</h3>
   <p>ProgTrack uses one shared data-access layer with two deployment profiles:</p>
   <table class="basic">
@@ -274,7 +274,7 @@
   <tr><td><strong>🗑️ Delete</strong></td><td>Delete archived animals permanently.</td></tr>
   </table>
 
-  
+
   <h2 id="animals">4. Managing animals</h2>
 
   <h3>4.1 Creating records</h3>
@@ -325,7 +325,7 @@
   <p>Archive keeps data but removes the animal from routine active views. Restore moves an archived animal back. Delete is available for archived animals and permanently removes that record from the database.</p>
   <p><strong>📦 Archive</strong> · <strong>⤴️ Restore</strong> · <strong>🗑️ Delete</strong></p>
 
-  
+
   <h2 id="measurements">5. Measurements &amp; importing data</h2>
 
   <h3>5.1 Measurement types</h3>
@@ -342,7 +342,7 @@
   <p><code>Animal ID</code> is authoritative for matching. Unknown animals remain visible as skipped rows and trigger a warning to ask a Manager to create them first. Measurement import never creates an animal and never opens a species/birth-date dialog.</p>
   <p><code>Sample ID</code> is a separate template column for the individual sample and may remain empty when no sample number exists. It is never a replacement for <code>Animal ID</code>.</p>
 
-  
+
   <h3>5.4 PdG &rarr; Progesterone Converter</h3>
   <p>
     ProgTrack can estimate blood progesterone values from urine PdG measurements using
@@ -499,7 +499,7 @@
   <table class="basic"><tr><th>Menu item</th><th>Kind</th><th>Current behavior and use</th></tr>
   <tr><td><strong>Steroid Track</strong></td><td>Feature gate</td><td>Steroid Track is a real plugin without its own window. It enables female phase filters, blood progesterone import, urine PdG import, sperm import, hormone/event plot controls, sperm plot controls, and the PdG converter entry.</td></tr>
   <tr><td><strong>PdG→Progesterone Converter</strong></td><td>Dialog</td><td>Fits animal-specific PdG to progesterone models from paired same-day PdG and blood progesterone measurements; fitted models enable Unified Prog. and combined plots.</td></tr>
-  <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Provides login, guest mode, users, jobs, permissions, sessions, and audit logs. Account roles are lord, master, AWO, user, and guest; job bundles refine practical permissions.</td></tr>
+  <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Provides login, guest mode, users, jobs, permissions, sessions, and audit logs. Account roles are lord, master, user, and guest; job bundles refine practical permissions. AWO is a Vet-bound job for animal-welfare work and IACUC assignments.</td></tr>
   <tr><td><strong>Project Track</strong></td><td>Sidebar + optional tab</td><td>Adds association-scoped project/species filters, project history, IACUC/AWO assignment, experiment state, documents/SOPs, and project management. Each project has one localized Draft, Active, or Closed state; the list shows Draft italic, Active bold, and Closed in normal text. Closing does not archive it or remove assignments; lifecycle changes are permission-checked and audited.</td></tr>
   <tr><td><strong>Medi Track</strong></td><td>Main tab</td><td>Shows medical history, active diagnoses, notes, treatments, observations, experiment/lifecycle events and documents; exports PDF or XLSX with optional signatures. Multi-animal File-menu export shows total/completed/current progress, accepts cancellation between atomic animal outputs, keeps valid completed files, and summarizes completion, cancellation, partial errors, and filenames.</td></tr>
   <tr><td><strong>Animal Reports</strong></td><td>Main tab</td><td>Provides monthly editable/lockable report lines. Unlocking preserves text until the tab is left and reopened. PDF/XLSX export can omit the entire Signatures column; XLSX stores plain text without rich-text tags.</td></tr>
@@ -517,10 +517,12 @@
   <table class="basic"><tr><th>Role</th><th>Use</th></tr>
     <tr><td><strong>lord</strong></td><td>IT administrative role for global settings and installation, with unlimited rights.</td></tr>
     <tr><td><strong>master</strong></td><td>Animal-facility administrative role for user management and fine-tuning ProgTrack to the facility's needs.</td></tr>
-    <tr><td><strong>AWO</strong></td><td>Animal Welfare Officer role for animal-welfare-related work with extended access.</td></tr>
+
     <tr><td><strong>user</strong></td><td>Standard signed-in account whose practical access is defined by jobs and permissions.</td></tr>
     <tr><td><strong>guest</strong></td><td>Read-oriented fallback account with a fixed restricted baseline.</td></tr>
   </table>
+
+  <p><strong>AWO job:</strong> The <code>AWO</code> (<code>animal_welfare_officer</code>) job is available only to accounts that also have the <code>vet</code> job. Veti is seeded as a standard <code>user</code> with both jobs.</p>
 
   <h3>9.2 Working across modules</h3>
   <p>Use the same controlled animal identity throughout ProgTrack. The following sequence keeps role tabs, projects, medical records, reports and housing information consistent:</p>

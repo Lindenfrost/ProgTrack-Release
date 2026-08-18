@@ -74,9 +74,9 @@ Animal role IDs remain:
 
 Localized labels are presentation resources. Built-in role IDs are global
 semantic IDs. Custom roles use facility-owned record IDs plus a local semantic
-key separate from the label. User access roles remain `lord`, `master`,
-`animal_welfare_officer`, `user`, and `guest`; custom job bundles are
-facility-owned configuration.
+key separate from the label. User access roles are `lord`, `master`, `user`, and `guest`; `animal_welfare_officer`
+is a facility-owned job identifier that is assignable only together with `vet`.
+Custom job bundles are facility-owned configuration.
 
 ## Common record fields
 

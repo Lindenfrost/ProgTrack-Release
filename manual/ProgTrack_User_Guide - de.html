@@ -203,7 +203,7 @@
     <li>Der kompilierte Launcher enthält die benötigte Python-Laufzeitumgebung; Nutzer des portablen Pakets müssen keine Python-Pakete installieren.</li>
   </ul>
   <div class="hint"><strong>Tipp:</strong> Wenn die Anwendung nicht startet, prüfen Sie <code>launcher_error.log</code> und <code>launcher_fault.log</code> bei einer beschreibbaren portablen Installation unter <code>ProgTrackData/state/logs</code>, sonst im Benutzer-State-Verzeichnis der Installation.</div>
-  
+
   <h3>2.2 Backend-Profile und verwaltete Daten</h3>
   <p>ProgTrack verwendet eine gemeinsame Datenzugriffsschicht mit zwei Profilen:</p>
   <table class="basic">
@@ -278,7 +278,7 @@
   <tr><td><strong>🗑️ Löschen</strong></td><td>Archivierte Tiere dauerhaft löschen.</td></tr>
   </table>
 
-  
+
   <h2 id="animals">4. Tiere verwalten</h2>
 
   <h3>4.1 Datensätze anlegen</h3>
@@ -329,7 +329,7 @@
   <p>Archivieren erhält die Daten, entfernt das Tier aber aus den aktiven Routineansichten. Wiederherstellen verschiebt ein archiviertes Tier zurück. Löschen ist für archivierte Tiere verfügbar und entfernt den Datensatz dauerhaft aus der Datenbank.</p>
   <p><strong>📦 Archivieren</strong> · <strong>⤴️ Wiederherstellen</strong> · <strong>🗑️ Löschen</strong></p>
 
-  
+
   <h2 id="measurements">5. Messungen &amp; Datenimport</h2>
 
   <h3>5.1 Messarten</h3>
@@ -346,7 +346,7 @@
   <p><code>Animal ID</code> ist für die Zuordnung maßgeblich. Unbekannte Tiere bleiben als übersprungene Zeilen sichtbar; die Warnung fordert dazu auf, sie zuerst durch einen Manager anlegen zu lassen. Ein Messwertimport legt niemals Tiere an und öffnet keinen Identitätsdialog.</p>
   <p><code>Sample ID</code> ist eine getrennte Vorlagenspalte für die einzelne Probe und darf leer bleiben, wenn keine Probennummer existiert. Sie ersetzt niemals die <code>Animal ID</code>.</p>
 
-  
+
   <h3>5.4 PdG &rarr; Progesteron-Konverter</h3>
   <p>
     ProgTrack kann Blutprogesteronwerte aus Urin-PdG-Messungen mithilfe
@@ -519,7 +519,7 @@
   <table class="basic"><tr><th>Menüeintrag</th><th>Art</th><th>Aktuelles Verhalten und Nutzung</th></tr>
   <tr><td><strong>Steroid Track</strong></td><td>Feature-Gate</td><td>Steroid Track ist ein echtes Plugin ohne eigenes Fenster. Es aktiviert Phasenfilter für weibliche Tiere, Blut-Progesteronimport, Urin-PdG-Import, Spermaimport, Hormon-/Ereignissteuerungen, Sperma-Plotsteuerungen und den PdG-Konverter.</td></tr>
   <tr><td><strong>PdG→Progesteron Converter</strong></td><td>Dialog</td><td>Erstellt tierbezogene PdG-zu-Progesteron-Modelle aus gepaarten PdG- und Blut-Progesteronmessungen am selben Tag; gespeicherte Modelle aktivieren Vereinheitl. Prog. und kombinierte Diagramme.</td></tr>
-  <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Bietet Anmeldung, Gastmodus, Benutzer, Jobs, Berechtigungen, Sitzungen und Audit-Protokolle. Kontorollen sind lord, master, AWO, user und guest; Job-Bündel verfeinern die praktischen Rechte.</td></tr>
+  <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Bietet Anmeldung, Gastmodus, Benutzer, Jobs, Berechtigungen, Sitzungen und Audit-Protokolle. Kontorollen sind lord, master, user und guest; Job-Bündel verfeinern die praktischen Rechte. AWO ist ein an den Job Vet gebundener Job für Tierschutz- und IACUC-Aufgaben.</td></tr>
   <tr><td><strong>Projekt Track</strong></td><td>Seitenleiste + optionaler Tab</td><td>Bietet zuordnungsabhängige Projekt-/Speziesfilter, Projekthistorie, IACUC-/AWO-Zuordnung, Versuchsstatus, Dokumente/SOPs und Projektverwaltung. Jedes Projekt hat genau den lokalisierten Status Entwurf, Aktiv oder Geschlossen; die Liste zeigt Entwurf kursiv, Aktiv fett und Geschlossen normal. Schließen archiviert es nicht und entfernt keine Zuordnungen; Statuswechsel sind berechtigungsgeprüft und protokolliert.</td></tr>
   <tr><td><strong>Medi Track</strong></td><td>Haupttab</td><td>Zeigt Krankengeschichte, Diagnosen, Notizen, Behandlungen, Beobachtungen, Versuchs-/Lebenszyklusereignisse und Dokumente; PDF/XLSX-Export unterstützt optionale Signaturen. Der Mehrtierexport im Dateimenü zeigt Gesamtzahl, Fortschritt und aktuelles Tier, lässt sich zwischen atomaren Tierausgaben abbrechen, behält gültige fertige Dateien und fasst Ergebnis, Teilfehler und Dateinamen zusammen.</td></tr>
   <tr><td><strong>Tierberichte</strong></td><td>Haupttab</td><td>Bietet monatliche bearbeitbare/sperrbare Berichtszeilen. Entsperren erhält den Text bis zum Verlassen und erneuten Öffnen des Tabs. PDF/XLSX kann die gesamte Signaturspalte auslassen; XLSX enthält Klartext ohne Format-Tags.</td></tr>
@@ -537,10 +537,12 @@
   <table class="basic"><tr><th>Rolle</th><th>Nutzung</th></tr>
     <tr><td><strong>lord</strong></td><td>IT-Administrationsrolle für globale Einstellungen und Installation mit uneingeschränkten Rechten.</td></tr>
     <tr><td><strong>master</strong></td><td>Administrative Rolle der Tierhaltung für Benutzerverwaltung und die Anpassung von ProgTrack an die Anforderungen der Einrichtung.</td></tr>
-    <tr><td><strong>AWO</strong></td><td>Rolle für Tierschutzbeauftragte für tierschutzbezogene Arbeit mit erweitertem Zugriff.</td></tr>
+
     <tr><td><strong>user</strong></td><td>Normales angemeldetes Konto, dessen praktische Zugriffe durch Jobs und Berechtigungen bestimmt werden.</td></tr>
     <tr><td><strong>guest</strong></td><td>Leseorientiertes Ersatzkonto mit festem eingeschränktem Grundprofil.</td></tr>
   </table>
+
+  <p><strong>AWO-Job:</strong> Der Job <code>AWO</code> (<code>animal_welfare_officer</code>) kann nur zusammen mit dem Job <code>vet</code> vergeben werden. Veti ist als normales <code>user</code>-Konto mit beiden Jobs im Seed enthalten.</p>
 
   <h3>9.2 Modulübergreifend arbeiten</h3>
   <p>Verwenden Sie in allen ProgTrack-Modulen dieselbe kontrollierte Tieridentität. Der folgende Ablauf hält Rollen-Tabs, Projekte, Krankengeschichte, Berichte und Haltung konsistent:</p>

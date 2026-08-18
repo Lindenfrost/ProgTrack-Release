@@ -17,8 +17,8 @@ from .permissions import (
     ROLE_GUEST,
     ROLE_LORD,
     ROLE_MASTER,
-    ROLE_ANIMAL_WELFARE,
     ROLE_USER,
+    JOB_ANIMAL_WELFARE,
     JOB_BUNDLES,
     ALL_PERMISSIONS,
     PERM_MASTER_VIEW_USERS,
@@ -229,8 +229,6 @@ class MasterTrackPlugin:
             return ROLE_LORD
         if self._current_role == ROLE_MASTER:
             return ROLE_MASTER
-        if self._current_role == ROLE_ANIMAL_WELFARE:
-            return "animal welfare officer"
         if self._current_role == ROLE_GUEST:
             return ROLE_GUEST
         user = self._current_user_record()
@@ -255,7 +253,11 @@ class MasterTrackPlugin:
 
         if not jobs:
             return ROLE_USER + suffix
-        return "/".join(f"{j}{suffix}" for j in jobs)
+        display_jobs = [
+            "AWO" if job == JOB_ANIMAL_WELFARE else job
+            for job in jobs
+        ]
+        return "/".join(f"{j}{suffix}" for j in display_jobs)
 
     def can(self, action: str) -> bool:
         """Central permission check used by ProgTrack core and all plugins."""

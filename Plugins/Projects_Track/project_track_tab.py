@@ -184,10 +184,11 @@ class _UserInfoDialog(QDialog):
     def was_removed(self): return self._removed
 
 class UserSearchField(QWidget):
-    def __init__(self, messages, app, can_edit=True, parent=None, role_filter: Optional[str] = None):
+    def __init__(self, messages, app, can_edit=True, parent=None, role_filter: Optional[str] = None, job_filter: Optional[str] = None):
         super().__init__(parent)
         self._messages=messages; self._app=app; self._can_edit=can_edit
         self._role_filter = role_filter
+        self._job_filter = job_filter
         self._login=None; self._user_data={}
         self._combo=QComboBox(); self._combo.setEditable(True)
         self._combo.setEnabled(can_edit)
@@ -223,6 +224,8 @@ class UserSearchField(QWidget):
         if mt and hasattr(mt,'user_db'):
             for ud in (mt.user_db.users or []):
                 if self._role_filter and ud.get('role') != self._role_filter:
+                    continue
+                if self._job_filter and self._job_filter not in set(ud.get('jobs') or []):
                     continue
                 login=ud.get('username','')
                 if login:
@@ -820,7 +823,7 @@ class ProjectTrackTab(QWidget):
             self._messages,
             self._app,
             can_edit=can_manage,
-            role_filter='animal_welfare_officer',
+            job_filter='animal_welfare_officer',
         )
         self._iacuc_welfare.setMinimumWidth(_PROJECT_IACUC_FIELD_MIN_WIDTH)
         self._iacuc_welfare.set_login(iacuc.get('welfare_login', '') or '')

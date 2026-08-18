@@ -89,7 +89,7 @@ account is `123456`; change these passwords before any sensitive or shared use.
 | `Admin` | Administrator Administratorson | `lord` | none |
 | `Researcher` | Dr. Researcher Sciencedottir | `user` | `researcher` |
 | `Vet` | Dr. Veterinary Medicinsson | `user` | `vet` |
-| `Veti` | Dr. Veterinary Medicinsdottir | `AWO` | `vet` |
+| `Veti` | Dr. Veterinary Medicinsdottir | `user` | `vet`, `AWO` |
 | `Manager` | Dr. Manager Plansdottir | `user` | `manager` |
 | `Keeper` | Keeper Breedsson | `user` | `keeper` |
 | `Tester` | Tester Aitisson | `user` | `tester` |
@@ -354,14 +354,14 @@ Master Track separates the immutable account role from configurable job bundles:
   <tbody>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_lord.svg" width="26" alt="Lord"></td><td><code>lord</code></td><td>IT administrative role for global settings and installation, with unlimited rights.</td></tr>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_master.svg" width="26" alt="Master"></td><td><code>master</code></td><td>Animal-facility administrative role for user management and ProgTrack fine-tuning.</td></tr>
-    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_awo.svg" width="26" alt="AWO"></td><td><code>AWO</code></td><td>Animal Welfare Officer account for IACUC and welfare assignments. The user overview shows <code>AWO</code>.</td></tr>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_user.svg" width="26" alt="User"></td><td><code>user</code></td><td>Standard account; effective access comes from its baseline, jobs, grants, and revocations.</td></tr>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_guest_locked.svg" width="26" alt="Guest"></td><td><code>guest</code></td><td>Restricted read-oriented fallback account.</td></tr>
   </tbody>
 </table>
 
-The default job bundles are `vet`, `keeper`, `manager`, `researcher`, and
-`tester`. Their permissions are bootstrapped into the backend and can be
+The default job bundles are `vet`, `AWO` (`animal_welfare_officer`), `keeper`,
+`manager`, `researcher`, and `tester`. The AWO job can only be assigned together
+with the Vet job. Their permissions are bootstrapped into the backend and can be
 configured by authorized administration; there is no runtime `jobs.json`
 authority. Typical responsibilities are:
 
@@ -369,6 +369,7 @@ authority. Typical responsibilities are:
   <thead><tr><th bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;">UI icon</th><th>Job</th><th>Typical focus</th></tr></thead>
   <tbody>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_veterinarian.svg" width="28" alt="Vet"></td><td><code>vet</code></td><td>Medical review, health status, Medi Track, reports, and welfare-relevant visibility.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_awo.svg" width="28" alt="AWO"></td><td><code>AWO</code> (<code>animal_welfare_officer</code>)</td><td>Animal Welfare Officer work for IACUC and welfare assignments; assignable only together with the <code>vet</code> job.</td></tr>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/accountkeeper.svg" width="28" alt="Keeper"></td><td><code>keeper</code></td><td>Housing, cage placement/inspection, animal core data, and permitted measurements.</td></tr>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_manager.svg" width="28" alt="Manager"></td><td><code>manager</code></td><td>Animal creation, imports, archiving/deletion, projects, cages, documents, and role configuration.</td></tr>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/account_researcher.svg" width="28" alt="Researcher"></td><td><code>researcher</code></td><td>Research measurements, imports/exports, reports, PdG, planning, flow, samples, and associated projects.</td></tr>

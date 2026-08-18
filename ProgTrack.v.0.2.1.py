@@ -17575,13 +17575,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if mt.is_logged_in:
             user = mt.user_db.get_user(mt.current_username)
             display = user.get("display_name", mt.current_username) if user else mt.current_username
-            semantic_id = {
-                "lord": "account.lord",
-                "master": "account.master",
-                "animal_welfare_officer": "account.awo",
-            }.get(mt.current_role, "account.user")
             jobs = user.get("jobs", []) if user else []
-            jobs_str = f" [{', '.join(jobs)}]" if jobs else ""
+            if mt.current_role == "lord":
+                semantic_id = "account.lord"
+            elif mt.current_role == "master":
+                semantic_id = "account.master"
+            elif "animal_welfare_officer" in (jobs or []) and "vet" in (jobs or []):
+                semantic_id = "account.awo"
+            else:
+                semantic_id = "account.user"
+            display_jobs = [
+                "AWO" if job == "animal_welfare_officer" else job
+                for job in (jobs or [])
+            ]
+            jobs_str = f" [{', '.join(display_jobs)}]" if display_jobs else ""
             lbl.setText(f" {display}{jobs_str} ")
         else:
             semantic_id = "account.guest_locked"

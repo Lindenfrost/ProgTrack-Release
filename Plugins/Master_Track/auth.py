@@ -13,6 +13,11 @@ import os
 from datetime import date
 from typing import Any, Dict, List, Optional
 
+from .permissions import (
+    JOB_ANIMAL_WELFARE,
+    JOB_VET,
+)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -62,9 +67,19 @@ class UserDB:
         value = self.backend.records.get("security", "users", default=[])
         self._users = value if isinstance(value, list) else []
         self._loaded = True
+        changed = False
+        for user in self._users:
+            before = (user.get("role"), tuple(user.get("jobs") or []))
+            self._ensure_user_defaults(user)
+            after = (user.get("role"), tuple(user.get("jobs") or []))
+            changed = changed or before != after
+        if changed:
+            self.save()
         return self._users
 
     def save(self) -> None:
+        for user in self._users:
+            self._ensure_user_defaults(user)
         self.backend.records.put("security", "users", self._users)
 
     @property
@@ -89,8 +104,21 @@ class UserDB:
 
     @staticmethod
     def _ensure_user_defaults(user: Dict[str, Any]) -> Dict[str, Any]:
-        """Backfill missing jobs/permissions fields for records pre-dating this schema."""
-        user.setdefault("jobs", [])
+        """Backfill fields and enforce the Vet-bound AWO job invariant."""
+        jobs = user.setdefault("jobs", [])
+        if not isinstance(jobs, list):
+            jobs = []
+        cleaned_jobs = []
+        seen = set()
+        for raw in jobs:
+            value = str(raw or "").strip()
+            if value and value not in seen:
+                cleaned_jobs.append(value)
+                seen.add(value)
+        if JOB_ANIMAL_WELFARE in seen and JOB_VET not in seen:
+            # Never grant AWO access from malformed or hand-edited records.
+            cleaned_jobs = [job for job in cleaned_jobs if job != JOB_ANIMAL_WELFARE]
+        user["jobs"] = cleaned_jobs
         perms = user.setdefault("permissions", {})
         if not isinstance(perms, dict):
             user["permissions"] = {"granted": [], "revoked": []}
@@ -106,11 +134,12 @@ class UserDB:
                  pronouns: str = "", email: str = "", phone: str = "",
                  mobile: str = "", unit: str = "", profession: str = "") -> Dict[str, Any]:
         pw_hash, salt = hash_password(password)
+        initial_jobs: list[str] = []
         record = {
             "username": username,
             "display_name": display_name or username,
             "role": role,
-            "jobs": [],
+            "jobs": initial_jobs,
             "permissions": {"granted": [], "revoked": []},
             "password_hash": pw_hash,
             "salt": salt,
@@ -187,11 +216,21 @@ class UserDB:
         return True
 
     def set_jobs(self, username: str, jobs: List[str]) -> bool:
-        """Replace the job list for *username*. Returns True on success."""
+        """Replace jobs, rejecting AWO unless Vet is also assigned."""
         user = self.get_user(username)
         if not user:
             return False
-        user["jobs"] = list(jobs)
+        cleaned = []
+        seen = set()
+        for raw in jobs or []:
+            value = str(raw or "").strip()
+            if value and value not in seen:
+                cleaned.append(value)
+                seen.add(value)
+        if JOB_ANIMAL_WELFARE in seen and JOB_VET not in seen:
+            logger.warning("Refused AWO assignment without Vet for '%s'.", username)
+            return False
+        user["jobs"] = cleaned
         self.save()
         return True
 

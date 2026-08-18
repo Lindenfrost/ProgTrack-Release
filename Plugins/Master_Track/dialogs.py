@@ -67,8 +67,9 @@ from .permissions import (
     ROLE_GUEST,
     ROLE_LORD,
     ROLE_MASTER,
-    ROLE_ANIMAL_WELFARE,
     ROLE_USER,
+    JOB_ANIMAL_WELFARE,
+    JOB_VET,
 )
 
 # ---------------------------------------------------------------------------
@@ -463,12 +464,15 @@ def _jobs_label(user: Dict[str, Any]) -> str:
     has_granted = bool(perms.get("granted"))
     has_revoked = bool(perms.get("revoked"))
     suffix = ("+" if has_granted else "") + ("-" if has_revoked else "")
-    return "/".join(f"[{j}]{suffix}" for j in jobs)
+    return "/".join(
+        f"[{'AWO' if j == JOB_ANIMAL_WELFARE else j}]{suffix}"
+        for j in jobs
+    )
 
 
 def _user_overview_role_label(role: str) -> str:
     """Return the compact role label used by the Manage Users table."""
-    return "AWO" if role == ROLE_ANIMAL_WELFARE else role
+    return role
 
 
 class ManageUsersDialog(QDialog):
@@ -865,29 +869,22 @@ class _EditUserDialog(QDialog):
         role_layout = QHBoxLayout(role_group)
         self._role_lord_rb   = QRadioButton(_msg(messages, "master_track.role.lord",   "Lord"))
         self._role_master_rb = QRadioButton(_msg(messages, "master_track.role.master", "Master"))
-        self._role_welfare_rb = QRadioButton(_msg(
-            messages, "master_track.role.animal_welfare_officer", "Animal Welfare Officer"))
         self._role_user_rb   = QRadioButton(_msg(messages, "master_track.role.user",   "User"))
         if user["role"] == ROLE_LORD:
             self._role_lord_rb.setChecked(True)
         elif user["role"] == ROLE_MASTER:
             self._role_master_rb.setChecked(True)
-        elif user["role"] == ROLE_ANIMAL_WELFARE:
-            self._role_welfare_rb.setChecked(True)
         else:
             self._role_user_rb.setChecked(True)
         self._role_lord_rb.toggled.connect(self._on_role_changed)
         self._role_master_rb.toggled.connect(self._on_role_changed)
-        self._role_welfare_rb.toggled.connect(self._on_role_changed)
         self._role_user_rb.toggled.connect(self._on_role_changed)
         role_layout.addWidget(self._role_lord_rb)
         role_layout.addWidget(self._role_master_rb)
-        role_layout.addWidget(self._role_welfare_rb)
         role_layout.addWidget(self._role_user_rb)
         role_layout.addStretch()
         for _role_button in (
-            self._role_lord_rb, self._role_master_rb,
-            self._role_welfare_rb, self._role_user_rb,
+            self._role_lord_rb, self._role_master_rb, self._role_user_rb,
         ):
             _role_button.setEnabled(self._can_assign_primary_role)
         layout.addWidget(role_group)
@@ -908,7 +905,14 @@ class _EditUserDialog(QDialog):
             cb.setEnabled(self._can_assign_jobs and not is_lord_or_master)
             cb.stateChanged.connect(self._on_job_changed)
             self._job_checks[job_name] = cb
+            if job_name == JOB_ANIMAL_WELFARE:
+                cb.setToolTip(_msg(
+                    messages,
+                    "master_track.job.animal_welfare_officer.tooltip",
+                    "The AWO job requires the Vet job.",
+                ))
             jobs_layout.addWidget(cb)
+        self._update_awo_job_state()
         layout.addWidget(jobs_group)
 
         # --- Direct permission overrides ---
@@ -964,6 +968,7 @@ class _EditUserDialog(QDialog):
         is_elevated = new_role in (ROLE_LORD, ROLE_MASTER)
         for cb in self._job_checks.values():
             cb.setEnabled(self._can_assign_jobs and not is_elevated)
+        self._update_awo_job_state()
         self._refresh_perm_styles()
 
     def _get_selected_role(self) -> str:
@@ -971,12 +976,25 @@ class _EditUserDialog(QDialog):
             return ROLE_LORD
         if self._role_master_rb.isChecked():
             return ROLE_MASTER
-        if self._role_welfare_rb.isChecked():
-            return ROLE_ANIMAL_WELFARE
         return ROLE_USER
 
+    def _update_awo_job_state(self) -> None:
+        awo = self._job_checks.get(JOB_ANIMAL_WELFARE)
+        vet = self._job_checks.get(JOB_VET)
+        if awo is None or vet is None:
+            return
+        elevated = self._get_selected_role() in (ROLE_LORD, ROLE_MASTER)
+        if not vet.isChecked() and awo.isChecked():
+            awo.blockSignals(True)
+            awo.setChecked(False)
+            awo.blockSignals(False)
+        awo.setEnabled(
+            self._can_assign_jobs and not elevated and vet.isChecked()
+        )
+
     def _on_job_changed(self) -> None:
-        """Handle job checkbox changes - update permission checkboxes to reflect new baseline."""
+        """Update job dependencies and permission previews."""
+        self._update_awo_job_state()
         self._update_permission_checkboxes_for_new_jobs()
         self._refresh_perm_styles()
 
@@ -1032,6 +1050,15 @@ class _EditUserDialog(QDialog):
         if set(new_jobs_preview) != set(user.get("jobs", [])) and not self._can_assign_jobs:
             self.error_label.setText("Permission denied: job assignment.")
             return
+        if JOB_ANIMAL_WELFARE in new_jobs_preview and JOB_VET not in new_jobs_preview:
+            self.error_label.setText(
+                _msg(
+                    self.messages,
+                    "master_track.error.awo_requires_vet",
+                    "The AWO job requires the Vet job.",
+                )
+            )
+            return
 
         if user["role"] == ROLE_LORD and new_role != ROLE_LORD:
             if self.user_db.lord_count() <= 1:
@@ -1047,7 +1074,13 @@ class _EditUserDialog(QDialog):
 
         if new_role not in (ROLE_LORD, ROLE_MASTER):
             new_jobs = [j for j, cb in self._job_checks.items() if cb.isChecked()]
-            self.user_db.set_jobs(self.username, new_jobs)
+            if not self.user_db.set_jobs(self.username, new_jobs):
+                self.error_label.setText(_msg(
+                    self.messages,
+                    "master_track.error.awo_requires_vet",
+                    "The AWO job requires the Vet job.",
+                ))
+                return
 
             if self._perm_checks:
                 base_perms = resolve_effective_permissions(new_role, new_jobs, [], [])

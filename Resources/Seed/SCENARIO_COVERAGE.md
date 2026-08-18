@@ -17,5 +17,5 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | OTOF- failure | Poor yield, low embryo development, repeated negative pregnancy verification, two verified pregnancies followed by abortions |
 | Monitoring | Three 28-day cycles; 10–11 day follicular phase; complete FSH/retrieval and PGF chains |
 | Sperm collection | One donation event per sample ID, including Denethor's OTOF donation |
-| Users/roles | Canonical Admin, Researcher, Vet, Manager, Keeper, Tester, and Veti accounts; password `123456` |
+| Users/roles | Canonical Admin, Researcher, Vet, Manager, Keeper, Tester, and Veti accounts; Veti is a user with Vet + AWO jobs (AWO requires Vet); password `123456` |
 | Backend parity | One canonical interchange package for both adapters |

@@ -10,7 +10,6 @@ from typing import Any, Iterable, Mapping
 from Plugins.core.animal_identity import animal_base_name
 
 
-ANIMAL_WELFARE_ROLE = "animal_welfare_officer"
 UNRESTRICTED_PROJECT_ROLES = {"lord", "master"}
 PROJECT_LOGIN_FIELDS = {
     "summary": (

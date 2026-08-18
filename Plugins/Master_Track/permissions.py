@@ -38,9 +38,12 @@ def _load_permission_labels() -> Dict[str, Dict[str, str]]:
 
 ROLE_LORD = "lord"
 ROLE_MASTER = "master"
-ROLE_ANIMAL_WELFARE = "animal_welfare_officer"
 ROLE_USER = "user"
 ROLE_GUEST = "guest"
+
+# AWO is a normal job, but it is valid only together with the Vet job.
+JOB_ANIMAL_WELFARE = "animal_welfare_officer"
+JOB_VET = "vet"
 
 # ---------------------------------------------------------------------------
 # Permission name constants (canonical keys used in all can() calls)
@@ -215,6 +218,10 @@ DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
         PERM_MEDI_ADD_DOCS,
         PERM_REPORTS_VIEW,
     },
+    JOB_ANIMAL_WELFARE: {
+        PERM_MEDI_FILTER_USE,
+        PERM_MEDI_DELETE_DOCUMENT,
+    },
     "keeper": {
         PERM_CORE_CREATE_ANIMALS,
         PERM_CORE_EDIT_ANIMAL_CORE,
@@ -304,15 +311,9 @@ _GUEST_BASELINE: Set[str] = {
     PERM_PLOTS_VIEW,
 }
 
-_ANIMAL_WELFARE_BASELINE: Set[str] = set(_USER_BASELINE) | {
-    PERM_MEDI_FILTER_USE,
-    PERM_MEDI_DELETE_DOCUMENT,
-}
-
 ROLE_BASELINES: Dict[str, Set[str]] = {
     ROLE_LORD: {"*"},      # wildcard — all permissions always granted
     ROLE_MASTER: set(),    # resolved dynamically — see resolve_effective_permissions
-    ROLE_ANIMAL_WELFARE: _ANIMAL_WELFARE_BASELINE,
     ROLE_USER: _USER_BASELINE,
     ROLE_GUEST: _GUEST_BASELINE,
 }
@@ -320,6 +321,24 @@ ROLE_BASELINES: Dict[str, Set[str]] = {
 # ---------------------------------------------------------------------------
 # Effective-permission resolution
 # ---------------------------------------------------------------------------
+
+
+def sanitize_assigned_jobs(jobs: Iterable[str]) -> list[str]:
+    """Return a deterministic job list with the Vet→AWO invariant enforced.
+
+    Unknown/custom jobs remain visible and are resolved through JOB_BUNDLES when
+    present.  AWO is removed fail-closed if Vet is not assigned.
+    """
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in jobs or []:
+        value = str(raw or "").strip()
+        if value and value not in seen:
+            cleaned.append(value)
+            seen.add(value)
+    if JOB_ANIMAL_WELFARE in seen and JOB_VET not in seen:
+        cleaned = [job for job in cleaned if job != JOB_ANIMAL_WELFARE]
+    return cleaned
 
 
 def resolve_effective_permissions(
@@ -336,6 +355,7 @@ def resolve_effective_permissions(
     * lord → always {"*"} regardless of jobs/granted/revoked.
     * guest → fixed to guest baseline; granted/revoked ignored.
     """
+    jobs = sanitize_assigned_jobs(jobs)
     if role == ROLE_LORD:
         return {"*"}
     if role == ROLE_MASTER:
@@ -393,7 +413,7 @@ def can_manage_health_status(
     """Clinical sick/abnormal mutation is Vet-only, except Lord/Master."""
     if role in {ROLE_LORD, ROLE_MASTER}:
         return True
-    return "vet" in {str(job).strip().casefold() for job in jobs}
+    return JOB_VET in {str(job).strip().casefold() for job in jobs}
 
 
 def get_permission_label(permission_name: str, lang: Optional[str] = None) -> str:
