@@ -2028,5 +2028,10 @@
   "embryo_track.tooltip.reference_edit_denied": "Referenzdaten dürfen nur von Researcher und Lord bearbeitet werden.",
   "embryo_track.error.reference_no_baseline": "Die importierten Daten enthalten kein gültiges Zwei-Embryonen-Basismodell. Es wurde nichts ersetzt.",
   "embryo_track.confirm.replace_reference": "Gespeicherte Embryo-Track-Referenzdaten ersetzen? Die aktuellen Backend-Daten werden erst nach der Validierung ersetzt.",
-  "embryo_track.error.replace_reference": "Die Referenzdaten konnten nicht ersetzt werden. Der bisherige Datensatz bleibt aktiv."
+  "embryo_track.error.replace_reference": "Die Referenzdaten konnten nicht ersetzt werden. Der bisherige Datensatz bleibt aktiv.",
+  "medi_track.btn.delete_document": "Dokument löschen",
+  "medi_track.dialog.delete_document.title": "Medizinisches Dokument löschen",
+  "medi_track.dialog.delete_document.reason": "Grund für die Löschung (erforderlich):",
+  "medi_track.dialog.delete_document.backend_only": "Hier können nur vom Backend verwaltete Dokumente gelöscht werden.",
+  "medi_track.dialog.delete_document.failed": "Das Dokument konnte nicht gelöscht werden: {error}"
 }

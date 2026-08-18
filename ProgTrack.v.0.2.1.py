@@ -8276,6 +8276,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return
         if index < 0:
             return
+        if not self.main_tabs.isTabEnabled(index):
+            for fallback_index in range(self.main_tabs.count()):
+                if self.main_tabs.isTabEnabled(fallback_index):
+                    self.main_tabs.setCurrentIndex(fallback_index)
+                    return
+            return
         # Determine which tab we're switching to
         tab_text = self.main_tabs.tabText(index)
         tab_widget = self.main_tabs.widget(index)
@@ -8873,6 +8879,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         return line_edit.text()
 
     def _on_animal_name_filter_changed(self, text: str) -> None:
+        if not self._master_can("core.use_filters"):
+            return
         self._animal_name_filter = text
         self._refresh_list()
 
@@ -8925,6 +8933,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             checkbox.setAccessibleDescription(text)
 
     def _on_animal_sex_filter_changed(self, _checked: bool) -> None:
+        if not self._master_can("core.use_filters"):
+            return
         self._refresh_list()
 
     def _animal_matches_sex_filter(self, animal_data: Dict[str, Any]) -> bool:
@@ -17508,6 +17518,34 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         return True if not perm else self._master_can(perm)
 
     def _refresh_role_restricted_tool_states(self) -> None:
+        filter_allowed = self._master_can("core.use_filters")
+        name_filter = getattr(self, "animal_name_filter_edit", None)
+        if name_filter is not None:
+            name_filter.setEnabled(filter_allowed)
+        sex_filter = getattr(self, "sex_filter_widget", None)
+        if sex_filter is not None:
+            sex_filter.setEnabled(filter_allowed)
+        tabs = getattr(self, "main_tabs", None)
+        if tabs is not None and tabs.count() > 0:
+            tab_permissions = {
+                self.messages.get("tab.plots", "Plots"): "plots.view",
+                self.messages.get("tab.reports", "Reports"): "reports.view",
+                self.messages.get("tab.flow_track", "Flow Track"): "flow_track.open",
+                self.messages.get("tab.heritage_track", "Heritage Track"): "heritage.view",
+                self.messages.get("tab.cage_track", "Cage Track"): "cage.view",
+                self.messages.get("tab.medi_track", "Medi Track"): "medi_track.view",
+                self.messages.get("tab.project_track", "Project Track"): "project.view",
+            }
+            for index in range(tabs.count()):
+                permission = tab_permissions.get(tabs.tabText(index))
+                if permission:
+                    tabs.setTabEnabled(index, self._master_can(permission))
+            current_index = tabs.currentIndex()
+            if current_index >= 0 and not tabs.isTabEnabled(current_index):
+                for fallback_index in range(tabs.count()):
+                    if tabs.isTabEnabled(fallback_index):
+                        tabs.setCurrentIndex(fallback_index)
+                        break
         for action_attr in (
             'network_track_action',
             'embryo_tracker_action',

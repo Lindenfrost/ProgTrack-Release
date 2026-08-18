@@ -73,6 +73,7 @@ PERM_MASTER_CREATE_USERS = "master.create_users"
 PERM_MASTER_EDIT_USERS = "master.edit_users"
 PERM_MASTER_ASSIGN_PRIMARY_ROLE = "master.assign_primary_role"
 PERM_MASTER_ASSIGN_JOBS = "master.assign_jobs"
+# Retained as a migration marker only; it is intentionally not grantable.
 PERM_MASTER_MANAGE_ROLE_BASELINES = "master.manage_role_baselines"
 PERM_MASTER_MANAGE_JOB_BUNDLES = "master.manage_job_bundles"
 PERM_MASTER_GRANT_DIRECT = "master.grant_direct_permissions"
@@ -112,6 +113,7 @@ PERM_PROJECT_VIEW_ALL = "project.view_all"
 PERM_PROJECT_ASSIGN = "project.project_assign"
 PERM_PROJECT_CREATE = "project.create"
 PERM_PROJECT_MANAGE_SEVERITY = "project.manage_severity"
+# Retained as a migration marker only; project.manage is authoritative.
 PERM_PROJECT_MANAGE_SPECIES_SCOPE = "project.manage_species_scope"
 PERM_PROJECT_SET_IN_EXPERIMENT   = "project.set_in_experiment"
 PERM_PROJECT_UNSET_IN_EXPERIMENT = "project.unset_in_experiment"
@@ -154,7 +156,7 @@ PERM_TOGGLE_MASTER_TRACK = "toggle_master_track"
 INTERNAL_PERMISSIONS: Set[str] = {PERM_TOGGLE_MASTER_TRACK}
 
 # Permissions that ROLE_MASTER explicitly lacks (everything else is granted)
-_MASTER_EXCLUDED: Set[str] = {PERM_MASTER_CREATE_USERS, PERM_TOGGLE_MASTER_TRACK}
+_MASTER_EXCLUDED: Set[str] = {PERM_TOGGLE_MASTER_TRACK}
 
 # ---------------------------------------------------------------------------
 # All known permission names (for UI enumeration)
@@ -172,7 +174,7 @@ ALL_PERMISSIONS: List[str] = [
     PERM_CORE_STYLE_SETTINGS, PERM_CORE_MANAGE_ANIMAL_ROLES,
     PERM_MASTER_VIEW_USERS, PERM_MASTER_CREATE_USERS, PERM_MASTER_EDIT_USERS,
     PERM_MASTER_ASSIGN_PRIMARY_ROLE, PERM_MASTER_ASSIGN_JOBS,
-    PERM_MASTER_MANAGE_ROLE_BASELINES, PERM_MASTER_MANAGE_JOB_BUNDLES,
+    PERM_MASTER_MANAGE_JOB_BUNDLES,
     PERM_MASTER_GRANT_DIRECT, PERM_MASTER_REVOKE_DIRECT, PERM_MASTER_VIEW_AUDIT,
     PERM_NETWORK_VIEW, PERM_NETWORK_CREATE_ENTRY, PERM_NETWORK_EDIT_ENTRY,
     PERM_HERITAGE_VIEW, PERM_HERITAGE_EDIT_LINKS, PERM_HERITAGE_EXPORT,
@@ -184,7 +186,7 @@ ALL_PERMISSIONS: List[str] = [
     PERM_CAGE_ASSIGN_LOCATIONS, PERM_CAGE_MANAGE_ROOMS_BUILDINGS, PERM_CAGE_EDIT,
     PERM_CAGE_EXPORT_PDF,
     PERM_PROJECT_VIEW, PERM_PROJECT_VIEW_ALL, PERM_PROJECT_ASSIGN, PERM_PROJECT_CREATE,
-    PERM_PROJECT_MANAGE_SEVERITY, PERM_PROJECT_MANAGE_SPECIES_SCOPE,
+    PERM_PROJECT_MANAGE_SEVERITY,
     PERM_PROJECT_SET_IN_EXPERIMENT, PERM_PROJECT_UNSET_IN_EXPERIMENT,
     PERM_PROJECT_MANAGE, PERM_PROJECT_ARCHIVE,
     PERM_PROJECT_UPLOAD_DOCUMENT, PERM_PROJECT_DELETE_DOCUMENT,
@@ -208,7 +210,7 @@ DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
         PERM_CORE_EDIT_ANIMAL_CORE,
         PERM_CORE_EDIT_ANIMAL_MEASUREMENTS,
         PERM_MEDI_VIEW, PERM_MEDI_FILTER_USE,
-        PERM_MEDI_UPLOAD_DOCUMENT, PERM_MEDI_DELETE_DOCUMENT,
+        PERM_MEDI_UPLOAD_DOCUMENT,
         PERM_MEDI_STATUS_ENABLE, PERM_MEDI_STATUS_MANAGE,
         PERM_MEDI_ADD_DOCS,
         PERM_REPORTS_VIEW,
@@ -219,7 +221,7 @@ DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
         PERM_CORE_EDIT_ANIMAL_HOUSING,
         PERM_CORE_EDIT_ANIMAL_MEASUREMENTS,
         PERM_CAGE_ASSIGN_LOCATIONS,
-        PERM_CAGE_VIEW, PERM_CAGE_RECORD_INSPECTION, PERM_CAGE_EDIT,
+        PERM_CAGE_VIEW, PERM_CAGE_RECORD_INSPECTION,
         PERM_CAGE_MANAGE_ROOMS_BUILDINGS,
         PERM_CAGE_EXPORT_PDF,
         PERM_MEDI_VIEW, PERM_MEDI_FILTER_USE,
@@ -241,12 +243,13 @@ DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
         PERM_CAGE_MANAGE_ROOMS_BUILDINGS,
         PERM_CAGE_EXPORT_PDF,
         PERM_PROJECT_VIEW_ALL, PERM_PROJECT_ASSIGN, PERM_PROJECT_CREATE,
-        PERM_PROJECT_MANAGE_SEVERITY, PERM_PROJECT_MANAGE_SPECIES_SCOPE,
+        PERM_PROJECT_MANAGE_SEVERITY,
         PERM_PROJECT_SET_IN_EXPERIMENT, PERM_PROJECT_UNSET_IN_EXPERIMENT,
         PERM_PROJECT_MANAGE, PERM_PROJECT_ARCHIVE,
         PERM_PROJECT_UPLOAD_DOCUMENT, PERM_PROJECT_DELETE_DOCUMENT,
         PERM_PROJECT_UPLOAD_SOP, PERM_PROJECT_DELETE_SOP,
-        PERM_MEDI_VIEW, PERM_MEDI_FILTER_USE, PERM_MEDI_ADD_DOCS,
+        PERM_MEDI_VIEW, PERM_MEDI_DELETE_DOCUMENT, PERM_MEDI_ADD_DOCS,
+        PERM_HERITAGE_EXPORT,
         PERM_REPORTS_VIEW,
     },
     "researcher": {
@@ -255,7 +258,7 @@ DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
         PERM_CORE_EDIT_ANIMAL_MEASUREMENTS,
         PERM_CORE_EDIT_ANIMAL_RESEARCH_DATA,
         PERM_HERITAGE_VIEW, PERM_HERITAGE_EXPORT,
-        PERM_MEDI_VIEW, PERM_MEDI_FILTER_USE,
+        PERM_MEDI_VIEW,
         PERM_CAGE_VIEW,
         PERM_PROJECT_VIEW,
         PERM_PROJECT_SET_IN_EXPERIMENT,
@@ -281,11 +284,13 @@ _USER_BASELINE: Set[str] = {
     PERM_CORE_VIEW, PERM_CORE_USE_FILTERS, PERM_CORE_OPEN_READONLY,
     PERM_CORE_STYLE_SETTINGS,
     PERM_REPORTS_VIEW,
-    PERM_MEDI_VIEW, PERM_MEDI_FILTER_USE,
+    PERM_MEDI_VIEW,
     PERM_NETWORK_VIEW, PERM_NETWORK_CREATE_ENTRY, PERM_NETWORK_EDIT_ENTRY,
-    PERM_HERITAGE_VIEW, PERM_HERITAGE_EXPORT,
+    PERM_HERITAGE_VIEW,
     PERM_CAGE_VIEW,
     PERM_PROJECT_VIEW,
+    PERM_PLOTS_VIEW,
+    PERM_FLOW_TRACK_OPEN,
 }
 
 _GUEST_BASELINE: Set[str] = {
@@ -296,9 +301,13 @@ _GUEST_BASELINE: Set[str] = {
     PERM_HERITAGE_VIEW,
     PERM_CAGE_VIEW,
     PERM_PROJECT_VIEW,
+    PERM_PLOTS_VIEW,
 }
 
-_ANIMAL_WELFARE_BASELINE: Set[str] = set(_USER_BASELINE)
+_ANIMAL_WELFARE_BASELINE: Set[str] = set(_USER_BASELINE) | {
+    PERM_MEDI_FILTER_USE,
+    PERM_MEDI_DELETE_DOCUMENT,
+}
 
 ROLE_BASELINES: Dict[str, Set[str]] = {
     ROLE_LORD: {"*"},      # wildcard — all permissions always granted
@@ -330,7 +339,8 @@ def resolve_effective_permissions(
     if role == ROLE_LORD:
         return {"*"}
     if role == ROLE_MASTER:
-        # All known permissions except the two that are lord-exclusive
+        # All known permissions except the internal toggle. Master is an
+        # administrative account and receives the complete grantable catalog.
         return {p for p in ALL_PERMISSIONS if p not in _MASTER_EXCLUDED}
     if role == ROLE_GUEST:
         return set(_GUEST_BASELINE)
@@ -338,11 +348,16 @@ def resolve_effective_permissions(
     baseline = set(ROLE_BASELINES.get(role or ROLE_GUEST, _GUEST_BASELINE))
     job_perms: Set[str] = set()
     for job in jobs:
-        job_perms |= JOB_BUNDLES.get(job, set())
+        job_perms |= {
+            permission for permission in JOB_BUNDLES.get(job, set())
+            if permission in ALL_PERMISSIONS
+        }
 
-    effective = baseline | job_perms | set(granted)
+    effective = baseline | job_perms | {
+        permission for permission in granted if permission in ALL_PERMISSIONS
+    }
     effective -= INTERNAL_PERMISSIONS
-    effective -= set(revoked)
+    effective -= {permission for permission in revoked if permission in ALL_PERMISSIONS}
     return effective
 
 
@@ -363,7 +378,10 @@ def can(
     if permission_name in INTERNAL_PERMISSIONS:
         return False
     if role == ROLE_MASTER:
-        return permission_name not in _MASTER_EXCLUDED
+        return (
+            permission_name in ALL_PERMISSIONS
+            and permission_name not in _MASTER_EXCLUDED
+        )
     effective = resolve_effective_permissions(role, jobs, granted, revoked)
     return "*" in effective or permission_name in effective
 
@@ -398,6 +416,22 @@ def get_permission_label(permission_name: str, lang: Optional[str] = None) -> st
 
     # Return translated label, fallback to permission name
     return lang_labels.get(permission_name, permission_name)
+
+
+def get_permission_tooltip(permission_name: str, lang: Optional[str] = None) -> str:
+    """Return a localized effect description with the canonical permission key."""
+    return f"{get_permission_label(permission_name, lang)} [{permission_name}]"
+
+
+def get_permission_namespace_label(namespace: str, lang: Optional[str] = None) -> str:
+    """Return a localized namespace heading, with a stable English fallback."""
+    labels_dict = _load_permission_labels()
+    lang_code = lang if lang in labels_dict else "en"
+    lang_labels = labels_dict.get(lang_code, {})
+    return lang_labels.get(
+        f"__namespace.{namespace}",
+        namespace.replace("_", " ").title(),
+    )
 
 
 def get_permission_namespace(permission_name: str) -> str:

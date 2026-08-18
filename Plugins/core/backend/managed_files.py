@@ -238,18 +238,48 @@ class ManagedFileService:
             rows = _fetchall(connection, sql, params)
         return [self.adapter.row_to_dict(row) for row in rows]
 
-    def remove(self, document_id: str) -> bool:
-        try:
-            record = self.get(document_id)
-        except KeyError:
-            return False
+    def delete_active(self, document_id: str) -> dict[str, Any]:
+        """Delete one active payload without leaving an active DB reference.
+
+        The payload is first moved to a same-directory tombstone.  Only after
+        that move succeeds is the database state changed to ``deleted``; a
+        failed state update restores the original path.  Cleanup failures
+        quarantine the record so it can never be presented as active.
+        Callers should write a success audit entry only after this returns.
+        """
+        record = self.get(document_id)
+        if str(record.get("state", "")) != "active":
+            raise ValidationError("Only active managed documents can be deleted.")
         path = self.payload_path(record)
-        self._set_state(document_id, "deleted")
+        if not path.is_file():
+            self._set_state(document_id, "quarantined")
+            raise ValidationError("The managed document payload is missing.")
+        tombstone = path.with_name(path.name + f".deleting-{uuid.uuid4().hex}")
+        os.replace(path, tombstone)
         try:
-            path.unlink(missing_ok=True)
+            self._set_state(document_id, "deleted")
+        except Exception:
+            try:
+                os.replace(tombstone, path)
+            except OSError:
+                self._set_state(document_id, "quarantined")
+            raise
+        try:
+            tombstone.unlink()
         except OSError:
+            # No active reference remains; quarantine makes the cleanup issue
+            # visible to reconciliation instead of silently exposing a stale
+            # document.  The caller must not report this as a successful delete.
             self._set_state(document_id, "quarantined")
             raise
+        return record | {"state": "deleted"}
+
+    def remove(self, document_id: str) -> bool:
+        """Legacy compatibility removal used by older callers."""
+        try:
+            self.delete_active(document_id)
+        except KeyError:
+            return False
         return True
 
     def reconcile(self) -> dict[str, int]:

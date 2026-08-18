@@ -21,7 +21,15 @@ from .permissions import (
     ROLE_USER,
     JOB_BUNDLES,
     ALL_PERMISSIONS,
+    PERM_MASTER_VIEW_USERS,
     PERM_MASTER_CREATE_USERS,
+    PERM_MASTER_EDIT_USERS,
+    PERM_MASTER_ASSIGN_PRIMARY_ROLE,
+    PERM_MASTER_ASSIGN_JOBS,
+    PERM_MASTER_MANAGE_JOB_BUNDLES,
+    PERM_MASTER_GRANT_DIRECT,
+    PERM_MASTER_REVOKE_DIRECT,
+    PERM_MASTER_VIEW_AUDIT,
     ROLE_BASELINES,
     can as _perm_can,
     resolve_effective_permissions,
@@ -101,7 +109,15 @@ class MasterTrackPlugin:
     def save_job_bundles(self) -> None:
         """Persist current job bundles through the backend."""
         try:
-            serializable = {k: sorted(v) for k, v in JOB_BUNDLES.items()}
+            known_permissions = set(ALL_PERMISSIONS)
+            cleaned = {
+                str(k): (set(v) & known_permissions)
+                for k, v in JOB_BUNDLES.items()
+                if isinstance(v, (set, list, tuple))
+            }
+            JOB_BUNDLES.clear()
+            JOB_BUNDLES.update(cleaned)
+            serializable = {k: sorted(v) for k, v in cleaned.items()}
             self.app.backend.records.put(
                 "configuration", "job-bundles", serializable
             )
@@ -510,19 +526,31 @@ class MasterTrackPlugin:
     # ------------------------------------------------------------------
 
     def show_manage_users(self) -> None:
+        if not self.can(PERM_MASTER_VIEW_USERS):
+            return
         from .dialogs import ManageUsersDialog
         dlg = ManageUsersDialog(self.app, self.app.messages,
                                 self.user_db, self._current_username or "",
                                 can_create_users=self.can(PERM_MASTER_CREATE_USERS),
+                                can_view_users=self.can(PERM_MASTER_VIEW_USERS),
+                                can_edit_users=self.can(PERM_MASTER_EDIT_USERS),
+                                can_assign_primary_role=self.can(PERM_MASTER_ASSIGN_PRIMARY_ROLE),
+                                can_assign_jobs=self.can(PERM_MASTER_ASSIGN_JOBS),
+                                can_grant_direct=self.can(PERM_MASTER_GRANT_DIRECT),
+                                can_revoke_direct=self.can(PERM_MASTER_REVOKE_DIRECT),
                                 lang=self.app.lang)
         dlg.exec()
 
     def show_edit_jobs(self) -> None:
+        if not self.can(PERM_MASTER_MANAGE_JOB_BUNDLES):
+            return
         from .dialogs import EditJobsDialog
         dlg = EditJobsDialog(self.app, self.app.messages, self)
         dlg.exec()
 
     def show_logs(self) -> None:
+        if not self.can(PERM_MASTER_VIEW_AUDIT):
+            return
         from .dialogs import AuditLogsDialog
         dlg = AuditLogsDialog(self.app, self.app.messages, self.plugin_dir, self.audit_logs_dir())
         dlg.exec()

@@ -3151,6 +3151,9 @@ class CageTrackPlugin:
         return self.store.get_address_for_dialog(animal_name)
 
     def save_address_from_dialog(self, animal_name: str, address_values: Dict[str, Optional[str]]) -> None:
+        if not self._can("cage.assign_locations"):
+            self._deny()
+            return
         before_address = self.store.get_address_for_dialog(animal_name)
         self.store.set_address_from_dialog(
             animal_name,

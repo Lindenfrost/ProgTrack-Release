@@ -2657,6 +2657,8 @@ class FlowTrackWidget:
     
     def _on_pick(self, event):
         """Handle pick events (clicks and drag initiation)."""
+        if not self._can("use"):
+            return
         artist = event.artist
         
         # Double-click opens dialogs
@@ -5583,6 +5585,9 @@ class FlowTrackWidget:
     
     def _open_settings_dialog(self):
         """Open settings dialog with all configuration options."""
+        if not self._can("use"):
+            self._deny()
+            return
         QtWidgets = self.parent_app.QtWidgets
         
         # Create dialog
@@ -5865,6 +5870,9 @@ class FlowTrackWidget:
     
     def _export_dialog(self):
         """Show export dialog for flow track data."""
+        if not self._can("use"):
+            self._deny()
+            return
         QtWidgets = self.parent_app.QtWidgets
         
         # Create dialog

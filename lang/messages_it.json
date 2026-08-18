@@ -1966,5 +1966,10 @@
   "embryo_track.tooltip.reference_edit_denied": "La modifica dei dati di riferimento è disponibile solo per Researcher e Lord.",
   "embryo_track.error.reference_no_baseline": "I dati importati non contengono un modello di base valido per due embrioni. Nulla è stato sostituito.",
   "embryo_track.confirm.replace_reference": "Sostituire i dati di riferimento di Embryo Track salvati? I dati correnti del backend saranno sostituiti solo dopo la convalida.",
-  "embryo_track.error.replace_reference": "Non è stato possibile sostituire i dati di riferimento. Il dataset precedente rimane attivo."
+  "embryo_track.error.replace_reference": "Non è stato possibile sostituire i dati di riferimento. Il dataset precedente rimane attivo.",
+  "medi_track.btn.delete_document": "Elimina documento",
+  "medi_track.dialog.delete_document.title": "Elimina documento medico",
+  "medi_track.dialog.delete_document.reason": "Motivo della cancellazione (obbligatorio):",
+  "medi_track.dialog.delete_document.backend_only": "Qui è possibile eliminare solo documenti gestiti dal backend.",
+  "medi_track.dialog.delete_document.failed": "Impossibile eliminare il documento: {error}"
 }

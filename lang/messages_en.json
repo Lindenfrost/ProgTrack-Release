@@ -2030,5 +2030,10 @@
   "embryo_track.tooltip.reference_edit_denied": "Reference data editing is available only to Researchers and Lords.",
   "embryo_track.error.reference_no_baseline": "The imported data do not contain a valid two-embryo baseline model. Nothing was replaced.",
   "embryo_track.confirm.replace_reference": "Replace the stored Embryo Track reference dataset? The current backend data will be replaced after validation.",
-  "embryo_track.error.replace_reference": "The reference data could not be replaced. The previous dataset remains active."
+  "embryo_track.error.replace_reference": "The reference data could not be replaced. The previous dataset remains active.",
+  "medi_track.btn.delete_document": "Delete document",
+  "medi_track.dialog.delete_document.title": "Delete medical document",
+  "medi_track.dialog.delete_document.reason": "Reason for deletion (required):",
+  "medi_track.dialog.delete_document.backend_only": "Only backend-managed documents can be deleted here.",
+  "medi_track.dialog.delete_document.failed": "The document could not be deleted: {error}"
 }

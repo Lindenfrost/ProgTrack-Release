@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QInputDialog,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
@@ -850,6 +851,16 @@ class MediStore:
         self._block(name)["documents"].append(doc)
         self.save()
 
+    def remove_document(self, name: str, *, document_id: str = "", path: str = "") -> None:
+        """Remove only the local compatibility reference after backend deletion."""
+        docs = self._block(name)["documents"]
+        self._block(name)["documents"] = [
+            doc for doc in docs
+            if not ((document_id and str(doc.get("document_id", "")) == document_id)
+                    or (path and str(doc.get("path", "")) == path))
+        ]
+        self.save()
+
     def get_active_issues(self, name: str, status_type: str) -> List[Dict[str, Any]]:
         """Return issues of *status_type* that have been started but not resolved."""
         entries = self.get_entries(name)
@@ -1350,6 +1361,9 @@ class MediTrackWidget(QWidget):
             self._filter_btns[fkey] = btn
             filter_row.addWidget(btn)
         self._sync_filter_button_heights()
+        filter_allowed = self._can_filter_use() if hasattr(self, "app") else True
+        for _button in self._filter_btns.values():
+            _button.setEnabled(filter_allowed)
         filter_row.addStretch()
         root.addLayout(filter_row)
 
@@ -1484,6 +1498,11 @@ class MediTrackWidget(QWidget):
         self._btn_add_doc.setEnabled(False)
         self._btn_add_doc.clicked.connect(self._on_add_document_clicked)
         docs_toolbar.addWidget(self._btn_add_doc)
+        self._btn_delete_doc = QPushButton(
+            _msg(self.messages, "medi_track.btn.delete_document", "Delete Document"))
+        self._btn_delete_doc.setEnabled(False)
+        self._btn_delete_doc.clicked.connect(self._on_delete_document_clicked)
+        docs_toolbar.addWidget(self._btn_delete_doc)
         docs_toolbar.addStretch()
         docs_inner.addLayout(docs_toolbar)
 
@@ -1512,6 +1531,14 @@ class MediTrackWidget(QWidget):
         fn = getattr(self.app, '_master_can', None)
         return bool(fn('medi_track.upload_document')) if callable(fn) else True
 
+    def _can_filter_use(self) -> bool:
+        fn = getattr(self.app, '_master_can', None)
+        return bool(fn('medi_track.filter_use')) if callable(fn) else True
+
+    def _can_delete_document(self) -> bool:
+        fn = getattr(self.app, '_master_can', None)
+        return bool(fn('medi_track.delete_document')) if callable(fn) else True
+
     def _set_content_visible(self, visible: bool) -> None:
         self._stack.setCurrentIndex(1 if visible else 0)
         can_docs = self._can_docs()
@@ -1519,6 +1546,9 @@ class MediTrackWidget(QWidget):
         self._btn_add_entry.setEnabled(visible and can_docs)
         self._btn_export.setEnabled(visible and self._can_export())
         self._btn_add_doc.setEnabled(visible and can_upload)
+        self._btn_delete_doc.setEnabled(visible and self._can_delete_document())
+        for _button in self._filter_btns.values():
+            _button.setEnabled(self._can_filter_use())
 
     def _configure_filter_button(
         self,
@@ -2408,30 +2438,35 @@ class MediTrackWidget(QWidget):
     def _reload_docs(self, animal_name: str) -> None:
         """Refresh the documents list for the given animal."""
         self._docs_list.clear()
-        found: List[str] = []
+        found: List[Tuple[str, str]] = []
         for record in self.app.backend.documents.list_for_owner(
             "animal-medical", animal_name
         ):
-            found.append(
-                str(self.app.backend.documents.payload_path(record))
-            )
+            found.append((
+                str(self.app.backend.documents.payload_path(record)),
+                str(record.get("document_id", "")),
+            ))
         json_docs = self.store.get_documents(animal_name)
         json_paths = {d.get('path', '') for d in json_docs}
+        found_paths = {path for path, _document_id in found}
         extra = [d for d in json_docs
-                 if d.get('path') and d['path'] not in found
+                 if d.get('path') and d['path'] not in found_paths
                  and Path(d['path']).exists()]
-        all_paths = [(p, Path(p).name) for p in found] + [
-            (d['path'], d.get('title') or Path(d['path']).name) for d in extra]
+        all_paths = [(p, Path(p).name, document_id) for p, document_id in found] + [
+            (d['path'], d.get('title') or Path(d['path']).name, str(d.get('document_id', '')))
+            for d in extra]
         if not all_paths:
             self._docs_list.addItem(
                 _msg(self.messages, "medi_track.empty.no_documents", "(no documents)"))
             return
-        for fpath, fname in all_paths:
+        for fpath, fname, document_id in all_paths:
             icon = _icon_for_ext(Path(fpath).suffix)
             item = QListWidgetItem(icon, fname)
             item.setData(Qt.ItemDataRole.UserRole, fpath)
+            item.setData(Qt.ItemDataRole.UserRole + 1, document_id)
             item.setToolTip(fpath)
             self._docs_list.addItem(item)
+        self._btn_delete_doc.setEnabled(self._can_delete_document() and bool(found))
 
     def _on_doc_item_clicked(self, item: QListWidgetItem) -> None:
         path = item.data(Qt.ItemDataRole.UserRole)
@@ -2439,9 +2474,69 @@ class MediTrackWidget(QWidget):
             if not open_local_path(path):
                 logger.error("Could not open document path: %s", path)
 
+    def _on_delete_document_clicked(self) -> None:
+        if not self._current_animal or not self._can_delete_document():
+            self._show_permission_denied()
+            return
+        item = self._docs_list.currentItem()
+        if item is None:
+            return
+        document_id = str(item.data(Qt.ItemDataRole.UserRole + 1) or "").strip()
+        path = str(item.data(Qt.ItemDataRole.UserRole) or "").strip()
+        if not document_id:
+            QMessageBox.warning(
+                self,
+                _msg(self.messages, "medi_track.dialog.delete_document.title", "Delete document"),
+                _msg(self.messages, "medi_track.dialog.delete_document.backend_only",
+                     "Only backend-managed documents can be deleted here."),
+            )
+            return
+        reason, accepted = QInputDialog.getMultiLineText(
+            self,
+            _msg(self.messages, "medi_track.dialog.delete_document.title", "Delete document"),
+            _msg(self.messages, "medi_track.dialog.delete_document.reason",
+                 "Reason for deletion (required):"),
+        )
+        reason = str(reason or "").strip()
+        if not accepted or not reason:
+            return
+        try:
+            record = self.app.backend.documents.delete_active(document_id)
+            try:
+                self.store.remove_document(self._current_animal, document_id=document_id, path=path)
+            except Exception:
+                # The backend reference and payload are authoritative.  A stale
+                # compatibility mirror must not suppress the successful audit.
+                logger.exception("Could not remove Medi compatibility document reference %s", document_id)
+            mt = getattr(self.app, "master_track", None)
+            if mt is not None and hasattr(mt, "audit"):
+                mt.audit(
+                    "medi_document_delete",
+                    document_id,
+                    (f"animal={self._current_animal}; original_name={record.get('original_name', '')}; "
+                     f"path={path}; reason={reason}; result=deleted"),
+                )
+            self._reload_docs(self._current_animal)
+        except Exception as exc:
+            logger.exception("Medi document deletion failed for %s", document_id)
+            QMessageBox.warning(
+                self,
+                _msg(self.messages, "error.title", "Error"),
+                _msg(self.messages, "medi_track.dialog.delete_document.failed",
+                     "The document could not be deleted: {error}").format(error=exc),
+            )
+
+    def _show_permission_denied(self) -> None:
+        fn = getattr(self.app, "_show_permission_denied", None)
+        if callable(fn):
+            fn()
+
     # ── filter logic ──
 
     def _on_filter_clicked(self, fkey: str) -> None:
+        if not self._can_filter_use():
+            self._show_permission_denied()
+            return
         self._active_filter = fkey
         for k, btn in self._filter_btns.items():
             btn.setChecked(k == fkey)

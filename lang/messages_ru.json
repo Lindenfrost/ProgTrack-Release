@@ -2022,5 +2022,10 @@
   "embryo_track.tooltip.reference_edit_denied": "Изменять эталонные данные могут только Researcher и Lord.",
   "embryo_track.error.reference_no_baseline": "Импортированные данные не содержат действительной базовой модели для двух эмбрионов. Ничего не заменено.",
   "embryo_track.confirm.replace_reference": "Заменить сохранённые эталонные данные Embryo Track? Текущие данные backend будут заменены только после проверки.",
-  "embryo_track.error.replace_reference": "Не удалось заменить эталонные данные. Предыдущий набор данных остаётся активным."
+  "embryo_track.error.replace_reference": "Не удалось заменить эталонные данные. Предыдущий набор данных остаётся активным.",
+  "medi_track.btn.delete_document": "Удалить документ",
+  "medi_track.dialog.delete_document.title": "Удаление медицинского документа",
+  "medi_track.dialog.delete_document.reason": "Причина удаления (обязательно):",
+  "medi_track.dialog.delete_document.backend_only": "Здесь можно удалять только документы, управляемые серверной частью.",
+  "medi_track.dialog.delete_document.failed": "Не удалось удалить документ: {error}"
 }

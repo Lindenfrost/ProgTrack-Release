@@ -61,6 +61,8 @@ from .permissions import (
     PERM_FLOW_TRACK_USE,
     get_permission_label,
     get_permission_namespace,
+    get_permission_tooltip,
+    get_permission_namespace_label,
     resolve_effective_permissions,
     ROLE_GUEST,
     ROLE_LORD,
@@ -474,12 +476,22 @@ class ManageUsersDialog(QDialog):
 
     def __init__(self, parent: Optional[QWidget], messages: Dict[str, Any],
                  user_db: UserDB, current_username: str,
-                 can_create_users: bool = True, lang: str = "en"):
+                 can_create_users: bool = True, can_view_users: bool = True,
+                 can_edit_users: bool = True, can_assign_primary_role: bool = True,
+                 can_assign_jobs: bool = True, can_grant_direct: bool = True,
+                 can_revoke_direct: bool = True, lang: str = "en"):
         super().__init__(parent)
         self.messages = messages
         self.lang = lang
         self.user_db = user_db
         self.current_username = current_username
+        self._can_create_users = bool(can_create_users)
+        self._can_view_users = bool(can_view_users)
+        self._can_edit_users = bool(can_edit_users)
+        self._can_assign_primary_role = bool(can_assign_primary_role)
+        self._can_assign_jobs = bool(can_assign_jobs)
+        self._can_grant_direct = bool(can_grant_direct)
+        self._can_revoke_direct = bool(can_revoke_direct)
 
         self.setWindowTitle(_msg(messages, "master_track.manage.title", "Manage Users"))
         self.setModal(True)
@@ -502,25 +514,28 @@ class ManageUsersDialog(QDialog):
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.table.doubleClicked.connect(self._edit_user)
+        self.table.doubleClicked.connect(lambda *_: self._edit_user())
         layout.addWidget(self.table)
 
         btn_row = QHBoxLayout()
         add_btn = QPushButton(_msg(messages, "master_track.manage.add", "Create User"))
         add_btn.clicked.connect(self._add_user)
-        add_btn.setVisible(can_create_users)
+        add_btn.setVisible(self._can_create_users)
         btn_row.addWidget(add_btn)
 
         edit_btn = QPushButton(_msg(messages, "master_track.manage.edit_user", "Edit User…"))
         edit_btn.clicked.connect(self._edit_user)
+        edit_btn.setEnabled(self._can_edit_users)
         btn_row.addWidget(edit_btn)
 
         reset_btn = QPushButton(_msg(messages, "master_track.manage.reset_pw", "Reset Password"))
         reset_btn.clicked.connect(self._reset_password)
+        reset_btn.setEnabled(self._can_edit_users)
         btn_row.addWidget(reset_btn)
 
         del_btn = QPushButton(_msg(messages, "master_track.manage.delete", "Delete User"))
         del_btn.clicked.connect(self._delete_user)
+        del_btn.setEnabled(self._can_edit_users)
         btn_row.addWidget(del_btn)
 
         btn_row.addStretch()
@@ -575,19 +590,32 @@ class ManageUsersDialog(QDialog):
         return item.text() if item else None
 
     def _add_user(self) -> None:
+        if not self._can_create_users:
+            return
         dlg = _CreateUserSubDialog(self, self.messages, self.user_db)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self._refresh()
 
     def _edit_user(self) -> None:
+        if not self._can_edit_users:
+            return
         uname = self._selected_username()
         if not uname:
             return
-        dlg = _EditUserDialog(self, self.messages, self.user_db, uname, self.lang)
+        dlg = _EditUserDialog(
+            self, self.messages, self.user_db, uname, self.lang,
+            can_edit_users=self._can_edit_users,
+            can_assign_primary_role=self._can_assign_primary_role,
+            can_assign_jobs=self._can_assign_jobs,
+            can_grant_direct=self._can_grant_direct,
+            can_revoke_direct=self._can_revoke_direct,
+        )
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self._refresh()
 
     def _reset_password(self) -> None:
+        if not self._can_edit_users:
+            return
         uname = self._selected_username()
         if not uname:
             return
@@ -596,6 +624,8 @@ class ManageUsersDialog(QDialog):
             self._refresh()
 
     def _delete_user(self) -> None:
+        if not self._can_edit_users:
+            return
         uname = self._selected_username()
         if not uname:
             return
@@ -714,13 +744,15 @@ def _build_permission_scroll(parent: QWidget, messages: Dict[str, Any],
         ns = get_permission_namespace(perm)
         if ns != current_ns:
             current_ns = ns
-            group = QGroupBox(_NAMESPACE_LABELS.get(ns, ns.replace("_", " ").title()))
+            group = QGroupBox(get_permission_namespace_label(ns, lang))
             current_group_layout = QVBoxLayout(group)
             current_group_layout.setSpacing(2)
             vbox.addWidget(group)
 
         label = get_permission_label(perm, lang)
         cb = QCheckBox(label)
+        cb.setToolTip(get_permission_tooltip(perm, lang))
+        cb.setAccessibleName(get_permission_tooltip(perm, lang))
 
         in_base = perm in base_perms
         is_revoked = perm in explicit_revoked
@@ -755,12 +787,20 @@ class _EditUserDialog(QDialog):
     """Edit role, jobs, and direct permission overrides for one user."""
 
     def __init__(self, parent: QWidget, messages: Dict[str, Any],
-                 user_db: UserDB, username: str, lang: str = "en"):
+                 user_db: UserDB, username: str, lang: str = "en",
+                 can_edit_users: bool = True, can_assign_primary_role: bool = True,
+                 can_assign_jobs: bool = True, can_grant_direct: bool = True,
+                 can_revoke_direct: bool = True):
         super().__init__(parent)
         self.messages = messages
         self.lang = lang
         self.user_db = user_db
         self.username = username
+        self._can_edit_users = bool(can_edit_users)
+        self._can_assign_primary_role = bool(can_assign_primary_role)
+        self._can_assign_jobs = bool(can_assign_jobs)
+        self._can_grant_direct = bool(can_grant_direct)
+        self._can_revoke_direct = bool(can_revoke_direct)
 
         user = user_db.get_user(username)
         if not user:
@@ -801,6 +841,11 @@ class _EditUserDialog(QDialog):
         self._p_mobile     = QLineEdit(user.get("mobile",      ""))
         self._p_unit       = QLineEdit(user.get("unit",        ""))
         self._p_profession = QLineEdit(user.get("profession",  ""))
+        for _field in (
+            self._p_display, self._p_pronouns, self._p_email, self._p_phone,
+            self._p_mobile, self._p_unit, self._p_profession,
+        ):
+            _field.setEnabled(self._can_edit_users)
         prof_form.addRow(_msg(messages, "master_track.label.display_name", "Display Name:"), self._p_display)
         prof_form.addRow(_msg(messages, "master_track.label.pronouns",     "Pronouns:"),     self._p_pronouns)
         prof_form.addRow(_msg(messages, "master_track.label.email",        "E-Mail:"),       self._p_email)
@@ -840,6 +885,11 @@ class _EditUserDialog(QDialog):
         role_layout.addWidget(self._role_welfare_rb)
         role_layout.addWidget(self._role_user_rb)
         role_layout.addStretch()
+        for _role_button in (
+            self._role_lord_rb, self._role_master_rb,
+            self._role_welfare_rb, self._role_user_rb,
+        ):
+            _role_button.setEnabled(self._can_assign_primary_role)
         layout.addWidget(role_group)
 
         # --- Jobs ---
@@ -855,7 +905,7 @@ class _EditUserDialog(QDialog):
             )
             cb = QCheckBox(job_label)
             cb.setChecked(job_name in current_jobs)
-            cb.setEnabled(not is_lord_or_master)
+            cb.setEnabled(self._can_assign_jobs and not is_lord_or_master)
             cb.stateChanged.connect(self._on_job_changed)
             self._job_checks[job_name] = cb
             jobs_layout.addWidget(cb)
@@ -894,6 +944,8 @@ class _EditUserDialog(QDialog):
                 lang=self.lang,
             )
             override_inner.addWidget(self._scroll)
+            for _perm, _cb in self._perm_checks.items():
+                _cb.setEnabled(self._can_grant_direct or self._can_revoke_direct)
 
         layout.addWidget(override_group)
 
@@ -911,7 +963,7 @@ class _EditUserDialog(QDialog):
         new_role = self._get_selected_role()
         is_elevated = new_role in (ROLE_LORD, ROLE_MASTER)
         for cb in self._job_checks.values():
-            cb.setEnabled(not is_elevated)
+            cb.setEnabled(self._can_assign_jobs and not is_elevated)
         self._refresh_perm_styles()
 
     def _get_selected_role(self) -> str:
@@ -973,6 +1025,13 @@ class _EditUserDialog(QDialog):
     def _save(self) -> None:
         new_role = self._get_selected_role()
         user = self._user
+        if new_role != user.get("role") and not self._can_assign_primary_role:
+            self.error_label.setText("Permission denied: primary role assignment.")
+            return
+        new_jobs_preview = [j for j, cb in self._job_checks.items() if cb.isChecked()]
+        if set(new_jobs_preview) != set(user.get("jobs", [])) and not self._can_assign_jobs:
+            self.error_label.setText("Permission denied: job assignment.")
+            return
 
         if user["role"] == ROLE_LORD and new_role != ROLE_LORD:
             if self.user_db.lord_count() <= 1:
@@ -983,7 +1042,8 @@ class _EditUserDialog(QDialog):
                          "Cannot demote the last Lord account."))
                 return
 
-        self.user_db.set_role(self.username, new_role)
+        if new_role != user.get("role"):
+            self.user_db.set_role(self.username, new_role)
 
         if new_role not in (ROLE_LORD, ROLE_MASTER):
             new_jobs = [j for j, cb in self._job_checks.items() if cb.isChecked()]
@@ -991,30 +1051,49 @@ class _EditUserDialog(QDialog):
 
             if self._perm_checks:
                 base_perms = resolve_effective_permissions(new_role, new_jobs, [], [])
-                granted, revoked = [], []
+                old_perms = self._user.get("permissions", {})
+                old_granted = set(old_perms.get("granted", []))
+                old_revoked = set(old_perms.get("revoked", []))
+                granted, revoked = set(), set()
                 for perm, cb in self._perm_checks.items():
                     if not cb.isEnabled():
+                        if perm in old_granted:
+                            granted.add(perm)
+                        if perm in old_revoked:
+                            revoked.add(perm)
                         continue
                     if cb.isChecked() and perm not in base_perms:
-                        granted.append(perm)
+                        granted.add(perm)
                     elif not cb.isChecked() and perm in base_perms:
-                        revoked.append(perm)
-                self.user_db.set_direct_permissions(self.username, granted, revoked)
+                        revoked.add(perm)
+
+                grant_changes = (granted - old_granted) | (old_revoked - revoked)
+                revoke_changes = (revoked - old_revoked) | (old_granted - granted)
+                if grant_changes and not self._can_grant_direct:
+                    self.error_label.setText("Permission denied: direct grants.")
+                    return
+                if revoke_changes and not self._can_revoke_direct:
+                    self.error_label.setText("Permission denied: direct revocations.")
+                    return
+                self.user_db.set_direct_permissions(
+                    self.username, sorted(granted), sorted(revoked)
+                )
         else:
             self.user_db.set_jobs(self.username, [])
             self.user_db.set_direct_permissions(self.username, [], [])
 
         # Save profile fields
-        self.user_db.update_user_profile(
-            self.username,
-            display_name=self._p_display.text().strip(),
-            pronouns=self._p_pronouns.text().strip(),
-            email=self._p_email.text().strip(),
-            phone=self._p_phone.text().strip(),
-            mobile=self._p_mobile.text().strip(),
-            unit=self._p_unit.text().strip(),
-            profession=self._p_profession.text().strip(),
-        )
+        if self._can_edit_users:
+            self.user_db.update_user_profile(
+                self.username,
+                display_name=self._p_display.text().strip(),
+                pronouns=self._p_pronouns.text().strip(),
+                email=self._p_email.text().strip(),
+                phone=self._p_phone.text().strip(),
+                mobile=self._p_mobile.text().strip(),
+                unit=self._p_unit.text().strip(),
+                profession=self._p_profession.text().strip(),
+            )
         self.accept()
 
 
@@ -1105,9 +1184,11 @@ class EditJobsDialog(QDialog):
             ns = get_permission_namespace(perm)
             if ns != current_ns:
                 current_ns = ns
-                lbl = QLabel(f"<b>{_NAMESPACE_LABELS.get(ns, ns.replace('_', ' ').title())}</b>")
+                lbl = QLabel(f"<b>{get_permission_namespace_label(ns, self.plugin.app.lang)}</b>")
                 self._scroll_vbox.addWidget(lbl)
             cb = QCheckBox(get_permission_label(perm, self.plugin.app.lang))
+            cb.setToolTip(get_permission_tooltip(perm, self.plugin.app.lang))
+            cb.setAccessibleName(get_permission_tooltip(perm, self.plugin.app.lang))
             cb.setChecked(perm in job_perms)
             self._perm_checks[perm] = cb
             self._scroll_vbox.addWidget(cb)
