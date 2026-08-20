@@ -109,11 +109,12 @@ class PluginManager:
             _module_and_attr(str(data.get("entry_point") or ""))
         except ValueError as exc:
             errors.append(str(exc))
-        if data.get("bootstrap_entry_point"):
-            try:
-                _module_and_attr(str(data.get("bootstrap_entry_point") or ""))
-            except ValueError as exc:
-                errors.append("bootstrap_entry_point: " + str(exc))
+        for optional_key in ("bootstrap_entry_point", "ui_entry_point"):
+            if data.get(optional_key):
+                try:
+                    _module_and_attr(str(data.get(optional_key) or ""))
+                except ValueError as exc:
+                    errors.append(f"{optional_key}: " + str(exc))
         resource_patterns = []
         for key in ("data_files", "resources"):
             values = data.get(key, [])
@@ -149,15 +150,16 @@ class PluginManager:
                     errors.append(f"entry point attribute not found: {attr}")
                 elif not callable(entry_value):
                     errors.append(f"entry point is not callable: {attr}")
-                bootstrap = data.get("bootstrap_entry_point")
-                if bootstrap:
-                    bmodule, battr = _module_and_attr(str(bootstrap))
-                    bimported = importlib.import_module(f"Plugins.{plugin_id}.{bmodule}")
-                    bootstrap_value = getattr(bimported, battr, None)
-                    if bootstrap_value is None:
-                        errors.append(f"bootstrap entry point attribute not found: {battr}")
-                    elif not callable(bootstrap_value):
-                        errors.append(f"bootstrap entry point is not callable: {battr}")
+                for optional_key in ("bootstrap_entry_point", "ui_entry_point"):
+                    optional_entry = data.get(optional_key)
+                    if optional_entry:
+                        omodule, oattr = _module_and_attr(str(optional_entry))
+                        oimported = importlib.import_module(f"Plugins.{plugin_id}.{omodule}")
+                        optional_value = getattr(oimported, oattr, None)
+                        if optional_value is None:
+                            errors.append(f"{optional_key} attribute not found: {oattr}")
+                        elif not callable(optional_value):
+                            errors.append(f"{optional_key} is not callable: {optional_entry}")
             except Exception as exc:
                 errors.append(f"entry point import failed: {exc}")
         return ManifestDiagnostic(plugin_id, str(manifest_path), not errors, optional, errors, warnings, data)
@@ -168,10 +170,11 @@ class PluginManager:
         for plugin_dir in self.discover():
             diagnostic = self.validate_manifest(plugin_dir, import_entry_point=import_entry_points)
             self.diagnostics[diagnostic.plugin_id] = diagnostic
-            for capability in diagnostic.capabilities:
-                owners = list(self.capability_registry.get(capability, ()))
-                owners.append(diagnostic.plugin_id)
-                self.capability_registry[capability] = tuple(sorted(set(owners)))
+            if diagnostic.valid:
+                for capability in diagnostic.capabilities:
+                    owners = list(self.capability_registry.get(capability, ()))
+                    owners.append(diagnostic.plugin_id)
+                    self.capability_registry[capability] = tuple(sorted(set(owners)))
             if not diagnostic.valid:
                 level = logging.ERROR if not diagnostic.optional else logging.WARNING
                 logger.log(level, "Plugin manifest %s invalid: %s", diagnostic.plugin_id, "; ".join(diagnostic.errors))
@@ -208,3 +211,20 @@ class PluginManager:
         module, attr = _module_and_attr(str(diagnostic.manifest["entry_point"]))
         imported = importlib.import_module(f"Plugins.{plugin_id}.{module}")
         return getattr(imported, attr)
+
+    def resolve_ui_entry_point(self, plugin_id: str) -> Any:
+        """Resolve the optional UI entry declared by a plugin manifest."""
+        diagnostic = self.diagnostics.get(plugin_id)
+        if diagnostic is None or not diagnostic.valid:
+            raise RuntimeError(f"Plugin {plugin_id} is unavailable.")
+        entry = str(
+            diagnostic.manifest.get("ui_entry_point")
+            or diagnostic.manifest.get("entry_point")
+            or ""
+        )
+        module, attr = _module_and_attr(entry)
+        imported = importlib.import_module(f"Plugins.{plugin_id}.{module}")
+        value = getattr(imported, attr, None)
+        if value is None or not callable(value):
+            raise RuntimeError(f"Plugin {plugin_id} UI entry point is not callable: {entry}")
+        return value

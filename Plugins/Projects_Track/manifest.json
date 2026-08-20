@@ -7,6 +7,7 @@
   "SPDX-License-Identifier": "GPL-3.0-or-later",
   "Copyright": "Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH",
   "entry_point": "ProjectsTrack_plugin.ProjectsTrackPlugin",
+  "ui_entry_point": "project_track_tab.ProjectTrackTab",
   "dependencies": [
     "PyQt6"
   ],

@@ -1,8 +1,11 @@
-"""Fail-closed authorization and canonical organizational-unit services.
+"""Authorization, trusted-local mode, and canonical organizational units.
 
-This module is deliberately independent from Qt and plugin UI code.  It is the
-single policy boundary for protected writes: a missing, disabled, or unavailable
-Master Track never grants write access.  Housing units remain unrelated data.
+This module is deliberately independent from Qt and plugin UI code. When the
+Master Track service is available it is the policy boundary for protected
+operations. If Master Track is absent or explicitly disabled, the application
+intentionally enters trusted-local mode: the installation is treated as a
+single trusted operator, all actions are allowed, and no actor-based audit
+event is generated. Housing units remain unrelated data.
 """
 from __future__ import annotations
 
@@ -133,10 +136,25 @@ class CanonicalUnitService:
         return key
 
 class AuthorizationService:
-    """Single fail-closed policy boundary for protected operations."""
-    def __init__(self, master_track: Any = None, *, disabled: bool = False, backend: Any = None):
+    """Central policy boundary for managed and trusted-local operation.
+
+    trusted_local is deliberately explicit so callers cannot accidentally
+    infer a real Lord identity from a missing plugin. It is enabled by the
+    application only when Master Track is absent or globally disabled. The
+    service then grants every action but exposes no authenticated actor and
+    must not be used to write user/audit attribution.
+    """
+    def __init__(
+        self,
+        master_track: Any = None,
+        *,
+        disabled: bool = False,
+        backend: Any = None,
+        trusted_local: bool = False,
+    ):
         self.master_track = master_track
         self.disabled = bool(disabled)
+        self.trusted_local = bool(trusted_local)
         self.units = CanonicalUnitService(backend) if backend is not None else None
 
     @staticmethod
@@ -151,7 +169,18 @@ class AuthorizationService:
 
     @property
     def available(self) -> bool:
-        return self.master_track is not None and not self.disabled
+        return self.trusted_local or (
+            self.master_track is not None and not self.disabled
+        )
+
+    @property
+    def managed(self) -> bool:
+        """Whether a real Master Track actor currently governs actions."""
+        return bool(
+            self.master_track is not None
+            and not self.disabled
+            and not self.trusted_local
+        )
 
     @property
     def current_unit_id(self) -> str:
@@ -195,8 +224,41 @@ class AuthorizationService:
             and not owner_unit.archived
         )
 
+    def can_read_unit(self, owner_unit_id: Any = None, *, allow_unassigned: bool = False) -> bool:
+        """Return whether a managed actor may read a unit-owned record.
+
+        Trusted-local mode deliberately bypasses unit scope. In managed mode an
+        explicit owner is required unless the caller opts into the documented
+        global/unassigned bucket; housing IDs are never inferred.
+        """
+        if self.trusted_local:
+            return True
+        if owner_unit_id in (None, ""):
+            return bool(allow_unassigned)
+        return self.same_unit(owner_unit_id)
+
+    def filter_records(
+        self,
+        records: Iterable[Mapping[str, Any]],
+        *,
+        owner_key: str = "unit_id",
+        allow_unassigned: bool = False,
+    ) -> list[Mapping[str, Any]]:
+        """Filter backend records through the canonical Unit boundary."""
+        result = []
+        for record in records:
+            if not isinstance(record, Mapping):
+                continue
+            if self.can_read_unit(record.get(owner_key), allow_unassigned=allow_unassigned):
+                result.append(record)
+        return result
+
     def can(self, action: str, *, owner_unit_id: Any = None, write: bool | None = None) -> bool:
         action = str(action or "").strip()
+        if self.trusted_local:
+            # Trusted-local operation is intentionally not an authenticated
+            # Lord session. Do not emit audit records or invent a user here.
+            return True
         protected = self.is_write_action(action) if write is None else bool(write)
         if protected and not self.available:
             return False

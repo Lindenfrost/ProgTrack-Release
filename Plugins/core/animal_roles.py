@@ -646,7 +646,11 @@ def normalize_block_list(values: Any) -> List[str]:
 
     normalized: List[str] = []
     for block in [*REQUIRED_DIALOG_BLOCKS, *raw_values]:
-        if (block in ALL_DIALOG_BLOCKS or block.startswith("custom_limit:")) and block not in normalized:
+        if (
+            block in ALL_DIALOG_BLOCKS
+            or block.startswith("custom_limit:")
+            or block.startswith("experimental-block:")
+        ) and block not in normalized:
             normalized.append(block)
     return normalized
 

@@ -1170,6 +1170,7 @@ class StyleSettingsDialog(QDialog):
         # Store color buttons for easy access
         self.color_buttons = {}
         self.marker_combos = {}
+        self._custom_event_style_controls = {}
         self.role_table = None
         self._role_definitions = self.parent_app._load_animal_role_definitions()
         self._role_setup_editable = self.parent_app._can_configure_animal_roles()
@@ -1577,6 +1578,53 @@ class StyleSettingsDialog(QDialog):
         
         markers_group.setLayout(markers_layout)
         scroll_layout.addWidget(markers_group)
+
+        # Facility-defined events are rendered beside the built-in controls.
+        # Their defaults are shared registry data; edits are kept as per-user
+        # style overrides and never mutate the registry.
+        custom_defs = []
+        try:
+            custom_defs = self.parent_app._custom_event_definitions(include_retired=False)
+        except Exception:
+            custom_defs = []
+        if custom_defs:
+            custom_group = QGroupBox(
+                self.messages.get("style.custom_events", "Custom events")
+            )
+            custom_layout = QFormLayout(custom_group)
+            marker_options_custom = [
+                ("o", "●"), ("^", "▲"), ("v", "▼"), ("s", "■"),
+                ("D", "◆"), ("*", "★"), ("+", "✚"), ("x", "✖")
+            ]
+            for definition in custom_defs:
+                event_id = str(definition.get("id") or definition.get("event_type") or "")
+                event_type = str(definition.get("event_type") or event_id)
+                if not event_id:
+                    continue
+                label = str(definition.get("name") or definition.get("label") or event_type)
+                key = event_id
+                color_button = self._create_color_button(
+                    str(definition.get("default_color") or definition.get("color") or "#4C78A8")
+                )
+                color_button.setToolTip(label)
+                custom_layout.addRow(label + ":", color_button)
+                marker_combo = None
+                if str(definition.get("render_mode") or "line") == "symbol":
+                    marker_combo = QComboBox()
+                    for value, marker_label in marker_options_custom:
+                        marker_combo.addItem(marker_label, value)
+                    custom_layout.addRow(
+                        self.messages.get("style.custom_event_marker", "Symbol") + " " + label + ":",
+                        marker_combo,
+                    )
+                self._custom_event_style_controls[key] = (
+                    definition, color_button, marker_combo
+                )
+            custom_group.setLayout(custom_layout)
+            scroll_layout.addWidget(custom_group)
+            self._custom_event_style_group = custom_group
+        else:
+            self._custom_event_style_group = None
         
         scroll_layout.addStretch()
         scroll.setWidget(scroll_widget)
@@ -3548,6 +3596,24 @@ class StyleSettingsDialog(QDialog):
             idx = self.marker_combos['sperm_progressive'].findData(self.parent_app.sperm_progressive_marker)
             if idx >= 0:
                 self.marker_combos['sperm_progressive'].setCurrentIndex(idx)
+
+        try:
+            stored = self.parent_app._load_user_style_settings()
+            overrides = stored.get("custom_events", {}) if isinstance(stored, dict) else {}
+        except Exception:
+            overrides = {}
+        for key, (definition, color_button, marker_combo) in self._custom_event_style_controls.items():
+            override = overrides.get(key, {}) if isinstance(overrides, dict) else {}
+            default_color = str(definition.get("default_color") or definition.get("color") or "#4C78A8")
+            color = str(override.get("color") or default_color)
+            if QColor(color).isValid():
+                color_button.setStyleSheet(f"background-color: {color}; border: 1px solid #000;")
+                color_button.setProperty("color", color)
+            if marker_combo is not None:
+                marker = str(override.get("marker") or definition.get("default_marker") or definition.get("marker") or "o")
+                idx = marker_combo.findData(marker)
+                if idx >= 0:
+                    marker_combo.setCurrentIndex(idx)
     
     def _reset_to_defaults(self):
         """Reset all settings to default values."""
@@ -3570,6 +3636,16 @@ class StyleSettingsDialog(QDialog):
                 idx = self.marker_combos[key].findData(defaults[marker_key])
                 if idx >= 0:
                     self.marker_combos[key].setCurrentIndex(idx)
+
+        for definition, color_button, marker_combo in self._custom_event_style_controls.values():
+            color = str(definition.get("default_color") or definition.get("color") or "#4C78A8")
+            color_button.setStyleSheet(f"background-color: {color}; border: 1px solid #000;")
+            color_button.setProperty("color", color)
+            if marker_combo is not None:
+                marker = str(definition.get("default_marker") or definition.get("marker") or "o")
+                idx = marker_combo.findData(marker)
+                if idx >= 0:
+                    marker_combo.setCurrentIndex(idx)
     
     def get_settings(self):
         """Get the current settings from the dialog."""
@@ -3607,7 +3683,37 @@ class StyleSettingsDialog(QDialog):
             'fsh_marker': _marker_or_parent('fsh', 'fsh_marker', 'v'),
             'sperm_total_marker': _marker_or_parent('sperm_total', 'sperm_total_marker', 'o'),
             'sperm_motile_marker': _marker_or_parent('sperm_motile', 'sperm_motile_marker', 's'),
-            'sperm_progressive_marker': _marker_or_parent('sperm_progressive', 'sperm_progressive_marker', '^')
+            'sperm_progressive_marker': _marker_or_parent('sperm_progressive', 'sperm_progressive_marker', '^'),
+            'custom_events': {
+                key: {
+                    item_key: value
+                    for item_key, value in (
+                        [
+                            ("color", str(color_button.property("color"))),
+                            *(
+                                [("marker", str(marker_combo.currentData()))]
+                                if marker_combo is not None else []
+                            ),
+                        ]
+                    )
+                    if value not in (
+                        str(definition.get("default_color") or definition.get("color") or "#4C78A8")
+                        if item_key == "color"
+                        else str(definition.get("default_marker") or definition.get("marker") or "o")
+                    )
+                }
+                for key, (definition, color_button, marker_combo)
+                in self._custom_event_style_controls.items()
+                if (
+                    str(color_button.property("color"))
+                    != str(definition.get("default_color") or definition.get("color") or "#4C78A8")
+                    or (
+                        marker_combo is not None
+                        and str(marker_combo.currentData())
+                        != str(definition.get("default_marker") or definition.get("marker") or "o")
+                    )
+                )
+            }
         }
 
     def get_role_definitions(self):
@@ -4537,13 +4643,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if service is None:
             return False if AuthorizationService.is_write_action(action) else True
         allowed = service.can(action)
-        if not allowed and AuthorizationService.is_write_action(action):
+        trusted_local = bool(getattr(service, "trusted_local", False))
+        if not allowed and AuthorizationService.is_write_action(action) and not trusted_local:
             self._master_audit(
                 "authorization_denied",
                 "ProgTrack",
                 f"action={action}",
             )
-        if allowed and action in {
+        if allowed and not trusted_local and action in {
             "core.create_animals", "core.edit_animal_core", "core.edit_animal_immutable",
             "core.archive_animals", "core.delete_animals", "core.import",
             "reports.write",
@@ -4557,7 +4664,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if service is None:
             return False
         allowed = service.can(action, owner_unit_id=owner_unit_id)
-        if not allowed and AuthorizationService.is_write_action(action):
+        if (
+            not allowed
+            and AuthorizationService.is_write_action(action)
+            and not bool(getattr(service, "trusted_local", False))
+        ):
             self._master_audit(
                 "authorization_denied",
                 str(owner_unit_id or ""),
@@ -4700,8 +4811,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
 
     def _master_audit(self, action: str, target: str = "", details: str = "") -> None:
-        """Write an audit log entry if Master_Track is active."""
-        mt = getattr(self, 'master_track', None)
+        """Write an audit entry only in managed Master Track operation."""
+        service = getattr(self, "authorization", None)
+        if bool(getattr(service, "trusted_local", False)):
+            return
+        mt = getattr(self, "master_track", None)
         if mt:
             mt.audit(action, target, details)
 
@@ -5032,6 +5146,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 candidate = str(value).strip()
                 if candidate in valid_markers:
                     normalized[key] = candidate
+            elif key == "custom_events":
+                if isinstance(value, dict):
+                    normalized[key] = {
+                        str(event_id): {
+                            field: str(field_value)
+                            for field, field_value in override.items()
+                            if field in {"color", "marker"} and (
+                                field != "color" or QColor(str(field_value)).isValid()
+                            )
+                        }
+                        for event_id, override in value.items()
+                        if isinstance(override, dict)
+                    }
             else:
                 normalized[key] = value
         return normalized
@@ -5290,7 +5417,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.network_track_window = None
             if self.network_track_enabled:
                 try:
-                    from Plugins.Network_Track.network_track import NetworkTrackWidget
+                    NetworkTrackWidget = self.plugin_manager.resolve_entry_point("Network_Track")
                     QtWidgets.QApplication.processEvents()
                     self.network_track_window = NetworkTrackWidget(self.messages, self, app=self)
                     # This widget uses native Window flags.  Hide it before
@@ -5391,6 +5518,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.master_track,
             disabled=("master_track" in self._disabled_plugins),
             backend=self.backend,
+            trusted_local=(
+                not self.has_master_track
+                or "master_track" in self._disabled_plugins
+            ),
         )
         if self.has_master_track:
             global_disabled = self._load_disabled_plugins()
@@ -5904,7 +6035,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 )
             except Exception as exc:
                 logging.error("Identity change could not be copied to MediTrack: %s", exc)
-        if mt and hasattr(mt, "audit"):
+        if (
+            mt and hasattr(mt, "audit")
+            and not bool(getattr(getattr(self, "authorization", None), "trusted_local", False))
+        ):
             mt.audit(
                 "animal_identity_changed",
                 new_key,
@@ -8765,7 +8899,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             
             try:
                 # Build the Flow Track tab
-                from Plugins.Flow_Track.flow_track_widget import FlowTrackWidget
+                FlowTrackWidget = self.plugin_manager.resolve_entry_point("Flow_Track")
                 self.flow_track_widget = FlowTrackWidget(self, self.messages)
                 self.flow_track_tab = self.flow_track_widget.get_widget()
                 
@@ -8871,7 +9005,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         elif pt_tab_selected and self.project_track_tab is None:
             logging.info("Lazy loading Project Track tab...")
             try:
-                from Plugins.Projects_Track.project_track_tab import ProjectTrackTab
+                ProjectTrackTab = self.plugin_manager.resolve_ui_entry_point("Projects_Track")
                 self.project_track_widget = ProjectTrackTab(
                     self, self.messages,
                     history_store=self.projects_plugin._history)
@@ -9532,19 +9666,193 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return list(REQUIRED_DIALOG_BLOCKS)
         return registry.dialog_blocks_for_value(role_value, mode)
 
-    def _custom_experimental_block_definitions(self) -> List[Dict[str, Any]]:
+    def _custom_experimental_block_definitions(self, include_retired: bool = True) -> List[Dict[str, Any]]:
         payload = self.backend.records.get(
             "configuration", "role-block-presets", default={}
         )
         values = payload.get("experimental_blocks", []) if isinstance(payload, dict) else []
-        return [dict(item) for item in values if isinstance(item, dict)]
+        result = [dict(item) for item in values if isinstance(item, dict)]
+        return result if include_retired else [item for item in result if bool(item.get("active", True))]
 
-    def _custom_event_definitions(self) -> List[Dict[str, Any]]:
+    def _custom_event_definitions(self, include_retired: bool = True) -> List[Dict[str, Any]]:
         payload = self.backend.records.get(
             "configuration", "role-block-presets", default={}
         )
         values = payload.get("event_definitions", []) if isinstance(payload, dict) else []
-        return [dict(item) for item in values if isinstance(item, dict)]
+        result = [dict(item) for item in values if isinstance(item, dict)]
+        return result if include_retired else [item for item in result if bool(item.get("active", True))]
+
+    def _custom_event_definition_for_type(self, event_type: str) -> Optional[Dict[str, Any]]:
+        token = str(event_type or "").strip()
+        if not token:
+            return None
+        folded = token.casefold()
+        for definition in self._custom_event_definitions(include_retired=True):
+            values = (
+                definition.get("id"),
+                definition.get("stable_id"),
+                definition.get("event_type"),
+                definition.get("typ"),
+            )
+            if any(str(value or "").strip().casefold() == folded for value in values):
+                return definition
+        return None
+
+    def _active_custom_event_definitions_for_role(
+        self, role_value: str, mode: str = "edit"
+    ) -> List[Dict[str, Any]]:
+        blocks = set(self._role_dialog_blocks(role_value, mode))
+        if not blocks:
+            return []
+        definitions = []
+        for definition in self._custom_event_definitions(include_retired=False):
+            block_id = str(definition.get("block_id") or definition.get("limit_block") or "")
+            event_type = str(definition.get("event_type") or "")
+            if block_id in blocks or event_type in blocks:
+                definitions.append(definition)
+        return definitions
+
+    def _custom_event_types_for_role(self, role_value: str, mode: str = "edit") -> set[str]:
+        values = set()
+        for definition in self._active_custom_event_definitions_for_role(role_value, mode):
+            for value in (
+                definition.get("id"),
+                definition.get("stable_id"),
+                definition.get("event_type"),
+            ):
+                if str(value or "").strip():
+                    values.add(str(value).strip())
+        return values
+
+    def _custom_event_appearance(self, event_type: str) -> Dict[str, Any]:
+        definition = self._custom_event_definition_for_type(event_type) or {}
+        key = str(definition.get("id") or definition.get("stable_id") or event_type)
+        override = getattr(self, "custom_event_styles", {}).get(key, {})
+        color = str(
+            override.get("color")
+            or definition.get("default_color")
+            or definition.get("color")
+            or "#4C78A8"
+        )
+        if not QColor(color).isValid():
+            color = "#4C78A8"
+        marker = str(
+            override.get("marker")
+            or definition.get("default_marker")
+            or definition.get("marker")
+            or "o"
+        )
+        render_mode = str(definition.get("render_mode") or "line").casefold()
+        return {
+            "definition": definition,
+            "color": color,
+            "marker": marker,
+            "render_mode": render_mode if render_mode in {"line", "symbol"} else "line",
+        }
+
+    def _custom_event_snapshot(self, event_type: str) -> Dict[str, Any]:
+        definition = self._custom_event_definition_for_type(event_type) or {}
+        appearance = self._custom_event_appearance(event_type)
+        return {
+            "id": str(definition.get("id") or event_type),
+            "stable_id": str(definition.get("stable_id") or ""),
+            "revision": int(definition.get("revision", 1) or 1),
+            "label": str(definition.get("name") or definition.get("label") or event_type),
+            "render_mode": appearance["render_mode"],
+            "color": appearance["color"],
+            "marker": appearance["marker"],
+        }
+
+    def _validate_custom_event_limits_for_record(
+        self, record: Dict[str, Any]
+    ) -> List[str]:
+        violations = []
+        events = record.get("events", []) if isinstance(record, dict) else []
+        if not isinstance(events, list):
+            events = []
+        for block in self._custom_experimental_block_definitions(include_retired=False):
+            if str(block.get("kind") or "limiting") != "limiting":
+                continue
+            block_id = str(block.get("id") or block.get("stable_id") or "")
+            event_ids = {
+                str(value) for value in (block.get("event_ids") or [])
+                if str(value).strip()
+            }
+            fallback_type = str(block.get("event_type") or "")
+            event_ids.update({fallback_type, block_id})
+            for _definition in self._custom_event_definitions(include_retired=True):
+                if str(_definition.get("block_id") or _definition.get("limit_block") or "") == block_id:
+                    event_ids.update(
+                        str(value) for value in (
+                            _definition.get("id"),
+                            _definition.get("stable_id"),
+                            _definition.get("event_type"),
+                        ) if str(value or "").strip()
+                    )
+            count = sum(
+                1 for event in events
+                if isinstance(event, dict)
+                and str(event.get("typ") or "") in event_ids
+            )
+            limits = record.get("experimental_limits", {})
+            value = limits.get(block_id) if isinstance(limits, dict) else None
+            if value is None:
+                field = str(block.get("max_field") or "")
+                value = record.get(field) if field else None
+            if value is None:
+                value = block.get("default_maximum", 0)
+            try:
+                maximum = int(value)
+            except (TypeError, ValueError):
+                maximum = 0
+            if count > maximum:
+                violations.append(
+                    f"{block.get('name') or block_id}: {count}/{maximum}"
+                )
+        return violations
+
+    def _custom_event_limit_additions_allowed(
+        self, previous: Dict[str, Any], candidate: Dict[str, Any]
+    ) -> List[str]:
+        previous_events = previous.get("events", []) if isinstance(previous, dict) else []
+        candidate_events = candidate.get("events", []) if isinstance(candidate, dict) else []
+        violations = []
+        for block in self._custom_experimental_block_definitions(include_retired=False):
+            if str(block.get("kind") or "limiting") != "limiting":
+                continue
+            block_id = str(block.get("id") or block.get("stable_id") or "")
+            event_ids = {str(block.get("event_type") or ""), block_id}
+            for definition in self._custom_event_definitions(include_retired=True):
+                if str(definition.get("block_id") or definition.get("limit_block") or "") == block_id:
+                    event_ids.update(
+                        str(value) for value in (
+                            definition.get("id"),
+                            definition.get("stable_id"),
+                            definition.get("event_type"),
+                        ) if str(value or "").strip()
+                    )
+            old_count = sum(
+                1 for event in previous_events
+                if isinstance(event, dict) and str(event.get("typ") or "") in event_ids
+            )
+            new_count = sum(
+                1 for event in candidate_events
+                if isinstance(event, dict) and str(event.get("typ") or "") in event_ids
+            )
+            if new_count <= old_count:
+                continue
+            limits = candidate.get("experimental_limits", {})
+            maximum = limits.get(block_id) if isinstance(limits, dict) else None
+            if maximum is None:
+                field = str(block.get("max_field") or "")
+                maximum = candidate.get(field) if field else block.get("default_maximum", 0)
+            try:
+                maximum = int(maximum)
+            except (TypeError, ValueError):
+                maximum = 0
+            if new_count > maximum:
+                violations.append(f"{block.get('name') or block_id}: {new_count}/{maximum}")
+        return violations
 
     def _role_block_enabled(self, role_value: str, block_id: str, mode: str = "edit") -> bool:
         if block_id in REQUIRED_DIALOG_BLOCKS:
@@ -11393,6 +11701,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             'special_measurement': messages.get('plot.event.special_measurement', 'Special measurement'),
             'measurement': messages.get('stats.measurement', 'Measurement'),
         }
+        custom = self._custom_event_definition_for_type(typ_lower)
+        if custom:
+            return str(custom.get("name") or custom.get("label") or custom.get("event_type") or typ_lower)
         return labels.get(typ_lower, typ_lower)
 
     def _get_report_event_max(self, typ_lower: str, animal_data: Dict[str, Any]):
@@ -11414,6 +11725,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return animal_data.get('max_special', '?')
         if typ_lower == 'progesterone':
             return animal_data.get('max_messungen', '?')
+        custom = self._custom_event_definition_for_type(typ_lower)
+        if custom and str(custom.get("kind") or "limiting") == "limiting":
+            block_id = str(custom.get("block_id") or custom.get("limit_block") or "")
+            limits = animal_data.get("experimental_limits", {})
+            if isinstance(limits, dict) and block_id in limits:
+                return limits.get(block_id)
+            field = str(custom.get("max_field") or custom.get("limit_block") or "")
+            if field:
+                return animal_data.get(field, custom.get("default_maximum", "?"))
+            return custom.get("default_maximum", "?")
         return None
     
     def _get_reproduction_status(self, animal_data: Dict[str, Any], date: datetime.date) -> str:
@@ -14318,6 +14639,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             for ev in a.get('events', [])
                             if ev['typ'] in ('fsh', 'pgf', 'surgery')]
 
+                # Custom events are admitted only when the active role recipe
+                # contains their block. Keep built-in role filtering unchanged.
+                custom_types = self._custom_event_types_for_role(rolle, mode='edit')
+                if custom_types:
+                    existing_custom = {
+                        (str(typ), dt) for typ, dt in evs
+                    }
+                    for custom_event in a.get('events', []) or []:
+                        event_type = str(custom_event.get('typ') or '')
+                        event_date = custom_event.get('datum')
+                        if (
+                            event_type in custom_types
+                            and (event_type, event_date) not in existing_custom
+                        ):
+                            evs.append((event_type, event_date))
+
                 # styling maps
                 colors = {
                     'pgf': getattr(self, 'pgf_color', QColor('#FF0000')).name(), 
@@ -14348,6 +14685,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     'progesterone': self.messages.get('plot.event.progesterone_short', 'Prog.'),
                     'special_measurement': self.messages.get('plot.event.special_measurement', 'Special measurement')
                 }
+                for definition in self._custom_event_definitions(include_retired=True):
+                    event_type = str(definition.get("event_type") or "")
+                    if event_type:
+                        appearance = self._custom_event_appearance(event_type)
+                        colors[event_type] = appearance["color"]
+                        labels[event_type] = str(
+                            definition.get("name") or definition.get("label") or event_type
+                        )
 
                 # how many of each type we have now
                 counts = {}
@@ -14367,14 +14712,39 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     'special_measurement': a.get('max_special', '?'),
                     'fsh': a.get('max_fsh', '?'),
                 }
+                for definition in self._custom_event_definitions(include_retired=True):
+                    event_type = str(definition.get("event_type") or "")
+                    if event_type:
+                        max_allowed[event_type] = self._get_report_event_max(event_type, a)
 
                 # constant y‐offset for all event triangles so only the tip touches the axis
 
                 for typ, dt_raw in evs:
                     idxs[typ] += 1
                     col = colors.get(typ, 'black')
+                    custom_definition = self._custom_event_definition_for_type(typ)
+                    custom_appearance = self._custom_event_appearance(typ) if custom_definition else {}
+                    # Symbol custom events use the same clipped event layer as FSH,
+                    # while line events continue through the standard vertical-line path.
+                    if custom_definition and custom_appearance.get("render_mode") == "symbol":
+                        dt = _to_py_datetime(dt_raw)
+                        dt_num = _safe_date2num(dt)
+                        if dt_num is None:
+                            logging.warning(f"Skipping invalid custom event date: {dt_raw!r}")
+                            continue
+                        symbol = ax.scatter(
+                            dt_num, TRI_Y,
+                            marker=custom_appearance.get("marker", "o"),
+                            s=30, color=custom_appearance.get("color", "#4C78A8"),
+                            transform=ax.get_xaxis_transform(),
+                            clip_on=True, picker=10, zorder=3
+                        )
+                        events_chk = self._get_current_events_checkbox()
+                        symbol.set_visible(events_chk is not None and events_chk.isChecked())
+                        self.ev_lines.append(symbol)
+                        self.hover_data.append((dt, TRI_Y, ax, typ, name, symbol))
                     # FSH and Progesterone: tiny triangles inside the axes, clipped by y-limits
-                    if typ in ('fsh', 'progesterone'):
+                    elif typ in ('fsh', 'progesterone'):
                         # strict normalization to avoid invalid ordinals
                         dt = _to_py_datetime(dt_raw)
                         dt_num = _safe_date2num(dt)
@@ -14394,7 +14764,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         tri.set_visible(events_chk is not None and events_chk.isChecked())
                         self.ev_lines.append(tri)
                         self.hover_data.append((dt, TRI_Y, ax, typ, name, tri))
-                    else:
+                    elif not (custom_definition and custom_appearance.get("render_mode") == "symbol"):
                         # All line event labels use weight axis for placement
                         if 'weight_ax' in locals():
                             axis_plot = weight_ax
@@ -15253,6 +15623,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 # insert a visual separator after each block except the last
                 if idx < len(blocks) - 1:
                     combo.insertSeparator(combo.count())
+
+            for definition in self._active_custom_event_definitions_for_role(
+                current_role or Role.UNKNOWN.value, mode="edit"
+            ):
+                event_type = str(definition.get("event_type") or "")
+                if event_type and combo.findData(event_type) < 0:
+                    combo.addItem(
+                        str(definition.get("name") or definition.get("label") or event_type),
+                        event_type,
+                    )
             
             # set current selection by matching the stored type
             stored_type = item_data[1].lower()
@@ -17061,6 +17441,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ).exec()
 
     def _is_lord_session(self) -> bool:
+        service = getattr(self, "authorization", None)
+        if bool(getattr(service, "trusted_local", False)):
+            return True
         mt = getattr(self, "master_track", None)
         return bool(
             mt
@@ -17141,6 +17524,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.sperm_motile_color = QColor(settings.get('sperm_motile_color', '#0072B2'))
         self.sperm_progressive_color = QColor(settings.get('sperm_progressive_color', '#009E73'))
         self.fsh_color = QColor(settings.get('fsh_color', '#000000'))
+        custom_events = settings.get("custom_events", {})
+        self.custom_event_styles = (
+            {str(k): dict(v) for k, v in custom_events.items() if isinstance(v, dict)}
+            if isinstance(custom_events, dict) else {}
+        )
         
         # Event colors
         self.pgf_color = QColor(settings.get('pgf_color', '#FF0000'))
@@ -17192,7 +17580,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             'fsh_marker': 'v',  # triangle down
             'sperm_total_marker': 'o',  # circle
             'sperm_motile_marker': 's',  # square
-            'sperm_progressive_marker': '^'  # triangle up
+            'sperm_progressive_marker': '^',  # triangle up
+            'custom_events': {}
         }
 
     def _refresh_ui(self):
@@ -17759,8 +18148,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._apply_master_button_states()
         self._update_master_status_bar()
         self._refresh_master_menu_states()
-        mt.audit("toggle_master_track",
-                 "disabled" if currently_enabled else "enabled")
+        if not bool(getattr(getattr(self, "authorization", None), "trusted_local", False)):
+            mt.audit("toggle_master_track",
+                     "disabled" if currently_enabled else "enabled")
 
     def _do_master_logout(self):
         """Log out, save session, revert to Guest mode, refresh UI."""
@@ -18121,11 +18511,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 action.setEnabled(self._role_allows_tool_action(action_attr))
 
     def _update_master_status_bar(self):
-        """Update the status bar with the current user/role."""
+        """Update the status bar with the current user/role or local mode."""
         mt = getattr(self, 'master_track', None)
+        service = getattr(self, "authorization", None)
+        lbl = getattr(self, '_master_status_label', None)
+        if bool(getattr(service, "trusted_local", False)):
+            if lbl is not None:
+                lbl.setText(
+                    f" {self.messages.get('master_track.status.trusted_local', 'Trusted local mode')} "
+                )
+            icon_label = getattr(self, '_master_status_icon_label', None)
+            if icon_label is not None:
+                icon_label.setPixmap(ui_icon("account.lord").pixmap(QSize(27, 27)))
+            self._update_master_window_title()
+            return
         if not mt:
             return
-        lbl = getattr(self, '_master_status_label', None)
         if lbl is None:
             return
         icon_label = getattr(self, '_master_status_icon_label', None)
@@ -18158,15 +18559,24 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Append or remove '[Read only]' from the window title based on
         Master_Track guest state and file-lock read-only mode."""
         mt = getattr(self, 'master_track', None)
+        service = getattr(self, "authorization", None)
         mt_disabled = "master_track" in getattr(self, '_disabled_plugins', set())
         is_guest = mt and not mt_disabled and not mt.is_logged_in
+        trusted_local = bool(getattr(service, "trusted_local", False))
         is_file_locked = getattr(self, 'read_only_mode', False)
-        read_only = is_guest or is_file_locked
+        read_only = (is_guest and not trusted_local) or is_file_locked
 
         current = self.windowTitle()
-        clean = current.replace(" [Read only]", "").replace(" [READ-ONLY]", "").strip()
+        clean = (
+            current.replace(" [Read only]", "")
+            .replace(" [READ-ONLY]", "")
+            .replace(" [Trusted local]", "")
+            .strip()
+        )
         if read_only:
             self.setWindowTitle(f"{clean} [Read only]")
+        elif trusted_local:
+            self.setWindowTitle(f"{clean} [Trusted local]")
         else:
             self.setWindowTitle(clean)
 
@@ -18491,7 +18901,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self.network_track_window = None
             
             # Create new window
-            from Plugins.Network_Track.network_track import NetworkTrackWidget
+            NetworkTrackWidget = self.plugin_manager.resolve_entry_point("Network_Track")
             self.network_track_window = NetworkTrackWidget(self.messages, self, app=self)
             self.network_track_window.show()
             logging.info("Network Track window created and shown")
@@ -20351,6 +20761,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self.messages.get("dialog.offspring.combo.operation", "Operation"),
                     "surgery"
                 )
+                for definition in self._active_custom_event_definitions_for_role(
+                    Role.OFFSPRING.value, mode="edit"
+                ):
+                    event_type = str(definition.get("event_type") or "")
+                    if event_type and combo.findData(event_type) < 0:
+                        combo.addItem(
+                            str(definition.get("name") or definition.get("label") or event_type),
+                            event_type,
+                        )
 
                 if data:
                     # Map the stored values to the combo data (canonical event types)
@@ -21059,6 +21478,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self.messages.get("dialog.zuchttier.event.birth", "Birth"),
                     "birth"
                 )
+                for definition in self._active_custom_event_definitions_for_role(
+                    Role.ZUCHTTIER.value, mode="edit"
+                ):
+                    event_type = str(definition.get("event_type") or "")
+                    if event_type and combo.findData(event_type) < 0:
+                        combo.addItem(
+                            str(definition.get("name") or definition.get("label") or event_type),
+                            event_type,
+                        )
 
                 if data:
                     # Map the stored values to the combo data
@@ -23108,7 +23536,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         dt = datetime.strptime(d_edit.text(), DATE_FORMAT).date()
                         # Use currentData() to get canonical event type, not translated display text
                         typ = combo.currentData()
-                        if not typ or typ not in EVENT_TYPES: raise ValueError
+                        allowed_types = set(EVENT_TYPES) | self._custom_event_types_for_role(role_code)
+                        if not typ or typ not in allowed_types: raise ValueError
                         if typ == 'surgery':
                             if dt not in seen_op:  seen_op.add(dt);  new_op.append(datetime.combine(dt, datetime.min.time()))
                         elif typ == 'pgf':
@@ -23128,9 +23557,23 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             'error'
                         )
                         return
+                candidate_events = (new_fsh if role_code == Role.SPENDER.value else new_ev)
+                candidate_record = dict(rec)
+                candidate_record["events"] = candidate_events
+                limit_violations = self._custom_event_limit_additions_allowed(rec, candidate_record)
+                if limit_violations:
+                    self._show_message(
+                        self.messages.get("error.title", "Error"),
+                        self.messages.get(
+                            "error.custom_event_limit",
+                            "Experimental event limit exceeded: "
+                        ) + ", ".join(limit_violations),
+                        "warning",
+                    )
+                    return
                 rec['op']  = new_op
                 rec['pgf'] = new_pgf
-                rec['events'] = (new_fsh if role_code == Role.SPENDER.value else new_ev)
+                rec['events'] = candidate_events
             else:
                 rec['op'] = rec.get('op', [])
                 rec['pgf'] = rec.get('pgf', [])
@@ -23800,8 +24243,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         # Normalize legacy German identifiers to English
                         normalized_typ = LEGACY_EVENT_MAP.get(typ, typ)
                         # Only include valid event types
-                        if datum and normalized_typ in EVENT_TYPES:
-                            rec['events'].append({"typ": normalized_typ, "datum": datum})
+                        if datum and (
+                            normalized_typ in EVENT_TYPES
+                            or self._custom_event_definition_for_type(normalized_typ)
+                        ):
+                            payload = {"typ": normalized_typ, "datum": datum}
+                            snapshot = self._custom_event_snapshot(normalized_typ)
+                            if snapshot.get("id") != normalized_typ:
+                                payload["custom_event_snapshot"] = snapshot
+                            rec['events'].append(payload)
                     except Exception:
                         logging.warning(f"Skipped invalid event: {ev}")
                         skipped += 1
@@ -24280,7 +24730,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._save_trace("post_persistence_sync.exit")
 
     def _save_persistence(self, defer_post_save_work: bool = False):
-        """Save current data to JSON."""
+        """Persist backend data after enriching dynamic event snapshots."""
+        for _record in list(self.animals.values()) + list(self.archived.values()):
+            for _event in _record.get("events", []) if isinstance(_record, dict) else []:
+                _event_type = str(_event.get("typ") or "") if isinstance(_event, dict) else ""
+                if _event_type and self._custom_event_definition_for_type(_event_type):
+                    if isinstance(_event, dict) and not _event.get("custom_event_snapshot"):
+                        _event["custom_event_snapshot"] = self._custom_event_snapshot(_event_type)
         self._save_trace("save_persistence.enter", defer_post_save_work=defer_post_save_work)
         logging.info(
             "Persistence save begin; defer_post_save_work=%s",

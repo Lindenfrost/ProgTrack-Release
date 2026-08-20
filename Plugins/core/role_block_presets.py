@@ -12,6 +12,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 import re
+import uuid
 
 from Plugins.core.animal_roles import normalize_block_list
 
@@ -43,6 +44,12 @@ def valid_preset_name(name: Any, *, extra_reserved: Iterable[str] = ()) -> bool:
     return bool(value) and value.casefold() not in reserved
 
 
+def _stable_id(prefix: str, value: Any) -> str:
+    """Create a deterministic first-write ID for schema-v1 migration."""
+    token = normalized_preset_name(value).casefold()
+    return f"{prefix}:{uuid.uuid5(uuid.NAMESPACE_URL, 'progtrack:role-block:' + token)}"
+
+
 def _slug(value: Any) -> str:
     text = normalized_preset_name(value).casefold()
     text = re.sub(r"[^a-z0-9]+", "_", text).strip("_")
@@ -53,9 +60,9 @@ def normalize_experimental_block(raw: Dict[str, Any]) -> Dict[str, Any]:
     name = normalized_preset_name(raw.get("name") or raw.get("label") or "")
     block_id = str(raw.get("id") or "").strip()
     if not block_id:
-        block_id = "custom_limit:" + _slug(name)
-    if not block_id.startswith("custom_limit:"):
-        block_id = "custom_limit:" + _slug(block_id)
+        block_id = _stable_id("experimental-block", name or raw.get("event_type") or "custom-block")
+    if not (block_id.startswith("experimental-block:") or block_id.startswith("custom_limit:")):
+        block_id = _stable_id("experimental-block", block_id)
     kind = str(raw.get("kind") or "limiting").strip().casefold()
     if kind not in {"counting", "limiting"}:
         kind = "limiting"
@@ -66,38 +73,76 @@ def normalize_experimental_block(raw: Dict[str, Any]) -> Dict[str, Any]:
     if render_mode not in {"line", "symbol"}:
         render_mode = "symbol"
     marker = str(raw.get("marker") or "o").strip() or "o"
-    color = str(raw.get("color") or "#4C78A8").strip()
+    color = str(raw.get("color") or raw.get("default_color") or "#4C78A8").strip()
     if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
         color = "#4C78A8"
+    default_maximum = raw.get("default_maximum", raw.get("default_max", 0))
+    try:
+        default_maximum = max(0, int(default_maximum or 0))
+    except (TypeError, ValueError):
+        default_maximum = 0
+    event_ids = (
+        [str(v).strip() for v in raw.get("event_ids", []) if str(v).strip()]
+        if isinstance(raw.get("event_ids"), list) else []
+    )
+    stable_id = str(raw.get("stable_id") or _stable_id("experimental-block", name or event_type))
     return {
         "id": block_id,
+        "stable_id": stable_id,
         "name": name or event_type.replace("_", " ").title(),
+        "description": str(raw.get("description") or "").strip(),
         "kind": kind,
+        "default_maximum": default_maximum,
+        "event_ids": list(dict.fromkeys(event_ids)),
         "event_type": event_type,
-        "max_field": max_field,
+        "max_field": max_field if kind == "limiting" else "",
         "render_mode": render_mode,
         "marker": marker,
         "color": color.upper(),
+        "active": bool(raw.get("active", True)),
+        "retired_at": str(raw.get("retired_at") or ""),
+        "revision": max(1, int(raw.get("revision", 1) or 1)),
     }
 
 
 def normalize_event_definition(raw: Dict[str, Any]) -> Dict[str, Any]:
     event = normalize_experimental_block(raw)
+    event_id = str(raw.get("id") or "").strip()
+    if not event_id or not event_id.startswith("custom-event:"):
+        event_id = _stable_id("custom-event", raw.get("event_type") or event["name"])
+    block_id = str(raw.get("block_id") or event.get("id") or "").strip()
+    stable_id = str(raw.get("stable_id") or _stable_id("custom-event", raw.get("event_type") or event["name"]))
     return {
+        "id": event_id,
+        "stable_id": stable_id,
+        "block_id": block_id,
         "event_type": event["event_type"],
+        "name": event["name"],
         "label": event["name"],
         "label_key": str(raw.get("label_key") or ""),
         "render_mode": event["render_mode"],
         "marker": event["marker"],
         "color": event["color"],
+        "default_color": event["color"],
+        "default_marker": event["marker"],
         "limit_block": event["max_field"] if event["kind"] == "limiting" else "",
+        "active": bool(raw.get("active", True)),
+        "revision": max(1, int(raw.get("revision", 1) or 1)),
     }
 
 
 def normalize_preset(raw: Dict[str, Any]) -> Dict[str, Any]:
+    name = normalized_preset_name(raw.get("name"))
+    preset_id = str(raw.get("id") or "").strip()
+    if not preset_id or not preset_id.startswith("preset:"):
+        preset_id = _stable_id("preset", name or "unnamed")
     return {
-        "name": normalized_preset_name(raw.get("name")),
+        "id": preset_id,
+        "name": name,
         "blocks": normalize_block_list(raw.get("blocks", [])),
+        "active": bool(raw.get("active", True)),
+        "retired_at": str(raw.get("retired_at") or ""),
+        "revision": max(1, int(raw.get("revision", 1) or 1)),
     }
 
 
@@ -121,8 +166,17 @@ class RoleBlockPresetRegistry:
     def experimental_blocks(self) -> List[Dict[str, Any]]:
         return deepcopy(self._experimental_blocks)
 
-    def event_definitions(self) -> List[Dict[str, Any]]:
-        return deepcopy(self._event_definitions)
+    def event_definitions(self, *, include_retired: bool = True) -> List[Dict[str, Any]]:
+        values = self._event_definitions if include_retired else [
+            item for item in self._event_definitions if bool(item.get("active", True))
+        ]
+        return deepcopy(values)
+
+    def active_experimental_blocks(self) -> List[Dict[str, Any]]:
+        return deepcopy([item for item in self._experimental_blocks if bool(item.get("active", True))])
+
+    def active_event_definitions(self) -> List[Dict[str, Any]]:
+        return deepcopy([item for item in self._event_definitions if bool(item.get("active", True))])
 
     def save_presets(
         self,
@@ -130,7 +184,8 @@ class RoleBlockPresetRegistry:
         *,
         experimental_blocks: Iterable[Dict[str, Any]] | None = None,
         event_definitions: Iterable[Dict[str, Any]] | None = None,
-    ) -> None:
+        expected_revision: int | None = None,
+    ) -> int:
         normalized: List[Dict[str, Any]] = []
         seen = set()
         for raw in presets:
@@ -176,10 +231,14 @@ class RoleBlockPresetRegistry:
             "experimental_blocks": blocks,
             "event_definitions": events,
         }
-        self.backend.records.put("configuration", "role-block-presets", payload)
+        revision = self.backend.records.put(
+            "configuration", "role-block-presets", payload,
+            expected_revision=expected_revision,
+        )
         self._presets = normalized
         self._experimental_blocks = blocks
         self._event_definitions = events
+        return revision
 
     def payload(self) -> Dict[str, Any]:
         return {
