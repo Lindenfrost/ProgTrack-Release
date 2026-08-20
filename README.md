@@ -288,6 +288,7 @@ and active-plugin filters rather than changing any animal record.
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_female.svg" width="24" alt="Female role"></td><td>Egg cell donor / surrogate</td><td>Steroid, urine, blood, and reproductive workflows.</td></tr>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_male.svg" width="24" alt="Male role"></td><td>Sperm donor</td><td>Sperm measurements and donor events.</td></tr>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_offspring.svg" width="24" alt="Offspring role"></td><td>Offspring</td><td>Young animals and offspring-specific records.</td></tr>
+    <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_experimental_offspring.svg" width="24" alt="Experimental offspring role"></td><td>Experimental offspring</td><td>Offspring assigned to an experimental project, with the configured experimental event blocks.</td></tr>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_partner.svg" width="24" alt="Partner role"></td><td>Partner</td><td>Partner animals with the configured basic blocks.</td></tr>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/pedigree_symbol.svg" width="24" alt="Breeding role"></td><td>Breeding animal</td><td>Mature breeding-colony animals.</td></tr>
     <tr><td bgcolor="#e0e0e0" style="background-color:#e0e0e0 !important;color:#111111 !important;" align="center"><img src="icons/ui/role_experimental.svg" width="24" alt="Experimental role"></td><td>Experimental animal</td><td>Experimental workflows and configured event blocks.</td></tr>
@@ -346,22 +347,26 @@ across selected animals.
 
 Plugins are loaded from `Plugins/` at startup. Some are tabs, some are dialogs,
 and some provide feature gates or backend services.
+The Version column below is taken from each shipped plugin's `manifest.json`; the same 0.2.1 application payload and minimum runtime are required for this release. The table is a release inventory, not a promise that a future roadmap feature is already enabled.
 
-| Plugin | Kind | Purpose |
-| --- | --- | --- |
-| Steroid Track | Feature gate | Steroid roles, hormone imports, sperm imports, reproductive events, phase filters, and PdG integration. |
-| Master Track | Administration | Login, users, jobs, permissions, sessions, locks, and audit logs. |
-| Animal Reports | Main tab | Monthly reports, locked/manual lines, signatures, and PDF/XLSX export. |
-| Medi Track | Main tab | Medical history, status filters, treatment/observation records, documents, and PDF/XLSX exports. Multi-animal File-menu export shows determinate progress, supports cancellation between atomic outputs, and reports exactly which valid files remain. |
-| Surgery Planner | Dialog | Surgery and embryo-transfer planning, recovery rules, blocked days, and export. |
-| Embryo Tracker | Dialog | Gestation-day prediction from ultrasound measurements. |
-| PdG to Progesterone Converter | Dialog | Per-animal PdG-to-progesterone model fitting. |
-| Flow Track | Main tab | Embryo flow between donors, surrogates, and freezer inventory. |
-| Heritage Track | Main tab | Pedigree graphs, family nodes, kinship, inbreeding, genotype annotations, and complex-family routing. |
-| Cage Track | Main tab | Building → Unit → Room → Cage hierarchy, placement, movements, inspections, and PDF export. It projects the complete animal-list selection into one deterministic building, highlights matching occupants, and remembers each signed-in user's inspection-table sort. |
-| Sample Track | Window | Organ/biological samples, aliquots, linked files, filters, and PDF export. |
-| Projects Track | Sidebar and tab | Project/species visibility, project history, IACUC/AWO assignment, documents/SOPs, and experiment state. Each project has a localized `Draft`, `Active`, or `Closed` lifecycle state; lifecycle and archive state are independent. |
-| Network Track | Window | Backend-backed team chat with polling and optional notification sounds. |
+
+| Plugin | Version | Kind | Purpose |
+| --- | --- | --- | --- |
+| Steroid Track | `0.2.1` | Feature gate | Steroid roles, hormone imports, sperm imports, reproductive events, phase filters, and PdG integration. |
+| Master Track | `0.2.1` | Administration | Login, users, jobs, permissions, sessions, locks, and audit logs. |
+| Animal Reports | `0.2.1` | Main tab | Monthly reports, locked/manual lines, signatures, and PDF/XLSX export. |
+| Medi Track | `0.2.1` | Main tab | Medical history, status filters, treatment/observation records, documents, and PDF/XLSX exports. Multi-animal File-menu export shows determinate progress, supports cancellation between atomic outputs, and reports exactly which valid files remain. |
+| Surgery Planner (OP Planner) | `0.2.1` | Dialog | Surgery and embryo-transfer planning, recovery rules, blocked days, and export. |
+| Embryo Tracker | `0.2.1` | Dialog | Gestation-day prediction from ultrasound measurements. |
+| PdG to Progesterone Converter | `0.2.1` | Dialog | Per-animal PdG-to-progesterone model fitting. |
+| Flow Track | `0.2.1` | Main tab | Embryo flow between donors, surrogates, and freezer inventory. |
+| Heritage Track | `0.2.1` | Main tab | Pedigree graphs, family nodes, kinship, inbreeding, genotype annotations, and complex-family routing. |
+| Cage Track | `0.2.1` | Main tab | Building → Unit → Room → Cage hierarchy, placement, movements, inspections, and PDF export. It projects the complete animal-list selection into one deterministic building, highlights matching occupants, and remembers each signed-in user's inspection-table sort. |
+| Sample Track | `0.2.1` | Window | Organ/biological samples, aliquots, linked files, filters, and PDF export. |
+| Projects Track | `0.2.1` | Sidebar and tab | Project/species visibility, project history, IACUC/AWO assignment, documents/SOPs, and experiment state. Each project has a localized `Draft`, `Active`, or `Closed` lifecycle state; lifecycle and archive state are independent. |
+| Network Track | `0.2.1` | Window | Backend-backed team chat with polling and optional notification sounds. |
+
+Terminology: the **Reports** tab and File-menu report actions are the user-facing surface provided by the **Animal Reports** plugin; they are not separate report databases. In Cage Track, a **Unit** is a physical housing level between a building and room. An organizational unit or workgroup is a user/project membership scope managed in Master Track and is unrelated to cage placement.
 
 ## Users, account roles, and job bundles
 

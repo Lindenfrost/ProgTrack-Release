@@ -20,6 +20,7 @@ from .permissions import (
 
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------------------------------
 # Password hashing
 # ---------------------------------------------------------------------------
@@ -119,6 +120,8 @@ class UserDB:
             # Never grant AWO access from malformed or hand-edited records.
             cleaned_jobs = [job for job in cleaned_jobs if job != JOB_ANIMAL_WELFARE]
         user["jobs"] = cleaned_jobs
+        unit_id = str(user.get("unit_id") or "").strip()
+        user["unit_id"] = unit_id.casefold()
         perms = user.setdefault("permissions", {})
         if not isinstance(perms, dict):
             user["permissions"] = {"granted": [], "revoked": []}
@@ -132,7 +135,8 @@ class UserDB:
     def add_user(self, username: str, password: str, role: str = "user",
                  display_name: str = "",
                  pronouns: str = "", email: str = "", phone: str = "",
-                 mobile: str = "", unit: str = "", profession: str = "") -> Dict[str, Any]:
+                 mobile: str = "", unit: str = "", profession: str = "",
+                 unit_id: str = "") -> Dict[str, Any]:
         pw_hash, salt = hash_password(password)
         initial_jobs: list[str] = []
         record = {
@@ -151,6 +155,7 @@ class UserDB:
             "phone":      phone,
             "mobile":     mobile,
             "unit":       unit,
+            "unit_id":     unit_id.strip().casefold(),
             "profession": profession,
         }
         self._users.append(record)
@@ -164,7 +169,8 @@ class UserDB:
                              phone: Optional[str] = None,
                              mobile: Optional[str] = None,
                              unit: Optional[str] = None,
-                             profession: Optional[str] = None) -> bool:
+                             profession: Optional[str] = None,
+                             unit_id: Optional[str] = None) -> bool:
         """Update profile fields for *username*. Only non-None arguments are changed."""
         user = self.get_user(username)
         if not user:
@@ -175,6 +181,10 @@ class UserDB:
                          ("mobile", mobile), ("unit", unit), ("profession", profession)]:
             if val is not None:
                 user[key] = val
+        if unit_id is not None:
+            user["unit_id"] = str(unit_id).strip().casefold()
+        elif unit is not None and "unit_id" not in user:
+            user["unit_id"] = ""
         self.save()
         return True
 

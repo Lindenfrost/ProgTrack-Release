@@ -1,7 +1,7 @@
 {
   "name": "PdG_converter",
   "display_name": "PdG to Progesterone Converter",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Converts urine PdG (pregnanediol glucuronide) measurements to progesterone equivalents using fitted mathematical models. Supports kink (broken-stick) and linear models with bounded least squares fitting. Features individual per-animal parameter storage and optional plugin architecture.",
   "author": "DLL",
   "SPDX-License-Identifier": "GPL-3.0-or-later",
@@ -15,7 +15,7 @@
   "data_files": [
     "data/*.json"
   ],
-  "min_progtrack_version": "RC 0.1.0",
+  "min_progtrack_version": "0.2.1",
   "menu_location": "Tools",
   "icon": "progtrack_icon.ico",
   "optional": true,
@@ -26,5 +26,21 @@
     "kink_model_fitting",
     "converted_progesterone_overlay",
     "pdg_measurement_table_integration"
+  ],
+  "capabilities": [
+    "pdg_to_progesterone_conversion",
+    "per_animal_model_parameters",
+    "linear_model_fitting",
+    "kink_model_fitting",
+    "converted_progesterone_overlay",
+    "pdg_measurement_table_integration"
+  ],
+  "permissions": [],
+  "backend_namespaces": [],
+  "resources": [
+    "data/*.json"
+  ],
+  "docs": [
+    "../../manual/ProgTrack_User_Guide - en.html#plugins"
   ]
 }

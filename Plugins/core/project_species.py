@@ -2,22 +2,41 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Mapping, List
 
 
-def species_match(project_species: str, animal_species: str) -> bool:
+def species_match(project_species: Any, animal_species: str) -> bool:
     """Empty project species is unrestricted; otherwise matching is exact."""
+    if isinstance(project_species, (list, tuple, set)):
+        expected = {str(value).strip() for value in project_species if str(value).strip()}
+        return not expected or str(animal_species or "") in expected
     expected = str(project_species or "")
     return not expected or expected == str(animal_species or "")
+
+
+def project_species_values_for(
+    projects: Mapping[str, Mapping[str, Any]],
+    project_name: str,
+) -> List[str]:
+    record = projects.get(str(project_name or ""), {})
+    summary = record.get("summary", {}) if isinstance(record, Mapping) else {}
+    raw = summary.get("species") if isinstance(summary, Mapping) else None
+    if raw in (None, ""):
+        raw = record.get("species") if isinstance(record, Mapping) else None
+    if isinstance(raw, (list, tuple, set)):
+        return [str(item).strip() for item in raw if str(item).strip()]
+    value = str(raw or "").strip()
+    return [value] if value else []
 
 
 def project_species_for(
     projects: Mapping[str, Mapping[str, Any]],
     project_name: str,
 ) -> str:
-    record = projects.get(str(project_name or ""), {})
-    summary = record.get("summary", {}) if isinstance(record, Mapping) else {}
-    return str(summary.get("species") or record.get("species") or "")
+    values = project_species_values_for(projects, project_name)
+    return values[0] if len(values) == 1 else ""
+
+
 
 
 def assignment_allowed(
@@ -27,7 +46,7 @@ def assignment_allowed(
 ) -> bool:
     if not str(project_name or ""):
         return True
-    return species_match(project_species_for(projects, project_name), animal_species)
+    return species_match(project_species_values_for(projects, project_name), animal_species)
 
 
 def remove_mismatched_assignments(

@@ -1,7 +1,7 @@
 {
   "name": "Projects_Track",
   "display_name": "Projects Track",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Project-based animal filtering plugin. Adds sidebar tabs that group animals by their project assignment, enabling quick switching between project views. Caches project assignments for fast startup and updates automatically when animal data changes.",
   "author": "DLL",
   "SPDX-License-Identifier": "GPL-3.0-or-later",
@@ -11,7 +11,7 @@
     "PyQt6"
   ],
   "data_files": [],
-  "min_progtrack_version": "RC 0.1.0",
+  "min_progtrack_version": "0.2.1",
   "menu_location": "Sidebar",
   "icon": "progtrack_icon.ico",
   "optional": true,
@@ -22,5 +22,20 @@
     "automatic_animal_project_sync",
     "project_management_tab",
     "master_track_user_integration"
+  ],
+  "bootstrap_entry_point": "__init__.initialize",
+  "capabilities": [
+    "project_based_sidebar_filtering",
+    "project_assignment_cache",
+    "project_history_tracking",
+    "automatic_animal_project_sync",
+    "project_management_tab",
+    "master_track_user_integration"
+  ],
+  "permissions": [],
+  "backend_namespaces": [],
+  "resources": [],
+  "docs": [
+    "../../manual/ProgTrack_User_Guide - en.html#plugins"
   ]
 }

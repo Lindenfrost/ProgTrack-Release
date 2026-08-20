@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.2.1
 # Required ProgTrack version: see plugin manifest.
-# Required Launcher version: 0.1.0 RC or newer.
+# Required Launcher version: 0.2.1 or newer.
 # Module: Surgery Planner scheduling and Gantt-chart tools.
 
 import os
@@ -23,13 +23,9 @@ ROOT_DIR = os.path.dirname(os.path.dirname(PLUGIN_DIR))  # Go up two levels to g
 # Date format for display
 DATE_FORMAT = '%Y-%m-%d'
 
-# Configure matplotlib to use Qt5Agg backend before importing pyplot
-import matplotlib
-matplotlib.use('Qt5Agg')
-
-# Third-party imports
+# Qt6-compatible Matplotlib canvas. The plugin never changes the process-global backend.
 import matplotlib as mpl
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.dates as mdates
 from matplotlib.ticker import NullFormatter  # For hiding axis labels
@@ -51,25 +47,19 @@ from PyQt6.QtWidgets import (
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_roles import ROLE_VALUE_AMME, ROLE_VALUE_SPENDER, canonical_role_value
 from Plugins.core.backend_store import BackendJsonStore
+from .surgery_engine import PlannerSnapshot, stable_schedule_id
 
 
-_SURGERY_BACKEND = None
-
-
-def _backend_load(record_id: str, default):
-    if _SURGERY_BACKEND is None:
+def _backend_load(backend, record_id: str, default):
+    if backend is None:
         return default
-    return BackendJsonStore(
-        _SURGERY_BACKEND, "surgery-planner", record_id
-    ).load(default)
+    return BackendJsonStore(backend, "surgery-planner", record_id).load(default)
 
 
-def _backend_save(record_id: str, payload) -> None:
-    if _SURGERY_BACKEND is None:
+def _backend_save(backend, record_id: str, payload) -> None:
+    if backend is None:
         raise RuntimeError("Surgery Planner requires the ProgTrack backend.")
-    BackendJsonStore(
-        _SURGERY_BACKEND, "surgery-planner", record_id
-    ).save(payload)
+    BackendJsonStore(backend, "surgery-planner", record_id).save(payload)
 
 
 def _animal_role_value(animal: Dict[str, Any]) -> str:
@@ -122,9 +112,6 @@ def tr(messages: Dict[str, Any], key: str, default: str = '', **kwargs) -> str:
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('SurgeryPlanner')
 
-# Make all x-tick labels smaller (and optionally axis labels too)
-mpl.rcParams['xtick.labelsize'] = 7
-mpl.rcParams['axes.labelsize']  = 5
 
 # ─── Data Structures ──────────────────────────────────────────────────
 
@@ -143,6 +130,8 @@ class ScheduleEntry:
         self.timestamp = datetime.utcnow().isoformat()
         # by default, new entries are unfixed (can be regenerated)
         self.fixed = False
+        self.entry_id = stable_schedule_id(animal, event_type, date_obj)
+        self.override_reason = ""
 
 
 def schedule_entry_to_dict(entry: ScheduleEntry, *, date_format: str = "iso") -> Dict[str, Any]:
@@ -157,6 +146,8 @@ def schedule_entry_to_dict(entry: ScheduleEntry, *, date_format: str = "iso") ->
         'created_by': entry.created_by,
         'timestamp': entry.timestamp,
         'fixed': entry.fixed,
+        'id': getattr(entry, 'entry_id', stable_schedule_id(entry.animal, entry.event_type, entry.date)),
+        'override_reason': getattr(entry, 'override_reason', ''),
     }
 
 # ─── JSON I/O ──────────────────────────────────────────────
@@ -169,7 +160,7 @@ ROOT_DIR = os.path.abspath(os.path.join(PLUGIN_DIR, '..', '..'))
 # and schedule definitions are written into the same folder as this file
 # (Plugins/Surgery_Planner) rather than the root.  Exported PNG schedules
 # continue to be written into ROOT_DIR.
-DATE_FORMAT = '%d.%m.%Y'
+DATE_FORMAT = '%Y-%m-%d'
 
 def load_animals() -> list[dict]:
     """Return planner animals supplied by the application backend.
@@ -180,7 +171,7 @@ def load_animals() -> list[dict]:
     """
     return []
 
-def load_block_days() -> list[BlockDay]:
+def load_block_days(backend=None) -> list[BlockDay]:
     """
     Load the list of block days from the plugin's block day file.  The
     expected format is a JSON object with a ``block_days`` key pointing to
@@ -191,7 +182,7 @@ def load_block_days() -> list[BlockDay]:
     warning.
     """
     try:
-        data = _backend_load("block-days", {"block_days": []})
+        data = _backend_load(backend, "block-days", {"block_days": []})
         items: list = []
         if isinstance(data, dict):
             raw = data.get('block_days', [])
@@ -224,9 +215,9 @@ def load_block_days() -> list[BlockDay]:
         logger.error(f"Failed to load block days: {e}")
         return []
 
-def save_block_days(days: list[BlockDay]) -> None:
+def save_block_days(days: list[BlockDay], backend=None) -> None:
     try:
-        data = _backend_load("block-days", {"block_days": []})
+        data = _backend_load(backend, "block-days", {"block_days": []})
         raw = data.get('block_days', []) if isinstance(data, dict) else []
         # build a map date→name from disk
         on_disk = {item['date']: item.get('name', '') for item in raw if 'date' in item}
@@ -241,12 +232,12 @@ def save_block_days(days: list[BlockDay]) -> None:
             for dt in on_disk
             if dt in keep
         ]
-        _backend_save("block-days", {'block_days': cleaned})
+        _backend_save(backend, "block-days", {'block_days': cleaned})
         logger.debug(f"Persisted {len(cleaned)} block days to backend")
     except Exception as e:
         logger.error(f"Failed to save block days: {e}")
 
-def save_schedule_to_plugin(entries: list[ScheduleEntry]) -> None:
+def save_schedule_to_plugin(entries: list[ScheduleEntry], backend=None) -> None:
     """Publish the schedule through the shared backend."""
     try:
         # Convert entries to dict format for JSON serialization
@@ -254,15 +245,15 @@ def save_schedule_to_plugin(entries: list[ScheduleEntry]) -> None:
         for entry in entries:
             schedule_data.append(schedule_entry_to_dict(entry, date_format="iso"))
         
-        _backend_save("schedule", {'schedule': schedule_data})
+        _backend_save(backend, "schedule", {'schedule': schedule_data})
         logger.info("Schedule saved to backend")
     except Exception as e:
         logger.error(f"Failed to save schedule: {e}")
 
-def load_plugin_settings() -> dict:
+def load_plugin_settings(backend=None) -> dict:
     """Load plugin settings from the shared backend."""
     try:
-        settings = _backend_load("settings", {})
+        settings = _backend_load(backend, "settings", {})
         if settings:
             logger.info("Settings loaded from backend")
             return settings
@@ -283,7 +274,7 @@ def load_plugin_settings() -> dict:
         logger.error(f"Failed to load settings: {e}")
         return {}
 
-def save_plugin_settings(settings: dict) -> None:
+def save_plugin_settings(settings: dict, backend=None) -> None:
     """Save plugin settings to the shared backend."""
     try:
         # Convert sets to lists for JSON serialization
@@ -294,7 +285,7 @@ def save_plugin_settings(settings: dict) -> None:
             else:
                 serializable_settings[key] = value
         
-        _backend_save("settings", serializable_settings)
+        _backend_save(backend, "settings", serializable_settings)
         logger.info("Settings saved to backend")
     except Exception as e:
         logger.error(f"Failed to save settings: {e}")
@@ -322,6 +313,12 @@ def export_schedule_to_csv(entries: list[ScheduleEntry], filename: str) -> None:
 
 class GanttWidget(QDialog):
 
+    def _backend_load(self, record_id: str, default):
+        return _backend_load(self.backend, record_id, default)
+
+    def _backend_save(self, record_id: str, payload) -> None:
+        _backend_save(self.backend, record_id, payload)
+
     def __init__(self, animals: Optional[list[dict]] = None, messages: Optional[dict] = None, parent=None):
         """
         Create a new GanttWidget.  The optional ``animals`` parameter allows
@@ -331,8 +328,7 @@ class GanttWidget(QDialog):
         localized strings for the UI.
         """
         super().__init__(parent)
-        global _SURGERY_BACKEND
-        _SURGERY_BACKEND = getattr(parent, "backend", None)
+        self.backend = getattr(parent, "backend", None)
         
         # Initialize instance variables
         self.planned = []  # List of scheduled events
@@ -555,7 +551,7 @@ class GanttWidget(QDialog):
         Load plugin settings from plugin config file.
         """
         # Load plugin settings first
-        plugin_settings = load_plugin_settings()
+        plugin_settings = load_plugin_settings(self.backend)
         if plugin_settings:
             # Merge plugin settings with current settings (plugin settings take precedence)
             self.settings.update(plugin_settings)
@@ -565,7 +561,7 @@ class GanttWidget(QDialog):
         # not fall back to a legacy JSON file.
         if not self.animals:
             logger.info("No planner animals were supplied by the configured backend")
-        self.block_days = load_block_days()
+        self.block_days = load_block_days(self.backend)
         self.update_animal_table()
 
         # Refresh calendar formatting now that block days have been loaded.
@@ -681,15 +677,15 @@ class GanttWidget(QDialog):
         # Connect signals to update settings
         def update_donors(val):
             self.settings['donors_per_surgery'] = val
-            save_plugin_settings(self.settings)
+            save_plugin_settings(self.settings, self.backend)
 
         def update_surrogates(val):
             self.settings['surrogates_per_transfer'] = val
-            save_plugin_settings(self.settings)
+            save_plugin_settings(self.settings, self.backend)
 
         def update_transfer_offset(val):
             self.settings['transfer_offset_days'] = val
-            save_plugin_settings(self.settings)
+            save_plugin_settings(self.settings, self.backend)
 
         self.donors_per_surgery.valueChanged.connect(update_donors)
         self.surrogates_per_transfer.valueChanged.connect(update_surrogates)
@@ -1131,7 +1127,7 @@ class GanttWidget(QDialog):
                 message = f"Blocked day: {selected_date}"
                 logger.debug(f"Added block day: {selected_date} - {name}")
             # Persist the updated list
-            save_block_days(self.block_days)
+            save_block_days(self.block_days, self.backend)
             QMessageBox.information(
                 self, 
                 self.messages.get('op_planner.info.block_day_updated', 'Block Day Updated'), 
@@ -1153,9 +1149,9 @@ class GanttWidget(QDialog):
 
     def load_schedule_on_startup(self):
         """Load the published schedule, or the current draft, from the backend."""
-        data = _backend_load("schedule", None)
+        data = self._backend_load("schedule", None)
         if data is None:
-            data = _backend_load("draft-schedule", None)
+            data = self._backend_load("draft-schedule", None)
         if data is not None:
             try:
                 # Handle both formats: direct list [...] or wrapped {"schedule": [...]}
@@ -1187,6 +1183,8 @@ class GanttWidget(QDialog):
                         override=item.get('override_weekday', False)
                     )
                     entry.fixed = item.get('fixed', False)
+                    entry.entry_id = item.get('id', stable_schedule_id(entry.animal, entry.event_type, entry.date))
+                    entry.override_reason = item.get('override_reason', '')
                     entry.created_by = item.get('created_by', 'surgery_planner_plugin_v1.0.0')
                     entry.timestamp = item.get('timestamp', datetime.utcnow().isoformat())
                     saved.append(entry)
@@ -1201,36 +1199,9 @@ class GanttWidget(QDialog):
             self.planned = []
 
     def generate_new_schedule_workflow(self):
-        """Two-stage schedule generation with proper file handling."""
-        # Stage 1: generate the editable staging schedule.
-        self._generate_schedule_to_memory()  # Generate schedule in memory first
-        
-        # Save generated schedule to the staging file.
-        try:
-            schedule_data = []
-            for entry in self.planned:
-                schedule_data.append(schedule_entry_to_dict(entry, date_format="iso"))
-            
-            _backend_save("draft-schedule", {'schedule': schedule_data})
-            logger.info("Staging schedule saved to backend")
-        except Exception as e:
-            logger.error(f"Failed to save staging schedule: {e}")
-            return False
-        
-        # Stage 2: publish the staging schedule to the main schedule file.
-        try:
-            _backend_save("schedule", {'schedule': schedule_data})
-            logger.info("Staging schedule published in backend")
-            
-            # Load the new schedule
-            self.load_schedule_on_startup()
-            
-            # Keep the staging file so manual edits can continue from the last generated plan.
-            logger.info("Staging schedule retained for further edits")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to copy schedule: {e}")
-            return False
+        """Generate a preview without writing backend records."""
+        self._generate_schedule_to_memory()
+        return bool(self.planned)
 
     def _generate_schedule_to_memory(self):
         """Generate schedule data in memory before writing the staging schedule."""
@@ -1253,8 +1224,8 @@ class GanttWidget(QDialog):
     def _load_saved_schedule(self) -> None:
         """Load and render an existing backend schedule, if present."""
         try:
-            data = _backend_load(
-                "draft-schedule", _backend_load("schedule", None)
+            data = self._backend_load(
+                "draft-schedule", self._backend_load("schedule", None)
             )
             if data is None:
                 return
@@ -1276,6 +1247,8 @@ class GanttWidget(QDialog):
                         override   = item.get('override_weekday', False)
                     )
                     entry.fixed = item.get('fixed', True)
+                    entry.entry_id = item.get('id', stable_schedule_id(entry.animal, entry.event_type, entry.date))
+                    entry.override_reason = item.get('override_reason', '')
                     saved.append(entry)
                 if saved:
                     self.planned = saved
@@ -1476,7 +1449,7 @@ class GanttWidget(QDialog):
             temp_out = {'schedule': []}
             for entry in getattr(self, 'planned', []):
                 temp_out['schedule'].append(schedule_entry_to_dict(entry, date_format=DATE_FORMAT))
-            _backend_save("draft-schedule", temp_out)
+            self._backend_save("draft-schedule", temp_out)
             logger.debug(f"Persisted {len(temp_out['schedule'])} events to temp schedule")
         except Exception as ex:
             logger.error(f"Failed to persist temp schedule: {ex}")
@@ -1895,6 +1868,8 @@ class GanttWidget(QDialog):
                 )
                 logger.error("Invalid date range: start_date > end_date")
                 return
+
+            self.planner_snapshot = PlannerSnapshot.from_inputs(self.animals, self.settings, start_date, end_date, (bd.date for bd in self.block_days), getattr(self, 'planned', ()))
 
             # Initialize fixed events and planned list
             blocks = {bd.date for bd in self.block_days}
@@ -2448,16 +2423,6 @@ class GanttWidget(QDialog):
                         planned.append(entry)
                         # Note: s['remaining'] and s['next'] already updated in first pass
 
-            # Save generated plan to the editable staging file.
-            try:
-                temp_out = {'schedule': []}
-                for entry in planned:
-                    temp_out['schedule'].append(schedule_entry_to_dict(entry, date_format=DATE_FORMAT))
-                _backend_save("draft-schedule", temp_out)
-                logger.debug(f"Saved staging schedule ({len(planned)} entries) to backend")
-            except Exception as e:
-                logger.error(f"Failed to save staging schedule: {e}")
-
             # Update internal schedule
             self.planned = planned
             
@@ -2642,7 +2607,7 @@ class GanttWidget(QDialog):
                     temp_out = {'schedule': []}
                     for e in self.planned:
                         temp_out['schedule'].append(schedule_entry_to_dict(e, date_format=DATE_FORMAT))
-                    _backend_save("draft-schedule", temp_out)
+                    self._backend_save("draft-schedule", temp_out)
                 except Exception as ex:
                     logger.error(f"Failed to save temp schedule after edit: {ex}")
 
@@ -3132,7 +3097,6 @@ class GanttWidget(QDialog):
         )
         if filename:
             try:
-                save_schedule_to_plugin(self.planned)
                 out = {
                     "schedule": [
                         schedule_entry_to_dict(entry, date_format="iso")
@@ -3154,11 +3118,23 @@ class GanttWidget(QDialog):
                 )
                 logger.error(f"JSON export failed: {e}")
 
+    def _audit_publish(self, revision, count):
+        parent=getattr(self, "_parent", None)
+        master=getattr(parent, "master_track", None)
+        audit=getattr(master, "audit", None)
+        if callable(audit):
+            try: audit("surgery_planner.publish", f"revision={revision}; entries={count}")
+            except Exception: logger.exception("Surgery Planner audit failed")
+
     def _save_schedule(self):
         """
         Persist the currently generated schedule entries to
         the selected ProgTrack backend.
         """
+        if not self._can("op_scheduler.use"):
+            QMessageBox.warning(self, self.messages.get("op_planner.warning.permission", "Permission denied"), self.messages.get("op_planner.warning.publish_permission", "You are not allowed to publish a schedule."))
+            return
+
         try:
             # Ensure we've generated a schedule
             if not hasattr(self, 'planned') or not self.planned:
@@ -3170,11 +3146,12 @@ class GanttWidget(QDialog):
                 return
 
             # Serialize entries
-            out = {'schedule': []}
+            out = {'schedule': [], 'snapshot_revision': getattr(getattr(self, 'planner_snapshot', None), 'revision', 'unknown'), 'published_at': datetime.utcnow().isoformat()}
             for entry in self.planned:
                 out['schedule'].append(schedule_entry_to_dict(entry, date_format=DATE_FORMAT))
 
-            _backend_save("schedule", out)
+            self._backend_save("schedule", out)
+            self._audit_publish(out.get("snapshot_revision"), len(self.planned))
 
             QMessageBox.information(
                 self, 
@@ -3208,7 +3185,7 @@ class GanttWidget(QDialog):
                 return
                 
             # Fall back to the published backend schedule.
-            data = _backend_load("schedule", None)
+            data = self._backend_load("schedule", None)
             if data is not None:
                 if isinstance(data, list):
                     data = {"schedule": data}

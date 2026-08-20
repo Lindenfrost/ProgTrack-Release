@@ -1,7 +1,7 @@
 {
   "name": "Cage__Track",
   "display_name": "Cage Track",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Hierarchical animal housing management plugin. Visualizes buildings, rooms, and cages with drag-and-drop animal placement, movement history tracking, role-based coloring, project-based cage backgrounds, and PDF export. Supports collapsible multi-row layouts and address integration in animal dialogs.",
   "author": "DLL",
   "SPDX-License-Identifier": "GPL-3.0-or-later",
@@ -12,7 +12,7 @@
     "matplotlib"
   ],
   "data_files": [],
-  "min_progtrack_version": "RC 0.1.0",
+  "min_progtrack_version": "0.2.1",
   "menu_location": "Tab",
   "icon": "progtrack_icon.ico",
   "optional": true,
@@ -26,5 +26,23 @@
     "address_dialog_integration",
     "collapsible_multi_row_layout",
     "pdf_export"
+  ],
+  "bootstrap_entry_point": "__init__.initialize",
+  "capabilities": [
+    "hierarchical_housing_model",
+    "building_room_cage_management",
+    "drag_and_drop_animal_placement",
+    "movement_history_tracking",
+    "role_based_animal_coloring",
+    "project_based_cage_coloring",
+    "address_dialog_integration",
+    "collapsible_multi_row_layout",
+    "pdf_export"
+  ],
+  "permissions": [],
+  "backend_namespaces": [],
+  "resources": [],
+  "docs": [
+    "../../manual/ProgTrack_User_Guide - en.html#plugins"
   ]
 }

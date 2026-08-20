@@ -1,7 +1,7 @@
 {
   "name": "Medi_Track",
   "display_name": "Medi Track",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Medical history tracking plugin for individual animals. Adds 'Abnormal' status checkbox, medical condition categorization with hierarchical taxonomy, document management per animal, and comprehensive medical log reporting. Integrates with ProgTrack status system and Master Track audit logging.",
   "author": "DLL",
   "SPDX-License-Identifier": "GPL-3.0-or-later",
@@ -15,7 +15,7 @@
   "data_files": [
     "lang/conditions_*.json"
   ],
-  "min_progtrack_version": "RC 0.1.0",
+  "min_progtrack_version": "0.2.1",
   "menu_location": "Tab",
   "icon": "progtrack_icon.ico",
   "optional": true,
@@ -30,5 +30,24 @@
     "master_track_audit_logging"
   ],
   "warranty": "NO WARRANTY",
-  "disclaimer": "The plugin and documentation are provided without warranty to the extent permitted by law. No warranty is given for completeness, correctness, fitness for a particular purpose, or suitability for scientific, clinical, regulatory, or operational decisions."
+  "disclaimer": "The plugin and documentation are provided without warranty to the extent permitted by law. No warranty is given for completeness, correctness, fitness for a particular purpose, or suitability for scientific, clinical, regulatory, or operational decisions.",
+  "bootstrap_entry_point": "__init__.initialize",
+  "capabilities": [
+    "sick_and_abnormal_status_tracking",
+    "medical_condition_taxonomy",
+    "medical_history_logging",
+    "status_change_signatures",
+    "per_animal_document_management",
+    "medical_report_integration",
+    "filter_controls_integration",
+    "master_track_audit_logging"
+  ],
+  "permissions": [],
+  "backend_namespaces": [],
+  "resources": [
+    "lang/conditions_*.json"
+  ],
+  "docs": [
+    "../../manual/ProgTrack_User_Guide - en.html#plugins"
+  ]
 }

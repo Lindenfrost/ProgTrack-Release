@@ -144,6 +144,11 @@ class MasterTrackPlugin:
         return self._current_role
 
     @property
+    def current_unit_id(self) -> str:
+        record = self._current_user_record()
+        return str(record.get("unit_id") or "").strip().casefold() if record else ""
+
+    @property
     def is_logged_in(self) -> bool:
         return self._current_username is not None
 

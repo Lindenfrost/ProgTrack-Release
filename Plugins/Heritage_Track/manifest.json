@@ -27,5 +27,23 @@
     "species_filtering",
     "family_node_collapsing",
     "draggable_nodes"
+  ],
+  "bootstrap_entry_point": "__init__.initialize",
+  "capabilities": [
+    "pedigree_graph_visualization",
+    "parent_child_relationship_management",
+    "kinship_coefficient_calculation",
+    "inbreeding_analysis",
+    "heritage_only_animals",
+    "genotype_annotations",
+    "species_filtering",
+    "family_node_collapsing",
+    "draggable_nodes"
+  ],
+  "permissions": [],
+  "backend_namespaces": [],
+  "resources": [],
+  "docs": [
+    "../../manual/ProgTrack_User_Guide - en.html#plugins"
   ]
 }

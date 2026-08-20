@@ -1,18 +1,19 @@
 {
   "name": "Surgery_Planner",
   "display_name": "Surgery Planner (OP Planner)",
-  "version": "0.1.0",
-  "description": "Automated surgery and embryo transfer scheduling plugin. Provides a Gantt-chart-based planner with configurable recovery rules, weekday constraints, blocked days, animal eligibility filtering, manual adjustments, calendar highlighting, and export to CSV, Excel, PNG, and JSON.",
+  "version": "0.2.1",
+  "description": "Qt6-compatible surgery and embryo-transfer scheduling baseline with deterministic backend snapshots and explicit preview/publish boundaries.",
   "author": "DLL",
   "SPDX-License-Identifier": "GPL-3.0-or-later",
   "Copyright": "Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH",
-  "entry_point": "surgery_planner.SurgeryPlannerPlugin",
+  "entry_point": "surgery_planner.Plugin",
   "dependencies": [
     "PyQt6",
-    "pyqtgraph"
+    "matplotlib",
+    "numpy"
   ],
   "data_files": [],
-  "min_progtrack_version": "RC 0.1.0",
+  "min_progtrack_version": "0.2.1",
   "menu_location": "Tools",
   "icon": "progtrack_icon.ico",
   "optional": true,
@@ -28,5 +29,27 @@
     "csv_excel_png_json_export"
   ],
   "warranty": "NO WARRANTY",
-  "disclaimer": "The plugin and documentation are provided without warranty to the extent permitted by law. No warranty is given for completeness, correctness, fitness for a particular purpose, or suitability for scientific, clinical, regulatory, or operational decisions."
+  "disclaimer": "The plugin and documentation are provided without warranty to the extent permitted by law. No warranty is given for completeness, correctness, fitness for a particular purpose, or suitability for scientific, clinical, regulatory, or operational decisions.",
+  "capabilities": [
+    "surgery_transfer_scheduling",
+    "gantt_chart_planning",
+    "recovery_rule_configuration",
+    "weekday_constraints",
+    "blocked_days_management",
+    "animal_eligibility_filtering",
+    "manual_schedule_adjustments",
+    "calendar_highlighting",
+    "csv_excel_png_json_export"
+  ],
+  "permissions": [
+    "op_scheduler.view",
+    "op_scheduler.use"
+  ],
+  "backend_namespaces": [
+    "surgery-planner"
+  ],
+  "resources": [],
+  "docs": [
+    "../../manual/ProgTrack_User_Guide - en.html#plugins"
+  ]
 }

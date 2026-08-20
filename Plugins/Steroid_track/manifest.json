@@ -1,7 +1,7 @@
 {
   "name": "Steroid_track",
   "display_name": "Steroid Track",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Non-windowed ProgTrack feature-gate plugin. Enables steroid-related role controls, hormone and sperm measurements, reproductive events, female phase filters, and PdG converter integration when installed and enabled.",
   "author": "DLL",
   "SPDX-License-Identifier": "GPL-3.0-or-later",
@@ -9,7 +9,7 @@
   "entry_point": "__init__.initialize",
   "dependencies": [],
   "data_files": [],
-  "min_progtrack_version": "RC 0.1.0",
+  "min_progtrack_version": "0.2.1",
   "menu_location": "Tools",
   "icon": "progtrack_icon.ico",
   "optional": true,
@@ -22,5 +22,20 @@
     "reproductive_event_controls",
     "female_phase_filters",
     "pdg_converter_integration"
+  ],
+  "capabilities": [
+    "non_windowed_feature_gate",
+    "steroid_role_controls",
+    "hormone_measurement_controls",
+    "sperm_measurement_controls",
+    "reproductive_event_controls",
+    "female_phase_filters",
+    "pdg_converter_integration"
+  ],
+  "permissions": [],
+  "backend_namespaces": [],
+  "resources": [],
+  "docs": [
+    "../../manual/ProgTrack_User_Guide - en.html#plugins"
   ]
 }

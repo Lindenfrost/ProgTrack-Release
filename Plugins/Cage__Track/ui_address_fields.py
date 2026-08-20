@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from PyQt6.QtWidgets import QComboBox, QFormLayout, QGroupBox, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QComboBox, QFormLayout, QVBoxLayout, QWidget
+
+from Plugins.core.animal_dialog_sections import AnimalDialogSection
 
 
 def build_address_group(
@@ -19,7 +21,7 @@ def build_address_group(
     units: List[Dict[str, Any]],
     rooms: List[Dict[str, Any]],
     cages: List[Dict[str, Any]],
-) -> Tuple[QGroupBox, Dict[str, QComboBox]]:
+) -> Tuple[AnimalDialogSection, Dict[str, QComboBox]]:
     """Create address input UI block with cascading non-editable dropdowns.
 
     Parameters
@@ -33,24 +35,16 @@ def build_address_group(
 
     Returns
     -------
-    (QGroupBox, dict of QComboBox)
+    (AnimalDialogSection, dict of QComboBox)
         The group widget and a mapping for all four address levels.
     """
-    group = QGroupBox(messages.get("address.label", "Address"))
-    group.setObjectName("animalOptionalAddressSection")
-    group.setCheckable(True)
-    group.setStyleSheet(
-        "QGroupBox#animalOptionalAddressSection {"
-        " border: 1px solid palette(mid); border-radius: 3px; margin-top: 8px;"
-        " padding-top: 4px; }"
-        "QGroupBox#animalOptionalAddressSection::indicator {"
-        " width: 18px; height: 18px; }"
+    # Address sections intentionally start collapsed.  The application may
+    # restore a signed-in user's preference after the widget is constructed.
+    group = AnimalDialogSection(
+        messages.get("address.label", "Address"), collapsed=True
     )
-    has_address = any(v for v in current_address.values() if v)
-    group.setChecked(has_address)
-
-    group_layout = QVBoxLayout(group)
-    group_layout.setContentsMargins(4, 2, 4, 4)
+    group.setProperty("section_id", "address")
+    group_layout = group.content_layout()
 
     content = QWidget()
     inner = QFormLayout(content)
@@ -157,10 +151,6 @@ def build_address_group(
     inner.addRow(messages.get("address.cage", "Cage:"), cage_combo)
 
     group_layout.addWidget(content)
-
-    # Toggle content visibility when checkbox is checked/unchecked
-    group.toggled.connect(content.setVisible)
-    content.setVisible(group.isChecked())
 
     return group, fields
 

@@ -105,6 +105,32 @@ def _msg(messages: Dict[str, Any], key: str, fallback: str) -> str:
     return messages.get(key, fallback)
 
 
+def _organization_unit_combo(user_db: UserDB, current_id: str = "") -> QComboBox:
+    """Build a selector from the backend-owned organizational Unit catalog."""
+    combo = QComboBox()
+    combo.addItem("Unassigned", "")
+    try:
+        raw = user_db.backend.records.get(
+            "security", "organization-units", default={}
+        )
+    except Exception:
+        raw = {}
+    items = raw.get("units", []) if isinstance(raw, dict) else []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        unit_id = str(item.get("unit_id") or "").strip().casefold()
+        if not unit_id:
+            continue
+        label = str(item.get("display_name") or unit_id)
+        if bool(item.get("archived", False)) or not bool(item.get("active", True)):
+            continue
+        combo.addItem(label, unit_id)
+    index = combo.findData(str(current_id or "").strip().casefold())
+    combo.setCurrentIndex(index if index >= 0 else 0)
+    return combo
+
+
 def _strength(pw: str) -> int:
     """Return 0-100 password strength score."""
     score = 0
@@ -843,7 +869,9 @@ class _EditUserDialog(QDialog):
         self._p_email      = QLineEdit(user.get("email",       ""))
         self._p_phone      = QLineEdit(user.get("phone",       ""))
         self._p_mobile     = QLineEdit(user.get("mobile",      ""))
-        self._p_unit       = QLineEdit(user.get("unit",        ""))
+        self._p_unit       = _organization_unit_combo(
+            user_db, user.get("unit_id", "")
+        )
         self._p_profession = QLineEdit(user.get("profession",  ""))
         for _field in (
             self._p_display, self._p_pronouns, self._p_email, self._p_phone,
@@ -1043,6 +1071,13 @@ class _EditUserDialog(QDialog):
     def _save(self) -> None:
         new_role = self._get_selected_role()
         user = self._user
+        if new_role not in (ROLE_LORD, ROLE_MASTER) and not str(self._p_unit.currentData() or ""):
+            self.error_label.setText(_msg(
+                self.messages,
+                "master_track.error.unit_required",
+                "A regular user must have an organizational Unit.",
+            ))
+            return
         if new_role != user.get("role") and not self._can_assign_primary_role:
             self.error_label.setText("Permission denied: primary role assignment.")
             return
@@ -1124,7 +1159,8 @@ class _EditUserDialog(QDialog):
                 email=self._p_email.text().strip(),
                 phone=self._p_phone.text().strip(),
                 mobile=self._p_mobile.text().strip(),
-                unit=self._p_unit.text().strip(),
+                unit=self._p_unit.currentText().strip(),
+                unit_id=str(self._p_unit.currentData() or ""),
                 profession=self._p_profession.text().strip(),
             )
         self.accept()
@@ -2212,7 +2248,7 @@ class _CreateUserSubDialog(QDialog):
         self.f_email      = QLineEdit()
         self.f_phone      = QLineEdit()
         self.f_mobile     = QLineEdit()
-        self.f_unit       = QLineEdit()
+        self.f_unit       = _organization_unit_combo(user_db)
         self.f_profession = QLineEdit()
         prof_form.addRow(_msg(messages, "master_track.label.pronouns",   "Pronouns:"),   self.f_pronouns)
         prof_form.addRow(_msg(messages, "master_track.label.email",      "E-Mail:"),     self.f_email)
@@ -2249,6 +2285,13 @@ class _CreateUserSubDialog(QDialog):
                      "Password must be at least {n} characters.").replace("{n}", str(_MIN_PW_LEN)))
             return
         role = self.role_combo.currentText()
+        if role not in ("lord", "master") and not str(self.f_unit.currentData() or ""):
+            self.error_label.setText(_msg(
+                self.messages,
+                "master_track.error.unit_required",
+                "A regular user must have an organizational Unit.",
+            ))
+            return
         self.user_db.add_user(
             uname, pw, role=role,
             display_name=self.dname.text().strip(),
@@ -2256,7 +2299,8 @@ class _CreateUserSubDialog(QDialog):
             email=self.f_email.text().strip(),
             phone=self.f_phone.text().strip(),
             mobile=self.f_mobile.text().strip(),
-            unit=self.f_unit.text().strip(),
+            unit=self.f_unit.currentText().strip(),
+            unit_id=str(self.f_unit.currentData() or ""),
             profession=self.f_profession.text().strip(),
         )
         self.accept()

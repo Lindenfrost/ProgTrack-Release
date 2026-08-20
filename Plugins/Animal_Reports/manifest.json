@@ -1,18 +1,18 @@
 {
   "name": "Animal_Reports",
   "display_name": "Animal Reports",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Per-animal reporting plugin. Aggregates ProgTrack animal data into searchable report views with general information, measurements, procedures, notes, timeline entries, statistics, lockable timeline items, and report export support.",
   "author": "DLL",
   "SPDX-License-Identifier": "GPL-3.0-or-later",
   "Copyright": "Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH",
-  "entry_point": "animal_reports.AnimalReportsPlugin",
+  "entry_point": "animal_reports.AnimalReportsWidget",
   "dependencies": [
     "PyQt6",
     "matplotlib"
   ],
   "data_files": [],
-  "min_progtrack_version": "RC 0.1.0",
+  "min_progtrack_version": "0.2.1",
   "menu_location": "Tab",
   "icon": "progtrack_icon.ico",
   "optional": true,
@@ -25,5 +25,21 @@
     "locked_timeline_entries",
     "report_data_cache",
     "report_export"
+  ],
+  "capabilities": [
+    "per_animal_report_view",
+    "animal_search_and_selection",
+    "general_measurement_procedure_note_tabs",
+    "timeline_event_table",
+    "statistics_summary",
+    "locked_timeline_entries",
+    "report_data_cache",
+    "report_export"
+  ],
+  "permissions": [],
+  "backend_namespaces": [],
+  "resources": [],
+  "docs": [
+    "../../manual/ProgTrack_User_Guide - en.html#plugins"
   ]
 }

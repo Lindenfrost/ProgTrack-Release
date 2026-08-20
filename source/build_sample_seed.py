@@ -206,48 +206,48 @@ CANONICAL_USERS = (
         "username": "Admin", "display_name": "Administrator Administratorson",
         "role": "lord", "jobs": [], "pronouns": "Mr.",
         "email": "admin@dpz.eu", "phone": "-000",
-        "mobile": "0176234234234", "unit": "IT",
+        "mobile": "0176234234234", "unit": "IT", "unit_id": "org-it",
         "profession": "Software engineer", "created_at": "2026-04-16",
     },
     {
         "username": "Researcher", "display_name": "Dr. Researcher Sciencedottir",
         "role": "user", "jobs": ["researcher"], "pronouns": "Mrs.",
         "email": "res@dpz.eu", "phone": "-111",
-        "mobile": "01753457685634", "unit": "TTS",
+        "mobile": "01753457685634", "unit": "TTS", "unit_id": "org-tts",
         "profession": "Biologist", "created_at": "2026-04-16",
     },
     {
         "username": "Vet", "display_name": "Dr. Veterinary Medicinsson",
         "role": "user", "jobs": ["vet"], "pronouns": "Mr.",
         "email": "vet@dpz.eu", "phone": "-222",
-        "mobile": "0176345345475456", "unit": "HUS",
+        "mobile": "0176345345475456", "unit": "HUS", "unit_id": "org-hus",
         "profession": "Veterinary surgeon", "created_at": "2026-04-16",
     },
     {
         "username": "Manager", "display_name": "Dr. Manager Plansdottir",
         "role": "user", "jobs": ["manager"], "pronouns": "Ms.",
         "email": "man@dpz.eu", "phone": "-333",
-        "mobile": "0146234234345235", "unit": "HUS",
+        "mobile": "0146234234345235", "unit": "HUS", "unit_id": "org-hus",
         "profession": "Biologist", "created_at": "2026-04-16",
     },
     {
         "username": "Keeper", "display_name": "Keeper Breedsson",
         "role": "user", "jobs": ["keeper"], "pronouns": "Mr.",
         "email": "keep@dpz.eu", "phone": "-444",
-        "mobile": "01782342343463425", "unit": "HUS",
+        "mobile": "01782342343463425", "unit": "HUS", "unit_id": "org-hus",
         "profession": "Animal caretaker", "created_at": "2026-04-16",
     },
     {
         "username": "Tester", "display_name": "Tester Aitisson",
         "role": "user", "jobs": ["tester"], "pronouns": "Mr.",
         "email": "test@dpz.eu", "phone": "-999",
-        "mobile": "016745346234234", "unit": "IT",
+        "mobile": "016745346234234", "unit": "TTS", "unit_id": "org-tts",
         "profession": "Software engineer", "created_at": "2026-04-16",
     },
     {
         "username": "Veti", "display_name": "Dr. Veterinary Medicinsdottir",
         "role": "user", "jobs": ["vet", "animal_welfare_officer"], "pronouns": "",
-        "email": "veti@dpz.eu", "phone": "", "mobile": "", "unit": "HUS",
+        "email": "veti@dpz.eu", "phone": "", "mobile": "", "unit": "HUS", "unit_id": "org-hus",
         "profession": "Veterinary Surgeon", "created_at": "2026-07-22",
     },
 )
@@ -796,6 +796,13 @@ def build_flow(scenario: dict[str, Any]) -> dict[str, Any]:
             "embryo_transfers": {},
         },
     }
+
+
+CANONICAL_ORGANIZATION_UNITS = (
+    {"unit_id": "org-it", "display_name": "IT", "active": True, "archived": False, "revision": 1, "facility_ref": "dpz"},
+    {"unit_id": "org-tts", "display_name": "TTS", "active": True, "archived": False, "revision": 1, "facility_ref": "dpz"},
+    {"unit_id": "org-hus", "display_name": "HUS", "active": True, "archived": False, "revision": 1, "facility_ref": "dpz"},
+)
 
 
 def seed_users() -> list[dict[str, Any]]:
@@ -1641,6 +1648,10 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
     records[("reports", "animal-reports")] = reports
     records[("reproduction", "flow")] = build_flow(scenario)
     records[("security", "users")] = seed_users()
+    records[("security", "organization-units")] = {
+        "schema_version": 1,
+        "units": [dict(item) for item in CANONICAL_ORGANIZATION_UNITS],
+    }
     records[("configuration", "global-settings")] = {"language": "en"}
     records[("configuration", "disabled-plugins")] = []
     records[("configuration", "animal-roles")] = seeded_animal_role_configuration()
@@ -1815,8 +1826,42 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
             errors.append(
                 f"project {record_id} mismatch: {sorted(project_names)}"
             )
+    project_catalog = records.get(("projects", "catalog"), {})
+    catalog_projects = project_catalog.get("projects", {})
+    for project_name, project in catalog_projects.items():
+        summary = project.get("summary", {}) if isinstance(project, dict) else {}
+        project_species = str(summary.get("species") or "").strip()
+        assigned_animals = {
+            ipid: record
+            for ipid, record in all_animals.items()
+            if str(record.get("project") or "").strip() == project_name
+        }
+        assigned_species = {
+            str(record.get("species") or "").strip()
+            for record in assigned_animals.values()
+        }
+        if not project_species:
+            errors.append(f"missing project species: {project_name}")
+        if not assigned_animals:
+            errors.append(f"project has no assigned animals: {project_name}")
+        if "" in assigned_species:
+            errors.append(f"project has animal with missing species: {project_name}")
+        if len(assigned_species) > 1:
+            errors.append(
+                f"project has mixed assigned species: {project_name} -> "
+                f"{sorted(assigned_species)}"
+            )
+        if project_species and any(
+            species and species != project_species
+            for species in assigned_species
+        ):
+            errors.append(
+                f"project species does not match assigned animals: "
+                f"{project_name} -> {project_species} / {sorted(assigned_species)}"
+            )
     project_history = records.get(("projects", "history"), {})
     for project_name, project in (project_history.get("projects") or {}).items():
+        active_history_ipids: list[str] = []
         for index, entry in enumerate(project.get("animals", []) or []):
             ipid = str(entry.get("ipid") or "").strip() if isinstance(entry, dict) else ""
             if ipid not in all_animals:
@@ -1824,6 +1869,29 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
                     "dangling project-history animal: "
                     f"{project_name}[{index}] -> {ipid or '<empty>'}"
                 )
+            if (
+                isinstance(entry, dict)
+                and not entry.get("date_left")
+                and str(entry.get("status") or "active").strip().casefold()
+                == "active"
+            ):
+                active_history_ipids.append(ipid)
+        expected_active_ipids = {
+            ipid
+            for ipid, record in core["animals"].items()
+            if str(record.get("project") or "").strip() == project_name
+        }
+        if len(active_history_ipids) != len(set(active_history_ipids)):
+            errors.append(
+                f"duplicate active project-history animal: {project_name}"
+            )
+        if set(active_history_ipids) != expected_active_ipids:
+            missing = sorted(expected_active_ipids - set(active_history_ipids))
+            unexpected = sorted(set(active_history_ipids) - expected_active_ipids)
+            errors.append(
+                f"active project-history mismatch: {project_name}; "
+                f"missing={missing}; unexpected={unexpected}"
+            )
     for namespace, record_id, container_key in (
         ("heritage", "graph", "animals"),
         ("medical", "history", "animals"),
@@ -1893,7 +1961,7 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         user = actual_users.get(username, {})
         for field in (
             "display_name", "role", "jobs", "pronouns", "email", "phone",
-            "mobile", "unit", "profession",
+            "mobile", "unit", "unit_id", "profession",
         ):
             if user.get(field) != profile.get(field):
                 errors.append(f"user profile mismatch: {username}.{field}")
@@ -1908,6 +1976,13 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
             errors.append(f"example password mismatch: {username}")
         if user.get("must_change_password"):
             errors.append(f"unexpected forced password change: {username}")
+        if not str(user.get("unit_id") or "").startswith("org-"):
+            errors.append(f"invalid canonical organization unit: {username}")
+    units = records.get(("security", "organization-units"), {})
+    actual_units = {str(item.get("unit_id")) for item in units.get("units", []) if isinstance(item, dict)}
+    expected_units = {str(item["unit_id"]) for item in CANONICAL_ORGANIZATION_UNITS}
+    if actual_units != expected_units:
+        errors.append(f"organization unit catalog mismatch: {sorted(actual_units)} != {sorted(expected_units)}")
     housing = records[("housing", "cage")]
     structures = housing.get("structures", {})
     for reference in sorted(set(housing.get("occupants", {})) - set(core["animals"])):

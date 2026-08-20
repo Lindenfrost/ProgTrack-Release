@@ -11,11 +11,12 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
+import re
 
 from Plugins.core.animal_roles import normalize_block_list
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_FILENAME = "role_block_presets.json"
 RESERVED_PRESET_NAMES = {
     "custom",
@@ -42,6 +43,57 @@ def valid_preset_name(name: Any, *, extra_reserved: Iterable[str] = ()) -> bool:
     return bool(value) and value.casefold() not in reserved
 
 
+def _slug(value: Any) -> str:
+    text = normalized_preset_name(value).casefold()
+    text = re.sub(r"[^a-z0-9]+", "_", text).strip("_")
+    return text or "custom_block"
+
+
+def normalize_experimental_block(raw: Dict[str, Any]) -> Dict[str, Any]:
+    name = normalized_preset_name(raw.get("name") or raw.get("label") or "")
+    block_id = str(raw.get("id") or "").strip()
+    if not block_id:
+        block_id = "custom_limit:" + _slug(name)
+    if not block_id.startswith("custom_limit:"):
+        block_id = "custom_limit:" + _slug(block_id)
+    kind = str(raw.get("kind") or "limiting").strip().casefold()
+    if kind not in {"counting", "limiting"}:
+        kind = "limiting"
+    event_type = str(raw.get("event_type") or block_id.removeprefix("custom_limit:")).strip()
+    event_type = re.sub(r"[^a-zA-Z0-9_]+", "_", event_type).strip("_") or "custom_event"
+    max_field = str(raw.get("max_field") or raw.get("limit_block") or ("max_" + event_type)).strip()
+    render_mode = str(raw.get("render_mode") or "symbol").strip().casefold()
+    if render_mode not in {"line", "symbol"}:
+        render_mode = "symbol"
+    marker = str(raw.get("marker") or "o").strip() or "o"
+    color = str(raw.get("color") or "#4C78A8").strip()
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+        color = "#4C78A8"
+    return {
+        "id": block_id,
+        "name": name or event_type.replace("_", " ").title(),
+        "kind": kind,
+        "event_type": event_type,
+        "max_field": max_field,
+        "render_mode": render_mode,
+        "marker": marker,
+        "color": color.upper(),
+    }
+
+
+def normalize_event_definition(raw: Dict[str, Any]) -> Dict[str, Any]:
+    event = normalize_experimental_block(raw)
+    return {
+        "event_type": event["event_type"],
+        "label": event["name"],
+        "label_key": str(raw.get("label_key") or ""),
+        "render_mode": event["render_mode"],
+        "marker": event["marker"],
+        "color": event["color"],
+        "limit_block": event["max_field"] if event["kind"] == "limiting" else "",
+    }
+
+
 def normalize_preset(raw: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "name": normalized_preset_name(raw.get("name")),
@@ -50,16 +102,14 @@ def normalize_preset(raw: Dict[str, Any]) -> Dict[str, Any]:
 
 
 class RoleBlockPresetRegistry:
-    """Read and write shared custom block presets in the backend.
-
-    The bundled preset JSON is a static bootstrap catalog only.  Facility
-    edits are mutable configuration and therefore have no JSON-file fallback.
-    """
+    """Backend-owned shared role-dialog presets and dynamic event definitions."""
 
     def __init__(self, backend: Any, *, initial_payload: Dict[str, Any] | None = None):
         if backend is None or not hasattr(backend, "records"):
             raise RuntimeError("RoleBlockPresetRegistry requires a configured backend.")
         self.backend = backend
+        self._experimental_blocks: List[Dict[str, Any]] = []
+        self._event_definitions: List[Dict[str, Any]] = []
         self._presets = self._read(initial_payload)
 
     def reload(self) -> None:
@@ -68,7 +118,19 @@ class RoleBlockPresetRegistry:
     def presets(self) -> List[Dict[str, Any]]:
         return deepcopy(self._presets)
 
-    def save_presets(self, presets: Iterable[Dict[str, Any]]) -> None:
+    def experimental_blocks(self) -> List[Dict[str, Any]]:
+        return deepcopy(self._experimental_blocks)
+
+    def event_definitions(self) -> List[Dict[str, Any]]:
+        return deepcopy(self._event_definitions)
+
+    def save_presets(
+        self,
+        presets: Iterable[Dict[str, Any]],
+        *,
+        experimental_blocks: Iterable[Dict[str, Any]] | None = None,
+        event_definitions: Iterable[Dict[str, Any]] | None = None,
+    ) -> None:
         normalized: List[Dict[str, Any]] = []
         seen = set()
         for raw in presets:
@@ -79,32 +141,63 @@ class RoleBlockPresetRegistry:
             if not valid_preset_name(preset["name"]):
                 raise ValueError(f"Invalid custom preset name: {preset['name']!r}")
             if name_key in seen:
-                raise ValueError(
-                    f"Custom preset names must be unique: {preset['name']!r}"
-                )
+                raise ValueError(f"Custom preset names must be unique: {preset['name']!r}")
             seen.add(name_key)
             normalized.append(preset)
 
+        blocks_source = self._experimental_blocks if experimental_blocks is None else experimental_blocks
+        events_source = self._event_definitions if event_definitions is None else event_definitions
+        blocks: List[Dict[str, Any]] = []
+        block_ids = set()
+        for raw in blocks_source or []:
+            if not isinstance(raw, dict):
+                continue
+            item = normalize_experimental_block(raw)
+            if not item["name"] or item["id"] in block_ids:
+                continue
+            block_ids.add(item["id"])
+            blocks.append(item)
+        events: List[Dict[str, Any]] = []
+        event_ids = set()
+        for raw in events_source or []:
+            if not isinstance(raw, dict):
+                continue
+            item = normalize_event_definition(raw)
+            if item["event_type"] in event_ids:
+                continue
+            event_ids.add(item["event_type"])
+            events.append(item)
         normalized.sort(key=lambda preset: preset["name"].casefold())
-        payload = {"schema_version": SCHEMA_VERSION, "presets": normalized}
+        blocks.sort(key=lambda item: item["name"].casefold())
+        events.sort(key=lambda item: item["event_type"].casefold())
+        payload = {
+            "schema_version": SCHEMA_VERSION,
+            "presets": normalized,
+            "experimental_blocks": blocks,
+            "event_definitions": events,
+        }
         self.backend.records.put("configuration", "role-block-presets", payload)
         self._presets = normalized
+        self._experimental_blocks = blocks
+        self._event_definitions = events
 
     def payload(self) -> Dict[str, Any]:
-        return {"schema_version": SCHEMA_VERSION, "presets": self.presets()}
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "presets": self.presets(),
+            "experimental_blocks": self.experimental_blocks(),
+            "event_definitions": self.event_definitions(),
+        }
 
     def _read(self, initial_payload: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
         payload = initial_payload
         if not isinstance(payload, dict):
-            payload = self.backend.records.get(
-                "configuration", "role-block-presets", default=None
-            )
+            payload = self.backend.records.get("configuration", "role-block-presets", default=None)
         if not isinstance(payload, dict):
-            return []
-        raw_presets = payload.get("presets", []) if isinstance(payload, dict) else []
+            payload = {}
+        raw_presets = payload.get("presets", [])
         if not isinstance(raw_presets, list):
-            return []
-
+            raw_presets = []
         presets: List[Dict[str, Any]] = []
         seen = set()
         for raw in raw_presets:
@@ -116,4 +209,24 @@ class RoleBlockPresetRegistry:
                 continue
             seen.add(name_key)
             presets.append(preset)
+        self._experimental_blocks = []
+        block_ids = set()
+        for raw in payload.get("experimental_blocks", []) if isinstance(payload.get("experimental_blocks", []), list) else []:
+            if not isinstance(raw, dict):
+                continue
+            item = normalize_experimental_block(raw)
+            if item["id"] in block_ids:
+                continue
+            block_ids.add(item["id"])
+            self._experimental_blocks.append(item)
+        self._event_definitions = []
+        event_ids = set()
+        for raw in payload.get("event_definitions", []) if isinstance(payload.get("event_definitions", []), list) else []:
+            if not isinstance(raw, dict):
+                continue
+            item = normalize_event_definition(raw)
+            if item["event_type"] in event_ids:
+                continue
+            event_ids.add(item["event_type"])
+            self._event_definitions.append(item)
         return sorted(presets, key=lambda preset: preset["name"].casefold())
