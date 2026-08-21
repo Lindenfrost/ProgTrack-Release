@@ -2547,6 +2547,9 @@ class StyleSettingsDialog(QDialog):
             "sperm_measurements": "Sperm value entry and import support.",
             "blood_progesterone": "Blood progesterone values and import support.",
             "urine_pdg": "Urine PdG values and import support.",
+            "computed_values": (
+                "Unified Progesterone: blood-equivalent values calculated from urine PdG."
+            ),
             "reproductive_events": "Reproductive event timeline.",
             "procedure_events": "Procedure and measurement event timeline.",
         }
@@ -2559,41 +2562,127 @@ class StyleSettingsDialog(QDialog):
             f"settings.role_setup.block.{block_id}.description",
             defaults.get(block_id, "Optional dialog block."),
         )
+    def _role_setup_available_block_ids(self):
+        """Return blocks that are meaningful for installed capabilities."""
+        steroid_active = self._steroid_track_active()
+        return tuple(
+            block_id
+            for block_id in ALL_DIALOG_BLOCKS
+            if block_id != "computed_values" or steroid_active
+        )
+
 
     def _custom_experimental_block_editor(self, parent, initial=None):
         initial = dict(initial or {})
         dlg = QDialog(parent)
+        dlg.setObjectName("customExperimentalBlockDialog")
         dlg.setWindowTitle(self.messages.get(
             "settings.role_setup.custom_blocks.experimental_editor",
             "Experimental limitation block",
         ))
         form = QFormLayout(dlg)
         name = QLineEdit(str(initial.get("name") or ""))
-        event_type = QLineEdit(str(initial.get("event_type") or ""))
-        max_field = QLineEdit(str(initial.get("max_field") or ""))
-        kind = QComboBox()
-        kind.addItem(self.messages.get("settings.role_setup.custom_blocks.counting", "Counting"), "counting")
-        kind.addItem(self.messages.get("settings.role_setup.custom_blocks.limiting", "Limiting"), "limiting")
-        idx = kind.findData(str(initial.get("kind") or "limiting"))
-        kind.setCurrentIndex(idx if idx >= 0 else 1)
+        name.setObjectName("customExperimentalBlockName")
+        # Event type is the user-facing selector.  Its choices describe
+        # whether the event is counted only or receives a per-animal maximum
+        # in New/Edit Animal.  There is no second free-text event field.
+        event_type = QComboBox()
+        event_type.setObjectName("customExperimentalBlockEventTypeCombo")
+        event_type.addItem(
+            self.messages.get(
+                "settings.role_setup.custom_blocks.counting", "Counting"
+            ),
+            "counting",
+        )
+        event_type.addItem(
+            self.messages.get(
+                "settings.role_setup.custom_blocks.limiting", "Limiting"
+            ),
+            "limiting",
+        )
+        idx = event_type.findData(str(initial.get("kind") or "limiting"))
+        event_type.setCurrentIndex(idx if idx >= 0 else 1)
         render = QComboBox()
+        render.setObjectName("customExperimentalBlockRenderCombo")
         render.addItem(self.messages.get("settings.role_setup.custom_blocks.line", "Line"), "line")
         render.addItem(self.messages.get("settings.role_setup.custom_blocks.symbol", "Symbol"), "symbol")
         ridx = render.findData(str(initial.get("render_mode") or "symbol"))
         render.setCurrentIndex(ridx if ridx >= 0 else 1)
+        marker_label = QLabel(
+            self.messages.get("settings.role_setup.custom_blocks.marker", "Symbol:"),
+            dlg,
+        )
         marker = QComboBox()
+        marker.setObjectName("customExperimentalBlockSymbolCombo")
         for value in ("o", "s", "^", "v", "D", "*"):
             marker.addItem(value, value)
         midx = marker.findData(str(initial.get("marker") or "o"))
         marker.setCurrentIndex(midx if midx >= 0 else 0)
-        color = QLineEdit(str(initial.get("color") or "#4C78A8"))
-        form.addRow(self.messages.get("settings.role_setup.custom_blocks.block_name", "Name:"), name)
-        form.addRow(self.messages.get("settings.role_setup.custom_blocks.event_type", "Event type:"), event_type)
-        form.addRow(self.messages.get("settings.role_setup.custom_blocks.kind", "Type:"), kind)
-        form.addRow(self.messages.get("settings.role_setup.custom_blocks.max_field", "Maximum field:"), max_field)
-        form.addRow(self.messages.get("settings.role_setup.custom_blocks.render", "Render:"), render)
-        form.addRow(self.messages.get("settings.role_setup.custom_blocks.marker", "Symbol:"), marker)
-        form.addRow(self.messages.get("settings.role_setup.custom_blocks.color", "Color (#RRGGBB):"), color)
+        marker_label.setObjectName("customExperimentalBlockSymbolLabel")
+        initial_color = QColor(str(initial.get("color") or "#4C78A8"))
+        if not initial_color.isValid():
+            initial_color = QColor("#4C78A8")
+        color_button = QPushButton(dlg)
+        color_button.setObjectName("customExperimentalBlockColorButton")
+        color_button.setAccessibleName(
+            self.messages.get("settings.role_setup.custom_blocks.color", "Color")
+        )
+
+        def set_color_button(color_value):
+            chosen = QColor(color_value)
+            if not chosen.isValid():
+                return
+            color_name = chosen.name().upper()
+            color_button.setProperty("color", color_name)
+            color_button.setToolTip(color_name)
+            color_button.setStyleSheet(
+                "QPushButton {"
+                f"background-color: {color_name}; "
+                f"color: {role_color_foreground(color_name)}; "
+                "border: 2px solid palette(mid); border-radius: 3px; "
+                "min-width: 54px; min-height: 26px;"
+                "}"
+            )
+
+        def choose_color(_checked=False):
+            current = QColor(str(color_button.property("color") or "#4C78A8"))
+            chosen = QColorDialog.getColor(
+                current,
+                dlg,
+                self.messages.get("dialog.color_picker.title", "Choose Color"),
+            )
+            if chosen.isValid():
+                set_color_button(chosen)
+
+        set_color_button(initial_color)
+        color_button.clicked.connect(choose_color)
+
+        def update_symbol_visibility(_index=None):
+            # currentIndexChanged emits an integer; always read the item's
+            # data so the Symbol row is restored reliably.
+            is_symbol = str(render.currentData()) == "symbol"
+            marker_label.setVisible(is_symbol)
+            marker.setVisible(is_symbol)
+
+        render.currentIndexChanged.connect(update_symbol_visibility)
+        form.addRow(
+            self.messages.get("settings.role_setup.custom_blocks.block_name", "Name:"),
+            name,
+        )
+        form.addRow(
+            self.messages.get("settings.role_setup.custom_blocks.event_type", "Event type"),
+            event_type,
+        )
+        form.addRow(
+            self.messages.get("settings.role_setup.custom_blocks.render", "Render:"),
+            render,
+        )
+        form.addRow(marker_label, marker)
+        form.addRow(
+            self.messages.get("settings.role_setup.custom_blocks.color", "Color"),
+            color_button,
+        )
+        update_symbol_visibility()
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel, dlg)
         ok = buttons.addButton(self.messages.get("button.save", "Save"), QDialogButtonBox.ButtonRole.AcceptRole)
         ok.clicked.connect(dlg.accept)
@@ -2602,21 +2691,38 @@ class StyleSettingsDialog(QDialog):
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return None
         label = " ".join(name.text().strip().split())
-        event = re.sub(r"[^a-zA-Z0-9_]+", "_", event_type.text().strip()).strip("_")
+        existing_event = re.sub(
+            r"[^a-zA-Z0-9_]+",
+            "_",
+            str(initial.get("event_type") or ""),
+        ).strip("_")
+        event = existing_event or re.sub(
+            r"[^a-zA-Z0-9_]+",
+            "_",
+            label,
+        ).strip("_").lower()
         if not label or not event:
             QMessageBox.warning(parent, self.messages.get("title.warning", "Warning"),
-                                self.messages.get("settings.role_setup.custom_blocks.invalid_name", "Enter a descriptive name and event type."))
+                                self.messages.get("settings.role_setup.custom_blocks.invalid_name", "Enter a descriptive name."))
             return None
         block_id = str(initial.get("id") or ("custom_limit:" + event))
+        kind = str(event_type.currentData() or "limiting")
         return {
             "id": block_id,
             "name": label,
-            "kind": str(kind.currentData() or "limiting"),
+            "kind": kind,
             "event_type": event,
-            "max_field": max_field.text().strip() or ("max_" + event),
+            # The backing field is not editable here.  Limiting definitions
+            # expose their numeric maximum in New/Edit Animal instead.
+            "max_field": (
+                str(initial.get("max_field") or ("max_" + event))
+                if kind == "limiting" else ""
+            ),
             "render_mode": str(render.currentData() or "symbol"),
             "marker": str(marker.currentData() or "o"),
-            "color": color.text().strip().upper() or "#4C78A8",
+            "color": str(
+                color_button.property("color") or "#4C78A8"
+            ).upper(),
         }
 
     def _make_role_block_preset_combo(
@@ -2992,7 +3098,13 @@ class StyleSettingsDialog(QDialog):
         body_layout = QVBoxLayout(body)
         selected = set(self.parent_app._normalize_role_dialog_blocks(current_blocks))
         checkboxes = {}
-        for block_id in ALL_DIALOG_BLOCKS:
+        # Unified Prog depends on the optional Steroid/PdG capability.  Do not
+        # expose a dead checkbox in facilities where that plugin is disabled or
+        # not installed.  Existing selections are preserved below so opening a
+        # preset while the plugin is temporarily disabled never edits the
+        # facility configuration just by hiding this unavailable option.
+        available_block_ids = self._role_setup_available_block_ids()
+        for block_id in available_block_ids:
             cb = QCheckBox(self._role_block_label(block_id))
             cb.setChecked(block_id in selected or block_id in REQUIRED_DIALOG_BLOCKS)
             if block_id in REQUIRED_DIALOG_BLOCKS:
@@ -3140,9 +3252,14 @@ class StyleSettingsDialog(QDialog):
         preset_name = normalized_preset_name(name_le.text())
         blocks = [
             block_id
-            for block_id in ALL_DIALOG_BLOCKS
+            for block_id in available_block_ids
             if checkboxes[block_id].isChecked() or block_id in REQUIRED_DIALOG_BLOCKS
         ]
+        # Preserve a previously configured Unified Prog dependency while the
+        # Steroid Track is unavailable; it can be reviewed again when the
+        # capability is enabled, but cannot be silently discarded here.
+        if "computed_values" in selected and "computed_values" not in blocks:
+            blocks.append("computed_values")
         blocks.extend(
             block_id
             for block_id, checkbox in experimental_checkboxes.items()
@@ -23366,7 +23483,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # PdG plugin hook for female animal dialog
         _pdg_tabs = None
         if steroid_active and self.has_pdg_plugin and hasattr(self, 'pdg_cap') and self.pdg_cap and hasattr(self.pdg_cap, 'hooks'):
-            _pdg_tabs = self.pdg_cap.hooks.on_female_dialog_tabs(tabs, rec, not creating, self, name)
+            _pdg_tabs = self.pdg_cap.hooks.on_female_dialog_tabs(
+                tabs, rec, not creating, self, name,
+                add_unified_prog=self._role_block_enabled(
+                    role_now, "computed_values", "new" if creating else "edit"
+                ),
+            )
         
         v.addWidget(tabs, 1)
 
@@ -23424,6 +23546,27 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 maxm_le.setVisible(False)
                 _set_row_visible(lbl_maxp, False)
                 maxp_le.setVisible(False)
+
+            # Unified Prog is a role-owned computed value, not a generic PdG
+            # tab. Keep the raw PdG tab available when configured, but expose
+            # the calculated view only for roles with computed_values enabled.
+            # The PdG hook keeps the widget alive so switching donor/surrogate
+            # roles updates this in place.
+            if isinstance(_pdg_tabs, (list, tuple)) and len(_pdg_tabs) > 1:
+                conv_tab = _pdg_tabs[1]
+                setter = getattr(
+                    getattr(getattr(self, "pdg_cap", None), "hooks", None),
+                    "set_unified_prog_visible", None,
+                )
+                if callable(setter):
+                    setter(
+                        tabs,
+                        conv_tab,
+                        bool(steroid_active)
+                        and self._role_block_enabled(
+                            role_code, "computed_values", "new" if creating else "edit"
+                        ),
+                    )
 
             # Recovery time is steroid-related: hide when Steroid_track is inactive.
             _set_row_visible(lbl_rec, steroid_active)

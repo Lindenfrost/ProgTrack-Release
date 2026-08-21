@@ -339,8 +339,7 @@
           "lifecycle",
           "reference_weight",
           "partner_fields",
-          "health_flags",
-          "computed_values"
+          "health_flags"
         ],
         "edit": [
           "identity",
@@ -352,8 +351,7 @@
           "lifecycle",
           "reference_weight",
           "partner_fields",
-          "health_flags",
-          "computed_values"
+          "health_flags"
         ]
       },
       "custom_preset_names": {

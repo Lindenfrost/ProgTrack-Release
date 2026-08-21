@@ -249,12 +249,12 @@ DEFAULT_DIALOG_RECIPES: Dict[str, Dict[str, Any]] = {
         "new": [
             "identity", "id_chip_origin", "project_severity", "lifecycle",
             "cage_address", "parenting", "reference_weight", "partner_fields",
-            "health_flags", "weight", "computed_values",
+            "health_flags", "weight",
         ],
         "edit": [
             "identity", "id_chip_origin", "project_severity", "lifecycle",
             "cage_address", "parenting", "reference_weight", "partner_fields",
-            "health_flags", "weight", "computed_values",
+            "health_flags", "weight",
         ],
         "events": [],
     },

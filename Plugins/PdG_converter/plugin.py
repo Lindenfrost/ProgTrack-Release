@@ -136,7 +136,10 @@ class PdGCapability:
         # Storage for animal dialog tab references
         self._pdg_tabs = {}
     
-    def on_female_dialog_tabs(self, tabs, animal_rec, editing, parent_app=None, name=None):
+    def on_female_dialog_tabs(
+        self, tabs, animal_rec, editing, parent_app=None, name=None,
+        add_unified_prog=True,
+    ):
         """Hook for female animal dialog - add PdG tabs.
         
         Args:
@@ -147,7 +150,11 @@ class PdGCapability:
             name: Animal name string
         """
         animal_name = name if name else animal_rec.get('name', '')
-        return self.extend_animal_dialog(tabs, animal_rec, animal_name, parent_app)
+        return self.extend_animal_dialog(
+            tabs, animal_rec, animal_name, parent_app,
+            add_unified_prog=add_unified_prog,
+            retain_unified_prog=True,
+        )
     
     def on_partner_dialog_tabs(self, tabs, animal_rec, editing, parent_app=None, name=None):
         """Hook for partner dialog - add PdG tabs."""
@@ -187,7 +194,10 @@ class PdGCapability:
         # - marker_combos['urine'] with marker options
         pass
     
-    def extend_animal_dialog(self, tabs, animal_rec, animal_name, parent_app=None, add_unified_prog=True):
+    def extend_animal_dialog(
+        self, tabs, animal_rec, animal_name, parent_app=None,
+        add_unified_prog=True, retain_unified_prog=False,
+    ):
         """Add PdG tabs to animal dialogs.
         
         Args:
@@ -270,7 +280,10 @@ class PdGCapability:
         tabs.addTab(pdg_tab, self._plugin.app.messages.get("pdg_converter.tab.pdg", "PdG"))
         
         # --- Unified Prog Tab ---
-        if not add_unified_prog:
+        # Build the widget even when it starts hidden.  The female dialog can
+        # switch between donor/surrogate roles while open; retaining the tab
+        # widget lets the main app add/remove it without rebuilding the form.
+        if not add_unified_prog and not retain_unified_prog:
             return pdg_tab, None
         conv_tab = QWidget()
         conv_layout = QVBoxLayout(conv_tab)
@@ -383,9 +396,24 @@ class PdGCapability:
             tabs.addTab(conv_tab, self._plugin.app.messages.get("pdg_converter.tab.unified_prog", "Unified Prog."))
         
         # Store reference for ConverterDialog to refresh
-        self._pdg_tabs[animal_name] = (pdg_tab, conv_tab if add_unified_prog else None)
+        self._pdg_tabs[animal_name] = (pdg_tab, conv_tab if (add_unified_prog or retain_unified_prog) else None)
         
-        return pdg_tab, conv_tab if add_unified_prog else None
+        return pdg_tab, conv_tab if (add_unified_prog or retain_unified_prog) else None
+
+    def set_unified_prog_visible(self, tabs, conv_tab, visible):
+        """Show or hide the Unified Prog tab without rebuilding dialog state."""
+        if tabs is None or conv_tab is None:
+            return
+        index = tabs.indexOf(conv_tab)
+        if visible and index < 0:
+            tabs.addTab(
+                conv_tab,
+                self._plugin.app.messages.get(
+                    "pdg_converter.tab.unified_prog", "Unified Prog."
+                ),
+            )
+        elif not visible and index >= 0:
+            tabs.removeTab(index)
     
     def cleanup_animal_dialog(self, tabs):
         """Clean up plugin-created tabs before dialog closes.

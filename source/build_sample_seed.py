@@ -18,6 +18,7 @@ import re
 import shutil
 import sys
 import tempfile
+import unicodedata
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,7 @@ from Plugins.core.animal_roles import (
     canonical_role_value,
     normalize_role_definition,
 )
+from Plugins.core.identity_conventions import render_animal_id
 from Plugins.core.backend.facade import ProgTrackBackend
 from Plugins.core.runtime_paths import resolve_runtime_paths
 
@@ -79,6 +81,64 @@ _ANIMAL_REFERENCE_FIELDS = frozenset({
     "egg_donor",
     "surrogate",
 })
+
+
+def normalize_example_animal_name(value: Any) -> str:
+    """Return the ASCII-compatible display name used by fictional examples.
+
+    The example dataset is deliberately portable across database clients and
+    release environments. Unicode letters are transliterated by decomposing
+    their accents (for example ``Eärendil`` -> ``Earendil``); punctuation,
+    spaces, and the spelling of the name itself are retained.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(character)
+    )
+
+
+def normalized_example_public_id(
+    old_id: Any,
+    *,
+    name: str,
+    species: str,
+    birth_date: str,
+    sex: str,
+    sequence: Any,
+    absolute_sequence: Any,
+) -> str:
+    """Regenerate a changed example ID while preserving its seed counters.
+
+    Existing fictional seed IDs use the five-component public form
+    ``species_year_sequence_sex_name``. Keep that established shape and
+    change only the name token; the immutable four-part IPID is rebuilt by
+    :func:`animal_identity_key` separately.
+    """
+    old_text = str(old_id or "").strip()
+    try:
+        yearly = int(sequence or 0)
+    except (TypeError, ValueError):
+        yearly = 0
+    if not old_text or not yearly:
+        return old_text
+    try:
+        absolute = int(absolute_sequence or yearly)
+    except (TypeError, ValueError):
+        absolute = yearly
+    return render_animal_id(
+        "{species}_{year2}_{sequence:04d}_{sex}_{name}",
+        name=name,
+        species=species,
+        birth_date=birth_date,
+        sex=sex,
+        origin="",
+        sequence=yearly,
+        absolute_sequence=absolute,
+    )
 
 
 def seeded_animal_role_configuration() -> dict[str, Any]:
@@ -313,12 +373,15 @@ def normalize_core() -> tuple[dict[str, Any], dict[str, str]]:
     output = {"version": "5.0", "animals": {}, "archived_animals": {},
               "settings": {"language": "en", "seed_version": "0.2.1"}}
     key_map: dict[str, str] = {}
+    name_rewrites: dict[str, set[str]] = {}
     for section in ("animals", "archived_animals"):
         for old_key, raw in sorted(source.get(section, {}).items()):
             record = dict(raw)
-            name = str(record.get("name") or old_key.split(" | ")[0]).strip()
-            if name in REMOVED_ANIMAL_NAMES:
+            old_name = str(record.get("name") or old_key.split(" | ")[0]).strip()
+            if old_name in REMOVED_ANIMAL_NAMES:
                 continue
+            name = normalize_example_animal_name(old_name)
+            name_rewrites.setdefault(old_name, set()).add(name)
             species = str(record.get("species") or "").strip()
             if species == "Unknown species":
                 species = "Mus musculus"
@@ -335,15 +398,41 @@ def normalize_core() -> tuple[dict[str, Any], dict[str, str]]:
                         value for value in record.get(field, [])
                         if not str(value.get("datum", "")).startswith("2026-07-01")
                     ]
+            old_public_id = str(record.get("id") or "").strip()
+            new_public_id = normalized_example_public_id(
+                old_public_id,
+                name=name,
+                species=species,
+                birth_date=birth,
+                sex=str(record.get("sex") or ""),
+                sequence=record.get("generated_id_sequence"),
+                absolute_sequence=record.get("generated_id_absolute_sequence"),
+            )
+            if new_public_id != old_public_id:
+                record["id"] = new_public_id
+                key_map[old_public_id] = new_public_id
             record["ipid"] = new_key
             record["species"] = species
             output[section][new_key] = record
+    for old_name, replacements in name_rewrites.items():
+        if len(replacements) == 1:
+            new_name = next(iter(replacements))
+            if old_name != new_name:
+                key_map[old_name] = new_name
     return output, key_map
 
 
 def rewrite_references(value: Any, key_map: dict[str, str]) -> Any:
     if isinstance(value, str):
-        return key_map.get(value, value)
+        text = value
+        for old, new in sorted(key_map.items(), key=lambda item: len(item[0]), reverse=True):
+            if not old or old == new:
+                continue
+            # Do not apply a second pass when an old public ID is a prefix of
+            # the normalized ID (e.g. ``..._Honor`` in ``..._Honore``).
+            pattern = r"(?<![A-Za-z0-9])" + re.escape(old) + r"(?![A-Za-z0-9])"
+            text = re.sub(pattern, new, text)
+        return text
     if isinstance(value, list):
         return [rewrite_references(item, key_map) for item in value]
     if isinstance(value, dict):
