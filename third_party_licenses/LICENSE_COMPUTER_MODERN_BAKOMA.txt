@@ -1,0 +1,21 @@
+Computer Modern / BaKoMa TrueType font attribution
+
+The cm*.ttf files redistributed with Matplotlib are the BaKoMa Computer
+Modern TrueType collection.
+
+Copyright (C) 1994, Basil K. Malyshev. All Rights Reserved.
+BaKoMa Fonts Collection, Level-B.
+
+Unmodified files may be copied and distributed when this copyright, author, and
+permission notice remains with the files and related documentation. Modified
+files must retain the notice and identify the original font location. Font
+embedding in PDF/SVG and printing are permitted without a separate notice.
+These fonts are not owned by ProgTrack or Deutsches Primatenzentrum GmbH.
+
+Matplotlib also documents the American Mathematical Society SIL Open Font
+License 1.1 terms for its Computer Modern test-font material. See the
+authoritative Matplotlib reproduction of both notices:
+https://matplotlib.org/stable/project/license.html#fonts
+
+This text is a compact attribution notice; the upstream Matplotlib font data
+and its license documentation remain the authority for the unchanged files.
