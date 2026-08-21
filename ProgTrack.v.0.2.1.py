@@ -1178,6 +1178,19 @@ class StyleSettingsDialog(QDialog):
         self._role_block_preset_registry = RoleBlockPresetRegistry(
             self.parent_app.backend
         )
+        self._staged_role_block_preset_payload = None
+        self._configuration_revisions = {}
+        for _key in (
+            ("configuration", "animal-roles"),
+            ("configuration", "role-block-presets"),
+        ):
+            try:
+                _unused_payload, _revision = self.parent_app.backend.records.get_with_revision(
+                    _key[0], _key[1], default=None
+                )
+                self._configuration_revisions[_key] = int(_revision or 0)
+            except Exception:
+                self._configuration_revisions[_key] = None
         self._custom_role_block_presets = (
             self._role_block_preset_registry.presets()
         )
@@ -3444,10 +3457,12 @@ class StyleSettingsDialog(QDialog):
                     for item in self._custom_experimental_blocks
                     if isinstance(item, dict)
                 ]
-                self._role_block_preset_registry.save_presets(
-                    self._custom_role_block_presets,
-                    experimental_blocks=self._custom_experimental_blocks,
-                    event_definitions=self._custom_event_definitions,
+                self._staged_role_block_preset_payload = (
+                    self._role_block_preset_registry.prepare_payload(
+                        self._custom_role_block_presets,
+                        experimental_blocks=self._custom_experimental_blocks,
+                        event_definitions=self._custom_event_definitions,
+                    )
                 )
             except ValueError as exc:
                 QMessageBox.warning(
@@ -3719,6 +3734,14 @@ class StyleSettingsDialog(QDialog):
     def get_role_definitions(self):
         """Return accepted role definitions, or None when Role setup was read-only."""
         return self._accepted_role_definitions
+
+    def get_role_block_preset_payload(self):
+        """Return the validated, not-yet-committed preset registry payload."""
+        return copy.deepcopy(self._staged_role_block_preset_payload)
+
+    def get_configuration_revisions(self):
+        """Return revisions captured when this dialog was opened."""
+        return dict(self._configuration_revisions)
 
 # # ================================================================ #
 # Helper classes for Master_Track integration
@@ -9517,7 +9540,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         registry = getattr(self, "animal_role_registry", None)
         return registry.roles() if registry else []
 
-    def _save_animal_role_definitions(self, roles: List[Dict[str, Any]]) -> bool:
+    def _save_animal_role_definitions(
+        self,
+        roles: List[Dict[str, Any]],
+        *,
+        preset_payload: Optional[Dict[str, Any]] = None,
+        expected_revisions: Optional[Dict[Tuple[str, str], Optional[int]]] = None,
+    ) -> bool:
         registry = getattr(self, "animal_role_registry", None)
         if registry is None:
             return False
@@ -9544,7 +9573,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         }
         deleted_values = previous_values - next_values
         try:
-            registry.save_roles(roles_for_save)
+            if preset_payload is None:
+                registry.save_roles(roles_for_save)
+            else:
+                role_payload = registry.prepare_payload(roles_for_save)
+                expected = expected_revisions or {}
+                self.backend.records.put_many(
+                    [
+                        ("configuration", "animal-roles", role_payload),
+                        ("configuration", "role-block-presets", preset_payload),
+                    ],
+                    expected_revisions=expected,
+                )
+                registry.apply_payload(role_payload)
             self._save_role_label_overrides(registry.roles())
             self._merge_user_messages()
             if hasattr(self, "category_tab"):
@@ -17395,10 +17436,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Apply the new style settings
             new_settings = dialog.get_settings()
             new_roles = dialog.get_role_definitions()
+            preset_payload = dialog.get_role_block_preset_payload()
+            expected_revisions = dialog.get_configuration_revisions()
             self._apply_style_settings(new_settings)
             # Save per-user style settings
             self._save_user_style_settings(new_settings)
-            if new_roles is not None and self._save_animal_role_definitions(new_roles):
+            if new_roles is not None and self._save_animal_role_definitions(
+                new_roles,
+                preset_payload=preset_payload,
+                expected_revisions=expected_revisions,
+            ):
                 self._refresh_list(update_tab_visibility=True)
             # Refresh the plot to show new colors/styles
             if hasattr(self, 'selected_animals') and self.selected_animals:

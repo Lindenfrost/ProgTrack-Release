@@ -159,6 +159,79 @@ class DomainRecordRepository:
             )
             return next_revision
 
+    def put_many(
+        self,
+        records: Iterable[tuple[str, str, Any]],
+        *,
+        expected_revisions: dict[tuple[str, str], int | None] | None = None,
+    ) -> dict[tuple[str, str], int]:
+        """Replace several domain records in one adapter transaction.
+
+        All optimistic-lock checks happen before the first write.  The
+        adapter transaction then commits the complete batch together; a
+        conflict or write error rolls the batch back instead of leaving a
+        partially updated coordinated configuration.
+        """
+        batch = list(records)
+        if not batch:
+            return {}
+        expected = expected_revisions or {}
+        mark = _placeholder(self.adapter)
+        json_mark = _json_placeholder(self.adapter)
+        prepared: list[tuple[str, str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for namespace, record_id, payload in batch:
+            key = (str(namespace), str(record_id))
+            if key in seen:
+                raise ValueError(f"Duplicate domain record in batch: {key!r}")
+            seen.add(key)
+            prepared.append((key[0], key[1], dumps(payload)))
+
+        timestamp = now_text()
+        revisions: dict[tuple[str, str], int] = {}
+        with self.adapter.transaction(write=True) as connection:
+            current: dict[tuple[str, str], int] = {}
+            for namespace, record_id, _serialized in prepared:
+                row = _fetchone(
+                    connection,
+                    f"SELECT revision FROM domain_records "
+                    f"WHERE namespace={mark} AND record_id={mark}",
+                    (namespace, record_id),
+                )
+                revision = 0 if row is None else int(
+                    row["revision"] if isinstance(row, dict) else row[0]
+                )
+                current[(namespace, record_id)] = revision
+                expected_revision = expected.get((namespace, record_id))
+                if expected_revision is not None and expected_revision != revision:
+                    raise ConflictError(
+                        f"Stale revision {expected_revision} for "
+                        f"{namespace}/{record_id}; current revision is {revision}."
+                    )
+
+            for namespace, record_id, serialized in prepared:
+                previous = current[(namespace, record_id)]
+                next_revision = previous + 1
+                if previous == 0:
+                    _execute(
+                        connection,
+                        f"INSERT INTO domain_records("
+                        "namespace,record_id,payload_json,revision,created_at,updated_at"
+                        f") VALUES({mark},{mark},{json_mark},1,{mark},{mark})",
+                        (namespace, record_id, serialized, timestamp, timestamp),
+                    )
+                    next_revision = 1
+                else:
+                    _execute(
+                        connection,
+                        f"UPDATE domain_records SET payload_json={json_mark},"
+                        f"revision={mark},updated_at={mark} "
+                        f"WHERE namespace={mark} AND record_id={mark}",
+                        (serialized, next_revision, timestamp, namespace, record_id),
+                    )
+                revisions[(namespace, record_id)] = next_revision
+        return revisions
+
     def delete(self, namespace: str, record_id: str) -> bool:
         mark = _placeholder(self.adapter)
         with self.adapter.transaction(write=True) as connection:

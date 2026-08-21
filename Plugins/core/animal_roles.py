@@ -963,6 +963,33 @@ class AnimalRoleRegistry:
             }
         )
 
+    def prepare_payload(self, roles: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
+        """Validate and normalize role definitions without writing them."""
+        role_list = list(roles)
+        validate_role_orders(role_list)
+        for role in role_list:
+            if isinstance(role, dict):
+                validate_role_visual_configuration(role)
+        provided_values = {
+            canonical_role_value(role.get("value") or "")
+            for role in role_list
+            if isinstance(role, dict) and str(role.get("value") or "")
+        }
+        deleted_builtin_values = sorted(_BUILTIN_VALUES - provided_values)
+        normalized = self._merge_with_defaults(
+            role_list,
+            deleted_builtin_values=deleted_builtin_values,
+        )
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "deleted_builtin_values": deleted_builtin_values,
+            "roles": normalized,
+        }
+
+    def apply_payload(self, payload: Dict[str, Any]) -> None:
+        """Apply an already committed role payload to this in-memory registry."""
+        self._roles = self._read_roles(payload if isinstance(payload, dict) else {})
+
     def save_roles(self, roles: Iterable[Dict[str, Any]]) -> None:
         role_list = list(roles)
         # Validate before normalization/merging so malformed values are never

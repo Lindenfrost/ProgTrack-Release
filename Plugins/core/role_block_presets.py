@@ -178,6 +178,64 @@ class RoleBlockPresetRegistry:
     def active_event_definitions(self) -> List[Dict[str, Any]]:
         return deepcopy([item for item in self._event_definitions if bool(item.get("active", True))])
 
+    def prepare_payload(
+        self,
+        presets: Iterable[Dict[str, Any]],
+        *,
+        experimental_blocks: Iterable[Dict[str, Any]] | None = None,
+        event_definitions: Iterable[Dict[str, Any]] | None = None,
+    ) -> Dict[str, Any]:
+        """Validate and normalize a complete registry payload without writing."""
+        normalized: List[Dict[str, Any]] = []
+        seen = set()
+        for raw in presets:
+            if not isinstance(raw, dict):
+                continue
+            preset = normalize_preset(raw)
+            name_key = preset["name"].casefold()
+            if not valid_preset_name(preset["name"]):
+                raise ValueError(f"Invalid custom preset name: {preset['name']!r}")
+            if name_key in seen:
+                raise ValueError(f"Custom preset names must be unique: {preset['name']!r}")
+            seen.add(name_key)
+            normalized.append(preset)
+
+        blocks_source = self._experimental_blocks if experimental_blocks is None else experimental_blocks
+        events_source = self._event_definitions if event_definitions is None else event_definitions
+        blocks: List[Dict[str, Any]] = []
+        block_ids = set()
+        for raw in blocks_source or []:
+            if not isinstance(raw, dict):
+                continue
+            item = normalize_experimental_block(raw)
+            if not item["name"] or item["id"] in block_ids:
+                continue
+            block_ids.add(item["id"])
+            blocks.append(item)
+        events: List[Dict[str, Any]] = []
+        event_ids = set()
+        for raw in events_source or []:
+            if not isinstance(raw, dict):
+                continue
+            item = normalize_event_definition(raw)
+            if item["event_type"] in event_ids:
+                continue
+            event_ids.add(item["event_type"])
+            events.append(item)
+        normalized.sort(key=lambda preset: preset["name"].casefold())
+        blocks.sort(key=lambda item: item["name"].casefold())
+        events.sort(key=lambda item: item["event_type"].casefold())
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "presets": normalized,
+            "experimental_blocks": blocks,
+            "event_definitions": events,
+        }
+
+    def apply_payload(self, payload: Dict[str, Any]) -> None:
+        """Apply an already committed payload to this in-memory registry."""
+        self._presets = self._read(payload if isinstance(payload, dict) else {})
+
     def save_presets(
         self,
         presets: Iterable[Dict[str, Any]],
