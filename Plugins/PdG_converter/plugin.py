@@ -278,6 +278,7 @@ class PdGCapability:
         # Create a table for converted values
         conv_table = QTableWidget()
         conv_table.setColumnCount(3)
+        conv_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         conv_table.setHorizontalHeaderLabels([
             self._plugin.app.messages.get("pdg_converter.table.date", "Date"),
             self._plugin.app.messages.get("pdg_converter.table.pdg", "PdG (µg/mg Cr)"),
@@ -303,6 +304,8 @@ class PdGCapability:
             
             if not current_pdg_records:
                 logger.info("No PdG records to display")
+                if parent_app and hasattr(parent_app, "_cap_table_viewport"):
+                    parent_app._cap_table_viewport(conv_table, 0)
                 return
                 
             sorted_records = sorted(current_pdg_records, key=lambda x: x.get('datum', datetime.min) if isinstance(x.get('datum'), datetime) else datetime.min)
@@ -339,6 +342,8 @@ class PdGCapability:
                     conv_item = QTableWidgetItem("-")
                 conv_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 conv_table.setItem(i, 2, conv_item)
+            if parent_app and hasattr(parent_app, "_cap_table_viewport"):
+                parent_app._cap_table_viewport(conv_table, len(sorted_records))
         
         # Model info label
         info_label = QLabel()

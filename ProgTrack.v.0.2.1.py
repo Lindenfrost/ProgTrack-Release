@@ -7331,6 +7331,26 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if item is not None:
             form.setItem(int(row), role, item)
 
+    @staticmethod
+    def _adopt_form_item(item: Any, parent: QWidget) -> None:
+        """Keep moved form items embedded in the dialog section."""
+        if item is None or parent is None:
+            return
+        try:
+            widget = item.widget()
+        except (AttributeError, RuntimeError):
+            widget = None
+        if widget is not None:
+            widget.setParent(parent)
+            widget.setWindowFlags(Qt.WindowType.Widget)
+            return
+        try:
+            child_layout = item.layout()
+        except (AttributeError, RuntimeError):
+            child_layout = None
+        if child_layout is not None:
+            child_layout.setParent(parent)
+
     def _move_form_row_after(
         self,
         form: QFormLayout,
@@ -7380,15 +7400,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             anchor_row, _anchor_role = form.getWidgetPosition(after)
             insert_at = anchor_row + 1 if anchor_row >= 0 else form.rowCount()
-        section = AnimalDialogSection(str(title or "Experimental limits"), collapsed=True)
+        host = form.parentWidget()
+        section = AnimalDialogSection(
+            str(title or "Experimental limits"), collapsed=True, parent=host
+        )
+        section.setWindowFlags(Qt.WindowType.Widget)
         section.setProperty("section_id", str(section_id or "experimental_limits"))
         inner_widget = QWidget(section.content_widget())
+        inner_widget.setWindowFlags(Qt.WindowType.Widget)
         inner = QFormLayout(inner_widget)
         inner.setContentsMargins(0, 0, 0, 0)
         inner.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         inner.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         for _old_row, result in captured:
             target = inner.rowCount()
+            self._adopt_form_item(result.labelItem, inner_widget)
+            self._adopt_form_item(result.fieldItem, inner_widget)
             self._set_form_item(inner, target, QFormLayout.ItemRole.LabelRole, result.labelItem)
             self._set_form_item(inner, target, QFormLayout.ItemRole.FieldRole, result.fieldItem)
         section.content_layout().addWidget(inner_widget)
@@ -11815,13 +11842,81 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         return 'O'  # Not pregnant
     
+    def _custom_event_statistics(
+        self, animal_data: Dict[str, Any], messages: Optional[Dict[str, str]] = None
+    ) -> List[str]:
+        """Return statistics for dynamic event/limit blocks stored in the backend."""
+        if not isinstance(animal_data, dict):
+            return []
+        events = [
+            event for event in (animal_data.get("events", []) or [])
+            if isinstance(event, dict)
+        ]
+        limits = animal_data.get("experimental_limits", {})
+        if not isinstance(limits, dict):
+            limits = {}
+        result: List[str] = []
+        for definition in self._custom_event_definitions(include_retired=True):
+            event_type = str(definition.get("event_type") or "").strip()
+            identifiers = {
+                str(value).strip().casefold()
+                for value in (
+                    definition.get("id"),
+                    definition.get("stable_id"),
+                    definition.get("event_type"),
+                    definition.get("typ"),
+                )
+                if str(value or "").strip()
+            }
+            if not identifiers:
+                continue
+            count = 0
+            for event in events:
+                raw = str(event.get("typ") or "").strip().casefold()
+                normalized = self._normalize_report_event_type(raw)
+                if raw in identifiers or normalized.casefold() in identifiers:
+                    count += 1
+
+            block_id = str(
+                definition.get("block_id")
+                or definition.get("limit_block")
+                or definition.get("max_field")
+                or ""
+            ).strip()
+            maximum = limits.get(block_id) if block_id else None
+            if maximum is None:
+                field = str(
+                    definition.get("max_field")
+                    or definition.get("limit_block")
+                    or ""
+                ).strip()
+                if field:
+                    maximum = animal_data.get(field)
+            kind = str(definition.get("kind") or "limiting").casefold()
+            if maximum is None and kind == "limiting":
+                maximum = definition.get("default_maximum")
+            if count == 0 and maximum is None:
+                continue
+            label = str(
+                definition.get("name")
+                or definition.get("label")
+                or event_type
+                or block_id
+                or "Custom event"
+            )
+            if kind == "limiting":
+                suffix = "?" if maximum is None else str(maximum)
+                result.append(f"{label}: {count}/{suffix}")
+            else:
+                result.append(f"{label}: {count}")
+        return result
+
     def _get_event_statistics(self, animal_data: Dict[str, Any]) -> str:
         """Get event statistics showing all items with defined maximums for the role."""
         role = self._animal_role_value(animal_data)
-        steroid_active = self._is_steroid_track_active()
         stats = []
         
-        if role == Role.SAMENSP.value and steroid_active:
+        if role == Role.SAMENSP.value:
             # Sperm donor: show sperm samples
             sperm_count = len(set(s['datum'].date() for s in animal_data.get('sperm', []) 
                                 if isinstance(s.get('datum'), datetime)))
@@ -11843,7 +11938,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 label_op = self.messages.get('stats.surgery', 'OP')
                 stats.append(f"{label_op}: {op_count}/{max_op}")
 
-        elif role == Role.EXPERIMENTAL.value:
+        elif role in {Role.EXPERIMENTAL.value, ROLE_VALUE_EXPERIMENTAL_OFFSPRING}:
             # Experimental animal: show surgeries and measurements
             events = animal_data.get('events', [])
             op_count   = sum(1 for ev in events if ev.get('typ') == 'surgery')
@@ -11936,25 +12031,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if max_geburten > 0:
                 stats.append(f"{label_birth}: {birth_count}/{max_geburten}")
         
-        for definition in self._custom_event_definitions():
-            event_type = str(definition.get("event_type") or "")
-            if not event_type:
-                continue
-            count = sum(1 for ev in animal_data.get("events", []) or [] if self._normalize_report_event_type(ev.get("typ", "")) == event_type)
-            limit_field = str(definition.get("limit_block") or definition.get("max_field") or "")
-            if count or limit_field in animal_data:
-                limit = animal_data.get(limit_field, "") if limit_field else ""
-                suffix = f"/{limit}" if limit not in ("", None) else ""
-                stats.append(f"{definition.get('label') or event_type}: {count}{suffix}")
+        stats.extend(self._custom_event_statistics(animal_data, self.messages))
         return ', '.join(stats) if stats else '-'
     
     def _get_event_statistics_localized(self, animal_data: Dict[str, Any], messages: dict) -> str:
         """Get event statistics with localized labels."""
         role = self._animal_role_value(animal_data)
-        steroid_active = self._is_steroid_track_active()
         stats = []
         
-        if role == Role.SAMENSP.value and steroid_active:
+        if role == Role.SAMENSP.value:
             # Sperm donor: show sperm samples
             sperm_count = len(set(s['datum'].date() for s in animal_data.get('sperm', []) 
                                 if isinstance(s.get('datum'), datetime)))
@@ -11973,7 +12058,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if max_op > 0:
                 stats.append(f"{messages.get('stats.surgery', 'Surgery')}: {op_count}/{max_op}")
 
-        elif role == Role.EXPERIMENTAL.value:
+        elif role in {Role.EXPERIMENTAL.value, ROLE_VALUE_EXPERIMENTAL_OFFSPRING}:
             # Experimental animal: show surgeries and measurements
             events = animal_data.get('events', [])
             op_count   = sum(1 for ev in events if ev.get('typ') == 'surgery')
@@ -12048,16 +12133,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if max_geburten > 0:
                 stats.append(f"{messages.get('stats.birth', 'Birth')}: {birth_count}/{max_geburten}")
         
-        for definition in self._custom_event_definitions():
-            event_type = str(definition.get("event_type") or "")
-            if not event_type:
-                continue
-            count = sum(1 for ev in animal_data.get("events", []) or [] if self._normalize_report_event_type(ev.get("typ", "")) == event_type)
-            limit_field = str(definition.get("limit_block") or definition.get("max_field") or "")
-            if count or limit_field in animal_data:
-                limit = animal_data.get(limit_field, "") if limit_field else ""
-                suffix = f"/{limit}" if limit not in ("", None) else ""
-                stats.append(f"{definition.get('label') or event_type}: {count}{suffix}")
+        stats.extend(self._custom_event_statistics(animal_data, messages))
         return ', '.join(stats) if stats else '-'
     
     def _localized_reproduction_status(
@@ -14670,8 +14746,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 # male Zuchttiere (breeding animals) show all events
                 elif rolle == Role.ZUCHTTIER.value:
                     evs += [(ev['typ'], ev['datum']) for ev in a.get('events', [])]
-                # experimental animals show all events
-                elif rolle == Role.EXPERIMENTAL.value:
+                # Experimental animals and experimental offspring show all
+                # recorded procedure/measurement events.
+                elif rolle in {Role.EXPERIMENTAL.value, ROLE_VALUE_EXPERIMENTAL_OFFSPRING}:
                     evs += [(ev['typ'], ev['datum']) for ev in a.get('events', [])]
                 else:
                     # donors: Surgery, PGF, and FSH (from both legacy arrays and events)
@@ -15334,6 +15411,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ------------------------
         self.dlay.addWidget(canvas)
 
+        # Summary statistics must be inserted immediately below the canvas.
+        # A stretch before these labels pushed them out of the visible detail
+        # panel for small selections and made them appear to be missing.
+        plot_animals = [n for n in self.selected_animals if n in self.animals]
+        for name in plot_animals:
+            animal = self.animals[name]
+            if self._animal_role_value(animal) == Role.PARTNER.value:
+                continue
+            stats_text = self._get_event_statistics(animal)
+            if stats_text and stats_text != "-":
+                self.dlay.addWidget(QLabel(f"{name}: {stats_text}"))
+
         count = len(self.selected_animals)
         if count in (1, 2):
             self.dlay.addStretch(7)
@@ -15366,56 +15455,118 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._highlight_point = None
         self._annotation = None
 
-        # ------------------------
-        # 7.18.22 Display summary statistics below plots
-        # ------------------------
-        if steroid_active:
-            # Filter out heritage-only animals that aren't in main animals list
-            plot_animals = [n for n in self.selected_animals if n in self.animals]
-            for name in plot_animals:
-                a = self.animals[name]
-                rolle = self._animal_role_value(a)
-                
-                # Skip statistics for partner animals
-                if rolle == Role.PARTNER.value:
-                    continue
-                    
-                # Use centralized statistics function for consistency
-                stats_text = self._get_event_statistics(a)
-                if stats_text and stats_text != '-':
-                    stats = f"{name}: {stats_text}"
-                    self.dlay.addWidget(QLabel(stats))
     def _cap_history_viewport(self, scroll: QScrollArea, frame: QWidget, row_count: int) -> None:
-        """Cap editable history viewports at five data rows without hiding the scrollbar."""
+        """Keep editable tab lists compact and show at most five data rows.
+
+        The old implementation used a maximum height plus a minimum derived
+        from a growing frame.  That left a blank band above/below short lists
+        and allowed the parent dialog to grow through the tab area.  A fixed
+        target based on the actual layout contents keeps the header, rows, and
+        add button tight while preserving a scrollbar for longer histories.
+        """
+        scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         scroll.setMinimumHeight(0)
-        scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        scroll.setMaximumHeight(16777215)
+
         def apply_cap() -> None:
             try:
                 frame.adjustSize()
                 layout = frame.layout()
                 if layout is None:
                     return
-                row_heights = []
-                # Header is item 0 when present; data rows follow it and the
-                # add button is the final item.
-                for index in range(1, min(layout.count(), 1 + int(row_count))):
-                    item = layout.itemAt(index)
-                    if item is not None:
-                        row_heights.append(max(1, item.sizeHint().height()))
-                line_height = max(row_heights or [24])
-                visible_rows = min(5, max(0, int(row_count)))
-                if row_count <= 5:
-                    target = max(72, frame.sizeHint().height() + 8)
+                items = [layout.itemAt(i) for i in range(layout.count())]
+                heights = [max(1, int(item.sizeHint().height())) for item in items]
+                # The first item is the column header and the final widget is
+                # the localized New button.  Rows are the intervening layouts.
+                header_h = heights[0] if heights else 0
+                add_h = heights[-1] if items and items[-1].widget() is not None else 0
+                row_items = items[1:-1] if add_h else items[1:]
+                row_h = [max(1, int(item.sizeHint().height())) for item in row_items]
+                visible = min(5, max(0, int(row_count)))
+                if int(row_count) <= 5:
+                    content_h = max(1, int(frame.sizeHint().height()))
                 else:
-                    header = layout.itemAt(0).sizeHint().height() if layout.count() else 0
-                    add_index = min(layout.count() - 1, 1 + int(row_count))
-                    add_height = layout.itemAt(add_index).sizeHint().height() if add_index >= 0 else 0
-                    target = max(96, int(header + add_height + visible_rows * line_height + 18))
-                scroll.setMaximumHeight(int(target))
-                scroll.setMinimumHeight(min(int(target), 96 if row_count else 72))
+                    spacing = max(0, int(layout.spacing()))
+                    content_h = header_h + add_h + sum(row_h[:visible])
+                    content_h += spacing * max(0, visible + 1)
+                    margins = layout.contentsMargins()
+                    content_h += margins.top() + margins.bottom()
+                # A couple of pixels cover the frame border without creating
+                # an extra empty row.  The scrollbar itself is vertical only.
+                target = max(24, content_h + 2)
+                scroll.setFixedHeight(target)
+                scroll.setProperty("_progtrack_viewport_target", target)
+                recap = getattr(scroll, "_progtrack_recap", None)
+                if callable(recap) and recap is not apply_cap:
+                    scroll._progtrack_recap = apply_cap
+                fit = getattr(scroll.window(), "_progtrack_fit_animal_tabs", None)
+                if callable(fit):
+                    QTimer.singleShot(0, fit)
             except (RuntimeError, AttributeError, TypeError):
                 return
+
+        scroll._progtrack_recap = apply_cap
         QTimer.singleShot(0, apply_cap)
+
+    def _cap_table_viewport(self, table: QTableWidget, row_count: int) -> None:
+        """Compact a table to its header plus at most five visible rows."""
+        if table is None:
+            return
+        try:
+            table.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+            table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+            table.resizeRowsToContents()
+            rows = min(5, max(0, int(row_count)))
+            header_h = max(1, int(table.horizontalHeader().sizeHint().height()))
+            row_h = max(1, int(table.verticalHeader().defaultSectionSize()))
+            for row in range(min(table.rowCount(), rows)):
+                row_h = max(row_h, int(table.rowHeight(row)))
+            frame = table.frameWidth() * 2
+            target = header_h + rows * row_h + frame + 4
+            table.setFixedHeight(max(28, target))
+            table.setProperty("_progtrack_viewport_target", int(max(28, target)))
+            fit = getattr(table.window(), "_progtrack_fit_animal_tabs", None)
+            if callable(fit):
+                QTimer.singleShot(0, fit)
+        except (RuntimeError, AttributeError, TypeError):
+            return
+
+    def _register_animal_dialog_tabs(self, dlg: QDialog, tabs: QTabWidget) -> None:
+        """Fit a role dialog's tabs to its active page without empty growth."""
+        if dlg is None or tabs is None:
+            return
+
+        tabs.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+        def fit_tabs() -> None:
+            try:
+                if tabs.isHidden():
+                    tabs.setMinimumHeight(0)
+                    tabs.setMaximumHeight(0)
+                    return
+                tabs.setMaximumHeight(16777215)
+                page = tabs.currentWidget()
+                if page is None:
+                    tabs.setFixedHeight(0)
+                    return
+                page.ensurePolished()
+                if page.layout() is not None:
+                    page.layout().activate()
+                page_h = max(
+                    int(page.sizeHint().height()),
+                    int(page.minimumSizeHint().height()),
+                )
+                bar_h = max(1, int(tabs.tabBar().sizeHint().height()))
+                tabs.setFixedHeight(max(32, page_h + bar_h + 6))
+                dlg.updateGeometry()
+                dlg.adjustSize()
+            except (RuntimeError, AttributeError, TypeError):
+                return
+
+        tabs._progtrack_fit = fit_tabs
+        dlg._progtrack_fit_animal_tabs = fit_tabs
+        tabs.currentChanged.connect(lambda _index: QTimer.singleShot(0, fit_tabs))
+        QTimer.singleShot(0, fit_tabs)
 
     # ------------------------
     # 7.19 Build Editable List
@@ -15433,7 +15584,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         widgets: List[Tuple[QLineEdit, Optional[QLineEdit], Optional[QLineEdit]]] = []
-        
+        scroll: Optional[QScrollArea] = None
+
+        def refresh_cap() -> None:
+            callback = getattr(scroll, "_progtrack_recap", None) if scroll is not None else None
+            if callable(callback):
+                QTimer.singleShot(0, callback)
+
         # Add column headers if provided
         if col_headers:
             header_layout = QHBoxLayout()
@@ -15527,6 +15684,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         break
                 if (d_edit, w_edit, probe_edit) in widgets:
                     widgets.remove((d_edit, w_edit, probe_edit))
+                refresh_cap()
 
             del_btn.clicked.connect(delete_row)
             row.addWidget(d_edit, 1)  # Stretch factor 1
@@ -15539,6 +15697,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             idx = layout.indexOf(add_btn)
             layout.insertLayout(idx, row)
             widgets.append((d_edit, w_edit, probe_edit))
+            refresh_cap()
 
         add_btn.clicked.connect(lambda: add_row(add_default(widgets)))
         for item in items:
@@ -15568,7 +15727,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         widgets: List[Tuple[QLineEdit, QComboBox]] = []
-        
+        scroll: Optional[QScrollArea] = None
+
+        def refresh_cap() -> None:
+            callback = getattr(scroll, "_progtrack_recap", None) if scroll is not None else None
+            if callable(callback):
+                QTimer.singleShot(0, callback)
+
         # Add column headers
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 5)
@@ -15711,6 +15876,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         break
                 if (d_edit, combo) in widgets:
                     widgets.remove((d_edit, combo))
+                refresh_cap()
 
             del_btn.clicked.connect(delete_row)
             row.addWidget(d_edit, 1)  # Stretch factor 1
@@ -15720,6 +15886,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             idx = layout.indexOf(add_btn)
             layout.insertLayout(idx, row)
             widgets.append((d_edit, combo))
+            refresh_cap()
 
         add_btn.clicked.connect(lambda: add_row(add_default(widgets)))
         for item in items:
@@ -19454,7 +19621,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         vbox.addWidget(tabs, 1)
 
-        wt_layout = QVBoxLayout(weights_tab)
+        wt_frame = QFrame()
+        wt_frame.setFrameShape(QFrame.Shape.NoFrame)
+        wt_layout = QVBoxLayout(wt_frame)
+        wt_layout.setContentsMargins(0, 0, 0, 0)
+        wt_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        wt_scroll = QScrollArea()
+        wt_scroll.setWidgetResizable(True)
+        wt_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        wt_scroll.setWidget(wt_frame)
+        weights_outer = QVBoxLayout(weights_tab)
+        weights_outer.setContentsMargins(0, 0, 0, 0)
+        weights_outer.addWidget(wt_scroll)
 
         # existing weights
         existing_w = rec.get('gewicht', [])
@@ -19569,7 +19747,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         btn_add_w = QPushButton(self.messages.get("dialog.partner.button.new_weight", "New Weight"))
         btn_add_w.clicked.connect(lambda: add_w_row(None))
         wt_layout.addWidget(btn_add_w)
-        wt_layout.addStretch(1)
+        self._cap_history_viewport(wt_scroll, wt_frame, len(wt_rows))
+
+        self._register_animal_dialog_tabs(dlg, tabs)
 
         # --- Save button (standard single center button) ---
         save_btn = QPushButton(self.messages.get("dialog.partner.button.save", "Save"))
@@ -20068,6 +20248,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         hdr.addWidget(del_hdr, 0)  # No stretch for delete column
         row_layout.addLayout(hdr)
         sperm_widgets: List[Tuple[QLineEdit, QLineEdit, QLineEdit, QLineEdit]] = []
+        scroll: Optional[QScrollArea] = None
+
+        def refresh_cap() -> None:
+            callback = getattr(scroll, "_progtrack_recap", None) if scroll is not None else None
+            if callable(callback):
+                QTimer.singleShot(0, callback)
+
         # function to add a row
         def add_sperm_row(data: Optional[Dict[str, Any]] = None) -> None:
             d = data or {
@@ -20126,6 +20313,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     sperm_widgets.remove((date_le, mot_le, prog_le, cnt_le))
                 except ValueError:
                     pass
+                refresh_cap()
             del_btn.clicked.connect(rm)
             # add widgets with proper stretch factors
             row.addWidget(date_le, 1)
@@ -20143,6 +20331,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             else:
                 row_layout.addLayout(row)
             sperm_widgets.append((date_le, mot_le, prog_le, cnt_le))
+            refresh_cap()
 
         # Button to add new sperm row
         sperm_title = self.messages.get("dialog.sperm_donor.measurement_title", "Sperm measurement")
@@ -20166,6 +20355,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidgetResizable(True)
         scroll.setWidget(frame)
+        self._cap_history_viewport(scroll, frame, len(sperm_widgets))
         sperm_layout.addWidget(scroll, 1)
         if steroid_active:
             tabs.addTab(sperm_tab, self.messages.get("dialog.tab.sperm_measurements", "Sperm Measurements"))
@@ -20191,10 +20381,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 ""  # Empty for unused sample ID column
             )
         )
-        wlay.addWidget(weight_sc, 1)
-        wlay.addStretch()
+        wlay.addWidget(weight_sc, 0)
         tabs.addTab(weight_tab, self.messages.get("dialog.tab.weights", "Weight"))
         v.addWidget(tabs, 1)
+        self._register_animal_dialog_tabs(dlg, tabs)
 
         # --- Save button ---
         save_btn = QPushButton(self.messages.get("button.save", "Save"))
@@ -20736,13 +20926,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
         )
         
-        wlay.addWidget(wg_sc, 1)
-        wlay.addStretch()
+        wlay.addWidget(wg_sc, 0)
         tabs.addTab(weight_tab, self.messages.get("dialog.offspring.tab.weights", "Weights"))
         
         # Events tab (special measurement or OP)
         _events_tab = None
         ev_widgets: List[Tuple[QLineEdit, QComboBox]] = []
+        ev_sc: Optional[QScrollArea] = None
+
+        def refresh_cap() -> None:
+            callback = getattr(ev_sc, "_progtrack_recap", None) if ev_sc is not None else None
+            if callable(callback):
+                QTimer.singleShot(0, callback)
+
         if steroid_active:
             events_tab = QWidget()
             _events_tab = events_tab
@@ -20850,6 +21046,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         ev_widgets.remove((date_le, combo))
                     except ValueError:
                         pass
+                    refresh_cap()
 
                 del_btn.clicked.connect(del_row)
                 row.addWidget(date_le, 1)  # Stretch factor 1
@@ -20859,6 +21056,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 idx = flayout.indexOf(add_ev_btn)
                 flayout.insertLayout(idx, row)
                 ev_widgets.append((date_le, combo))
+                refresh_cap()
 
             add_ev_btn.clicked.connect(lambda: add_ev_row())
 
@@ -20870,10 +21068,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             ev_sc = QScrollArea()
             ev_sc.setWidgetResizable(True)
             ev_sc.setWidget(frame)
-            elay.addWidget(ev_sc, 1)
+            self._cap_history_viewport(ev_sc, frame, len(ev_widgets))
+            elay.addWidget(ev_sc, 0)
             tabs.addTab(events_tab, self.messages.get("dialog.offspring.tab.events", "Events"))
         layout.addWidget(tabs)
         
+        self._register_animal_dialog_tabs(dlg, tabs)
+
         # Save button
         save_btn2 = QPushButton(self.messages.get("dialog.offspring.button.save", "Save"))
         def on_save_offspring() -> None:
@@ -21449,13 +21650,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
         )
         
-        wlay.addWidget(wg_sc, 1)
-        wlay.addStretch()
+        wlay.addWidget(wg_sc, 0)
         tabs.addTab(weight_tab, self.messages.get("dialog.zuchttier.tab.weights", "Weights"))
         
         # Events tab
         _events_tab = None
         ev_widgets: List[Tuple[QLineEdit, QComboBox]] = []
+        ev_sc: Optional[QScrollArea] = None
+
+        def refresh_cap() -> None:
+            callback = getattr(ev_sc, "_progtrack_recap", None) if ev_sc is not None else None
+            if callable(callback):
+                QTimer.singleShot(0, callback)
+
         if steroid_active:
             events_tab = QWidget()
             _events_tab = events_tab
@@ -21567,6 +21774,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         ev_widgets.remove((date_le, combo))
                     except ValueError:
                         pass
+                    refresh_cap()
 
                 del_btn.clicked.connect(del_row)
                 row.addWidget(date_le, 1)  # Stretch factor 1
@@ -21576,6 +21784,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 idx = flayout.indexOf(add_ev_btn)
                 flayout.insertLayout(idx, row)
                 ev_widgets.append((date_le, combo))
+                refresh_cap()
 
             add_ev_btn.clicked.connect(lambda: add_ev_row())
 
@@ -21587,7 +21796,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             ev_sc = QScrollArea()
             ev_sc.setWidgetResizable(True)
             ev_sc.setWidget(frame)
-            elay.addWidget(ev_sc, 1)
+            self._cap_history_viewport(ev_sc, frame, len(ev_widgets))
+            elay.addWidget(ev_sc, 0)
             tabs.addTab(events_tab, self.messages.get("dialog.zuchttier.tab.events", "Events"))
         layout.addWidget(tabs)
         
@@ -21604,6 +21814,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         sex_cb.currentTextChanged.connect(lambda _t: _update_sex_fields(sex_cb.currentData() or "Female"))
         _update_sex_fields(sex_cb.currentData() or "Female")
         
+        self._register_animal_dialog_tabs(dlg, tabs)
+
         # Save button
         save_btn = QPushButton(self.messages.get("dialog.zuchttier.button.save", "Save"))
         
@@ -22125,8 +22337,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 '',
             )
         )
-        wlay.addWidget(wg_sc, 1)
-        wlay.addStretch()
+        wlay.addWidget(wg_sc, 0)
         tabs.addTab(weight_tab,
                     self.messages.get('dialog.versuchstier.tab.weights', 'Weights'))
 
@@ -22159,6 +22370,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ev_flayout.addWidget(add_ev_btn_vt)
 
         ev_widgets: List[Tuple[QLineEdit, QComboBox]] = []
+        ev_sc: Optional[QScrollArea] = None
+
+        def refresh_cap() -> None:
+            callback = getattr(ev_sc, "_progtrack_recap", None) if ev_sc is not None else None
+            if callable(callback):
+                QTimer.singleShot(0, callback)
 
         def add_ev_row_vt(data: Optional[Tuple[str, str]] = None) -> None:
             row = QHBoxLayout()
@@ -22216,6 +22433,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     ev_widgets.remove((ev_date_le, ev_combo))
                 except ValueError:
                     pass
+                refresh_cap()
 
             del_btn_ev.clicked.connect(_del_ev_row)
             row.addWidget(ev_date_le, 1)
@@ -22224,6 +22442,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             idx = ev_flayout.indexOf(add_ev_btn_vt)
             ev_flayout.insertLayout(idx, row)
             ev_widgets.append((ev_date_le, ev_combo))
+            refresh_cap()
 
         add_ev_btn_vt.clicked.connect(lambda: add_ev_row_vt())
 
@@ -22234,11 +22453,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ev_sc = QScrollArea()
         ev_sc.setWidgetResizable(True)
         ev_sc.setWidget(ev_frame)
-        elay.addWidget(ev_sc, 1)
+        self._cap_history_viewport(ev_sc, ev_frame, len(ev_widgets))
+        elay.addWidget(ev_sc, 0)
         tabs.addTab(events_tab,
                     self.messages.get('dialog.versuchstier.tab.events', 'Events'))
 
         layout.addWidget(tabs)
+
+        self._register_animal_dialog_tabs(dlg, tabs)
 
         # ── Save button ───────────────────────────────────────────────────────
         save_btn = QPushButton(self.messages.get('button.save', 'Save'))
@@ -22597,8 +22819,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             form.addRow(self.messages.get("dialog.field.reference_weight", "Reference weight (g):"), ref_w_le)
 
         custom_limit_widgets = {}
+        stored_experimental_limits = rec.get("experimental_limits", {})
+        if not isinstance(stored_experimental_limits, dict):
+            stored_experimental_limits = {}
         for definition in self._custom_experimental_block_definitions():
-            block_id = str(definition.get("id") or "")
+            block_id = str(
+                definition.get("id")
+                or definition.get("stable_id")
+                or ""
+            ).strip()
             if block_id not in enabled_blocks:
                 continue
             limit_field = str(definition.get("max_field") or "").strip()
@@ -22606,8 +22835,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 continue
             spin = QSpinBox()
             spin.setRange(0, 100000)
+            initial_limit = stored_experimental_limits.get(
+                block_id, rec.get(limit_field, definition.get("default_maximum", 0))
+            )
             try:
-                spin.setValue(max(0, int(rec.get(limit_field, 0) or 0)))
+                spin.setValue(max(0, int(initial_limit or 0)))
             except (TypeError, ValueError):
                 spin.setValue(0)
             self._std_widen(spin)
@@ -22756,8 +22988,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if new_in_experiment is None:
                 return
             rec_obj["in_experiment"] = new_in_experiment
+            existing_experimental_limits = rec_obj.get("experimental_limits", {})
+            if not isinstance(existing_experimental_limits, dict):
+                existing_experimental_limits = {}
             for limit_field, widget in custom_limit_widgets.items():
                 rec_obj[limit_field] = int(widget.value())
+                for definition in self._custom_experimental_block_definitions():
+                    definition_field = str(definition.get("max_field") or "").strip()
+                    block_id = str(
+                        definition.get("id")
+                        or definition.get("stable_id")
+                        or ""
+                    ).strip()
+                    if definition_field == limit_field and block_id:
+                        existing_experimental_limits[block_id] = int(widget.value())
+            rec_obj["experimental_limits"] = existing_experimental_limits
             for field_name, widget in parent_fields.items():
                 rec_obj[field_name] = widget.text().strip()
 
@@ -23212,8 +23457,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             prog_tab = QWidget()
             _prog_tab = prog_tab
             prog_lay = QVBoxLayout(prog_tab)
-            prog_lay.addWidget(dp_sc, 1)
-            prog_lay.addStretch()
+            prog_lay.addWidget(dp_sc, 0)
             tabs.addTab(prog_tab, self.messages.get("dialog.tab.progesterone", "Progesterone"))
 
         # ---------------- PdG and Unified Prog tabs ----------------
@@ -23241,8 +23485,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
         gewicht_tab = QWidget()
         gewicht_lay = QVBoxLayout(gewicht_tab)
-        gewicht_lay.addWidget(gew_sc, 1)
-        gewicht_lay.addStretch()
+        gewicht_lay.addWidget(gew_sc, 0)
         tabs.addTab(gewicht_tab, self.messages.get("dialog.tab.weights", "Weight"))
 
         # ---------------- Events tab ----------------
@@ -23283,9 +23526,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             events_tab = QWidget()
             _events_tab = events_tab
             events_lay = QVBoxLayout(events_tab)
-            events_lay.addWidget(events_sc, 1)
-            events_lay.addStretch()
+            events_lay.addWidget(events_sc, 0)
             tabs.addTab(events_tab, self.messages.get("dialog.tab.events", "Events"))
+
+        self._register_animal_dialog_tabs(dlg, tabs)
 
         # ---------------- Save (single standard button) ----------------
         save_btn = QPushButton(self.messages.get("button.save", "Save"))
