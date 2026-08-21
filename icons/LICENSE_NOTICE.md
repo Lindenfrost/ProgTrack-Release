@@ -34,6 +34,7 @@ rights to use, modify, and redistribute these assets under its terms.
 - `progtrack_icon.ico`
 - `question.png`
 - `warning.png`
+- `tech.png`
 
 Windows-generated cache files such as `Thumbs.db`, if present, are not
 ProgTrack artwork source assets.
@@ -57,13 +58,29 @@ directly without a PNG fallback.  Optional raster review evidence outside the
 release is not a runtime asset.  The shared Qt loader may adapt only the
 canonical outline colour in memory when required by the active palette.
 
-## Additional account and sex-filter SVG masters
+## UI SVG artwork and manifest
 
-- `ui/account_it_specialist.svg`
-- `ui/account_manager.svg`
-- `ui/account_researcher.svg`
-- `ui/account_veterinarian.svg`
-- `ui/accountkeeper.svg`
-- `ui/role_unknown.svg`
+Every file under ui/ is covered by this notice: manifest.json, all action,
+account, control, flag, flow, heritage, measurement, Medi, network, pedigree,
+role, status, and toggle SVGs currently shipped there. This includes
+account_awo.svg, account_guest_locked.svg, account_it_specialist.svg, account_lord.svg,
+account_manager.svg, account_master.svg, account_researcher.svg,
+account_user.svg, account_veterinarian.svg, accountkeeper.svg,
+action_add.svg, action_archive.svg, action_delete.svg,
+action_edit.svg, action_edit_role.svg, action_refresh.svg,
+action_restore.svg, action_settings.svg, control_decrement.svg,
+control_increment.svg, flag_de.svg, flag_gb.svg, flag_it.svg,
+flag_ru.svg, flow_freezer.svg, heritage_placeholder.svg,
+measure_blood.svg, measure_sperm.svg, measure_urine.svg,
+measure_weight.svg, medi_ever_abnormal.svg, medi_ever_experiment.svg,
+medi_ever_sick.svg, network_insert_symbol.svg, pedigree_symbol.svg,
+role_experimental.svg, role_experimental_offspring.svg,
+role_female.svg, role_male.svg, role_offspring.svg, role_partner.svg,
+role_unknown.svg, status_abnormal.svg, status_deceased.svg,
+status_in_experiment.svg, status_not_pregnant.svg, status_offspring.svg,
+status_ok.svg, status_possible.svg, status_pregnant.svg,
+status_sick.svg, toggle_collapse.svg, and toggle_expand.svg.
 
-These SVGs are GPL-3.0-or-later ProgTrack artwork owned by Deutsches Primatenzentrum GmbH and are used only in the documented README or unknown-sex filter contexts.
+All of these SVGs are GPL-3.0-or-later ProgTrack artwork owned by Deutsches
+Primatenzentrum GmbH. manifest.json is the authoritative semantic mapping;
+the application uses the packaged SVG masters directly without a PNG fallback.

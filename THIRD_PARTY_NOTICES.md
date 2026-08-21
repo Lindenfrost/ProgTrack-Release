@@ -41,6 +41,7 @@ from the runtime bundle are stored in `third_party_licenses/`.
 | pypdf | 6.14.2 | BSD 3-Clause; see `LICENSE_PYPDF.txt` |
 | DejaVu fonts | bundled with matplotlib | DejaVu font license |
 | STIX fonts | bundled with matplotlib | STIX font license |
+| Computer Modern / BaKoMa TrueType fonts | bundled with matplotlib | Copyright (C) 1994 Basil K. Malyshev, BaKoMa Fonts Collection; see `fonts/LICENSE_NOTICE.md` and Matplotlib's reproduced BaKoMa notice |
 | ReportLab bundled fonts | bundled with reportlab | See ReportLab font license files |
 
 ## Backend build variants

@@ -55,6 +55,7 @@ PAYLOAD_DIRECTORIES = (
     "third_party_licenses",
 )
 MANIFEST_PATH = Path(__file__).with_name("linux_runtime_manifest.json")
+FONT_LICENSE_NOTICE = Path(__file__).with_name("fonts") / "LICENSE_NOTICE.md"
 
 
 def _repo_root() -> Path:
@@ -216,8 +217,13 @@ def _prepare_runtime(stage: Path, archive: Path, wheels: list[Path], manifest: d
     font_target = stage / "fonts" / "matplotlib"
     if font_source.exists():
         shutil.copytree(font_source, font_target)
+    if not FONT_LICENSE_NOTICE.is_file():
+        raise FileNotFoundError(f"Linux font license notice is missing: {FONT_LICENSE_NOTICE}")
+    shutil.copy2(FONT_LICENSE_NOTICE, stage / "fonts" / "LICENSE_NOTICE.md")
     (stage / "fonts" / "README.md").write_text(
-        "Bundled Matplotlib/DejaVu and STIX fonts used for portable Linux PDF and UI fallback.\n",
+        "Bundled Matplotlib fonts used for portable Linux PDF and UI fallback. "
+        "Rights and redistribution terms are in LICENSE_NOTICE.md; the upstream "
+        "font license files are retained in matplotlib/.\n",
         encoding="utf-8",
     )
     metadata = {
@@ -341,6 +347,7 @@ def _validate_stage(stage: Path) -> None:
         "runtime/lib/python3.13/site-packages/psycopg",
         "runtime/lib/python3.13/site-packages/psycopg_binary",
         "fonts/matplotlib",
+        "fonts/LICENSE_NOTICE.md",
         "Resources/Seed/progtrack_seed.ptdb",
         "icons/ui/manifest.json",
         "release_metadata.json",

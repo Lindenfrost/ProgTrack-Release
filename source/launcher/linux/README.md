@@ -19,6 +19,11 @@ read-only application folder remains untouched. Set `PROGTRACK_PORTABLE=1` only
 when the extracted folder is writable and a local `ProgTrackData/` tree is wanted.
 `./ProgTrack --diagnose-paths` prints the resolved paths.
 
+The portable `fonts/` directory includes a dedicated `LICENSE_NOTICE.md`.
+It identifies the rights holders and terms for the unchanged DejaVu, STIX, and
+Computer Modern/BaKoMa fonts; the upstream Matplotlib license files remain in
+`fonts/matplotlib/`.
+
 The local engineering artifact is deliberately not advertised as supported until
 manual native Linux validation passes: clean-machine double-click launch, Qt/font
 rendering, PDF/XLSX export, SQLite, PostgreSQL/TLS, XDG/read-only behavior, locks,

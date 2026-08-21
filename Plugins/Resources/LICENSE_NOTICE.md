@@ -16,6 +16,12 @@ as part of the ProgTrack distribution under its terms.
 
 ## Included Resources
 
+- Animal_Origins.txt
+- Death_Causes.txt
+- Departure_Reasons.txt
+- Experiment_Exit_Reasons.txt
+- Genotype_List.txt
+- Handover_Recipients.txt
 - `Real_Blut.xlsx`
 - `Real_Craniometry.csv`
 - `Real_Gewichtel.xlsx`
