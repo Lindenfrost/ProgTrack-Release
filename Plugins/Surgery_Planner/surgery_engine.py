@@ -60,12 +60,20 @@ class PlannerSnapshot:
             ipid = str(raw.get("ipid") or raw.get("name") or "").strip()
             if not ipid:
                 continue
+            canonical_events = [
+                event for event in raw.get("events", ()) or ()
+                if isinstance(event, dict)
+            ]
+            performed_ops = sum(1 for event in canonical_events if event.get("typ") == "surgery")
+            performed_transfers = sum(
+                1 for event in canonical_events if event.get("typ") == "embryo_transfer"
+            )
             rows.append(PlannerAnimal(
                 ipid, str(raw.get("rolle") or raw.get("role") or "").strip(),
                 integer(raw.get("OP_max", raw.get("max_op", 0))),
                 integer(raw.get("Embryo_max", raw.get("max_embryo", 0))),
-                len(raw.get("op", ()) or ()),
-                len(raw.get("embryoübertragung", ()) or ()),
+                performed_ops,
+                performed_transfers,
             ))
         rows.sort(key=lambda item: item.ipid.casefold())
         cfg = PlannerSettings(

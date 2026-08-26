@@ -13,6 +13,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from datetime import datetime, date
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ConverterDialog(QDialog):
@@ -227,7 +230,7 @@ class ConverterDialog(QDialog):
             import traceback
             error_msg = str(e)
             detail = traceback.format_exc()
-            print(f"Fit error: {error_msg}\n{detail}")  # Log to console
+            logger.error("Fit error: %s\n%s", error_msg, detail)
             QMessageBox.critical(
                 self,
                 self.parent_app.messages.get("pdg_converter.error.fitting_error", "Fitting Error"),
@@ -238,7 +241,11 @@ class ConverterDialog(QDialog):
             return
         
         if params is None:
-            print(f"DEBUG: paired_pdg count = {len(paired_pdg)}, paired_prog count = {len(paired_prog)}")
+            logger.debug(
+                "paired_pdg count = %s, paired_prog count = %s",
+                len(paired_pdg),
+                len(paired_prog),
+            )
             if len(paired_pdg) < 3:
                 QMessageBox.warning(
                     self,

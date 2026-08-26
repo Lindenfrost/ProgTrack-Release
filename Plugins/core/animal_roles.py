@@ -176,16 +176,17 @@ IMPORT_CAPABILITY_BLOCKS: Dict[str, str] = {
 }
 
 GLOBAL_EVENT_CATALOG: Dict[str, Dict[str, Any]] = {
-    "surgery": {"label_key": "event.surgery", "aliases": ["op"], "planned": True, "limit_block": "max_op"},
-    "embryo_transfer": {"label_key": "event.embryo_transfer", "aliases": ["embryo"], "planned": True, "limit_block": "max_embryo"},
-    "pregnancy": {"label_key": "event.pregnancy", "aliases": ["traechtigkeit", "trächtigkeit"], "planned": False, "limit_block": "max_pregnancies"},
-    "abortion": {"label_key": "event.abortion", "aliases": ["abort"], "planned": False, "limit_block": ""},
-    "birth": {"label_key": "event.birth", "aliases": ["geburt"], "planned": False, "limit_block": "max_births"},
-    "pgf": {"label_key": "event.pgf", "aliases": ["pgf"], "planned": True, "limit_block": "max_pgf"},
-    "fsh": {"label_key": "event.fsh", "aliases": ["fsh"], "planned": True, "limit_block": "max_fsh"},
-    "progesterone": {"label_key": "event.progesterone", "aliases": ["progesterone"], "planned": False, "limit_block": ""},
-    "special_measurement": {"label_key": "event.special_measurement", "aliases": ["sondermessung"], "planned": True, "limit_block": "max_special"},
-    "measurement": {"label_key": "event.measurement", "aliases": ["measurement"], "planned": True, "limit_block": "max_measurements"},
+    "surgery": {"label_key": "event.surgery", "planned": True, "limit_block": "max_op"},
+    "embryo_transfer": {"label_key": "event.embryo_transfer", "planned": True, "limit_block": "max_embryo"},
+    "pregnancy": {"label_key": "event.pregnancy", "planned": False, "limit_block": "max_pregnancies"},
+    "pregnancy_verification": {"label_key": "plot.event.pregnancy_verification", "planned": False, "limit_block": ""},
+    "abortion": {"label_key": "event.abortion", "planned": False, "limit_block": ""},
+    "birth": {"label_key": "event.birth", "planned": False, "limit_block": "max_births"},
+    "pgf": {"label_key": "event.pgf", "planned": True, "limit_block": "max_pgf"},
+    "fsh": {"label_key": "event.fsh", "planned": True, "limit_block": "max_fsh"},
+    "progesterone": {"label_key": "event.progesterone", "planned": False, "limit_block": ""},
+    "special_measurement": {"label_key": "event.special_measurement", "planned": True, "limit_block": "max_special"},
+    "measurement": {"label_key": "event.measurement", "planned": True, "limit_block": "max_measurements"},
 }
 
 DEFAULT_DIALOG_RECIPES: Dict[str, Dict[str, Any]] = {

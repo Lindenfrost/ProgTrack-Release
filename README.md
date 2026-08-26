@@ -1,11 +1,11 @@
-# ProgTrack 0.2.1
+# ProgTrack 0.2.2
 
 <p align="center">
   <img src="icons/Splash.png" alt="ProgTrack splash" width="520">
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.2.1-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.2.2-blue">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-portable%20Python-green">
   <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue">
@@ -17,7 +17,7 @@ reproductive events, medical history, cage placement, pedigree data, sample
 tracking, projects, reports, and planning tools in one inspectable Windows
 bundle.
 
-Version `0.2.1` is a backend-based release built for a complete, traceable
+Version 0.2.2 is a backend-based maintenance release built for a complete, traceable
 animal workflow. The application uses one service contract for every module and
 offers a tiny local SQLite profile for one workstation or testing, plus a shared
 PostgreSQL profile for networked facilities. The same animal identities, history,
@@ -153,7 +153,7 @@ Launcher.exe --script ProgTrack.v.0.2.1.py
 
 ## Platform support and release artifacts
 
-The `0.2.1` release published here is a native Windows portable release. Its
+The 0.2.2 release published here is a native Windows portable release. Its
 `Launcher.exe`, Windows Qt/Python runtime, and bundled native libraries must be
 kept together; this ZIP is not a native Linux package and is not supported
 through Wine.

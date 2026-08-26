@@ -54,7 +54,7 @@ import platform
 import calendar
 import html
 import shutil
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from Plugins.core.project_visibility import (
@@ -297,7 +297,8 @@ SCHEMA_VERSION = "4.0"
 EVENT_TYPES = [
     'surgery',           # Surgery/OP
     'embryo_transfer',   # Embryo transfer
-    'pregnancy',         # Pregnancy
+    'pregnancy',
+    'pregnancy_verification',         # Pregnancy
     'abortion',          # Abortion
     'birth',             # Birth
     'pgf',               # PGF administration
@@ -306,21 +307,34 @@ EVENT_TYPES = [
     'special_measurement' # Special measurement (offspring-specific)
 ]
 
-# Legacy event type mapping for backward compatibility
-# Maps old German identifiers to new canonical English identifiers
-LEGACY_EVENT_MAP = {
-    'op': 'surgery',
-    'embryoübertragung': 'embryo_transfer',
-    'embryo': 'embryo_transfer',
-    'trächtigkeit': 'pregnancy',
-    'abort': 'abortion',
-    'abbruch': 'abortion',
-    'geburt': 'birth',
-    'pgf': 'pgf',
-    'fsh': 'fsh',
-    'progesteron': 'progesterone',
-    'sondermessung': 'special_measurement'
-}
+def event_entries(record: Dict[str, Any], event_type: str) -> List[Dict[str, Any]]:
+    """Return canonical event entries of one type from an animal record.
+
+    Animal records use the backend events collection as their only event store.
+    This accessor keeps consumers robust to malformed optional entries without
+    reintroducing legacy per-event arrays.
+    """
+    wanted = str(event_type or "").strip().casefold()
+    result: List[Dict[str, Any]] = []
+    for event in record.get("events", []) or []:
+        if not isinstance(event, dict):
+            continue
+        actual = str(event.get("typ") or event.get("event_type") or "").strip().casefold()
+        if actual == wanted:
+            result.append(event)
+    return result
+
+
+def event_dates(record: Dict[str, Any], event_type: str) -> List[datetime]:
+    """Return canonical event dates for one type, ignoring malformed entries."""
+    dates: List[datetime] = []
+    for event in event_entries(record, event_type):
+        value = event.get("datum") or event.get("date")
+        if isinstance(value, datetime):
+            dates.append(value)
+        elif isinstance(value, date):
+            dates.append(datetime.combine(value, datetime.min.time()))
+    return dates
 
 SELECT_PIXEL_THRESHOLD = 10  # Schwellwert in Pixeln für Hover-/Click-Detection
 # Triangles are drawn just *inside* the axes so they obey y-limits & are clipped by the axes patch.
@@ -6701,43 +6715,30 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             entry['probennummer'] = probe_text
                     rec_copy['pdg'].append(entry)
 
-                # --- unified events (typ + datum) ---
-                # Events are the canonical source of truth for all event data
-                rec_copy['events'] = []
-                for ev in rec.get('events', []):
-                    if 'datum' in ev and 'typ' in ev:
-                        d = ev['datum']
-                        if isinstance(d, datetime):
-                            d = d.isoformat()
-                        # Normalize event type to canonical identifier
-                        typ = ev['typ'].lower().strip()
-                        canonical_typ = LEGACY_EVENT_MAP.get(typ, typ)
-                        rec_copy['events'].append({'typ': canonical_typ, 'datum': d})
-                    else:
-                        logging.warning(f"Invalid event in {name}, skipping: {ev}")
-
-                # --- legacy arrays (op, pgf, embryo) for backward compatibility ---
-                # These are maintained for existing data but not created for new animals
-                rec_copy['op'] = []
-                for d in rec.get('op', []):
-                    if isinstance(d, datetime):
-                        rec_copy['op'].append(d.isoformat())
-                    elif isinstance(d, str):
-                        rec_copy['op'].append(d)
-                
-                rec_copy['pgf'] = []
-                for d in rec.get('pgf', []):
-                    if isinstance(d, datetime):
-                        rec_copy['pgf'].append(d.isoformat())
-                    elif isinstance(d, str):
-                        rec_copy['pgf'].append(d)
-                
-                rec_copy['embryo'] = []
-                for d in rec.get('embryo', []):
-                    if isinstance(d, datetime):
-                        rec_copy['embryo'].append(d.isoformat())
-                    elif isinstance(d, str):
-                        rec_copy['embryo'].append(d)
+                # --- unified events (canonical typ + datum) ---
+                rec_copy["events"] = []
+                for event in rec.get("events", []) or []:
+                    if not isinstance(event, dict):
+                        logging.warning("Invalid event in %s, skipping: %r", name, event)
+                        continue
+                    event_type = str(event.get("typ") or "").strip()
+                    event_date = event.get("datum")
+                    if not event_type or event_date is None:
+                        logging.warning("Invalid event in %s, skipping: %r", name, event)
+                        continue
+                    if isinstance(event_date, datetime):
+                        event_date = event_date.isoformat()
+                    elif not isinstance(event_date, str):
+                        logging.warning("Invalid event date in %s, skipping: %r", name, event)
+                        continue
+                    payload = dict(event)
+                    payload["typ"] = event_type
+                    payload["datum"] = event_date
+                    payload.pop("event_type", None)
+                    payload.pop("date", None)
+                    rec_copy["events"].append(payload)
+                for legacy_field in ("op", "pgf", "embryo"):
+                    rec_copy.pop(legacy_field, None)
 
                 out[section][name] = rec_copy
             self._save_trace(
@@ -6956,9 +6957,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # screen/frame guard here so their title bar is also kept on-screen
             # when the user resizes or reopens them.
             if not hasattr(dlg, "_progtrack_geometry_guard"):
-                install_dialog_geometry_guard(
-                    dlg, minimum=QSize(w, max(0, int(minimum_height)))
-                )
+                if int(minimum_height) == 220:
+                    install_dialog_geometry_guard(dlg, minimum=QSize(w, 220))
+                else:
+                    install_dialog_geometry_guard(
+                        dlg, minimum=QSize(w, max(0, int(minimum_height)))
+                    )
             dlg.setMinimumWidth(w)
             dlg.adjustSize()
             dlg.resize(max(w, dlg.sizeHint().width()), dlg.sizeHint().height())
@@ -10736,7 +10740,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             recovery_days = animal_data.get('recovery_time', DEFAULT_RECOVERY_TIME)
             
             # Collect all relevant event dates: ops + sperm samples
-            op_dates = animal_data.get('op', []) or []
+            op_dates = event_dates(animal_data, 'surgery') or []
             sperm_dates = [s.get('datum') for s in animal_data.get('sperm', []) if s.get('datum')]
             all_dates = op_dates + sperm_dates
             
@@ -11813,53 +11817,27 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """
         event_counts = {}
 
-        # Build a lookup of event dates already present in the unified events list so we can
-        # ignore legacy-array duplicates.
-        unified_dates_by_type = {}
-        for ev in animal_data.get('events', []) or []:
-            if isinstance(ev, dict) and isinstance(ev.get('datum'), datetime):
-                t = self._normalize_report_event_type(ev.get('typ', ''))
-                d = ev['datum'].date()
-                unified_dates_by_type.setdefault(t, set()).add(d)
-        
-        # Count from events array
-        for event in animal_data.get('events', []):
-            if isinstance(event.get('datum'), datetime):
-                typ = self._normalize_report_event_type(event.get('typ', '').lower())
-                if typ:
-                    if typ not in event_counts:
-                        event_counts[typ] = {'up_to': 0, 'total': 0}
-                    event_counts[typ]['total'] += 1
-                    if event['datum'].date() <= date:
-                        event_counts[typ]['up_to'] += 1
-        
-        # Count from legacy event arrays
-        for ev_type in ['op', 'pgf', 'embryo', 'abort', 'geburt', 'trächtigkeit', 'fsh', 'progesterone']:
-            events = animal_data.get(ev_type, [])
-            if events:
-                typ = self._normalize_report_event_type(ev_type)
-                if typ not in event_counts:
-                    event_counts[typ] = {'up_to': 0, 'total': 0}
+        # Count canonical events only. Every lifecycle/procedure event is
+        # stored in the backend events collection.
+        for event in animal_data.get("events", []) or []:
+            if not isinstance(event, dict):
+                continue
+            value = event.get("datum") or event.get("date")
+            if not isinstance(value, (datetime, date)):
+                continue
+            typ = self._normalize_report_event_type(event.get("typ", ""))
+            if not typ:
+                continue
+            event_date = value.date() if isinstance(value, datetime) else value
+            counts = event_counts.setdefault(typ, {"up_to": 0, "total": 0})
+            counts["total"] += 1
+            if event_date <= date:
+                counts["up_to"] += 1
 
-                # Only count legacy entries that are not already represented in the unified events list.
-                legacy_dates = [d.date() for d in events if isinstance(d, datetime)]
-                filtered_dates = [d for d in legacy_dates if d not in unified_dates_by_type.get(typ, set())]
-
-                event_counts[typ]['total'] += len(filtered_dates)
-                for ev_date in events:
-                    if isinstance(ev_date, datetime):
-                        d = ev_date.date()
-                        if d in unified_dates_by_type.get(typ, set()):
-                            continue
-                        if d <= date:
-                            event_counts[typ]['up_to'] += 1
-        
-        # Convert to (current, total) tuples
-        result = {}
-        for ev_type, counts in event_counts.items():
-            result[ev_type] = (counts['up_to'], counts['total'])
-        
-        return result
+        return {
+            event_type: (counts["up_to"], counts["total"])
+            for event_type, counts in event_counts.items()
+        }
 
     def _normalize_report_event_type(self, typ: str) -> str:
         try:
@@ -11867,8 +11845,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         except Exception:
             t = str(typ).strip().lower()
 
-        # normalize aliases / legacy keys using LEGACY_EVENT_MAP
-        return LEGACY_EVENT_MAP.get(t, t)
+        return t
 
     def _get_report_event_label(self, typ_lower: str, messages: Dict[str, str]) -> str:
         labels = {
@@ -12073,8 +12050,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Female donor: show all relevant maximums
             # Each progesterone measurement ('daten') represents one blood sample
             prog_count = len(animal_data.get('daten', []))
-            pgf_count = len(animal_data.get('pgf', []))
-            op_count = len(animal_data.get('op', []))
+            pgf_count = len(event_dates(animal_data, 'pgf'))
+            op_count = len(event_dates(animal_data, 'surgery'))
             fsh_count = sum(1 for ev in animal_data.get('events', []) if ev.get('typ') == 'fsh')
             
             max_messungen = animal_data.get('max_messungen', 0)
@@ -12100,7 +12077,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Surrogate: show blood samples (progesterone measurements), PGF, embryo transfers, pregnancies, births
             # Each progesterone measurement ('daten') represents one blood sample
             prog_count = len(animal_data.get('daten', []))
-            pgf_count = len(animal_data.get('pgf', []))
+            pgf_count = len(event_dates(animal_data, 'pgf'))
             embryo_count = sum(1 for ev in animal_data.get('events', []) 
                              if ev.get('typ') == 'embryo_transfer')
             pregnancy_count = sum(1 for ev in animal_data.get('events', []) 
@@ -12190,8 +12167,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         elif role == Role.SPENDER.value:
             # Female donor: show all relevant maximums
             prog_count = len(animal_data.get('daten', []))
-            pgf_count = len(animal_data.get('pgf', []))
-            op_count = len(animal_data.get('op', []))
+            pgf_count = len(event_dates(animal_data, 'pgf'))
+            op_count = len(event_dates(animal_data, 'surgery'))
             fsh_count = sum(1 for ev in animal_data.get('events', []) if ev.get('typ') == 'fsh')
             
             max_messungen = animal_data.get('max_messungen', 0)
@@ -12211,7 +12188,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         elif role == Role.AMME.value:
             # Surrogate: show blood samples, PGF, embryo transfers, pregnancies, births
             prog_count = len(animal_data.get('daten', []))
-            pgf_count = len(animal_data.get('pgf', []))
+            pgf_count = len(event_dates(animal_data, 'pgf'))
             embryo_count = sum(1 for ev in animal_data.get('events', []) 
                              if ev.get('typ') == 'embryo_transfer')
             pregnancy_count = sum(1 for ev in animal_data.get('events', []) 
@@ -12309,7 +12286,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # Donor logic (including Samenspender): recovery after OP or Spermaprobe
         if role in (Role.SPENDER.value, Role.SAMENSP.value):
-            op_dates = a.get('op', []) or []
+            op_dates = event_dates(a, 'surgery') or []
             sperm_dates = [s.get('datum') for s in a.get('sperm', []) if s.get('datum')]
             all_dates = op_dates + sperm_dates
             try:
@@ -13786,7 +13763,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Donor logic (including Samenspender): recovery after OP or Spermaprobe
             if role in (Role.SPENDER.value, Role.SAMENSP.value):
                 # collect all relevant event dates: ops + sperm samples
-                op_dates = a.get('op', []) or []
+                op_dates = event_dates(a, 'surgery') or []
                 sperm_dates = [s.get('datum') for s in a.get('sperm', []) if s.get('datum')]
                 all_dates = op_dates + sperm_dates
                 try:
@@ -14124,12 +14101,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             has_blood |= steroid_active and bool(animal.get('daten'))
             has_urine |= steroid_active and bool(animal.get('pdg'))
             has_weight |= bool(animal.get('gewicht'))
-            has_events |= steroid_active and (
-                bool(animal.get('sperm')) or bool(
-                    animal.get('events') or
-                    animal.get('pgf')    or
-                    animal.get('op')
-                )
+            has_events |= steroid_active and bool(
+                animal.get('sperm') or animal.get('events')
             )
 
             # Check if plugin has fitted model for combined data availability
@@ -14848,7 +14821,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if steroid_active:
                 # Plot all reproductive events (PGF as line; FSH & Progesterone as triangles; Surgery, embryo, etc. as before)
                 evs = []
-                evs += [('pgf',       dt) for dt in a.get('pgf', [])]
+                evs += [('pgf',       dt) for dt in event_dates(a, 'pgf')]
                 # special case: offspring should plot all its surgery/special_measurement events
                 if rolle == Role.OFFSPRING.value:
                     evs += [(ev['typ'], ev['datum']) for ev in a.get('events', [])]
@@ -14869,7 +14842,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     evs += [(ev['typ'], ev['datum']) for ev in a.get('events', [])]
                 else:
                     # donors: Surgery, PGF, and FSH (from both legacy arrays and events)
-                    evs += [('surgery',      dt) for dt in a.get('op', [])]
+                    evs += [('surgery',      dt) for dt in event_dates(a, 'surgery')]
                     evs += [(ev['typ'], ev['datum'])
                             for ev in a.get('events', [])
                             if ev['typ'] in ('fsh', 'pgf', 'surgery')]
@@ -16705,16 +16678,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         # ------------------------
                         # 7.24.1 Merge reproduction events for Excel export
                         # ------------------------
-                        repro_events = []
-                        # Only include reproductive events for Spenderin and Amme
+                        # Include canonical reproductive events for Spenderin and Amme.
                         if role in (Role.SPENDER.value, Role.AMME.value):
-                            repro_events += [('pgf', dt) for dt in animal.get('pgf', [])]
-                            if role == Role.AMME.value:
-                                repro_events += [('embryo', dt) for dt in animal.get('embryo', [])]
-                            else:
-                                repro_events += [('op', dt) for dt in animal.get('op', [])]
-                            repro_events += [(ev['typ'], ev['datum']) for ev in animal.get('events', [])]
-
+                            repro_events = [
+                                (ev.get('typ'), ev.get('datum'))
+                                for ev in animal.get('events', []) or []
+                                if isinstance(ev, dict) and ev.get('typ') and ev.get('datum')
+                            ]
                             for typ, dt in repro_events:
                                 if isinstance(dt, datetime) and von <= dt.date() <= bis:
                                     data.append({
@@ -17747,6 +17717,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _show_institution_branding(self):
         """Compatibility entry point; branding now lives in Conventions."""
+        mt = getattr(self, "master_track", None)
         permitted = self._can_manage_institution_branding()
         if not permitted:
             QMessageBox.warning(
@@ -19056,10 +19027,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     # Compute current status to pass to planner for auto-exclusion
                     status = self._get_status(name)
                     # Build a new record for the planner
-                    # Extract embryo transfer dates from events list
-                    embryo_transfer_dates = [ev['datum'] for ev in rec.get('events', []) 
-                                            if ev.get('typ') == 'embryo_transfer' and ev.get('datum')]
-                    
                     new_rec = {
                         'name': name,
                         'rolle': role,
@@ -19068,8 +19035,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         'FSH_max':        rec.get('max_fsh',    rec.get('FSH_max',    0)),
                         'Embryo_max':     rec.get('max_embryo', rec.get('Embryo_max', 0)),
                         # include already-performed raw history
-                        'op':              rec.get('op', []),
-                        'embryoübertragung': embryo_transfer_dates,
                         # preserve any other event types
                         'events':         rec.get('events', []),
                         # Pass status info for auto-exclusion in planner
@@ -23635,18 +23600,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         _events_tab = None
         events_w = []
         if steroid_active:
-            if self._animal_role_value(rec) == Role.SPENDER.value:
-                ev_items = (
-                    [{'typ': LEGACY_EVENT_MAP.get('op', 'surgery'),  'datum': dt} for dt in rec.get('op', [])] +
-                    [{'typ': 'pgf', 'datum': dt} for dt in rec.get('pgf', [])] +
-                    [{'typ': LEGACY_EVENT_MAP.get(ev.get('typ'), ev.get('typ')), 'datum': ev.get('datum')} 
-                     for ev in rec.get('events', []) if ev.get('typ') in ('fsh', 'progesterone')]
-                )
-            else:
-                # Normalize legacy event types to English
-                ev_items = [{'typ': LEGACY_EVENT_MAP.get(ev.get('typ'), ev.get('typ')), 'datum': ev.get('datum')} 
-                           for ev in rec.get('events', []) if LEGACY_EVENT_MAP.get(ev.get('typ'), ev.get('typ')) in EVENT_TYPES]
-                ev_items += [{'typ': 'pgf', 'datum': dt} for dt in rec.get('pgf', [])]
+            # All role event rows are sourced from canonical backend events.
+            ev_items = [
+                {"typ": str(event.get("typ") or ""), "datum": event.get("datum")}
+                for event in rec.get("events", []) or []
+                if isinstance(event, dict)
+                and event.get("typ")
+                and event.get("datum") is not None
+                and str(event.get("typ")).strip() in EVENT_TYPES
+            ]
 
             def fmt_ev(ev): 
                 return (ev['datum'].strftime(DATE_FORMAT), ev['typ'])
@@ -23743,16 +23705,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("female_like.save.role_read", new_name=new_name, role_code=role_code)
             # role change cleanups
             if not creating and self._animal_role_value(rec) != role_code:
-                if role_code == Role.AMME.value and rec.get('op'):
+                if role_code == Role.AMME.value and event_entries(rec, 'surgery'):
                     self._show_message(
                         self.messages.get('warning.title', 'Warning'),
                         self.messages.get('warning.role_change_surrogate', 'Switching to Surrogate role will remove surgery events.'),
                         'warning'
                     )
-                    rec['op'] = []
+                    rec['events'] = [ev for ev in rec.get('events', []) if ev.get('typ') != 'surgery']
                 if role_code == Role.SPENDER.value:
                     # remove surrogate-only events
-                    rec['events'] = [ev for ev in rec.get('events', []) if ev.get('typ') != 'embryoübertragung']
+                    rec['events'] = [ev for ev in rec.get('events', []) if ev.get('typ') != 'embryo_transfer']
 
             # Scalars
             try:
@@ -23863,7 +23825,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         dt = datetime.strptime(d_edit.text(), DATE_FORMAT).date()
                         if dt in seen_dates: raise ValueError('Doppeltes Datum')
                         seen_dates.add(dt)
-                        val = float(w_edit.text());  assert val >= 0
+                        val = float(w_edit.text())
+                        if not (val >= 0):
+                            raise ValueError("Measurement values must be non-negative")
                         entry = {'datum': datetime.combine(dt, datetime.min.time()), 'wert': val}
                         # Add probennummer if provided
                         probe_text = probe_edit.text().strip()
@@ -23904,7 +23868,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         continue
                     try:
                         dt = datetime.strptime(d_edit.text(), DATE_FORMAT).date()
-                        val = float((w_edit.text() or '').strip());  assert val >= 0
+                        val = float((w_edit.text() or "").strip())
+                        if not (val >= 0):
+                            raise ValueError("Measurement values must be non-negative")
                         entry = {'datum': datetime.combine(dt, datetime.min.time()), 'wert': val}
                         # Add probennummer if provided
                         probe_text = probe_edit.text().strip()
@@ -23939,7 +23905,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if dt in seen_w:
                         raise ValueError(self.messages.get('error.duplicate_weight_date', 'Duplicate weight date: {}').format(dt.strftime(DATE_FORMAT)))
                     seen_w.add(dt)
-                    val = float(w_edit.text()); assert val >= 0
+                    val = float(w_edit.text())
+                    if not (val >= 0):
+                        raise ValueError("Measurement values must be non-negative")
                     new_gew.append({'datum': datetime.combine(dt, datetime.min.time()), 'wert': val})
                 except Exception as e:
                     logging.error(f"Weight validation error: {e}, date={d_edit.text() if d_edit else 'N/A'}, value={w_edit.text() if w_edit else 'N/A'}")
@@ -23953,45 +23921,36 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             # Events
             if steroid_active:
-                new_op, seen_op = [], set()
-                new_pgf, seen_pgf = [], set()
-                new_fsh, seen_fsh = [], set()
-                new_ev, seen_ev   = [], set()
+                new_events, seen_events = [], set()
                 for d_edit, combo in events_w:
-                    # Skip deleted widgets or empty rows
+                    # Skip deleted widgets or empty rows.
                     try:
-                        date_text = d_edit.text().strip() if d_edit else ''
+                        date_text = d_edit.text().strip() if d_edit else ""
                         if not date_text:
                             continue
                     except (RuntimeError, AttributeError):
-                        # Widget has been deleted or is invalid
                         continue
                     try:
-                        dt = datetime.strptime(d_edit.text(), DATE_FORMAT).date()
-                        # Use currentData() to get canonical event type, not translated display text
-                        typ = combo.currentData()
+                        dt = datetime.strptime(date_text, DATE_FORMAT).date()
+                        typ = str(combo.currentData() or "").strip()
                         allowed_types = set(EVENT_TYPES) | self._custom_event_types_for_role(role_code)
-                        if not typ or typ not in allowed_types: raise ValueError
-                        if typ == 'surgery':
-                            if dt not in seen_op:  seen_op.add(dt);  new_op.append(datetime.combine(dt, datetime.min.time()))
-                        elif typ == 'pgf':
-                            if dt not in seen_pgf: seen_pgf.add(dt); new_pgf.append(datetime.combine(dt, datetime.min.time()))
-                        elif typ == 'fsh':
-                            if dt not in seen_fsh:
-                                seen_fsh.add(dt)
-                                new_fsh.append({'typ':'fsh','datum': datetime.combine(dt, datetime.min.time())})
-                        else:
-                            if dt not in seen_ev:
-                                seen_ev.add(dt)
-                                new_ev.append({'typ': typ, 'datum': datetime.combine(dt, datetime.min.time())})
+                        if not typ or typ not in allowed_types:
+                            raise ValueError
+                        key = (typ, dt)
+                        if key not in seen_events:
+                            seen_events.add(key)
+                            new_events.append({
+                                "typ": typ,
+                                "datum": datetime.combine(dt, datetime.min.time()),
+                            })
                     except Exception:
                         self._show_message(
-                            self.messages.get('error.title', 'Error'),
-                            self.messages.get('error.invalid_events', 'Invalid events.'),
-                            'error'
+                            self.messages.get("error.title", "Error"),
+                            self.messages.get("error.invalid_events", "Invalid events."),
+                            "error",
                         )
                         return
-                candidate_events = (new_fsh if role_code == Role.SPENDER.value else new_ev)
+                candidate_events = new_events
                 candidate_record = dict(rec)
                 candidate_record["events"] = candidate_events
                 limit_violations = self._custom_event_limit_additions_allowed(rec, candidate_record)
@@ -24005,13 +23964,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         "warning",
                     )
                     return
-                rec['op']  = new_op
-                rec['pgf'] = new_pgf
-                rec['events'] = candidate_events
+                rec["events"] = candidate_events
             else:
-                rec['op'] = rec.get('op', [])
-                rec['pgf'] = rec.get('pgf', [])
-                rec['events'] = rec.get('events', [])
+                rec["events"] = rec.get("events", [])
             self._save_trace(
                 "female_like.save.measurements_events_done",
                 new_name=new_name,
@@ -24373,7 +24328,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ------------------------
         # 7.26.6 Validate event types against allowed list
         # ------------------------
-        valid_events = {'pgf', 'embryo', 'op', 'abort', 'geburt', 'trächtigkeit'}
+        valid_events = {'pgf', 'embryo_transfer', 'surgery', 'abortion', 'birth', 'pregnancy', 'pregnancy_verification'}
         f_values = df_events['F'].astype(str).str.strip().str.lower()
         unrec = set(f_values) - valid_events
         if unrec:
@@ -24504,43 +24459,35 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 # ------------------------
                 # 7.26.7.2.1 Add events to animal record
                 # ------------------------
-                if evt == 'pgf':
-                    a.setdefault('pgf', [])
-                    if datum not in a['pgf'] and len(a['pgf']) < a.get('max_pgf', DEFAULT_MAX_PGF):
-                        a['pgf'].append(datum)
-                        evt_added += 1
-                    else:
-                        logging.warning(f"PGF event skipped for {name}: max reached or duplicate")
+                events = a.setdefault("events", [])
+                limit_fields = {
+                    "pgf": "max_pgf",
+                    "embryo_transfer": "max_embryo",
+                    "surgery": "max_op",
+                }
+                matching = [
+                    event for event in events
+                    if isinstance(event, dict)
+                    and event.get("typ") == evt
+                    and event.get("datum") == datum
+                ]
+                if matching:
+                    logging.warning("Event skipped for %s: duplicate", name)
+                    skipped += 1
+                    continue
+                limit_field = limit_fields.get(evt)
+                if limit_field:
+                    maximum = int(a.get(limit_field, 0) or 0)
+                    current_count = sum(
+                        1 for event in events
+                        if isinstance(event, dict) and event.get("typ") == evt
+                    )
+                    if maximum and current_count >= maximum:
+                        logging.warning("Event skipped for %s: %s limit reached", name, evt)
                         skipped += 1
-                elif evt == 'embryo':
-                    a.setdefault('embryo', [])
-                    if datum not in a['embryo'] and len(a['embryo']) < a.get('max_embryo', DEFAULT_MAX_EMBRYO):
-                        a['embryo'].append(datum)
-                        evt_added += 1
-                    else:
-                        logging.warning(f"Embryo event skipped for {name}: invalid role or max reached")
-                        skipped += 1
-                elif evt == 'op':
-                    a.setdefault('op', [])
-                    if datum not in a['op'] and len(a['op']) < a.get('max_op', DEFAULT_MAX_OP):
-                        a['op'].append(datum)
-                        evt_added += 1
-                    else:
-                        logging.warning(f"OP event skipped for {name}: duplicate or max reached")
-                        skipped += 1
-
-                elif evt in ('abort', 'geburt', 'trächtigkeit'):
-                    a.setdefault('events', [])
-                    evs = a['events']
-                    if not any(
-                        isinstance(e.get('datum'), datetime) and e.get('datum') == datum and e.get('typ') == evt
-                        for e in evs
-                    ):
-                        evs.append({'typ': evt, 'datum': datum})
-                        evt_added += 1
-                    else:
-                        logging.warning(f"Lifecycle event skipped for {name}: duplicate")
-                        skipped += 1
+                        continue
+                events.append({"typ": evt, "datum": datum})
+                evt_added += 1
 
         finally:
             if progress:
@@ -24641,30 +24588,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         logging.warning(f"Skipped invalid measurement: {r}")
                         skipped += 1
                         continue
-                orig_pgf = rec.get('pgf', [])
-                rec['pgf'] = []
-                for x in orig_pgf:
-                    try:
-                        dt = parse_date(x)
-                        if dt is None:
-                            raise ValueError("Invalid date")
-                        rec['pgf'].append(dt)
-                    except (ValueError, TypeError):
-                        logging.warning(f"Skipped invalid PGF date: {x}")
-                        skipped += 1
-                        continue
-                orig_embryo = rec.get('embryo', [])
-                rec['embryo'] = []
-                for x in orig_embryo:
-                    try:
-                        dt = parse_date(x)
-                        if dt is None:
-                            raise ValueError("Invalid date")
-                        rec['embryo'].append(dt)
-                    except (ValueError, TypeError):
-                        logging.warning(f"Skipped invalid embryo date: {x}")
-                        skipped += 1
-                        continue
                 # ------------------------
                 # 7.27.1.1 Read reproductive events
                 # ------------------------
@@ -24675,7 +24598,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         datum = parse_date(ev.get('datum'))
                         typ = ev.get('typ', '').strip().lower()
                         # Normalize legacy German identifiers to English
-                        normalized_typ = LEGACY_EVENT_MAP.get(typ, typ)
+                        normalized_typ = typ
                         # Only include valid event types
                         if datum and (
                             normalized_typ in EVENT_TYPES
@@ -24688,21 +24611,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             rec['events'].append(payload)
                     except Exception:
                         logging.warning(f"Skipped invalid event: {ev}")
-                        skipped += 1
-
-                # ------------------------
-                # 7.27.1.2 Read OP data
-                # ------------------------
-                orig_op = rec.get('op', [])
-                rec['op'] = []
-                for x in orig_op:
-                    try:
-                        dt = parse_date(x)
-                        if dt is None:
-                            raise ValueError("Invalid date")
-                        rec['op'].append(dt)
-                    except (ValueError, TypeError):
-                        logging.warning(f"Skipped invalid OP date: {x}")
                         skipped += 1
 
                 # ------------------------

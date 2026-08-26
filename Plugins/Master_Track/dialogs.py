@@ -1454,7 +1454,7 @@ class AuditLogsDialog(QDialog):
         for folder in dict.fromkeys([self.audit_dir, self.plugin_dir]):
             try:
                 names = os.listdir(folder)
-            except Exception:
+            except OSError:
                 continue
 
             for name in names:
@@ -1495,7 +1495,7 @@ class AuditLogsDialog(QDialog):
             return None
         try:
             return json.loads(raw)
-        except Exception:
+        except (TypeError, ValueError, json.JSONDecodeError):
             return raw
 
     @staticmethod
@@ -1505,10 +1505,10 @@ class AuditLogsDialog(QDialog):
             return None
         try:
             return datetime.fromisoformat(text).date()
-        except Exception:
+        except (TypeError, ValueError):
             try:
                 return datetime.strptime(text[:10], "%Y-%m-%d").date()
-            except Exception:
+            except (TypeError, ValueError):
                 return None
 
     @staticmethod

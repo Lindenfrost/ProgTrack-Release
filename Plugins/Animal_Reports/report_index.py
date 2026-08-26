@@ -15,17 +15,6 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-LEGACY_EVENT_KEYS = (
-    "op",
-    "pgf",
-    "embryo",
-    "abort",
-    "geburt",
-    "trächtigkeit",
-    "fsh",
-    "progesterone",
-)
-
 _REVISION_FIELDS = (
     "rolle",
     "role",
@@ -56,7 +45,7 @@ _REVISION_FIELDS = (
     "sperm",
     "events",
     "edits",
-) + LEGACY_EVENT_KEYS
+)
 
 
 def _hash_value(hasher: "hashlib._Hash", value: Any) -> None:
@@ -234,31 +223,19 @@ class AnimalReportIndex:
             if not isinstance(timestamp, datetime):
                 continue
             self.years.add(timestamp.year)
-            raw_type = str(event.get("typ", "") or "")
+            raw_type = str(event.get("typ", "") or "").strip()
             normalized_type = normalize_event_type(raw_type)
             day = timestamp.date()
             if normalized_type:
                 unified_dates_by_type[normalized_type].add(day)
                 event_dates_by_type[normalized_type].append(day)
-            exact_event_datetimes[raw_type].append(timestamp)
+                exact_event_datetimes[normalized_type].append(timestamp)
             note = str(event.get("notiz", "") or "").strip()
             if normalized_type not in occurrence_notes[day]:
                 ordered_occurrences[day].append(normalized_type)
                 occurrence_notes[day][normalized_type] = note
             elif not occurrence_notes[day][normalized_type] and note:
                 occurrence_notes[day][normalized_type] = note
-
-        for legacy_type in LEGACY_EVENT_KEYS:
-            normalized_type = normalize_event_type(legacy_type)
-            for timestamp in animal_data.get(legacy_type, []) or []:
-                if not isinstance(timestamp, datetime):
-                    continue
-                day = timestamp.date()
-                if day not in unified_dates_by_type.get(normalized_type, set()):
-                    event_dates_by_type[normalized_type].append(day)
-                if normalized_type not in occurrence_notes[day]:
-                    ordered_occurrences[day].append(normalized_type)
-                    occurrence_notes[day][normalized_type] = ""
 
         self.event_dates_by_type = {
             event_type: sorted(days)
@@ -278,8 +255,7 @@ class AnimalReportIndex:
 
         donor_recovery = [
             timestamp.date()
-            for timestamp in animal_data.get("op", []) or []
-            if isinstance(timestamp, datetime)
+            for timestamp in self.exact_event_datetimes.get("surgery", [])
         ]
         donor_recovery.extend(
             record["datum"].date()

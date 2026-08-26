@@ -41,6 +41,28 @@ def add_lifecycle_event(record: Dict[str, Any], event: Mapping[str, Any]) -> Non
     events.append(dict(event))
 
 
+def canonical_event_entries(record: Mapping[str, Any], event_type: str) -> list[dict[str, Any]]:
+    """Return backend event entries matching one canonical type."""
+    wanted = str(event_type or "").strip().casefold()
+    result: list[dict[str, Any]] = []
+    for event in record.get("events", []) or []:
+        if not isinstance(event, Mapping):
+            continue
+        actual = str(event.get("typ") or "").strip().casefold()
+        if actual == wanted:
+            result.append(dict(event))
+    return result
+
+
+def canonical_event_dates(record: Mapping[str, Any], event_type: str) -> list[Any]:
+    """Return raw dates for one canonical event type."""
+    return [
+        event.get("datum")
+        for event in canonical_event_entries(record, event_type)
+        if event.get("datum") is not None
+    ]
+
+
 def ever_in_experiment(
     record: Mapping[str, Any],
     history_entries: Iterable[Mapping[str, Any]] = (),

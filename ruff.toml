@@ -1,0 +1,19 @@
+target-version = "py313"
+line-length = 100
+extend-exclude = [
+  "archive",
+  "_internal",
+  "build",
+  "dist",
+  "tests",
+]
+
+[lint]
+select = ["E4", "E7", "F5"]
+
+[lint.per-file-ignores]
+# These files intentionally import after runtime-path/bootstrap setup and
+# retain a small amount of legacy one-line syntax pending a dedicated cleanup.
+"ProgTrack.v.0.2.1.py" = ["E402", "E701", "E702", "E731"]
+"Plugins/Surgery_Planner/surgery_planner.py" = ["E402"]
+"source/build_sample_seed.py" = ["E402"]

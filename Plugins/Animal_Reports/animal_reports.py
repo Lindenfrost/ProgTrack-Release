@@ -348,179 +348,115 @@ class AnimalReportsWidget(QMainWindow):
             return str(date_str)
     
     def _get_all_dates(self, animal_name, progtrack_data):
-        """Extract all unique dates for an animal from progtrack data.
-        
-        Args:
-            animal_name: Name of the animal to get dates for
-            progtrack_data: Dictionary containing the loaded progtrack data
-            
-        Returns:
-            List of unique dates (strings in YYYY-MM-DD format), sorted newest first
-        """
+        """Return all dates from canonical events and measurement collections."""
         if not isinstance(progtrack_data, dict) or not animal_name:
             logger.warning("Invalid arguments to _get_all_dates")
             return []
-            
+
         dates = set()
-        
-        # Check both active and archived animals
-        for section in ['animals', 'archived']:
-            section_data = progtrack_data.get(section, {})
-            if not isinstance(section_data, dict):
-                logger.debug(f"No {section} data found or invalid format in progtrack_data")
-                continue
-            
-            animal_data = section_data.get(animal_name)
-            if not isinstance(animal_data, dict):
-                logger.debug(f"Animal '{animal_name}' not found or invalid in {section}")
-                continue
-            
-            logger.debug(f"Processing {section} data for {animal_name}")
-            
-            # List of all possible data types to check
-            data_types = [
-                # Main application event types
-                'op', 'embryoübertragung', 'embryo', 'trächtigkeit', 'abort', 
-                'geburt', 'pgf', 'fsh', 'progesteron',
-                
-                # Weight measurements (common in both)
-                'gewicht', 'weight',
-                
-                # Blood/urine tests (common in both)
-                'blut', 'urin', 'labor', 'daten',
-                
-                # Other common medical events
-                'operation', 'untersuchung', 'medikation', 'impfung', 'behandlung'
-            ]
-            
-            # Also include any other keys that might exist in the data
-            additional_types = [
-                k for k in animal_data.keys() 
-                if k not in data_types 
-                and k not in ['id', 'name', 'status', 'notes', 'reference_weight']
-            ]
-            data_types.extend(additional_types)
-            
-            # Process each data type
-            for data_type in data_types:
-                if data_type not in animal_data:
-                    continue
-                
-                try:
-                    items = animal_data[data_type]
-                    if not isinstance(items, list):
-                        logger.debug(f"{data_type} is not a list in {animal_name}'s {section} data")
-                        continue
-                    
-                    for item in items:
-                        if not isinstance(item, dict):
-                            continue
-                            
-                        # Handle different possible date field names
-                        date_val = item.get('datum') or item.get('date') or item.get('Datum') or item.get('Date')
-                        if not date_val:
-                            continue
-                            
-                        # Convert to string and extract just the date part if it's a datetime
-                        if hasattr(date_val, 'strftime'):
-                            date_str = date_val.strftime('%Y-%m-%d')
-                        else:
-                            date_str = str(date_val).split('T')[0].split(' ')[0]
-                            
-                        # Validate date format (YYYY-MM-DD)
-                        if self._is_valid_date(date_str):
-                            dates.add(date_str)
-                            
-                except Exception as e:
-                    logger.error(f"Error processing {data_type} in {section} for {animal_name}: {str(e)}", 
-                               exc_info=True)
-                    continue
-        
-        # Convert to list and sort newest first
-        try:
-            from datetime import datetime
-            return sorted(dates, 
-                         key=lambda x: datetime.strptime(x, '%Y-%m-%d'), 
-                         reverse=True)
-        except Exception as e:
-            logger.error(f"Error sorting dates: {str(e)}", exc_info=True)
-            return sorted(dates, reverse=True) if dates else []
-    
-    def _get_events_for_date(self, animal_name, date_str, progtrack_data):
-        """Get all events for a specific animal on a specific date.
-        
-        Args:
-            animal_name: Name of the animal
-            date_str: Date string in YYYY-MM-DD format
-            progtrack_data: Dictionary containing the loaded progtrack data
-            
-        Returns:
-            List of event strings for the specified date
-        """
-        if not animal_name or not date_str or not progtrack_data:
-            return []
-            
-        events = []
-        
-        # Check both active and archived animals
-        for section in ['animals', 'archived']:
+        measurement_types = ("daten", "pdg", "gewicht", "weight", "sperm")
+        for section in ("animals", "archived"):
             section_data = progtrack_data.get(section, {})
             if not isinstance(section_data, dict):
                 continue
-                
             animal_data = section_data.get(animal_name)
             if not isinstance(animal_data, dict):
                 continue
-            
-            # First check for weight data (special handling)
-            for weight_key in ['gewicht', 'weight']:
-                if weight_key in animal_data and isinstance(animal_data[weight_key], list):
-                    for weight_item in animal_data[weight_key]:
-                        if not isinstance(weight_item, dict):
-                            continue
-                            
-                        weight_date = str(weight_item.get('datum', '') or weight_item.get('date', '')).split('T')[0]
-                        if weight_date == date_str:
-                            weight_value = weight_item.get('wert') or weight_item.get('value', '')
-                            weight_unit = weight_item.get('einheit') or weight_item.get('unit', 'kg')
-                            weight_note = weight_item.get('bemerkung') or weight_item.get('note', '')
-                            
-                            weight_str = f"Gewicht: {weight_value} {weight_unit}"
-                            if weight_note:
-                                weight_str += f" ({weight_note})"
-                            events.append(weight_str)
-            
-            # Process other data types
-            for data_type in ['op', 'embryoübertragung', 'embryo', 'trächtigkeit', 'abort', 'geburt', 'pgf', 'fsh', 'progesteron']:
-                if data_type not in animal_data or not isinstance(animal_data[data_type], list):
+
+            for data_type in measurement_types:
+                items = animal_data.get(data_type, [])
+                if not isinstance(items, list):
                     continue
-                    
-                for item in animal_data[data_type]:
+                for item in items:
                     if not isinstance(item, dict):
                         continue
-                        
-                    item_date = str(item.get('datum', '') or item.get('date', '')).split('T')[0]
+                    date_val = item.get("datum")
+                    if hasattr(date_val, "strftime"):
+                        date_str = date_val.strftime("%Y-%m-%d")
+                    else:
+                        date_str = str(date_val or "").split("T")[0].split(" ")[0]
+                    if self._is_valid_date(date_str):
+                        dates.add(date_str)
+
+            for item in animal_data.get("events", []) or []:
+                if not isinstance(item, dict):
+                    continue
+                date_val = item.get("datum")
+                if hasattr(date_val, "strftime"):
+                    date_str = date_val.strftime("%Y-%m-%d")
+                else:
+                    date_str = str(date_val or "").split("T")[0].split(" ")[0]
+                if self._is_valid_date(date_str):
+                    dates.add(date_str)
+
+        try:
+            from datetime import datetime
+            return sorted(
+                dates,
+                key=lambda value: datetime.strptime(value, "%Y-%m-%d"),
+                reverse=True,
+            )
+        except (TypeError, ValueError) as exc:
+            logger.error("Error sorting dates: %s", exc, exc_info=True)
+            return sorted(dates, reverse=True) if dates else []
+
+    def _get_events_for_date(self, animal_name, date_str, progtrack_data):
+        """Return canonical event and measurement descriptions for one date."""
+        if not animal_name or not date_str or not progtrack_data:
+            return []
+
+        events = []
+        measurement_types = ("daten", "pdg", "gewicht", "weight", "sperm")
+        for section in ("animals", "archived"):
+            section_data = progtrack_data.get(section, {})
+            if not isinstance(section_data, dict):
+                continue
+            animal_data = section_data.get(animal_name)
+            if not isinstance(animal_data, dict):
+                continue
+
+            for data_type in measurement_types:
+                for item in animal_data.get(data_type, []) or []:
+                    if not isinstance(item, dict):
+                        continue
+                    item_date = item.get("datum")
+                    if hasattr(item_date, "strftime"):
+                        item_date = item_date.strftime("%Y-%m-%d")
+                    else:
+                        item_date = str(item_date or "").split("T")[0].split(" ")[0]
                     if item_date != date_str:
                         continue
-                        
-                    # Process the event
-                    value = item.get('wert') or item.get('value', '')
-                    unit = item.get('einheit') or item.get('unit', '')
-                    note = item.get('bemerkung') or item.get('note', '')
-                    
-                    # Build event string
-                    event_str = data_type.capitalize()
-                    details = []
-                    if value:
-                        details.append(f"{value} {unit}".strip())
+                    value = item.get("wert") or item.get("value", "")
+                    unit = item.get("einheit") or item.get("unit", "")
+                    note = item.get("bemerkung") or item.get("note", "")
+                    label = data_type.replace("_", " ").capitalize()
+                    details = [f"{value} {unit}".strip()] if value else []
                     if note:
                         details.append(note)
-                        
-                    if details:
-                        event_str += ": {}".format(', '.join(details))
-                        
-                    events.append(event_str)
-        
+                    events.append(f"{label}: {', '.join(details)}" if details else label)
+
+            for item in animal_data.get("events", []) or []:
+                if not isinstance(item, dict):
+                    continue
+                item_date = item.get("datum")
+                if hasattr(item_date, "strftime"):
+                    item_date = item_date.strftime("%Y-%m-%d")
+                else:
+                    item_date = str(item_date or "").split("T")[0].split(" ")[0]
+                if item_date != date_str:
+                    continue
+                event_type = str(item.get("typ") or "").replace("_", " ").strip()
+                if not event_type:
+                    continue
+                value = item.get("wert") or item.get("value", "")
+                unit = item.get("einheit") or item.get("unit", "")
+                note = item.get("notiz") or item.get("bemerkung") or item.get("note", "")
+                details = [f"{value} {unit}".strip()] if value else []
+                if note:
+                    details.append(str(note))
+                label = event_type.capitalize()
+                events.append(f"{label}: {', '.join(details)}" if details else label)
+
         return events
 
     def _update_timeline(self, animal_data):
@@ -1785,79 +1721,7 @@ def main():
     )
     return 1
     
-    # Load test messages (in a real standalone version, these would be loaded from language files)
-    messages = {
-        # General
-        'app.title': 'ProgTrack',
-        'app.initializing': 'Initializing...',
-        'app.loading_data': 'Loading data...',
-        'app.ready': 'Ready',
-        'app.settings_loaded': 'Settings loaded',
-        'app.data_loaded': 'Data loaded',
-        'app.ui_initialized': 'UI initialized',
-        'status.ready': 'Ready',
-        'status.loading': 'Loading...',
-        'status.saving': 'Saving...',
-        'status.saved': 'Changes saved',
-        'status.exported': 'Report exported to {path}',
-        'status.data_loaded': 'Data loaded',
-        
-        # Plugin
-        'plugin.animal_reports.title': 'Animal Report',
-        
-        # Labels
-        'label.animal': 'Animal:',
-        'label.name': 'Name:',
-        'label.reference_weight': 'Reference Weight (kg):',
-        'label.status': 'Status:',
-        'label.progesterone_measurements': 'Progesterone Measurements:',
-        'label.procedures': 'Procedures:',
-        'label.notes': 'Notes:',
-        
-        # Status values
-        'status.active': 'Active',
-        'status.archived': 'Archived',
-        'status.deceased': 'Deceased',
-        
-        # Headers
-        'header.date': 'Date',
-        'header.value': 'Value',
-        'header.comment': 'Comment',
-        'header.type': 'Type',
-        'header.details': 'Details',
-        'header.veterinarian': 'Veterinarian',
-        
-        # Buttons
-        'button.add': 'Add',
-        'button.remove': 'Remove',
-        'button.save': 'Save',
-        'button.cancel': 'Cancel',
-        'button.close': 'Close',
-        'button.export': 'Export...',
-        
-        # Tabs
-        'tab.general': 'General',
-        'tab.measurements': 'Measurements',
-        'tab.procedures': 'Procedures',
-        'tab.notes': 'Notes',
-        
-        # Actions
-        'action.save': '&Save',
-        'action.export': '&Export...',
-        'action.close': '&Close',
-        
-        # Dialogs
-        'dialog.export.title': 'Export Report',
-        'dialog.export.filter': 'PDF Files (*.pdf);;All Files (*)',
-        
-        # Errors
-        'error.title': 'Error',
-        'error.load_data': 'Failed to load data: {error}',
-        'error.save_data': 'Failed to save data: {error}',
-        'error.export_failed': 'Failed to export report: {error}'
-    }
-    
-    return 1
+
 
 
 def _clean_html_for_reportlab(html_text: str) -> str:
@@ -2151,11 +2015,10 @@ def create_monthly_report(
                     selected['regular'],
                     bool(selected['italic']),
                 )
-                print(f"[Animal Reports] Using font family: {selected['name']}")
+                logger.info("Using font family: %s", selected["name"])
             else:
                 # Fall back to Helvetica (won't display Cyrillic properly)
                 logger.warning("No Unicode font found in standard paths, using Helvetica (Cyrillic may not display)")
-                print("[Animal Reports] WARNING: No Unicode font found! Cyrillic will not display correctly.")
         except Exception as e:
             logger.error(f"Could not register Unicode font: {e}, using Helvetica")
             import traceback

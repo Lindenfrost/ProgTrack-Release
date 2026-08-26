@@ -75,7 +75,7 @@ class StandaloneProcessLock:
                 json.dump(payload, handle, ensure_ascii=False)
                 handle.flush()
                 os.fsync(handle.fileno())
-        except Exception:
+        except (OSError, TypeError, ValueError):
             # Do not leave an owner-unknown file behind when metadata writing
             # itself fails before the backend has started.
             try:

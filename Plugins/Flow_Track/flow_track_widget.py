@@ -1333,21 +1333,6 @@ class FlowTrackWidget:
                             })
                             detected_surgery_ids.add(surgery_id)
                 
-                # From legacy 'op' list
-                for dt in rec.get('op', []):
-                    event_date = _flow_datetime(dt)
-                    if event_date is None:
-                        continue
-                    surgery_id = f"surgery_{name}_{event_date.isoformat()}"
-                    if surgery_id not in detected_surgery_ids:
-                        self.egg_surgeries.append({
-                            'id': surgery_id,
-                            'animal_name': name,
-                            'date': event_date,
-                            'event_type': 'egg_donation_surgery'
-                        })
-                        detected_surgery_ids.add(surgery_id)
-            
             # Sperm donations (SAMENSP role)
             if rolle == Role.SAMENSP.value:
                 for sperm_entry in rec.get('sperm', []):
@@ -1385,21 +1370,6 @@ class FlowTrackWidget:
                             })
                             detected_transfer_ids.add(transfer_id)
                 
-                # From legacy 'embryo' list
-                for dt in rec.get('embryo', []):
-                    event_date = _flow_datetime(dt)
-                    if event_date is None:
-                        continue
-                    transfer_id = f"transfer_{name}_{event_date.isoformat()}"
-                    if transfer_id not in detected_transfer_ids:
-                        self.embryo_transfers.append({
-                            'id': transfer_id,
-                            'animal_name': name,
-                            'date': event_date,
-                            'event_type': 'embryo_transfer'
-                        })
-                        detected_transfer_ids.add(transfer_id)
-        
         # Sort by date
         self.egg_surgeries.sort(key=lambda x: x['date'])
         self.sperm_donations.sort(key=lambda x: x['date'])
@@ -1848,11 +1818,6 @@ class FlowTrackWidget:
                                     event_date = _flow_datetime(ev.get('datum'))
                                     if event_date is not None:
                                         surgeries.append(event_date)
-                            surgeries.extend(
-                                event_date for event_date in
-                                (_flow_datetime(value) for value in donor_data.get('op', []))
-                                if event_date is not None
-                            )
                             
                             # Find closest surgery before transfer
                             for surg_date in sorted(surgeries, reverse=True):
@@ -1916,12 +1881,7 @@ class FlowTrackWidget:
                                             event_date = _flow_datetime(ev.get('datum'))
                                             if event_date is not None:
                                                 surgeries.append(event_date)
-                                    surgeries.extend(
-                                        event_date for event_date in
-                                        (_flow_datetime(value) for value in donor_data.get('op', []))
-                                        if event_date is not None
-                                    )
-                                    
+
                                     # Find closest surgery before transfer
                                     for surg_date in sorted(surgeries, reverse=True):
                                         if transfer_date and surg_date <= transfer_date:
@@ -3434,23 +3394,6 @@ class FlowTrackWidget:
                     'date': date_obj,
                     'id': surgery_id
                 })
-        for op in animal_data.get('op', []):
-            if isinstance(op, dict):
-                date_obj = op.get('datum')
-            else:
-                date_obj = op
-            
-            if hasattr(date_obj, 'date'):
-                surgery_id = date_obj.date().isoformat()
-            elif hasattr(date_obj, 'isoformat'):
-                surgery_id = date_obj.isoformat()
-            else:
-                surgery_id = str(date_obj)
-            surgeries.append({
-                'date': date_obj,
-                'id': surgery_id
-            })
-        
         # Initialize v3.0 schema for this egg donor if needed
         if animal_name not in self.manual_data.get('egg_donors', {}):
             if 'egg_donors' not in self.manual_data:
@@ -4541,13 +4484,6 @@ class FlowTrackWidget:
                     'date': event.get('datum'),
                     'id': f"transfer_{animal_name}_{date_str}"
                 })
-        for emb in animal_data.get('embryo', []):
-            date_str = emb.isoformat() if hasattr(emb, 'isoformat') else str(emb)
-            transfers.append({
-                'date': emb,
-                'id': f"transfer_{animal_name}_{date_str}"
-            })
-        
         # Get or create manual data
         if animal_name not in self.manual_data:
             self.manual_data[animal_name] = {'transfers': {}}
@@ -4778,7 +4714,6 @@ class FlowTrackWidget:
                 for event in animal_data.get('events', []):
                     if event.get('typ') == 'surgery':
                         surgery_dates.append(event.get('datum'))
-                surgery_dates.extend(animal_data.get('op', []))
                 
                 # Sort by date, most recent first
                 surgery_dates = sorted(set(surgery_dates), reverse=True)
@@ -5461,11 +5396,6 @@ class FlowTrackWidget:
                         date_key = self._to_date_key(event.get('datum'))
                         if date_key:
                             surgery_date_keys.add(date_key)
-                    for surgery_date in animal_data.get('op', []):
-                        date_key = self._to_date_key(surgery_date)
-                        if date_key:
-                            surgery_date_keys.add(date_key)
-
                     surgeries_count = len(surgery_date_keys)
                     max_surgeries = animal_data.get('max_op')
                     if max_surgeries in (None, ''):
@@ -5501,11 +5431,6 @@ class FlowTrackWidget:
                         date_key = self._to_date_key(event.get('datum'))
                         if date_key:
                             transfer_date_keys.add(date_key)
-                    for transfer_date in animal_data.get('embryo', []):
-                        date_key = self._to_date_key(transfer_date)
-                        if date_key:
-                            transfer_date_keys.add(date_key)
-
                     transfers_count = len(transfer_date_keys)
                     max_transfers = animal_data.get('max_embryo')
                     if max_transfers in (None, ''):

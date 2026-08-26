@@ -425,7 +425,7 @@ class PostgreSQLAdministrationService:
         package_path: str | Path,
     ) -> Any:
         """Transfer a complete local canonical package into an empty target."""
-        preview = source_backend.interchange.export_package(package_path)
+        source_backend.interchange.export_package(package_path)
         imported = target_backend.interchange.import_package(package_path, require_empty=True)
         self._audit("database_interchange_import", {"package": str(package_path)})
         return imported

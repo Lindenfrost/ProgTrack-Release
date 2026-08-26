@@ -2598,7 +2598,6 @@ class OrganSamplesTab(QWidget):
         name_f = self._h_name.text().lower()
         species_f = self._h_species.text().lower()
         id_f = self._h_id.text().lower()
-        sex_f = self._h_sex.currentText()
         _age_active = getattr(self, '_age_row', None) is not None and self._age_row.isVisible()
         from_y = self._age_int(self._h_age_from_y) if _age_active else 0
         from_m = self._age_int(self._h_age_from_m) if _age_active else 0
@@ -2619,7 +2618,6 @@ class OrganSamplesTab(QWidget):
 
         for w in self._row_widgets:
             d = w.get_data()
-            animal_name = d.get("animal_name", "")
             visible = True
             if name_f and name_f not in d.get("animal_name", "").lower():
                 visible = False
@@ -3200,7 +3198,6 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
         page_width, page_height = page_size
         margin = 15 * mm
         usable_width = page_width - 2 * margin
-        usable_height = page_height - 2 * margin - 30  # Space for header/footer
 
         # Build table data - filter to only rows with aliquots
         visible_rows = [w for w in row_widgets if w.isVisible()]
@@ -3414,7 +3411,6 @@ def _export_tab_pdf(parent_widget, app, messages: Dict, tab_key: str,
                     "Unit": 22*mm,
                 }
 
-            num_cols = len(data_rows[0]) if data_rows else 0
             fixed_widths = [
                 fixed_width_by_header[header]
                 for header in data_rows[0]

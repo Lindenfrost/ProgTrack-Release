@@ -65,6 +65,38 @@ def _backend_save(backend, record_id: str, payload) -> None:
 def _animal_role_value(animal: Dict[str, Any]) -> str:
     return canonical_role_value((animal or {}).get('rolle', ''))
 
+
+def _canonical_event_count(animal: Dict[str, Any], event_type: str) -> int:
+    return sum(
+        1 for event in animal.get("events", []) or []
+        if isinstance(event, dict) and event.get("typ") == event_type
+    )
+
+
+def _canonical_event_dates(animal: Dict[str, Any], event_type: str) -> list[Any]:
+    return [
+        event.get("datum")
+        for event in animal.get("events", []) or []
+        if isinstance(event, dict)
+        and event.get("typ") == event_type
+        and event.get("datum") is not None
+    ]
+
+def _as_planner_date(value: Any) -> Optional[date]:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value or "").strip()
+    if not text:
+        return None
+    for fmt in (DATE_FORMAT, "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(text[:19], fmt).date()
+        except ValueError:
+            continue
+    return None
+
 # Translation helper function
 def tr(messages: Dict[str, Any], key: str, default: str = '', **kwargs) -> str:
     """
@@ -1367,12 +1399,18 @@ class GanttWidget(QDialog):
             status = a.get('status', '')
             
             if role == ROLE_VALUE_SPENDER:
-                performed = len(a.get('op', []))                
+                performed = sum(
+                    1 for event in a.get('events', []) or []
+                    if isinstance(event, dict) and event.get('typ') == 'surgery'
+                )
                 allowed   = int(a.get('OP_max', 0))
                 label_txt = f"{performed}/{allowed} {tr(self.messages, 'surgery_planner.label.operations_short', 'OPs')}"
                 role_label = tr(self.messages, 'surgery_planner.role.donor', 'Donor')
             else:
-                performed = len(a.get('embryoübertragung', []))
+                performed = sum(
+                    1 for event in a.get('events', []) or []
+                    if isinstance(event, dict) and event.get('typ') == 'embryo_transfer'
+                )
                 allowed   = int(a.get('Embryo_max', 0))
                 label_txt = f"{performed}/{allowed} {tr(self.messages, 'surgery_planner.label.embryo_transfers_short', 'ETs')}"
                 role_label = tr(self.messages, 'surgery_planner.role.surrogate', 'Surrogate')
@@ -1902,7 +1940,7 @@ class GanttWidget(QDialog):
                 role = _animal_role_value(a)
                 if role == ROLE_VALUE_SPENDER:
                     total_allowed = int(a.get('OP_max', 0))
-                    performed = len(a.get('op', []))
+                    performed = _canonical_event_count(a, 'surgery')
                     used_fixed = sum(1 for e in fixed_events
                                      if e.event_type == 'op' and e.animal == name)
                     remaining = max(total_allowed - performed - used_fixed, 0)
@@ -1914,7 +1952,7 @@ class GanttWidget(QDialog):
                     })
                 elif role == ROLE_VALUE_AMME:
                     total_allowed = int(a.get('Embryo_max', 0))
-                    performed = len(a.get('embryoübertragung', []))
+                    performed = _canonical_event_count(a, 'embryo_transfer')
                     used_fixed = sum(1 for e in fixed_events
                                      if e.event_type == 'embryoübertragung' and e.animal == name)
                     remaining = max(total_allowed - performed - used_fixed, 0)
@@ -1995,21 +2033,17 @@ class GanttWidget(QDialog):
                 
                 # Add events from animal data
                 if _animal_role_value(animal_data.get('animal', {})) == ROLE_VALUE_SPENDER:
-                    ops = animal.get('op', [])
+                    ops = _canonical_event_dates(animal, 'surgery')
                     for op_date_str in ops:
-                        try:
-                            op_date = datetime.strptime(op_date_str, DATE_FORMAT).date()
+                        op_date = _as_planner_date(op_date_str)
+                        if op_date is not None:
                             previous_events.append(op_date)
-                        except (TypeError, ValueError):
-                            continue
                 else:
-                    transfers = animal.get('embryoübertragung', [])
+                    transfers = _canonical_event_dates(animal, 'embryo_transfer')
                     for tr_date_str in transfers:
-                        try:
-                            tr_date = datetime.strptime(tr_date_str, DATE_FORMAT).date()
+                        tr_date = _as_planner_date(tr_date_str)
+                        if tr_date is not None:
                             previous_events.append(tr_date)
-                        except (TypeError, ValueError):
-                            continue
                 
                 # Add already planned events for this animal
                 for entry in planned:
@@ -2699,7 +2733,7 @@ class GanttWidget(QDialog):
                 if role == ROLE_VALUE_SPENDER:
                     # Check if donor has remaining capacity
                     total_allowed = int(animal.get('OP_max', 0))
-                    performed = len(animal.get('op', []))
+                    performed = _canonical_event_count(animal, 'surgery')
                     if performed < total_allowed:
                         available_animals.append({
                             'name': name,
@@ -2709,7 +2743,7 @@ class GanttWidget(QDialog):
                 elif role == ROLE_VALUE_AMME:
                     # Check if surrogate has remaining capacity
                     total_allowed = int(animal.get('Embryo_max', 0))
-                    performed = len(animal.get('embryoübertragung', []))
+                    performed = _canonical_event_count(animal, 'embryo_transfer')
                     if performed < total_allowed:
                         available_animals.append({
                             'name': name,
@@ -3123,8 +3157,10 @@ class GanttWidget(QDialog):
         master=getattr(parent, "master_track", None)
         audit=getattr(master, "audit", None)
         if callable(audit):
-            try: audit("surgery_planner.publish", f"revision={revision}; entries={count}")
-            except Exception: logger.exception("Surgery Planner audit failed")
+            try:
+                audit("surgery_planner.publish", f"revision={revision}; entries={count}")
+            except Exception:
+                logger.exception("Surgery Planner audit failed")
 
     def _save_schedule(self):
         """

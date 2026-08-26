@@ -206,7 +206,6 @@ class InterchangeService:
         if not preview.valid:
             return preview
         existing = self.backend.load_core_data()
-        existing_records = self.backend.records.list_all()
         if require_empty and (
             existing.get("animals")
             or existing.get("archived_animals")

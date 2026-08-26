@@ -581,11 +581,9 @@ class EmbryoTrackerWidget(QDialog):
                 final_prediction = np.average(predictions, weights=weights)
                 # Combined uncertainty: weighted average of individual uncertainties
                 final_uncertainty = np.average(uncertainty_scores, weights=weights)
-                final_confidence = min(np.mean(confidence_scores) * 1.1, 1.0)
             else:
                 final_prediction = predictions[0]
                 final_uncertainty = uncertainty_scores[0]
-                final_confidence = confidence_scores[0]
 
             # Final validation check
             if np.isnan(final_prediction) or np.isinf(final_prediction):

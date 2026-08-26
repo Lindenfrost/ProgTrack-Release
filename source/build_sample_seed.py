@@ -357,7 +357,42 @@ def complete_record(record: dict[str, Any], *, name: str, species: str,
     })
     result.setdefault("rolle", "breeding_animal")
     result.setdefault("sex", "Unknown")
-    result.setdefault("events", [])
+    # Convert archived authoring aliases to the single backend event stream.
+    # This is seed-build normalization only; runtime never reads these aliases.
+    canonical_events: list[dict[str, Any]] = []
+    for item in result.get("events", []) or []:
+        if not isinstance(item, dict):
+            continue
+        event_type = str(item.get("typ") or item.get("event_type") or "").strip()
+        event_date = item.get("datum") or item.get("date")
+        if hasattr(event_date, "isoformat"):
+            event_date = event_date.isoformat()
+        if not event_type or not event_date:
+            continue
+        event = copy.deepcopy(item)
+        event.pop("event_type", None)
+        event.pop("date", None)
+        event["typ"] = event_type
+        event["datum"] = str(event_date)
+        canonical_events.append(event)
+    for alias, event_type in (("op", "surgery"), ("pgf", "pgf"), ("embryo", "embryo_transfer")):
+        for item in result.pop(alias, []) or []:
+            if isinstance(item, dict):
+                event_date = item.get("datum") or item.get("date")
+                event = copy.deepcopy(item)
+                event.pop("event_type", None)
+                event.pop("date", None)
+            else:
+                event_date = item
+                event = {}
+            if hasattr(event_date, "isoformat"):
+                event_date = event_date.isoformat()
+            if not event_date:
+                continue
+            event["typ"] = event_type
+            event["datum"] = str(event_date)
+            canonical_events.append(event)
+    result["events"] = canonical_events
     result.setdefault("daten", [])
     result.setdefault("pdg", [])
     result.setdefault("sperm", [])
@@ -729,9 +764,10 @@ def monitoring(start: date, prefix: str, *, donor: bool) -> tuple[list, list, li
 
 
 def add_reproduction_scenarios(core: dict[str, Any], key_map: dict[str, str]) -> dict[str, str]:
-    find = lambda name: next(
-        key for key in core["animals"] if key.startswith(name + " |")
-    )
+    def find(name: str) -> str:
+        return next(
+            key for key in core["animals"] if key.startswith(name + " |")
+        )
     elros = find("Elros")
     invented_parent = add_animal(core, key_map, "Beth", "12.03.2012", "Female", "breeding_animal")
     denethor = add_animal(
@@ -772,9 +808,6 @@ def add_reproduction_scenarios(core: dict[str, Any], key_map: dict[str, str]) ->
         core["animals"][key]["daten"] = blood
         core["animals"][key]["pdg"] = urine
         core["animals"][key]["events"].extend(events)
-        core["animals"][key]["pgf"] = [
-            event["datum"] for event in events if event["typ"] == "pgf"
-        ]
     for donor, retrieval_date in zip(donors, RETRIEVAL_DATES):
         stimulation_start = retrieval_date - timedelta(days=10)
         core["animals"][donor]["events"].extend(
@@ -958,7 +991,7 @@ def normalize_mature_offspring_roles(core: dict[str, Any]) -> list[str]:
 def researcher_record_dates(animal: dict[str, Any]) -> list[date]:
     """Dates from scientific/clinical fields that researchers can populate."""
     found: list[date] = []
-    for field in ("daten", "pdg", "gewicht", "sperm", "events", "pgf", "op", "embryo"):
+    for field in ("daten", "pdg", "gewicht", "sperm", "events"):
         values = animal.get(field, [])
         if not isinstance(values, list):
             continue
@@ -1032,18 +1065,6 @@ def complete_scientific_histories(core: dict[str, Any]) -> None:
             )
             for event in events if isinstance(event, dict)
         }
-
-        # A PGF administration is both a plotted PGF marker and a scientific
-        # intervention event.
-        for pgf_value in animal.get("pgf", []) or []:
-            stamp = (
-                pgf_value.get("datum") if isinstance(pgf_value, dict)
-                else pgf_value
-            )
-            key = ("pgf", str(stamp), "")
-            if parse_record_date(stamp) and key not in existing_event_keys:
-                events.append({"typ": "pgf", "datum": str(stamp)})
-                existing_event_keys.add(key)
 
         # Every sperm sample is one collection event; measurements from the
         # sample share the same sample ID.
@@ -1364,7 +1385,7 @@ def _project_arrive_fields(profile: dict[str, Any]) -> dict[str, str]:
         "background": f"The example project provides a controlled context for {focus.lower()}",
         "objectives": focus,
         "ethical_statement": "Animal use is fictional seed data. Any real implementation must follow current institutional, legal, and veterinary approvals.",
-        "housing_husbandry": f"Animals are maintained in the configured facility structures for the relevant species and role; husbandry entries remain linked to the animal records.",
+        "housing_husbandry": "Animals are maintained in the configured facility structures for the relevant species and role; husbandry entries remain linked to the animal records.",
         "animal_care": "Keeper and veterinary staff review routine care, health status, deviations, and welfare observations throughout the project.",
         "interpretation": "Interpret results together with animal history, role, housing, welfare observations, and protocol deviations; do not infer beyond the recorded example data.",
         "protocol_registration": f"Internal fictional protocol {profile['protocol']} / {profile['internal']}.",

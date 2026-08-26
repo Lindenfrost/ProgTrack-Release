@@ -1404,9 +1404,9 @@ class MediTrackWidget(QWidget):
         hdr_layout.setContentsMargins(8, 6, 8, 6)
 
         def _lbl() -> QLabel:
-            l = QLabel("–")
-            l.setWordWrap(True)
-            return l
+            label = QLabel("–")
+            label.setWordWrap(True)
+            return label
 
         self._lbl_name = _lbl()
         self._lbl_id = _lbl()
@@ -1772,7 +1772,8 @@ class MediTrackWidget(QWidget):
             raise RuntimeError('PDF export requires PyQt6.QtPrintSupport.') from exc
 
         # Load messages for the requested language
-        import json as _json, os as _os
+        import json as _json
+        import os as _os
         _lang = lang or self._lang
         _lang_path = _os.path.join(
             _os.path.dirname(_os.path.abspath(__file__)),
@@ -2447,7 +2448,6 @@ class MediTrackWidget(QWidget):
                 str(record.get("document_id", "")),
             ))
         json_docs = self.store.get_documents(animal_name)
-        json_paths = {d.get('path', '') for d in json_docs}
         found_paths = {path for path, _document_id in found}
         extra = [d for d in json_docs
                  if d.get('path') and d['path'] not in found_paths

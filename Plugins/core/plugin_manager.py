@@ -72,7 +72,7 @@ class PluginManager:
         warnings: list[str] = []
         try:
             data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except Exception as exc:
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
             return ManifestDiagnostic(plugin_id, str(manifest_path), False, True, [f"invalid JSON: {exc}"], [], {})
         if not isinstance(data, dict):
             return ManifestDiagnostic(plugin_id, str(manifest_path), False, True, ["manifest root must be an object"], [], {})
