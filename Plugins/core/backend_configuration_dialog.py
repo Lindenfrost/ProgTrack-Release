@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QSpinBox,
     QStackedWidget,
     QTableWidget,
@@ -57,6 +58,21 @@ class _ProfileStackedWidget(QStackedWidget):
 
     def minimumSizeHint(self) -> QSize:
         return self._current_hint()
+
+
+class _ProfileScrollArea(QScrollArea):
+    """Scrollable backend page with a useful profile-level width hint.
+
+    ``QScrollArea`` otherwise reports only its small default viewport hint,
+    making the PostgreSQL page appear narrower than the compact SQLite page to
+    callers that compare profile hints.  The actual viewport remains free to
+    shrink on high-DPI screens; the wider hint is only used for normal layout
+    negotiation and does not impose a minimum width on the page.
+    """
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt API name
+        hint = super().sizeHint()
+        return QSize(max(840, hint.width()), hint.height())
 
 
 class BackendConfigurationDialog(QDialog):
@@ -213,7 +229,8 @@ class BackendConfigurationDialog(QDialog):
             if item is None:
                 continue
             if item.widget() is pages and current is not None:
-                item_height = current.sizeHint().height()
+                content = current.widget() if isinstance(current, QScrollArea) else current
+                item_height = content.sizeHint().height()
             else:
                 item_height = item.sizeHint().height()
             height += max(0, int(item_height))
@@ -280,7 +297,8 @@ class BackendConfigurationDialog(QDialog):
                 continue
             widget = item.widget()
             if widget is self.pages and current is not None:
-                item_height = current.sizeHint().height()
+                content = current.widget() if isinstance(current, QScrollArea) else current
+                item_height = content.sizeHint().height()
             else:
                 item_height = item.sizeHint().height()
             content_height += max(0, int(item_height))
@@ -449,7 +467,16 @@ class BackendConfigurationDialog(QDialog):
         migration_row.addWidget(migrate_browse)
         migration_row.addWidget(self.pg_migrate_sqlite)
         layout.addLayout(migration_row)
-        self.pages.addWidget(page)
+        # PostgreSQL has more controls than a highly scaled laptop display can
+        # show at once.  Keep the profile's natural size hint for normal
+        # displays, but provide a viewport so no connection/certificate/admin
+        # control is clipped when the native geometry guard is screen-limited.
+        scroll = _ProfileScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(page)
+        self.pg_page_scroll = scroll
+        self.pages.addWidget(scroll)
 
     def _choose_certificate(self, widget: QLineEdit, title: str) -> None:
         selected, _ = QFileDialog.getOpenFileName(
