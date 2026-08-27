@@ -106,6 +106,12 @@
       width: auto;
       margin-right: 0.4rem;
     }
+    .ui-icon {
+      width: 1.1em;
+      height: 1.1em;
+      vertical-align: -0.2em;
+      object-fit: contain;
+    }
     .inline-icon {
       vertical-align: text-bottom;
       width: 60px;
@@ -252,12 +258,12 @@
   <h3>3.1 Kategorien der Seitenleiste</h3>
   <p>Die Kategorie-Leiste filtert die Tierliste nach Workflow-Rolle. Leere Rollenkategorien werden automatisch ausgeblendet; Alle bleibt für Übersicht und Rollenkorrektur verfügbar. Phasenfilter für weibliche Tiere werden nur bei aktivem Steroid Track angezeigt.</p>
   <table class="basic"><tr><th>Kategorie</th><th>Bedeutung</th></tr>
-  <tr><td><strong>♀</strong></td><td>Spenderinnen und Ammen</td></tr>
-  <tr><td><strong>♂</strong></td><td>Samenspender</td></tr>
-  <tr><td><strong>👶</strong></td><td>Nachkommen</td></tr>
-  <tr><td><strong>🐾</strong></td><td>Partnertiere</td></tr>
-  <tr><td><strong>⚤</strong></td><td>Zuchttiere</td></tr>
-  <tr><td><strong>💡</strong></td><td>Versuchstiere</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_female.svg" alt="Weiblich" /></strong></td><td>Spenderinnen und Ammen</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_male.svg" alt="Männlich" /></strong></td><td>Samenspender</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_offspring.svg" alt="Nachwuchs" /></strong></td><td>Nachkommen</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_partner.svg" alt="Partner" /></strong></td><td>Partnertiere</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/pedigree_symbol.svg" alt="Zucht" /></strong></td><td>Zuchttiere</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_experimental.svg" alt="Versuch" /></strong></td><td>Versuchstiere</td></tr>
   <tr><td><strong>Alle</strong></td><td>Alle Tiere</td></tr>
   </table>
   <p>Geben Sie in der Filterzeile unter der Tierliste den Anfang eines Kurznamens ein, um die Liste einzugrenzen. Die drei Symbol-Kontrollkästchen neben dem Suchfeld blenden weibliche, männliche beziehungsweise Tiere mit unbekanntem Geschlecht ein oder aus. Anfangs sind alle drei aktiviert. Namens- und Geschlechtsfilter wirken gemeinsam und zusätzlich zu den gewählten Rollen-, Projekt-, Spezies-, Archiv- und aktiven Plugin-Filtern; jede Änderung aktualisiert die Liste sofort, ohne Tierdaten zu verändern.</p>
@@ -266,16 +272,16 @@
   <p>Die Schaltflächen sind kontextabhängig: Import-Schaltflächen erscheinen nur, wenn Rolle und installierte Plugins sie verwenden können. Die folgenden Bezeichnungen stammen aus der aktiven Sprachdatei.</p>
   <p>Lord, Master und Manager konfigurieren unter <strong>Einstellungen → Konventionen → Rollenkonfiguration</strong> Reihenfolge, Bezeichnungen/Symbole, Blöcke der Neu-/Bearbeiten-Dialoge und die Sichtbarkeit von <strong>Neues Tier</strong> je Rollen-Tab. Die Symbolschaltfläche öffnet eine Auswahl aller ausgelieferten SVGs unter <code>icons/ui</code>. Alle behält allgemeines Bearbeiten und die Rollenkorrektur, zeigt aber nicht pauschal alle vier Messwert-Importe.</p>
   <table class="basic"><tr><th>Schaltfläche</th><th>Nutzung</th></tr>
-  <tr><td><strong>➕ Neues Tier</strong></td><td>Neuen Datensatz anlegen.</td></tr>
-  <tr><td><strong>✏️ Bearbeiten</strong></td><td>Vollständigen Editor für das ausgewählte Tier öffnen.</td></tr>
-  <tr><td><strong>🫥 Rolle bearbeiten</strong></td><td>Rolle/Kategorie in der Alle-Ansicht ändern.</td></tr>
-  <tr><td><strong>📈 Blutwerte laden</strong></td><td>Blut-Progesteronwerte importieren.</td></tr>
-  <tr><td><strong>📉 Urinwerte laden</strong></td><td>Urin-PdG-Werte importieren.</td></tr>
-  <tr><td><strong>🎈 Spermawerte laden</strong></td><td>Spermamessungen importieren.</td></tr>
-  <tr><td><strong>⚖️ Gewichte laden</strong></td><td>Gewichtsmessungen importieren.</td></tr>
-  <tr><td><strong>📦 Archivieren</strong></td><td>Ausgewählte Tiere archivieren.</td></tr>
-  <tr><td><strong>⤴️ Wiederherstellen</strong></td><td>Archivierte Tiere wiederherstellen.</td></tr>
-  <tr><td><strong>🗑️ Löschen</strong></td><td>Archivierte Tiere dauerhaft löschen.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_add.svg" alt="Hinzufügen" /> Neues Tier</strong></td><td>Neuen Datensatz anlegen.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_edit.svg" alt="Bearbeiten" /> Bearbeiten</strong></td><td>Vollständigen Editor für das ausgewählte Tier öffnen.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_edit_role.svg" alt="Rolle bearbeiten" /> Rolle bearbeiten</strong></td><td>Rolle/Kategorie in der Alle-Ansicht ändern.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_blood.svg" alt="Blutwerte" /> Blutwerte laden</strong></td><td>Blut-Progesteronwerte importieren.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_urine.svg" alt="Urinwerte" /> Urinwerte laden</strong></td><td>Urin-PdG-Werte importieren.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_sperm.svg" alt="Spermawerte" /> Spermawerte laden</strong></td><td>Spermamessungen importieren.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_weight.svg" alt="Gewichte" /> Gewichte laden</strong></td><td>Gewichtsmessungen importieren.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_archive.svg" alt="Archivieren" /> Archivieren</strong></td><td>Ausgewählte Tiere archivieren.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_restore.svg" alt="Wiederherstellen" /> Wiederherstellen</strong></td><td>Archivierte Tiere wiederherstellen.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_delete.svg" alt="Löschen" /> Löschen</strong></td><td>Archivierte Tiere dauerhaft löschen.</td></tr>
   </table>
 
 
@@ -283,7 +289,7 @@
 
   <h3>4.1 Datensätze anlegen</h3>
   <p>Verwenden Sie die Aktion der Seitenleiste, um einen Datensatz anzulegen. In der Kategorie Alle fragt ProgTrack zuerst nach der Rolle und öffnet danach den passenden Editor. Pflichtfelder hängen von der Rolle ab; optionale ID-, Projekt-, Herkunfts-, Genotyp-, Eltern-, Haltungs- und Grenzwertfelder erscheinen dort, wo sie relevant sind.</p>
-  <p><strong>➕ Neues Tier</strong> · <strong>Rolle auswählen</strong> · <strong>Speichern</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_add.svg" alt="Hinzufügen" /> Neues Tier</strong> · <strong>Rolle auswählen</strong> · <strong>Speichern</strong></p>
   <div class="hint">
     <strong>Tieridentität:</strong> ProgTrack identifiziert jedes Tier über die unveränderliche IPID <code>Name | Spezies | TT.MM.JJJJ | Herkunft</code>. Nach dem Anlegen dürfen Name, Spezies, vollständiges Geburtsdatum, Herkunft und IPID von keinem Konto geändert werden, auch nicht vom Lord. Listen verwenden zur Lesbarkeit den Kurznamen; Backend-Beziehungen und exakte Exporte behalten die stabile Identität.
   </div>
@@ -314,7 +320,7 @@
 
   <h3>4.4 Daten bearbeiten</h3>
   <p>Wählen Sie ein Tier aus und verwenden Sie die Bearbeiten-Aktion. In der Kategorie Alle ändert Rolle bearbeiten nur die Rolle/Kategorie; die separate Bearbeiten-Aktion öffnet den vollständigen rollenspezifischen Editor.</p>
-  <p><strong>✏️ Bearbeiten</strong> · <strong>🫥 Rolle bearbeiten</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_edit.svg" alt="Bearbeiten" /> Bearbeiten</strong> · <strong><img class="ui-icon" src="../icons/ui/action_edit_role.svg" alt="Rolle bearbeiten" /> Rolle bearbeiten</strong></p>
   <table class="basic"><tr><th>Editor-Tab</th><th>Nutzung</th></tr>
   <tr><td><strong>Progesteron</strong></td><td>Wird angezeigt, wenn es für Rolle und installierte Module relevant ist.</td></tr>
   <tr><td><strong>PdG</strong></td><td>Wird angezeigt, wenn es für Rolle und installierte Module relevant ist.</td></tr>
@@ -327,7 +333,7 @@
 
   <h3>4.5 Archivieren, Wiederherstellen und Löschen</h3>
   <p>Archivieren erhält die Daten, entfernt das Tier aber aus den aktiven Routineansichten. Wiederherstellen verschiebt ein archiviertes Tier zurück. Löschen ist für archivierte Tiere verfügbar und entfernt den Datensatz dauerhaft aus der Datenbank.</p>
-  <p><strong>📦 Archivieren</strong> · <strong>⤴️ Wiederherstellen</strong> · <strong>🗑️ Löschen</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_archive.svg" alt="Archivieren" /> Archivieren</strong> · <strong><img class="ui-icon" src="../icons/ui/action_restore.svg" alt="Wiederherstellen" /> Wiederherstellen</strong> · <strong><img class="ui-icon" src="../icons/ui/action_delete.svg" alt="Löschen" /> Löschen</strong></p>
 
 
   <h2 id="measurements">5. Messungen &amp; Datenimport</h2>
@@ -340,7 +346,7 @@
 
   <h3>5.3 Import aus Excel</h3>
   <p>Excel-Importe basieren auf exakten Spaltennamen. Verwenden Sie die zum Datentyp passende Import-Schaltfläche und bereinigen Sie ungültige Datumswerte, leere Namen oder nicht-numerische Werte vor dem Import.</p>
-  <table class="basic"><tr><th>Schaltfläche</th><th>Erforderliche Spalten</th></tr><tr><td><strong>📈 Blutwerte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Urinwerte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Gewichte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Spermawerte laden</strong></td><td><code>Datum</code>, <code>Name</code>, <code>Animal ID</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
+  <table class="basic"><tr><th>Schaltfläche</th><th>Erforderliche Spalten</th></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_blood.svg" alt="Blutwerte" /> Blutwerte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_urine.svg" alt="Urinwerte" /> Urinwerte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_weight.svg" alt="Gewichte" /> Gewichte laden</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_sperm.svg" alt="Spermawerte" /> Spermawerte laden</strong></td><td><code>Datum</code>, <code>Name</code>, <code>Animal ID</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
   <p>Nach Auswahl einer gültigen Datei öffnet ProgTrack eine schreibgeschützte Vorschau, <strong>bevor Tiere oder Messwerte geschrieben werden</strong>. Sie zählt die vollständige Datei, zeigt bis zu 200 Zeilen und klassifiziert jede Zeile als vorhanden, unbekannt, archiviert, mehrdeutig oder ungültig.</p>
   <p>Prüfen Sie Animal ID, Name, Datumsangaben, Sample ID und Messwerte. <strong>Abbrechen</strong> lässt das Backend unverändert; <strong>Importieren</strong> schreibt nur zulässige Zeilen vorhandener aktiver Tiere.</p>
   <p><code>Animal ID</code> ist für die Zuordnung maßgeblich. Unbekannte Tiere bleiben als übersprungene Zeilen sichtbar; die Warnung fordert dazu auf, sie zuerst durch einen Manager anlegen zu lassen. Ein Messwertimport legt niemals Tiere an und öffnet keinen Identitätsdialog.</p>

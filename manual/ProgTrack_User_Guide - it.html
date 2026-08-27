@@ -106,6 +106,12 @@
       width: auto;
       margin-right: 0.4rem;
     }
+    .ui-icon {
+      width: 1.1em;
+      height: 1.1em;
+      vertical-align: -0.2em;
+      object-fit: contain;
+    }
     .inline-icon {
       vertical-align: text-bottom;
       width: 60px;
@@ -255,12 +261,12 @@
   <h3>3.1 Categorie del pannello laterale</h3>
   <p>La barra categorie filtra l’elenco animali per ruolo di lavoro. Le categorie vuote sono nascoste automaticamente; Tutti resta disponibile per panoramica e correzione del ruolo. I filtri di fase femminili appaiono solo con Steroid Track attivo.</p>
   <table class="basic"><tr><th>Categoria</th><th>Significato</th></tr>
-  <tr><td><strong>♀</strong></td><td>Donatrici di ovociti e madri surrogate</td></tr>
-  <tr><td><strong>♂</strong></td><td>Donatori di sperma</td></tr>
-  <tr><td><strong>👶</strong></td><td>Prole</td></tr>
-  <tr><td><strong>🐾</strong></td><td>Partner</td></tr>
-  <tr><td><strong>⚤</strong></td><td>Animali da riproduzione</td></tr>
-  <tr><td><strong>💡</strong></td><td>Animali sperimentali</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_female.svg" alt="Femmina" /></strong></td><td>Donatrici di ovociti e madri surrogate</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_male.svg" alt="Maschio" /></strong></td><td>Donatori di sperma</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_offspring.svg" alt="Prole" /></strong></td><td>Prole</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_partner.svg" alt="Partner" /></strong></td><td>Partner</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/pedigree_symbol.svg" alt="Riproduzione" /></strong></td><td>Animali da riproduzione</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_experimental.svg" alt="Sperimentale" /></strong></td><td>Animali sperimentali</td></tr>
   <tr><td><strong>Tutti</strong></td><td>Tutti gli animali</td></tr>
   </table>
   <p>Nella riga dei filtri sotto l'elenco animali, digitare l'inizio del nome breve per restringere l'elenco. Le tre caselle con icona accanto al campo di ricerca mostrano o nascondono animali femmina, maschio e con sesso sconosciuto. All'inizio sono tutte attive. I filtri per nome e sesso operano insieme e si combinano con i filtri correnti per ruolo, progetto, specie, archivio e plugin attivo; ogni modifica aggiorna subito l'elenco senza cambiare i dati degli animali.</p>
@@ -269,16 +275,16 @@
   <p>I pulsanti sono contestuali: quelli di importazione appaiono solo quando ruolo e plugin installati li possono usare. Le etichette sotto provengono dal file lingua attivo.</p>
   <p>Lord, Master e Manager configurano ordine, etichette/icone, blocchi delle finestre Nuovo/Modifica e visibilità di <strong>Nuovo animale</strong> per ogni scheda ruolo in <strong>Impostazioni → Convenzioni → Configurazione ruoli</strong>. Il pulsante icona apre una selezione di tutti gli SVG distribuiti in <code>icons/ui</code>. <strong>Tutti</strong> mantiene modifica generale e correzione del ruolo, ma non mostra automaticamente tutti e quattro i pulsanti di importazione.</p>
   <table class="basic"><tr><th>Pulsante</th><th>Uso</th></tr>
-  <tr><td><strong>➕ Nuovo animale</strong></td><td>Crea una nuova scheda.</td></tr>
-  <tr><td><strong>✏️ Modifica</strong></td><td>Apre l’editor completo dell’animale selezionato.</td></tr>
-  <tr><td><strong>🫥 Modifica ruolo</strong></td><td>Cambia ruolo/categoria nella vista Tutti.</td></tr>
-  <tr><td><strong>📈 Carica valori sangue</strong></td><td>Importa progesterone ematico.</td></tr>
-  <tr><td><strong>📉 Carica valori urina</strong></td><td>Importa valori PdG urinari.</td></tr>
-  <tr><td><strong>🎈 Carica valori sperma</strong></td><td>Importa misurazioni sperma.</td></tr>
-  <tr><td><strong>⚖️ Carica pesi</strong></td><td>Importa pesi.</td></tr>
-  <tr><td><strong>📦 Archivia</strong></td><td>Archivia animali selezionati.</td></tr>
-  <tr><td><strong>⤴️ Ripristina</strong></td><td>Ripristina animali archiviati.</td></tr>
-  <tr><td><strong>🗑️ Elimina</strong></td><td>Elimina definitivamente animali archiviati.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_add.svg" alt="Aggiungi" /> Nuovo animale</strong></td><td>Crea una nuova scheda.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_edit.svg" alt="Modifica" /> Modifica</strong></td><td>Apre l’editor completo dell’animale selezionato.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_edit_role.svg" alt="Modifica ruolo" /> Modifica ruolo</strong></td><td>Cambia ruolo/categoria nella vista Tutti.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_blood.svg" alt="Valori sangue" /> Carica valori sangue</strong></td><td>Importa progesterone ematico.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_urine.svg" alt="Valori urina" /> Carica valori urina</strong></td><td>Importa valori PdG urinari.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_sperm.svg" alt="Valori sperma" /> Carica valori sperma</strong></td><td>Importa misurazioni sperma.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_weight.svg" alt="Pesi" /> Carica pesi</strong></td><td>Importa pesi.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_archive.svg" alt="Archivia" /> Archivia</strong></td><td>Archivia animali selezionati.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_restore.svg" alt="Ripristina" /> Ripristina</strong></td><td>Ripristina animali archiviati.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_delete.svg" alt="Elimina" /> Elimina</strong></td><td>Elimina definitivamente animali archiviati.</td></tr>
   </table>
 
 
@@ -286,7 +292,7 @@
 
   <h3>4.1 Creazione delle schede</h3>
   <p>Usare l’azione del pannello laterale per creare una scheda. Nella categoria Tutti ProgTrack chiede prima il ruolo, poi apre l’editor corrispondente. I campi obbligatori dipendono dal ruolo; campi ID, progetto, origine, genotipo, genitori, alloggio e limiti appaiono quando rilevanti.</p>
-  <p><strong>➕ Nuovo animale</strong> · <strong>Seleziona ruolo</strong> · <strong>Salva</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_add.svg" alt="Aggiungi" /> Nuovo animale</strong> · <strong>Seleziona ruolo</strong> · <strong>Salva</strong></p>
   <div class="hint">
     <strong>Identità animale:</strong> ProgTrack identifica ogni animale tramite l'IPID immutabile <code>Name | Species | DD.MM.YYYY | Origin</code>. Dopo la creazione, nome, specie, data di nascita completa, origine e IPID non possono essere modificati da nessun account, incluso Lord. Gli elenchi usano il nome breve per leggibilità; relazioni backend ed esportazioni esatte conservano l'identità stabile.
   </div>
@@ -317,7 +323,7 @@
 
   <h3>4.4 Modifica dei dati</h3>
   <p>Selezionare un animale e usare l’azione di modifica. Nella categoria Tutti, Modifica ruolo cambia solo ruolo/categoria; l’azione Modifica separata apre l’editor completo specifico per ruolo.</p>
-  <p><strong>✏️ Modifica</strong> · <strong>🫥 Modifica ruolo</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_edit.svg" alt="Modifica" /> Modifica</strong> · <strong><img class="ui-icon" src="../icons/ui/action_edit_role.svg" alt="Modifica ruolo" /> Modifica ruolo</strong></p>
   <table class="basic"><tr><th>Scheda editor</th><th>Uso</th></tr>
   <tr><td><strong>Progesterone</strong></td><td>Mostrata quando rilevante per ruolo e moduli installati.</td></tr>
   <tr><td><strong>PdG</strong></td><td>Mostrata quando rilevante per ruolo e moduli installati.</td></tr>
@@ -330,7 +336,7 @@
 
   <h3>4.5 Archiviazione, ripristino ed eliminazione</h3>
   <p>Archivia conserva i dati ma rimuove l’animale dalle viste attive di routine. Ripristina riporta un animale archiviato tra gli attivi. Elimina è disponibile per animali archiviati e rimuove definitivamente la scheda dal database.</p>
-  <p><strong>📦 Archivia</strong> · <strong>⤴️ Ripristina</strong> · <strong>🗑️ Elimina</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_archive.svg" alt="Archivia" /> Archivia</strong> · <strong><img class="ui-icon" src="../icons/ui/action_restore.svg" alt="Ripristina" /> Ripristina</strong> · <strong><img class="ui-icon" src="../icons/ui/action_delete.svg" alt="Elimina" /> Elimina</strong></p>
 
 
   <h2 id="measurements">5. Misurazioni e importazione dati</h2>
@@ -343,7 +349,7 @@
 
   <h3>5.3 Importazione da Excel</h3>
   <p>Le importazioni Excel si basano su nomi colonna esatti. Usare il pulsante di importazione corrispondente al tipo di dato e correggere date non valide, nomi vuoti o valori non numerici prima dell’importazione.</p>
-  <table class="basic"><tr><th>Pulsante</th><th>Colonne richieste</th></tr><tr><td><strong>📈 Carica valori sangue</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Carica valori urina</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Carica pesi</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Carica valori sperma</strong></td><td><code>Animal ID</code>, <code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
+  <table class="basic"><tr><th>Pulsante</th><th>Colonne richieste</th></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_blood.svg" alt="Valori sangue" /> Carica valori sangue</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_urine.svg" alt="Valori urina" /> Carica valori urina</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_weight.svg" alt="Pesi" /> Carica pesi</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_sperm.svg" alt="Valori sperma" /> Carica valori sperma</strong></td><td><code>Animal ID</code>, <code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
   <p>Dopo aver scelto un file valido, ProgTrack apre un'anteprima di sola lettura <strong>prima di scrivere animali o misurazioni</strong>. Conta l'intero file, mostra fino a 200 righe e classifica ogni riga come esistente, sconosciuta, archiviata, ambigua o non valida.</p>
   <p>Controllare Animal ID, Nome, date, Sample ID e valori. <strong>Annulla</strong> lascia invariato il backend; <strong>Importa</strong> scrive solo le righe consentite per animali attivi esistenti.</p>
   <p><code>Animal ID</code> è determinante per l'abbinamento. Gli animali sconosciuti restano visibili come righe ignorate e l'avviso chiede di farli creare prima da un Manager. L'importazione di misurazioni non crea mai un animale e non apre una finestra d'identità.</p>

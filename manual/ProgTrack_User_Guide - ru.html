@@ -106,6 +106,12 @@
       width: auto;
       margin-right: 0.4rem;
     }
+    .ui-icon {
+      width: 1.1em;
+      height: 1.1em;
+      vertical-align: -0.2em;
+      object-fit: contain;
+    }
     .inline-icon {
       vertical-align: text-bottom;
       width: 60px;
@@ -256,12 +262,12 @@
   <h3>3.1 Категории боковой панели</h3>
   <p>Панель категорий фильтрует список животных по рабочей роли. Пустые категории ролей скрываются автоматически; Все остается доступной для обзора и исправления роли. Фазовые фильтры самок показываются только при активном Steroid Track.</p>
   <table class="basic"><tr><th>Категория</th><th>Значение</th></tr>
-  <tr><td><strong>♀</strong></td><td>Доноры яйцеклеток и суррогатные матери</td></tr>
-  <tr><td><strong>♂</strong></td><td>Доноры спермы</td></tr>
-  <tr><td><strong>👶</strong></td><td>Потомство</td></tr>
-  <tr><td><strong>🐾</strong></td><td>Партнеры</td></tr>
-  <tr><td><strong>⚤</strong></td><td>Племенные животные</td></tr>
-  <tr><td><strong>💡</strong></td><td>Экспериментальные животные</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_female.svg" alt="Самка" /></strong></td><td>Доноры яйцеклеток и суррогатные матери</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_male.svg" alt="Самец" /></strong></td><td>Доноры спермы</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_offspring.svg" alt="Потомство" /></strong></td><td>Потомство</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_partner.svg" alt="Партнёр" /></strong></td><td>Партнеры</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/pedigree_symbol.svg" alt="Разведение" /></strong></td><td>Племенные животные</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_experimental.svg" alt="Эксперимент" /></strong></td><td>Экспериментальные животные</td></tr>
   <tr><td><strong>Все</strong></td><td>Все животные</td></tr>
   </table>
   <p>В строке фильтров под списком животных введите начало короткого имени, чтобы сузить список. Три флажка со значками рядом с полем поиска показывают или скрывают самок, самцов и животных с неизвестным полом. Изначально включены все три. Фильтры по имени и полу работают совместно и дополняют выбранные фильтры по роли, проекту, виду, архиву и активному плагину; каждое изменение сразу обновляет список, не изменяя данные животных.</p>
@@ -270,16 +276,16 @@
   <p>Кнопки контекстные: кнопки импорта появляются только там, где роль и установленные плагины могут их использовать. Ниже используются подписи из активного языкового файла.</p>
   <p>Пользователи Lord, Master и Manager настраивают порядок, подписи/значки, блоки диалогов создания/редактирования и видимость <strong>Новое животное</strong> для каждой вкладки роли через <strong>Настройки → Соглашения → Настройка ролей</strong>. Кнопка значка открывает выбор всех поставляемых SVG из <code>icons/ui</code>. Вкладка <strong>Все</strong> сохраняет общее редактирование и исправление роли, но не показывает автоматически все четыре кнопки импорта.</p>
   <table class="basic"><tr><th>Кнопка</th><th>Использование</th></tr>
-  <tr><td><strong>➕ Новое животное</strong></td><td>Создать новую запись.</td></tr>
-  <tr><td><strong>✏️ Редактировать</strong></td><td>Открыть полный редактор выбранного животного.</td></tr>
-  <tr><td><strong>🫥 Изменить роль</strong></td><td>Изменить роль/категорию во Все.</td></tr>
-  <tr><td><strong>📈 Загрузить значения крови</strong></td><td>Импортировать прогестерон крови.</td></tr>
-  <tr><td><strong>📉 Загрузить значения мочи</strong></td><td>Импортировать PdG мочи.</td></tr>
-  <tr><td><strong>🎈 Загрузить значения спермы</strong></td><td>Импортировать измерения спермы.</td></tr>
-  <tr><td><strong>⚖️ Загрузить веса</strong></td><td>Импортировать веса.</td></tr>
-  <tr><td><strong>📦 Архивировать</strong></td><td>Архивировать выбранных животных.</td></tr>
-  <tr><td><strong>⤴️ Восстановить</strong></td><td>Восстановить архивных животных.</td></tr>
-  <tr><td><strong>🗑️ Удалить</strong></td><td>Окончательно удалить архивных животных.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_add.svg" alt="Добавить" /> Новое животное</strong></td><td>Создать новую запись.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_edit.svg" alt="Изменить" /> Редактировать</strong></td><td>Открыть полный редактор выбранного животного.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_edit_role.svg" alt="Изменить роль" /> Изменить роль</strong></td><td>Изменить роль/категорию во Все.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_blood.svg" alt="Кровь" /> Загрузить значения крови</strong></td><td>Импортировать прогестерон крови.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_urine.svg" alt="Моча" /> Загрузить значения мочи</strong></td><td>Импортировать PdG мочи.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_sperm.svg" alt="Сперма" /> Загрузить значения спермы</strong></td><td>Импортировать измерения спермы.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_weight.svg" alt="Вес" /> Загрузить веса</strong></td><td>Импортировать веса.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_archive.svg" alt="Архивировать" /> Архивировать</strong></td><td>Архивировать выбранных животных.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_restore.svg" alt="Восстановить" /> Восстановить</strong></td><td>Восстановить архивных животных.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_delete.svg" alt="Удалить" /> Удалить</strong></td><td>Окончательно удалить архивных животных.</td></tr>
   </table>
 
 
@@ -287,7 +293,7 @@
 
   <h3>4.1 Создание записей</h3>
   <p>Используйте действие боковой панели, чтобы создать запись. В категории Все ProgTrack сначала спрашивает роль, затем открывает соответствующий редактор. Обязательные поля зависят от роли; дополнительные поля ID, проекта, происхождения, генотипа, родителей, размещения и лимитов показываются там, где они релевантны.</p>
-  <p><strong>➕ Новое животное</strong> · <strong>Выбрать роль</strong> · <strong>Сохранить</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_add.svg" alt="Добавить" /> Новое животное</strong> · <strong>Выбрать роль</strong> · <strong>Сохранить</strong></p>
   <div class="hint">
     <strong>Идентичность животного:</strong> ProgTrack идентифицирует животное по неизменяемому IPID <code>Name | Species | DD.MM.YYYY | Origin</code>. После создания имя, вид, полная дата рождения, происхождение и IPID не могут изменяться никакой учётной записью, включая Lord. Списки используют короткое имя для читаемости; связи backend и точные экспорты сохраняют стабильную идентичность.
   </div>
@@ -318,7 +324,7 @@
 
   <h3>4.4 Редактирование данных</h3>
   <p>Выберите животное и используйте действие редактирования. В категории Все Изменить роль меняет только роль/категорию; отдельное действие Редактировать открывает полный редактор по роли.</p>
-  <p><strong>✏️ Редактировать</strong> · <strong>🫥 Изменить роль</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_edit.svg" alt="Изменить" /> Редактировать</strong> · <strong><img class="ui-icon" src="../icons/ui/action_edit_role.svg" alt="Изменить роль" /> Изменить роль</strong></p>
   <table class="basic"><tr><th>Вкладка редактора</th><th>Использование</th></tr>
   <tr><td><strong>Прогестерон</strong></td><td>Показывается, когда релевантно роли и установленным модулям.</td></tr>
   <tr><td><strong>PdG</strong></td><td>Показывается, когда релевантно роли и установленным модулям.</td></tr>
@@ -331,7 +337,7 @@
 
   <h3>4.5 Архивирование, восстановление и удаление</h3>
   <p>Архивирование сохраняет данные, но убирает животное из обычных активных видов. Восстановить возвращает архивное животное. Удалить доступно для архивных животных и окончательно удаляет запись из базы.</p>
-  <p><strong>📦 Архивировать</strong> · <strong>⤴️ Восстановить</strong> · <strong>🗑️ Удалить</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_archive.svg" alt="Архивировать" /> Архивировать</strong> · <strong><img class="ui-icon" src="../icons/ui/action_restore.svg" alt="Восстановить" /> Восстановить</strong> · <strong><img class="ui-icon" src="../icons/ui/action_delete.svg" alt="Удалить" /> Удалить</strong></p>
 
 
   <h2 id="measurements">5. Измерения и импорт данных</h2>
@@ -344,7 +350,7 @@
 
   <h3>5.3 Импорт из Excel</h3>
   <p>Импорт Excel основан на точных именах столбцов. Используйте кнопку импорта, соответствующую типу данных, и исправьте неверные даты, пустые имена или нечисловые значения перед импортом.</p>
-  <table class="basic"><tr><th>Кнопка</th><th>Обязательные столбцы</th></tr><tr><td><strong>📈 Загрузить значения крови</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Загрузить значения мочи</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Загрузить веса</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Загрузить значения спермы</strong></td><td><code>Animal ID</code>, <code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
+  <table class="basic"><tr><th>Кнопка</th><th>Обязательные столбцы</th></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_blood.svg" alt="Кровь" /> Загрузить значения крови</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_urine.svg" alt="Моча" /> Загрузить значения мочи</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_weight.svg" alt="Вес" /> Загрузить веса</strong></td><td><code>Animal ID</code>, <code>Name</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_sperm.svg" alt="Сперма" /> Загрузить значения спермы</strong></td><td><code>Animal ID</code>, <code>Datum</code>, <code>Name</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
   <p>После выбора корректного файла ProgTrack открывает предварительный просмотр только для чтения <strong>до записи животных или измерений</strong>. Он считает весь файл, показывает до 200 строк и классифицирует каждую строку как существующую, неизвестную, архивную, неоднозначную или недействительную.</p>
   <p>Проверьте Animal ID, Имя, даты, Sample ID и значения. <strong>Отмена</strong> оставляет backend без изменений; <strong>Импорт</strong> записывает только разрешённые строки существующих активных животных.</p>
   <p><code>Animal ID</code> является определяющим для сопоставления. Неизвестные животные остаются видимыми как пропущенные строки; предупреждение просит сначала обратиться к Manager. Импорт измерений никогда не создаёт животное и не открывает диалог идентичности.</p>

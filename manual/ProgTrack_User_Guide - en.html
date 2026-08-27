@@ -106,6 +106,12 @@
       width: auto;
       margin-right: 0.4rem;
     }
+    .ui-icon {
+      width: 1.1em;
+      height: 1.1em;
+      vertical-align: -0.2em;
+      object-fit: contain;
+    }
     .inline-icon {
       vertical-align: text-bottom;
       width: 60px;
@@ -248,12 +254,12 @@
   <h3>3.1 Sidebar categories</h3>
   <p>The category bar filters the animal list by workflow role. Empty role categories are hidden automatically; the All category remains available for overview and role correction. Female phase filters are shown only when Steroid Track is active.</p>
   <table class="basic"><tr><th>Category</th><th>Meaning</th></tr>
-  <tr><td><strong>♀</strong></td><td>Egg donors &amp; surrogates</td></tr>
-  <tr><td><strong>♂</strong></td><td>Sperm donors</td></tr>
-  <tr><td><strong>👶</strong></td><td>Offspring</td></tr>
-  <tr><td><strong>🐾</strong></td><td>Partners</td></tr>
-  <tr><td><strong>⚤</strong></td><td>Breeding animals</td></tr>
-  <tr><td><strong>💡</strong></td><td>Experimental animals</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_female.svg" alt="Female" /></strong></td><td>Egg donors &amp; surrogates</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_male.svg" alt="Male" /></strong></td><td>Sperm donors</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_offspring.svg" alt="Offspring" /></strong></td><td>Offspring</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_partner.svg" alt="Partner" /></strong></td><td>Partners</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/pedigree_symbol.svg" alt="Breeding" /></strong></td><td>Breeding animals</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/role_experimental.svg" alt="Experimental" /></strong></td><td>Experimental animals</td></tr>
   <tr><td><strong>All</strong></td><td>All animals</td></tr>
   </table>
   <p>In the filter row below the animal list, type the beginning of a short name to narrow the list. The three icon checkboxes beside the search field show or hide female, male, and unknown-sex animals. All three are enabled initially. Name and sex filters work together and remain combined with the selected role, project, species, archive, and active-plugin filters; each change refreshes the list immediately without changing animal data.</p>
@@ -262,16 +268,16 @@
   <p>Buttons are context-sensitive: import buttons appear only where the active role and installed plugins can use them. The labels below are the labels from the active language file.</p>
   <p>Lord, Master, and Manager users configure role order, labels/icons, New/Edit dialog blocks, and per-role <strong>New Animal</strong> visibility under <strong>Settings → Conventions → Role setup</strong>. The icon button opens a picker containing every packaged SVG in <code>icons/ui</code>. The All tab keeps general editing and role correction; it does not show all measurement-import buttons.</p>
   <table class="basic"><tr><th>Button</th><th>Use</th></tr>
-  <tr><td><strong>➕ New Animal</strong></td><td>Create a new record.</td></tr>
-  <tr><td><strong>✏️ Edit</strong></td><td>Open the full editor for the selected animal.</td></tr>
-  <tr><td><strong>🫥 Edit Role</strong></td><td>Change role/category in the All view.</td></tr>
-  <tr><td><strong>📈 Load Blood Values</strong></td><td>Import blood progesterone values.</td></tr>
-  <tr><td><strong>📉 Load Urine Values</strong></td><td>Import urine PdG values.</td></tr>
-  <tr><td><strong>🎈 Load Sperm Values</strong></td><td>Import sperm measurements.</td></tr>
-  <tr><td><strong>⚖️ Load Weights</strong></td><td>Import weight measurements.</td></tr>
-  <tr><td><strong>📦 Archive</strong></td><td>Archive selected animals.</td></tr>
-  <tr><td><strong>⤴️ Restore</strong></td><td>Restore archived animals.</td></tr>
-  <tr><td><strong>🗑️ Delete</strong></td><td>Delete archived animals permanently.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_add.svg" alt="Add" /> New Animal</strong></td><td>Create a new record.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_edit.svg" alt="Edit" /> Edit</strong></td><td>Open the full editor for the selected animal.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_edit_role.svg" alt="Edit role" /> Edit Role</strong></td><td>Change role/category in the All view.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_blood.svg" alt="Blood values" /> Load Blood Values</strong></td><td>Import blood progesterone values.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_urine.svg" alt="Urine values" /> Load Urine Values</strong></td><td>Import urine PdG values.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_sperm.svg" alt="Sperm values" /> Load Sperm Values</strong></td><td>Import sperm measurements.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/measure_weight.svg" alt="Weights" /> Load Weights</strong></td><td>Import weight measurements.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_archive.svg" alt="Archive" /> Archive</strong></td><td>Archive selected animals.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_restore.svg" alt="Restore" /> Restore</strong></td><td>Restore archived animals.</td></tr>
+  <tr><td><strong><img class="ui-icon" src="../icons/ui/action_delete.svg" alt="Delete" /> Delete</strong></td><td>Delete archived animals permanently.</td></tr>
   </table>
 
 
@@ -279,7 +285,7 @@
 
   <h3>4.1 Creating records</h3>
   <p>Use the sidebar action to create a record. In the All category ProgTrack asks for the role first, then opens the matching editor. Required fields depend on the role; optional ID, project, origin, genotype, parent, housing, and limit fields are shown where relevant.</p>
-  <p><strong>➕ New Animal</strong> · <strong>Select Role</strong> · <strong>Save</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_add.svg" alt="Add" /> New Animal</strong> · <strong>Select Role</strong> · <strong>Save</strong></p>
   <div class="hint">
     <strong>Animal identity:</strong> ProgTrack identifies each animal by the immutable IPID <code>Name | Species | DD.MM.YYYY | Origin</code>. After creation, name, species, complete birth date, origin, and IPID cannot be changed by any account, including Lord. Lists use the short name for readability while backend relationships and exact exports retain stable identity.
   </div>
@@ -310,7 +316,7 @@
 
   <h3>4.4 Editing data</h3>
   <p>Select an animal and use the edit action. In the All category, Edit Role changes only the role/category; the separate Edit action opens the full role-specific editor.</p>
-  <p><strong>✏️ Edit</strong> · <strong>🫥 Edit Role</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_edit.svg" alt="Edit" /> Edit</strong> · <strong><img class="ui-icon" src="../icons/ui/action_edit_role.svg" alt="Edit role" /> Edit Role</strong></p>
   <table class="basic"><tr><th>Editor tab</th><th>Use</th></tr>
   <tr><td><strong>Progesterone</strong></td><td>Shown when relevant for the selected role and installed modules.</td></tr>
   <tr><td><strong>PdG</strong></td><td>Shown when relevant for the selected role and installed modules.</td></tr>
@@ -323,7 +329,7 @@
 
   <h3>4.5 Archiving, restoring, and deleting</h3>
   <p>Archive keeps data but removes the animal from routine active views. Restore moves an archived animal back. Delete is available for archived animals and permanently removes that record from the database.</p>
-  <p><strong>📦 Archive</strong> · <strong>⤴️ Restore</strong> · <strong>🗑️ Delete</strong></p>
+  <p><strong><img class="ui-icon" src="../icons/ui/action_archive.svg" alt="Archive" /> Archive</strong> · <strong><img class="ui-icon" src="../icons/ui/action_restore.svg" alt="Restore" /> Restore</strong> · <strong><img class="ui-icon" src="../icons/ui/action_delete.svg" alt="Delete" /> Delete</strong></p>
 
 
   <h2 id="measurements">5. Measurements &amp; importing data</h2>
@@ -336,7 +342,7 @@
 
   <h3>5.3 Importing from Excel</h3>
   <p>Excel imports are based on exact column names. Use the import button that matches the data type and clean invalid dates, empty names, or non-numeric values before importing.</p>
-  <table class="basic"><tr><th>Button</th><th>Required columns</th></tr><tr><td><strong>📈 Load Blood Values</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong>📉 Load Urine Values</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong>⚖️ Load Weights</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong>🎈 Load Sperm Values</strong></td><td><code>Datum</code>, <code>Name</code>, <code>Animal ID</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
+  <table class="basic"><tr><th>Button</th><th>Required columns</th></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_blood.svg" alt="Blood values" /> Load Blood Values</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Progesteron (ng/ml)</code>, <code>F</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_urine.svg" alt="Urine values" /> Load Urine Values</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>PdG (µg/mg Cr)</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_weight.svg" alt="Weights" /> Load Weights</strong></td><td><code>Name</code>, <code>Animal ID</code>, <code>Datum</code>, <code>Gewicht</code></td></tr><tr><td><strong><img class="ui-icon" src="../icons/ui/measure_sperm.svg" alt="Sperm values" /> Load Sperm Values</strong></td><td><code>Datum</code>, <code>Name</code>, <code>Animal ID</code>, <code>% Motility</code>, <code>% Progressive</code>, <code>Sperms/ml</code></td></tr></table>
   <p>After selecting a valid file, ProgTrack opens a read-only preview <strong>before writing any animals or measurements</strong>. It reports counts for the complete file, displays up to the first 200 rows, and classifies each row as existing, unknown, archived, ambiguous, or invalid.</p>
   <p>Check Animal ID, Name, dates, Sample ID and measurement values. Choose <strong>Cancel</strong> to leave the backend unchanged. Choosing <strong>Import</strong> writes only permitted rows for existing active animals.</p>
   <p><code>Animal ID</code> is authoritative for matching. Unknown animals remain visible as skipped rows and trigger a warning to ask a Manager to create them first. Measurement import never creates an animal and never opens a species/birth-date dialog.</p>
