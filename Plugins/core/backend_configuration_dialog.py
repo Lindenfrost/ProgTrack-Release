@@ -94,8 +94,7 @@ class BackendConfigurationDialog(QDialog):
         intro = QLabel(
             self._text(
                 "backend.dialog.intro",
-                "Choose the backend used after the next clean restart. "
-                "This does not transfer, copy, overwrite, or delete data.",
+                "Choose the backend used after the next clean restart.",
             )
         )
         intro.setWordWrap(True)

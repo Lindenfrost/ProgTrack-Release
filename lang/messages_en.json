@@ -1958,7 +1958,7 @@
   "backend.postgresql.sslmode": "SSL mode",
   "backend.postgresql.pool_min": "Pool minimum",
   "backend.postgresql.pool_max": "Pool maximum",
-  "backend.dialog.intro": "Choose the backend used after the next clean restart. This does not transfer, copy, overwrite, or delete data.",
+  "backend.dialog.intro": "Choose the backend used after the next clean restart.",
   "backend.profile.sqlite": "Standalone SQLite",
   "backend.profile.postgresql": "Shared PostgreSQL",
   "backend.sqlite.explanation": "For one local workstation only. Network and synchronized/cloud locations are refused.",
