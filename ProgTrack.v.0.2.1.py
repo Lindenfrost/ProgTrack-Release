@@ -19739,6 +19739,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             "dialog.partner.title_edit", "Edit Partner: {name}"
         ).format(name=self._display_name(name)) if editing else self.messages.get("dialog.partner.title_new", "New Partner")
         dlg, vbox, form = self._new_std_dialog(dlg_title)
+        dlg.setProperty("animal_dialog_role", Role.PARTNER.value)
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
             name_value=name or "",
@@ -20362,6 +20363,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         dlg_title = self.messages.get("dialog.sperm_donor.edit_title", "Edit Sperm Donor: {name}").format(name=self._display_name(name)) if editing else \
                    self.messages.get("dialog.sperm_donor.new_title", "New Sperm Donor")
         dlg, v, form = self._new_std_dialog(dlg_title)
+        dlg.setProperty("animal_dialog_role", Role.SAMENSP.value)
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
             name_value=name or "",
@@ -21020,6 +21022,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             "dialog.offspring.title_edit", "Edit Offspring: {name}"
         ).format(name=self._display_name(name)) if editing else self.messages.get("dialog.offspring.title_new", "New Offspring")
         dlg, layout, form = self._new_std_dialog(dlg_title)
+        dlg.setProperty("animal_dialog_role", Role.OFFSPRING.value)
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
             name_value=name or "",
@@ -21744,6 +21747,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             dlg_title = self.messages.get("dialog.zuchttier.title_edit", "Edit Zuchttier: {name}").format(name=self._display_name(name))
         dlg, layout, form = self._new_std_dialog(dlg_title)
+        dlg.setProperty("animal_dialog_role", Role.ZUCHTTIER.value)
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
             name_value=name or "",
@@ -22481,6 +22485,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                               'Edit Experimental Animal: {name}').format(name=self._display_name(name))
         )
         dlg, layout, form = self._new_std_dialog(dlg_title)
+        dlg.setProperty("animal_dialog_role", role_value)
 
         # ── Name + Species ───────────────────────────────────────────────────
         name_le, species_cb, initial_species = self._build_name_species_inputs(
@@ -23125,6 +23130,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.messages.get("dialog.basic_role.title_edit", "Edit animal: {name}").format(name=self._display_name(name))
         )
         dlg, v, form = self._new_std_dialog(title)
+        dlg.setProperty("animal_dialog_role", role_value)
 
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
@@ -23716,6 +23722,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             dlg_title = self.messages.get("dialog.female_animal.title_edit", "Edit Female Animal: {name}").format(name=self._display_name(name))
         dlg, v, form = self._new_std_dialog(dlg_title)
+        dlg.setProperty("animal_dialog_role", role_now)
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
             name_value="" if creating else (name or ""),
@@ -24066,6 +24073,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             tabs.setVisible(not creating)
 
         role_cb.currentTextChanged.connect(_update_role_fields)
+        role_cb.currentIndexChanged.connect(
+            lambda _index: dlg.setProperty(
+                "animal_dialog_role", role_cb.currentData() or Role.SPENDER.value
+            )
+        )
         _update_role_fields()
 
         # ---------------- Progesterone tab ----------------
