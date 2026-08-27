@@ -150,6 +150,7 @@ from Plugins.core.resource_catalogs import (
     ordered_species_for_display,
 )
 from Plugins.core.identity_conventions import (
+    birth_year_token,
     conventions_path,
     load_conventions,
     next_generated_id,
@@ -157,7 +158,6 @@ from Plugins.core.identity_conventions import (
     preview_next_generated_id,
     relationship_candidates,
     relationship_display_label,
-    regenerated_id_for_edit,
     sex_token,
 )
 from Plugins.core.lifecycle_events import (
@@ -2553,7 +2553,17 @@ class StyleSettingsDialog(QDialog):
         for definition in getattr(self, "_custom_experimental_blocks", []):
             if str(definition.get("id") or "") == str(block_id):
                 return str(definition.get("name") or block_id)
-        fallback = str(block_id or "").replace("_", " ").strip().capitalize()
+        # This block controls whether a role participates in a project; the
+        # stored ``severity`` field remains a separate project-level concept.
+        fallback = {
+            "project_severity": self.messages.get(
+                "settings.role_setup.block.project_severity.name",
+                "Project membership",
+            ),
+        }.get(
+            str(block_id or ""),
+            str(block_id or "").replace("_", " ").strip().capitalize(),
+        )
         return self.messages.get(f"settings.role_setup.block.{block_id}.name", fallback)
 
     def _role_block_description(self, block_id: str) -> str:
@@ -2570,6 +2580,7 @@ class StyleSettingsDialog(QDialog):
             ),
             "reproductive_events": "Reproductive event timeline.",
             "procedure_events": "Procedure and measurement event timeline.",
+            "project_severity": "Project membership and association controls.",
         }
         for definition in getattr(self, "_custom_experimental_blocks", []):
             if str(definition.get("id") or "") == str(block_id):
@@ -3312,6 +3323,7 @@ class StyleSettingsDialog(QDialog):
         active_item.setCheckState(
             Qt.CheckState.Checked if role.get("active", True) else Qt.CheckState.Unchecked
         )
+        active_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         active_item.setFlags((active_item.flags() | Qt.ItemFlag.ItemIsUserCheckable) & ~Qt.ItemFlag.ItemIsEditable)
         if not self._role_setup_editable:
             active_item.setFlags(active_item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
@@ -5496,6 +5508,70 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             "Could not reserve a unique animal ID after concurrent updates."
         )
 
+    def _id_for_animal_dialog(
+        self,
+        id_widget: QLineEdit,
+        *,
+        name: str,
+        species: str,
+        birth_date: str,
+        sex: str,
+        origin: str,
+        editing: bool,
+        old_record: Optional[Mapping[str, Any]] = None,
+        preview_property: str = "",
+        manual_override_property: str = "_manual_id_override",
+    ) -> Tuple[str, Optional[Dict[str, Any]]]:
+        """Return the canonical ID for a New/Edit Animal dialog.
+
+        Every role dialog uses this boundary.  New records with an empty ID
+        (or an untouched generated preview) reserve the next identity
+        sequence atomically in the configured backend.  Explicit IDs remain
+        supported for the identity-correction workflow; editing never
+        silently regenerates an established ID.
+        """
+        entered = str(id_widget.text() or "").strip()
+        previous = str((old_record or {}).get("id") or "").strip()
+        if editing:
+            # Identity is immutable in edit mode.  Preserve even a legacy
+            # blank value rather than inventing a new ID during an edit.
+            return entered or previous, None
+
+        untouched_preview = False
+        if preview_property:
+            preview = str(id_widget.property(preview_property) or "").strip()
+            untouched_preview = bool(preview and entered == preview)
+        manually_overridden = bool(id_widget.property(manual_override_property))
+        if entered and not (untouched_preview and not manually_overridden):
+            return entered, None
+
+        # Archived records still own immutable identities.  Include them in
+        # the collision set so a cleanly rebuilt role cannot reuse an ID that
+        # is currently outside the active sidebar.
+        active_records = getattr(self, "animals", {})
+        archived_records = getattr(self, "archived", {})
+        active_values = active_records.values() if isinstance(active_records, Mapping) else ()
+        archived_values = archived_records.values() if isinstance(archived_records, Mapping) else ()
+        all_records = list(active_values)
+        all_records.extend(list(archived_values))
+        generated, conventions = self._reserve_generated_animal_id(
+            name=str(name or ""),
+            species=str(species or ""),
+            birth_date=str(birth_date or ""),
+            sex=str(sex or ""),
+            origin=str(origin or ""),
+            existing_ids=(record.get("id", "") for record in all_records),
+        )
+        year_key = birth_year_token(str(birth_date or ""))
+        return generated, {
+            "generated_id_sequence": int(
+                conventions.get("yearly_sequences", {}).get(year_key, 0)
+            ),
+            "generated_id_absolute_sequence": int(
+                conventions.get("absolute_sequence", 0)
+            ),
+        }
+
     def _merge_user_messages(self, lang_code: Optional[str] = None) -> None:
         lang_code = lang_code or getattr(self, "lang", "de") or "de"
         overrides = self.backend.records.get(
@@ -5758,7 +5834,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self,
             )
             medi_export_action.triggered.connect(self._dlg_export_medi_track)
-            medi_export_action.setEnabled(self._master_can("medi_track.view"))
+            medi_export_action.setEnabled(self._master_can("medi_track.export"))
             file_menu.addAction(medi_export_action)
 
         # ── Database section ─────────────────────────────────────────────────
@@ -7072,6 +7148,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.messages.get("dialog.offspring.genotype", "Genotype:")
         ))
         row_layout.addWidget(genotype_combo, 1)
+        # Keep a stable reference for form-row reordering.  The form stores
+        # ``row`` (not its child widgets), so nested controls can still be used
+        # as anchors by _move_form_row_after/_wrap_form_rows_in_section.
+        genotype_combo.setProperty("_form_row_widget", row)
+        sex_widget.setProperty("_form_row_widget", row)
         form.addRow(self.messages.get("dialog.offspring.sex", "Sex:"), row)
         return genotype_combo
 
@@ -7491,14 +7572,44 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Move one existing form row without recreating its widgets."""
         if row_widget is None:
             return
-        row, _role = form.getWidgetPosition(row_widget)
+        # Several shared controls (notably the sex/genotype pair) are hosted
+        # in a wrapper QWidget because they form one visual row.  QFormLayout
+        # only reports the wrapper's position, not the nested child.  Resolve
+        # that wrapper explicitly so callers can use either the row widget or
+        # one of its child controls as the anchor.
+        def _layout_anchor(widget: Optional[QWidget]) -> Optional[QWidget]:
+            if widget is None:
+                return None
+            candidate = widget
+            try:
+                mapped = candidate.property("_form_row_widget")
+            except (AttributeError, RuntimeError):
+                mapped = None
+            if isinstance(mapped, QWidget):
+                candidate = mapped
+            row, _ = form.getWidgetPosition(candidate)
+            if row >= 0:
+                return candidate
+            # Be defensive for older/custom rows that did not set the
+            # property: walk parents until the direct form-row widget appears.
+            parent = candidate.parentWidget()
+            while parent is not None:
+                row, _ = form.getWidgetPosition(parent)
+                if row >= 0:
+                    return parent
+                parent = parent.parentWidget()
+            return None
+
+        row_anchor = _layout_anchor(row_widget)
+        row, _role = form.getWidgetPosition(row_anchor) if row_anchor is not None else (-1, None)
         if row < 0:
             return
         result = form.takeRow(row)
-        if after_widget is None:
+        after_anchor = _layout_anchor(after_widget)
+        if after_anchor is None:
             insert_at = form.rowCount()
         else:
-            after_row, _after_role = form.getWidgetPosition(after_widget)
+            after_row, _after_role = form.getWidgetPosition(after_anchor)
             insert_at = after_row + 1 if after_row >= 0 else form.rowCount()
         self._set_form_item(form, insert_at, QFormLayout.ItemRole.LabelRole, result.labelItem)
         self._set_form_item(form, insert_at, QFormLayout.ItemRole.FieldRole, result.fieldItem)
@@ -7517,7 +7628,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         for widget in row_widgets:
             if widget is None:
                 continue
-            row, _role = form.getWidgetPosition(widget)
+            candidate = widget
+            try:
+                mapped = candidate.property("_form_row_widget")
+            except (AttributeError, RuntimeError):
+                mapped = None
+            if isinstance(mapped, QWidget):
+                candidate = mapped
+            row, _role = form.getWidgetPosition(candidate)
+            if row < 0:
+                parent = candidate.parentWidget()
+                while parent is not None and row < 0:
+                    row, _role = form.getWidgetPosition(parent)
+                    if row < 0:
+                        parent = parent.parentWidget()
             if row >= 0:
                 rows.add(int(row))
         if not rows:
@@ -7529,7 +7653,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if after is None:
             insert_at = form.rowCount()
         else:
-            anchor_row, _anchor_role = form.getWidgetPosition(after)
+            anchor = after
+            try:
+                mapped = anchor.property("_form_row_widget")
+            except (AttributeError, RuntimeError):
+                mapped = None
+            if isinstance(mapped, QWidget):
+                anchor = mapped
+            anchor_row, _anchor_role = form.getWidgetPosition(anchor)
+            if anchor_row < 0:
+                parent = anchor.parentWidget()
+                while parent is not None and anchor_row < 0:
+                    anchor_row, _anchor_role = form.getWidgetPosition(parent)
+                    if anchor_row < 0:
+                        parent = parent.parentWidget()
             insert_at = anchor_row + 1 if anchor_row >= 0 else form.rowCount()
         host = form.parentWidget()
         section = AnimalDialogSection(
@@ -11899,6 +12036,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         return default_experimental_limits(role).get(key, default)
 
     def _get_report_event_max(self, typ_lower: str, animal_data: Dict[str, Any]):
+        if typ_lower in {"pregnancy", "birth"}:
+            role = self._animal_role_value(animal_data)
+            sex = str(animal_data.get("sex") or "").strip().casefold()
+            if role == Role.ZUCHTTIER.value and sex == "male":
+                return None
         if typ_lower == 'fsh':
             return self._experimental_limit_value(animal_data, 'max_fsh', '?')
         if typ_lower == 'surgery':
@@ -11936,7 +12078,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return ''
         
         # Check if female
-        if role == Role.ZUCHTTIER.value and animal_data.get('sex') != 'female':
+        if role == Role.ZUCHTTIER.value and str(animal_data.get('sex') or '').strip().casefold() != 'female':
             return ''
         
         preg_dates = [ev['datum'].date() for ev in animal_data.get('events', []) 
@@ -12142,6 +12284,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         elif role == Role.ZUCHTTIER.value:
             # Breeding animals: show based on what's defined
+            if str(animal_data.get('sex') or '').strip().casefold() != 'female':
+                stats.extend(self._custom_event_statistics(animal_data, self.messages))
+                return ', '.join(stats) if stats else '-'
             events = animal_data.get('events', [])
             pregnancy_count = sum(1 for ev in events if ev.get('typ') == 'pregnancy')
             birth_count = sum(1 for ev in events if ev.get('typ') == 'birth')
@@ -12249,6 +12394,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         elif role == Role.ZUCHTTIER.value:
             # Breeding animals: show based on what's defined
+            if str(animal_data.get('sex') or '').strip().casefold() != 'female':
+                stats.extend(self._custom_event_statistics(animal_data, messages))
+                return ', '.join(stats) if stats else '-'
             events = animal_data.get('events', [])
             pregnancy_count = sum(1 for ev in events if ev.get('typ') == 'pregnancy')
             birth_count = sum(1 for ev in events if ev.get('typ') == 'birth')
@@ -15071,6 +15219,58 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         _pan_active = False
         _pan_start_x = None
         _pan_axis = None
+        _pan_button = None
+
+        def _plot_press_is_empty(event) -> bool:
+            """Return whether a press may start a canvas pan.
+
+            Hover points are kept in ``hover_data`` for the custom tooltip
+            layer, but they are not the complete set of Matplotlib artists:
+            line bodies, scatter collections, legends, and annotations must
+            also block the left-button gesture.  Hit testing is performed only
+            at press time so moving across an artist during an active drag
+            cannot unexpectedly cancel the pan.
+            """
+            axis = getattr(event, "inaxes", None)
+            if axis is None or getattr(event, "xdata", None) is None:
+                return False
+            toolbar = getattr(event.canvas, "toolbar", None)
+            if toolbar is not None and str(getattr(toolbar, "mode", "")):
+                return False
+            # First use the same pixel tolerance as the tooltip/selection
+            # layer, including hidden-point guards so invisible series do not
+            # create phantom obstacles.
+            for entry in self.hover_data:
+                line = entry[-1] if entry else None
+                if line is None or hasattr(line, "get_visible") and not line.get_visible():
+                    continue
+                try:
+                    if hasattr(line, "contains") and line.contains(event)[0]:
+                        return False
+                except (AttributeError, RuntimeError, TypeError, ValueError):
+                    pass
+            # Block visible plotted artists and annotations even where no
+            # tooltip point was registered (for example a line segment between
+            # sparse samples).  Axes background/patch and spines remain valid
+            # empty canvas; axis labels outside the axes have no ``inaxes``.
+            artists = list(getattr(axis, "lines", ()))
+            artists += list(getattr(axis, "collections", ()))
+            artists += list(getattr(axis, "patches", ()))
+            artists += list(getattr(axis, "texts", ()))
+            legend = axis.get_legend() if hasattr(axis, "get_legend") else None
+            if legend is not None:
+                artists.append(legend)
+            for artist in artists:
+                if artist is getattr(axis, "patch", None):
+                    continue
+                if hasattr(artist, "get_visible") and not artist.get_visible():
+                    continue
+                try:
+                    if hasattr(artist, "contains") and artist.contains(event)[0]:
+                        return False
+                except (AttributeError, RuntimeError, TypeError, ValueError):
+                    continue
+            return True
 
         # ------------------------
         # 7.18.11 Scroll zoom handler
@@ -15391,11 +15591,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     closest = entry
             
             # Handle middle button click in empty space for panning
-            if not closest and event.button == 2 and event.inaxes:
-                nonlocal _pan_active, _pan_start_x, _pan_axis
+            if (
+                not closest
+                and event.button in (1, 2)
+                and event.inaxes
+                and _plot_press_is_empty(event)
+            ):
+                nonlocal _pan_active, _pan_start_x, _pan_axis, _pan_button
                 _pan_active = True
                 _pan_start_x = event.xdata
                 _pan_axis = event.inaxes
+                _pan_button = event.button
                 return
             
             if not closest:
@@ -15489,11 +15695,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # 7.18.14 Button release handler to end panning
         # ------------------------
         def on_release(event):
-            nonlocal _pan_active, _pan_start_x, _pan_axis
-            if event.button == 2:
+            nonlocal _pan_active, _pan_start_x, _pan_axis, _pan_button
+            if event.button == _pan_button:
                 _pan_active = False
                 _pan_start_x = None
                 _pan_axis = None
+                _pan_button = None
 
         # ------------------------
         # 7.18.15 Create and configure FigureCanvas
@@ -18045,7 +18252,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self,
             )
             medi_export_action.triggered.connect(self._dlg_export_medi_track)
-            medi_export_action.setEnabled(self._master_can("medi_track.view"))
+            medi_export_action.setEnabled(self._master_can("medi_track.export"))
             file_menu.addAction(medi_export_action)
 
         file_menu.addSection(self.messages.get("menu.file.section.database", "Database"))
@@ -19941,8 +20148,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             # write record
             rec_obj = dict(self.animals.get(name, {})) if editing else {}
+            animal_id, generated_id_meta = self._id_for_animal_dialog(
+                id_le,
+                name=_orig_name,
+                species=selected_species,
+                birth_date=birth_date,
+                sex=str(sex_cb.currentData() or sex_cb.currentText()),
+                origin=origin,
+                editing=editing,
+                old_record=self.animals.get(name, {}) if editing else None,
+            )
             rec_obj['rolle']             = Role.PARTNER.value
-            rec_obj['id']                = id_le.text().strip()
+            rec_obj['id']                = animal_id
+            if generated_id_meta:
+                rec_obj.update(generated_id_meta)
             rec_obj['chip_nr']           = chip_le.text().strip()
             rec_obj['origin']            = origin_le.currentText().strip()
             rec_obj['project']           = project_le.currentText().strip()
@@ -20602,8 +20821,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec_obj = dict(self.animals.get(name, {}))
             else:
                 rec_obj = {}
+            animal_id, generated_id_meta = self._id_for_animal_dialog(
+                id_le,
+                name=_orig_name,
+                species=selected_species,
+                birth_date=birth_date,
+                sex="Male",
+                origin=origin,
+                editing=editing,
+                old_record=self.animals.get(name, {}) if editing else None,
+            )
             rec_obj['rolle'] = Role.SAMENSP.value
-            rec_obj['id'] = id_le.text().strip()
+            rec_obj['id'] = animal_id
+            if generated_id_meta:
+                rec_obj.update(generated_id_meta)
             rec_obj['chip_nr'] = chip_le.text().strip()
             rec_obj['origin'] = origin_le.currentText().strip()
             rec_obj['project'] = project_le.currentText().strip()
@@ -20988,6 +21219,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             "surrogate_father": ziehvater_le,
         }
         self._add_parent_mode_selector(form, parents_group, offspring_parent_fields, default_mode="embryo")
+
+        # Offspring dialogs expose one concise infant-weight entry in the
+        # identity section.  Full historical weight data remains in the
+        # bounded Weights tab; this field only appends a dated value on save.
+        infant_weight_le = QLineEdit("")
+        infant_weight_le.setValidator(QDoubleValidator(0.0, 100000.0, 3, infant_weight_le))
+        infant_weight_le.setPlaceholderText(self.messages.get(
+            "dialog.field.infant_weight.placeholder", "Weight (g)"
+        ))
+        form.addRow(
+            self.messages.get("dialog.field.infant_weight", "Infant weight (g):"),
+            infant_weight_le,
+        )
         
         # Health status
         _health_w_o = QWidget()
@@ -21259,39 +21503,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec_obj, new_name, _orig_name, selected_species, birth_date)
             rec_obj['sex']              = sex_cb.currentData() or sex_cb.currentText()
             rec_obj['genotype']         = genotype_le.text().strip()
-            conventions = self._load_identity_conventions()
             old_record = self.animals.get(name, {}) if editing else {}
-            entered_id = id_le.text().strip()
-            entered_id_is_preview = (
-                entered_id == str(id_le.property("_auto_id_preview") or "")
-                and not bool(id_le.property("_manual_id_override"))
+            animal_id, generated_id_meta = self._id_for_animal_dialog(
+                id_le,
+                name=_orig_name,
+                species=selected_species,
+                birth_date=birth_date,
+                sex=str(rec_obj["sex"]),
+                origin=str(rec_obj["origin"]),
+                editing=editing,
+                old_record=old_record,
+                preview_property="_auto_id_preview",
             )
-            if not editing and (not entered_id or entered_id_is_preview):
-                generated_id, conventions = self._reserve_generated_animal_id(
-                    name=_orig_name,
-                    species=selected_species,
-                    birth_date=birth_date,
-                    sex=str(rec_obj["sex"]),
-                    origin=str(rec_obj["origin"]),
-                    existing_ids=(
-                        record.get("id", "") for record in self.animals.values()
-                    ),
-                )
-                rec_obj["id"] = generated_id
-                year_key = birth_date[-4:] if len(birth_date) >= 4 else ""
-                short_year = year_key[-2:]
-                rec_obj["generated_id_sequence"] = int(
-                    conventions.get("yearly_sequences", {}).get(short_year, 0))
-                rec_obj["generated_id_absolute_sequence"] = int(
-                    conventions.get("absolute_sequence", 0))
-            elif editing and old_record.get("generated_id_sequence"):
-                if entered_id and entered_id != str(old_record.get("id") or ""):
-                    rec_obj["id"] = entered_id
-                    rec_obj.pop("generated_id_sequence", None)
-                    rec_obj.pop("generated_id_absolute_sequence", None)
-                else:
-                    rec_obj["id"] = regenerated_id_for_edit(
-                        conventions, old_record, rec_obj)
+            rec_obj["id"] = animal_id
+            if generated_id_meta:
+                rec_obj.update(generated_id_meta)
             rec_obj['eizellspenderin'] = eizell_le.text().strip()
             rec_obj['samenspender']    = sperm_le.text().strip()
             rec_obj['ziehmutter']      = ziehmutter_le.text().strip()
@@ -21327,6 +21553,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception:
                     pass
             rec_obj['gewicht'] = weights_list
+            if infant_weight_le.text().strip():
+                try:
+                    infant_value = float(infant_weight_le.text().strip().replace(',', '.'))
+                except ValueError:
+                    self._show_message(
+                        "error.invalid_weight_values",
+                        self.messages.get("error.invalid_weight_values", "Invalid weight value."),
+                    )
+                    return
+                rec_obj['gewicht'].append({"datum": datetime.now(), "wert": infant_value})
             rec_obj['project'] = project_le.currentText().strip()
             rec_obj['severity'] = severity_cb.currentData()
             # events
@@ -21988,8 +22224,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             
             # Collect fields
             rec_obj = dict(self.animals.get(name, {})) if editing else {}
+            animal_id, generated_id_meta = self._id_for_animal_dialog(
+                id_le,
+                name=_orig_name,
+                species=selected_species,
+                birth_date=birth_date,
+                sex=str(sex_cb.currentData() or sex_cb.currentText()),
+                origin=origin,
+                editing=editing,
+                old_record=self.animals.get(name, {}) if editing else None,
+            )
             rec_obj['rolle'] = Role.ZUCHTTIER.value
-            rec_obj['id'] = id_le.text().strip()
+            rec_obj['id'] = animal_id
+            if generated_id_meta:
+                rec_obj.update(generated_id_meta)
             rec_obj['chip_nr'] = chip_le.text().strip()
             rec_obj['origin'] = origin_le.currentText().strip()
             rec_obj['project'] = project_le.currentText().strip()
@@ -22347,6 +22595,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         genotype_le = self._add_sex_genotype_row(
             form, sex_cb, species_cb, str(rec.get("genotype", ""))
         )
+        # Keep the identity row directly below Birth/Death before the
+        # collapsible Address section.  The shared helper resolves the nested
+        # sex/genotype wrapper as a form-row anchor.
+        self._move_form_row_after(form, _cage_addr_group, genotype_le)
 
         # ── Genotype ─────────────────────────────────────────────────────────
         # ── Ref. weight ──────────────────────────────────────────────────────
@@ -22410,6 +22662,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             form, parents_group, vt_parent_fields, default_mode="hide")
         # The parent row already follows the rows wrapped into Experimental
         # limits.  A second move of this spanning row can detach it.
+
+        infant_weight_le = None
+        if role_value == ROLE_VALUE_EXPERIMENTAL_OFFSPRING:
+            infant_weight_le = QLineEdit("")
+            infant_weight_le.setValidator(
+                QDoubleValidator(0.0, 100000.0, 3, infant_weight_le)
+            )
+            infant_weight_le.setPlaceholderText(self.messages.get(
+                "dialog.field.infant_weight.placeholder", "Weight (g)"
+            ))
+            form.addRow(
+                self.messages.get(
+                    "dialog.field.infant_weight", "Infant weight (g):"
+                ),
+                infant_weight_le,
+            )
 
         # ── Health status checkboxes ──────────────────────────────────────────
         _health_w_vt = QWidget()
@@ -22650,9 +22918,37 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception:
                     pass
 
+            if infant_weight_le is not None and infant_weight_le.text().strip():
+                try:
+                    infant_value = float(
+                        infant_weight_le.text().strip().replace(',', '.')
+                    )
+                except ValueError:
+                    self._show_message_raw(
+                        self.messages.get('error.title', 'Error'),
+                        self.messages.get(
+                            'error.invalid_weight_values',
+                            'Invalid weight value.',
+                        ),
+                    )
+                    return
+                weights_list.append({"datum": datetime.now(), "wert": infant_value})
+
             rec_obj = dict(self.animals.get(name, {})) if editing else {}
+            animal_id, generated_id_meta = self._id_for_animal_dialog(
+                id_le,
+                name=_orig_name,
+                species=selected_species,
+                birth_date=birth_date,
+                sex=str(sex_cb.currentData() or sex_cb.currentText()),
+                origin=origin,
+                editing=editing,
+                old_record=self.animals.get(name, {}) if editing else None,
+            )
             rec_obj['rolle']            = role_value
-            rec_obj['id']               = id_le.text().strip()
+            rec_obj['id']               = animal_id
+            if generated_id_meta:
+                rec_obj.update(generated_id_meta)
             rec_obj['chip_nr']          = chip_le.text().strip()
             rec_obj['origin']           = origin_le.currentText().strip()
             rec_obj['project']          = project_le.currentText().strip()
@@ -23007,6 +23303,138 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             form.addRow(self.messages.get("dialog.offspring.health_status", "Health Status:"), health_w)
 
         self._add_scrollable_animal_form(dlg, v, form)
+
+        # Dynamic Role Setup events use the same bounded history surface as
+        # the built-in role dialogs.  A retired definition is intentionally
+        # not offered for new entry, while existing retired records remain in
+        # ``events`` and are preserved on save.
+        custom_event_widgets = []
+        custom_event_tab = None
+        active_custom_events = self._active_custom_event_definitions_for_role(
+            role_value, mode=dialog_mode
+        )
+        if active_custom_events:
+            custom_event_tab = QWidget()
+            custom_event_layout = QVBoxLayout(custom_event_tab)
+            custom_event_layout.setContentsMargins(0, 0, 0, 0)
+            custom_event_frame = QFrame()
+            custom_event_rows_layout = QVBoxLayout(custom_event_frame)
+            custom_event_rows_layout.setContentsMargins(0, 0, 0, 0)
+            custom_event_rows_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+            custom_event_header = QHBoxLayout()
+            custom_event_header.addWidget(QLabel(self.messages.get(
+                "table.header.date", "Date"
+            )), 1)
+            custom_event_header.addWidget(QLabel(self.messages.get(
+                "table.header.event_type", "Event type"
+            )), 1)
+            custom_event_header.addWidget(QLabel(self.messages.get(
+                "table.header.delete", "Delete"
+            )), 0)
+            custom_event_rows_layout.addLayout(custom_event_header)
+            add_custom_event = QPushButton(self.messages.get(
+                "dialog.basic_role.button.new_event", "New event"
+            ))
+            custom_event_rows_layout.addWidget(add_custom_event)
+            custom_event_scroll = None
+
+            active_event_ids = {
+                str(value).strip()
+                for definition in active_custom_events
+                for value in (
+                    definition.get("id"), definition.get("stable_id"),
+                    definition.get("event_type"),
+                ) if str(value or "").strip()
+            }
+
+            def add_custom_event_row(data=None):
+                row = QHBoxLayout()
+                date_edit = QLineEdit(
+                    str(data.get("datum", "")) if isinstance(data, dict) else
+                    datetime.now().date().strftime(DATE_FORMAT)
+                )
+                if isinstance(data, dict) and isinstance(data.get("datum"), datetime):
+                    date_edit.setText(data["datum"].strftime(DATE_FORMAT))
+                date_edit.setPlaceholderText(self.messages.get(
+                    "form.placeholder.date", "DD.MM.YYYY"
+                ))
+                event_combo = QComboBox()
+                for definition in active_custom_events:
+                    event_type = str(definition.get("event_type") or "").strip()
+                    if not event_type:
+                        continue
+                    event_combo.addItem(
+                        str(definition.get("name") or definition.get("label") or event_type),
+                        event_type,
+                    )
+                if isinstance(data, dict):
+                    stored_type = str(data.get("typ") or "")
+                    idx = event_combo.findData(stored_type)
+                    if idx >= 0:
+                        event_combo.setCurrentIndex(idx)
+                delete_button = QPushButton("×")
+                delete_button.setFixedWidth(50)
+                row.addWidget(date_edit, 1)
+                row.addWidget(event_combo, 1)
+                row.addWidget(delete_button, 0)
+                custom_event_rows_layout.insertLayout(
+                    max(1, custom_event_rows_layout.indexOf(add_custom_event)), row
+                )
+                custom_event_widgets.append((date_edit, event_combo, row))
+                if custom_event_scroll is not None:
+                    QTimer.singleShot(
+                        0,
+                        lambda: self._cap_history_viewport(
+                            custom_event_scroll,
+                            custom_event_frame,
+                            len(custom_event_widgets),
+                        ),
+                    )
+                delete_button.clicked.connect(
+                    lambda: _remove_custom_event_row(date_edit, row)
+                )
+
+            def _remove_custom_event_row(date_edit, row):
+                for idx, item in enumerate(custom_event_widgets):
+                    if item[0] is date_edit:
+                        custom_event_widgets.pop(idx)
+                        break
+                while row.count():
+                    item = row.takeAt(0)
+                    widget = item.widget()
+                    if widget is not None:
+                        widget.deleteLater()
+                custom_event_rows_layout.removeItem(row)
+                if custom_event_scroll is not None:
+                    QTimer.singleShot(
+                        0,
+                        lambda: self._cap_history_viewport(
+                            custom_event_scroll,
+                            custom_event_frame,
+                            len(custom_event_widgets),
+                        ),
+                    )
+
+            add_custom_event.clicked.connect(lambda: add_custom_event_row())
+            for event in rec.get("events", []) or []:
+                if isinstance(event, dict) and str(event.get("typ") or "") in active_event_ids:
+                    add_custom_event_row(event)
+            custom_event_scroll = QScrollArea()
+            custom_event_scroll.setWidgetResizable(True)
+            custom_event_scroll.setWidget(custom_event_frame)
+            self._cap_history_viewport(
+                custom_event_scroll, custom_event_frame, len(custom_event_widgets)
+            )
+            custom_event_layout.addWidget(custom_event_scroll, 1)
+            custom_tabs = QTabWidget()
+            custom_tabs.addTab(
+                custom_event_tab,
+                self.messages.get("dialog.tab.events", "Events"),
+            )
+            v.addWidget(custom_tabs, 0)
+        else:
+            custom_tabs = None
+
         save_btn = QPushButton(self.messages.get("button.save", "Save"))
         save_btn.setEnabled(not read_only and (
             self._master_can('core.create_animals') if creating else self._master_can('core.edit_animal_core')
@@ -23075,9 +23503,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 ref_weight = rec.get("ref_weight", DEFAULT_REF_WEIGHT)
 
             rec_obj = dict(rec)
+            animal_id, generated_id_meta = self._id_for_animal_dialog(
+                id_le,
+                name=base_name,
+                species=selected_species,
+                birth_date=birth_date,
+                sex=str(sex_cb.currentData() or sex_cb.currentText()),
+                origin=origin,
+                editing=not creating,
+                old_record=rec if not creating else None,
+            )
             rec_obj.update({
                 "rolle": role_value,
-                "id": id_le.text().strip(),
+                "id": animal_id,
                 "chip_nr": chip_le.text().strip(),
                 "origin": origin_le.currentText().strip(),
                 "project": project_cb.currentText().strip() if project_cb is not None else current_project,
@@ -23100,6 +23538,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 "_base_name": base_name,
                 "display_name": base_name,
             })
+            if generated_id_meta:
+                rec_obj.update(generated_id_meta)
             if not self._capture_death_lifecycle(rec_obj, rec):
                 return
             old_in_experiment = bool(rec.get("in_experiment", False))
@@ -23128,6 +23568,42 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if definition_field == limit_field and block_id:
                         existing_experimental_limits[block_id] = int(widget.value())
             rec_obj["experimental_limits"] = existing_experimental_limits
+            if custom_event_widgets:
+                retained_events = [
+                    event for event in rec_obj.get("events", []) or []
+                    if not isinstance(event, dict)
+                    or str(event.get("typ") or "") not in active_event_ids
+                ]
+                for date_edit, event_combo, _row in custom_event_widgets:
+                    try:
+                        event_date = datetime.strptime(
+                            date_edit.text().strip(), DATE_FORMAT
+                        )
+                    except ValueError:
+                        self._show_message_raw(
+                            self.messages.get("error.title", "Error"),
+                            self.messages.get(
+                                "error.invalid_date", "Invalid date: {date}"
+                            ).format(date=date_edit.text().strip()),
+                        )
+                        return
+                    event_type = str(event_combo.currentData() or "").strip()
+                    if not event_type:
+                        continue
+                    entry = {"datum": event_date, "typ": event_type}
+                    entry["custom_event_snapshot"] = self._custom_event_snapshot(event_type)
+                    retained_events.append(entry)
+                rec_obj["events"] = retained_events
+                violations = self._custom_event_limit_additions_allowed(rec, rec_obj)
+                if violations:
+                    self._show_message_raw(
+                        self.messages.get("error.title", "Error"),
+                        self.messages.get(
+                            "error.custom_event_limit",
+                            "Experimental event limit exceeded: {details}",
+                        ).format(details="; ".join(violations)),
+                    )
+                    return
             for field_name, widget in parent_fields.items():
                 rec_obj[field_name] = widget.text().strip()
 
@@ -23186,7 +23662,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 birth_date_le, death_date_le, special_status_le, sex_cb, genotype_le,
             ],
             'core.edit_animal_housing': [_cage_addr_group, parents_group],
-            'core.edit_animal_measurements': [new_weight_le],
+            'core.edit_animal_measurements': [new_weight_le, custom_event_tab],
             'core.edit_animal_research_data': [ref_w_le, *custom_limit_widgets.values()],
         })
         dlg.exec()
@@ -23768,10 +24244,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec['rolle'] = role_code
                 rec['sex'] = 'Female'
                 rec['genotype'] = genotype_le.text().strip()
-                id_text = id_le.text().strip()
                 project_text = project_le.currentText().strip()
-                logging.info(f"Saving animal: id='{id_text}', project='{project_text}'")
-                rec['id'] = id_text
+                animal_id, generated_id_meta = self._id_for_animal_dialog(
+                    id_le,
+                    name=_orig_name,
+                    species=selected_species,
+                    birth_date=birth_date,
+                    sex="Female",
+                    origin=origin,
+                    editing=not creating,
+                    old_record=rec if not creating else None,
+                )
+                logging.info(f"Saving animal: id='{animal_id}', project='{project_text}'")
+                rec['id'] = animal_id
+                if generated_id_meta:
+                    rec.update(generated_id_meta)
                 rec['chip_nr'] = chip_le.text().strip()
                 rec['origin'] = origin_le.currentText().strip()
                 rec['project'] = project_text

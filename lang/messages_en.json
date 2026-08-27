@@ -1823,6 +1823,8 @@
   "settings.role_setup.preset.partner": "Partner animal",
   "settings.role_setup.preset.breeding": "Breeding animal",
   "settings.role_setup.preset.experimental": "Experimental animal",
+  "settings.role_setup.block.project_severity.name": "Project membership",
+  "settings.role_setup.block.project_severity.description": "Project membership and association controls.",
   "settings.role_setup.block.computed_values.name": "Unified Progesterone (calculated)",
   "settings.role_setup.block.computed_values.description": "Shows Unified Progesterone: blood-equivalent values calculated from urine PdG.",
   "settings.role_setup.preset.custom": "Custom",
@@ -2071,5 +2073,7 @@
   "dialog.sperm_donor.checkbox.abnormal": "Abnormal",
   "heritage_track.compare.tab.coefficient_f": "Inbreeding coefficient F",
   "heritage_track.node.coefficient_f_approx": "F: ~{value}",
-  "heritage_track.node.coefficient_f_exact": "F: {value}"
+  "heritage_track.node.coefficient_f_exact": "F: {value}",
+  "dialog.field.infant_weight": "Infant weight (g):",
+  "dialog.field.infant_weight.placeholder": "Weight (g)"
 }

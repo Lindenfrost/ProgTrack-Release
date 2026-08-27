@@ -197,6 +197,12 @@ class BackendConfigurationDialog(QDialog):
         # profile-independent floor before measuring the current page so a
         # SQLite -> PostgreSQL -> SQLite switch can really compact again.
         self.setMinimumHeight(300)
+        # QStackedWidget can retain the previous (PostgreSQL) page's cached
+        # size hint for one event-loop turn.  Clear that cache before taking a
+        # profile-specific measurement; otherwise switching back to SQLite
+        # leaves the dialog with a large empty lower half on native Qt styles.
+        self.pages.setMinimumHeight(0)
+        self.pages.setMaximumHeight(16777215)
         self.pages.updateGeometry()
         current = self.pages.currentWidget()
         if current is not None:
@@ -204,7 +210,26 @@ class BackendConfigurationDialog(QDialog):
         self.layout().invalidate()
         self.layout().activate()
         self.adjustSize()
-        content_height = self.layout().sizeHint().height()
+        # Measure the visible page explicitly.  The top-level layout's cached
+        # sizeHint may still include hidden controls from the other profile;
+        # summing its visible items avoids inheriting that stale height while
+        # retaining the intro, override and button rows.
+        root_layout = self.layout()
+        margins = root_layout.contentsMargins()
+        content_height = margins.top() + margins.bottom()
+        item_count = root_layout.count()
+        for index in range(item_count):
+            item = root_layout.itemAt(index)
+            if item is None:
+                continue
+            widget = item.widget()
+            if widget is self.pages and current is not None:
+                item_height = current.sizeHint().height()
+            else:
+                item_height = item.sizeHint().height()
+            content_height += max(0, int(item_height))
+            if index < item_count - 1:
+                content_height += max(0, int(root_layout.spacing()))
         self.resize(target_width, max(self.minimumHeight(), content_height))
 
     def _build_postgres_page(self) -> None:

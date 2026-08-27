@@ -978,6 +978,15 @@ class ProjectTrackTab(QWidget):
         self._right_v.addWidget(sec_d)
 
         # ── Single Save button at bottom ──────────────────────────────────
+        # Successful saves are reported inline so the form stays usable and
+        # no launcher-style modal obscures the fields.  Validation, backend,
+        # permission, and revision failures above remain explicit warnings.
+        self._save_status_label = QLabel()
+        self._save_status_label.setObjectName("projectSaveStatus")
+        self._save_status_label.setWordWrap(True)
+        self._save_status_label.setStyleSheet("color: #1b6e34; padding: 2px 4px;")
+        self._save_status_label.setVisible(False)
+        self._right_v.addWidget(self._save_status_label)
         save_w = QWidget(); save_h = QHBoxLayout(save_w); save_h.setContentsMargins(0, 8, 0, 8)
         save_btn = QPushButton(_m(self._messages, "project.btn.save", "Save"))
         save_btn.setEnabled(can_manage); save_btn.clicked.connect(lambda: self._save_detail(name))
@@ -1465,11 +1474,12 @@ class ProjectTrackTab(QWidget):
             )
         self._refresh_animals_section(name)
         self._refresh_project_list()
-        QMessageBox.information(
-            self,
-            "",
-            _m(self._messages, "project.info.saved", "Project changes saved!"),
-        )
+        status_label = getattr(self, "_save_status_label", None)
+        if status_label is not None:
+            status_label.setText(
+                _m(self._messages, "project.info.saved", "Project changes saved!")
+            )
+            status_label.setVisible(True)
 
     def select_project(self, name):
         for i in range(self._list.count()):

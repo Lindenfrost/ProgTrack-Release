@@ -1829,6 +1829,8 @@
   "settings.role_setup.preset.partner": "???????",
   "settings.role_setup.preset.breeding": "????????? ????????",
   "settings.role_setup.preset.experimental": "????????????????? ????????",
+  "settings.role_setup.block.project_severity.name": "Prinadlezhnost k proektu",
+  "settings.role_setup.block.project_severity.description": "Upravlyaet privyazkoj zhivotnogo k proektam i uchastiem v nih.",
   "settings.role_setup.block.computed_values.name": "Edinyj progesteron (raschetnyj)",
   "settings.role_setup.block.computed_values.description": "Pokazyvaet Unified progesteron: ekvivalenty krovi, rasschitannye po PdG iz mochi.",
   "settings.role_setup.preset.custom": "????????????????",
@@ -2071,5 +2073,7 @@
   "lifecycle.handover.title": "Передача",
   "project.species_mismatch": "Вид животного не совпадает с выбранным проектом. Назначение не сохранено.",
   "settings.identity.id_pattern": "Шаблон ID животного:",
-  "lifecycle.departure.title": "Архивировать живое животное"
+  "lifecycle.departure.title": "Архивировать живое животное",
+  "dialog.field.infant_weight": "Ves detenysha (g):",
+  "dialog.field.infant_weight.placeholder": "Ves (g)"
 }

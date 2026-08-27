@@ -1525,7 +1525,10 @@ class MediTrackWidget(QWidget):
 
     def _can_export(self) -> bool:
         fn = getattr(self.app, '_master_can', None)
-        return bool(fn('medi_track.view')) if callable(fn) else True
+        # Viewing Medi Track and exporting its medical record are separate
+        # capabilities.  Keep the export gate in the plugin so both the tab
+        # toolbar and the File-menu path enforce the same job-bundle policy.
+        return bool(fn('medi_track.export')) if callable(fn) else True
 
     def _can_upload(self) -> bool:
         fn = getattr(self.app, '_master_can', None)

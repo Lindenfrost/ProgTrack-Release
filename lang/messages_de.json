@@ -1821,6 +1821,8 @@
   "settings.role_setup.preset.partner": "Partnertier",
   "settings.role_setup.preset.breeding": "Zuchttier",
   "settings.role_setup.preset.experimental": "Versuchstier",
+  "settings.role_setup.block.project_severity.name": "Projektzugehörigkeit",
+  "settings.role_setup.block.project_severity.description": "Steuert die Zuordnung und Teilnahme eines Tieres zu Projekten.",
   "settings.role_setup.block.computed_values.name": "Einheitliches Progesteron (berechnet)",
   "settings.role_setup.block.computed_values.description": "Zeigt Unified Progesteron: aus Urin-PdG berechnete Blutwert-Äquivalente.",
   "settings.role_setup.preset.custom": "Benutzerdefiniert",
@@ -2071,5 +2073,7 @@
   "projects.sidebar.toggle.projects": "Projekte",
   "dialog.field.severity": "Schweregrad:",
   "heritage_track.node.coefficient_f_exact": "F: {value}",
-  "severity.0": "SV0 – kein Schweregrad"
+  "severity.0": "SV0 – kein Schweregrad",
+  "dialog.field.infant_weight": "Jungtiergewicht (g):",
+  "dialog.field.infant_weight.placeholder": "Gewicht (g)"
 }
