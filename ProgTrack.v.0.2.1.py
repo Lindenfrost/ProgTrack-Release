@@ -22598,7 +22598,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Keep the identity row directly below Birth/Death before the
         # collapsible Address section.  The shared helper resolves the nested
         # sex/genotype wrapper as a form-row anchor.
-        self._move_form_row_after(form, _cage_addr_group, genotype_le)
 
         # ── Genotype ─────────────────────────────────────────────────────────
         # ── Ref. weight ──────────────────────────────────────────────────────
@@ -22621,6 +22620,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         form.addRow(
             self.messages.get('dialog.versuchstier.field.max_measurements', 'Max Measurements:'),
             max_meas_sb)
+
+        # Place the identity row before Address first.  Limits are wrapped
+        # afterwards so their section is inserted after the final Address row;
+        # wrapping before this move used to leave Experimental limits above
+        # Sex/Genotype in the experimental-offspring dialog.
+        self._move_form_row_after(form, _cage_addr_group, genotype_le)
 
         # ── Parents (collapsible, natural/embryo toggle) ──────────────────────
         parents_group = QGroupBox(self.messages.get('dialog.offspring.parents', 'Parents'))
