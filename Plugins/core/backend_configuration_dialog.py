@@ -41,6 +41,24 @@ from .backend_configuration import (
 from .runtime_paths import BackendProfile
 
 
+class _ProfileStackedWidget(QStackedWidget):
+    """Stacked pages whose geometry follows only the selected profile."""
+
+    def _current_hint(self) -> QSize:
+        current = self.currentWidget()
+        if current is None:
+            return QSize(0, 0)
+        hint = current.sizeHint()
+        frame = self.frameWidth() * 2
+        return QSize(hint.width() + frame, hint.height() + frame)
+
+    def sizeHint(self) -> QSize:
+        return self._current_hint()
+
+    def minimumSizeHint(self) -> QSize:
+        return self._current_hint()
+
+
 class BackendConfigurationDialog(QDialog):
     def __init__(
         self,
@@ -98,7 +116,7 @@ class BackendConfigurationDialog(QDialog):
         choice_row.addStretch(1)
         root.addLayout(choice_row)
 
-        self.pages = QStackedWidget(self)
+        self.pages = _ProfileStackedWidget(self)
         root.addWidget(self.pages)
         self._build_sqlite_page()
         self._build_postgres_page()
@@ -107,16 +125,6 @@ class BackendConfigurationDialog(QDialog):
         self.override_label = QLabel()
         self.override_label.setWordWrap(True)
         root.addWidget(self.override_label)
-
-        note = QLabel(
-            self._text(
-                "backend.dialog.transfer_note",
-                "Backend transfer is a separate canonical export/import workflow. "
-                "Saved changes become active only after restart.",
-            )
-        )
-        note.setWordWrap(True)
-        root.addWidget(note)
 
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save
@@ -184,8 +192,20 @@ class BackendConfigurationDialog(QDialog):
 
     def _resize_for_profile(self) -> None:
         target_width = 560 if self.sqlite_radio.isChecked() else 760
+        # The shared geometry guard may have raised the dialog's minimum
+        # height for the previously visible PostgreSQL page.  Reset that
+        # profile-independent floor before measuring the current page so a
+        # SQLite -> PostgreSQL -> SQLite switch can really compact again.
+        self.setMinimumHeight(300)
+        self.pages.updateGeometry()
+        current = self.pages.currentWidget()
+        if current is not None:
+            current.adjustSize()
+        self.layout().invalidate()
+        self.layout().activate()
         self.adjustSize()
-        self.resize(target_width, self.sizeHint().height())
+        content_height = self.layout().sizeHint().height()
+        self.resize(target_width, max(self.minimumHeight(), content_height))
 
     def _build_postgres_page(self) -> None:
         page = QWidget(self)
@@ -803,6 +823,8 @@ class BackendConfigurationDialog(QDialog):
         )
 
     def _save(self) -> None:
+        sqlite_target: Path | None = None
+        sqlite_is_new = False
         try:
             pg = self.postgresql_settings()
             profile = (
@@ -816,6 +838,11 @@ class BackendConfigurationDialog(QDialog):
                     password=self._password(),
                     authorized=self.authorized,
                 )
+            else:
+                sqlite_target = self.service.validate_sqlite_location(
+                    self.sqlite_folder.text(), self.sqlite_filename.text()
+                )
+                sqlite_is_new = not sqlite_target.exists()
             document = self.service.save(
                 profile=profile,
                 sqlite_filename=self.sqlite_filename.text(),
@@ -843,13 +870,19 @@ class BackendConfigurationDialog(QDialog):
                 str(exc),
             )
             return
+        message_key = (
+            "backend.save.sqlite_created"
+            if profile is BackendProfile.STANDALONE_SQLITE and sqlite_is_new
+            else "backend.save.success"
+        )
+        fallback = (
+            "A new empty database has been created. Restart ProgTrack to activate it."
+            if message_key.endswith("sqlite_created")
+            else "The backend profile was saved. Restart ProgTrack to activate it."
+        )
         QMessageBox.information(
             self,
             self._text("backend.save.success.title", "Backend saved"),
-            self._text(
-                "backend.save.success",
-                "The profile was saved. Restart ProgTrack to activate it. "
-                "No data were transferred.",
-            ),
+            self._text(message_key, fallback),
         )
         self.accept()

@@ -40,6 +40,11 @@ from Plugins.core.animal_roles import (
     canonical_role_value,
     normalize_role_definition,
 )
+from Plugins.core.experimental_limits import (
+    KNOWN_LIMIT_FIELDS,
+    default_experimental_limits,
+    synchronize_experimental_limits,
+)
 from Plugins.core.identity_conventions import render_animal_id
 from Plugins.core.backend.facade import ProgTrackBackend
 from Plugins.core.runtime_paths import resolve_runtime_paths
@@ -355,7 +360,9 @@ def complete_record(record: dict[str, Any], *, name: str, species: str,
         "birth_date": birth,
         "origin": origin,
     })
-    result.setdefault("rolle", "breeding_animal")
+    result["rolle"] = canonical_role_value(
+        result.get("rolle") or "breeding_animal", default="unknown"
+    )
     result.setdefault("sex", "Unknown")
     # Convert archived authoring aliases to the single backend event stream.
     # This is seed-build normalization only; runtime never reads these aliases.
@@ -400,6 +407,21 @@ def complete_record(record: dict[str, Any], *, name: str, species: str,
     result.setdefault("abnormal_current", False)
     if not result.get("gewicht"):
         result["gewicht"] = dated_weights(birth, species, result["sex"])
+    # Example records are canonicalized in one place.  Use the final measured
+    # weight as a more useful species/sex-specific reference where no explicit
+    # value was authored, then derive all exposed max_* projections from the
+    # role defaults.  Unsupported legacy fields are removed from the seed.
+    if not result.get("ref_weight") and result.get("gewicht"):
+        last_weight = result["gewicht"][-1]
+        if isinstance(last_weight, dict) and last_weight.get("wert") is not None:
+            result["ref_weight"] = last_weight.get("wert")
+    synchronize_experimental_limits(
+        result,
+        result.get("rolle", "unknown"),
+        prefer_flat=True,
+        prune_unsupported=True,
+        replace_nonpositive=True,
+    )
     return result
 
 
@@ -457,22 +479,39 @@ def normalize_core() -> tuple[dict[str, Any], dict[str, str]]:
     return output, key_map
 
 
-def rewrite_references(value: Any, key_map: dict[str, str]) -> Any:
+def rewrite_references(
+    value: Any,
+    key_map: dict[str, str],
+    _compiled_pattern: re.Pattern[str] | None = None,
+) -> Any:
+    """Rewrite legacy references in one pass without replacement cascades.
+
+    Sequentially applying every mapping can repeatedly extend an identity
+    when a legacy IPID is a prefix of its new four-part IPID (for example an
+    origin suffix).  A longest-first alternation replaces each token exactly
+    once, keeping seed generation bounded and preserving unrelated text.
+    """
+    if _compiled_pattern is None:
+        alternatives = [
+            re.escape(old)
+            for old, new in sorted(key_map.items(), key=lambda item: len(item[0]), reverse=True)
+            if old and old != new
+        ]
+        _compiled_pattern = (
+            re.compile(r"(?<![A-Za-z0-9])(?:" + "|".join(alternatives) + r")(?![A-Za-z0-9])")
+            if alternatives
+            else re.compile(r"(?!x)x")
+        )
+
     if isinstance(value, str):
-        text = value
-        for old, new in sorted(key_map.items(), key=lambda item: len(item[0]), reverse=True):
-            if not old or old == new:
-                continue
-            # Do not apply a second pass when an old public ID is a prefix of
-            # the normalized ID (e.g. ``..._Honor`` in ``..._Honore``).
-            pattern = r"(?<![A-Za-z0-9])" + re.escape(old) + r"(?![A-Za-z0-9])"
-            text = re.sub(pattern, new, text)
-        return text
+        return _compiled_pattern.sub(
+            lambda match: key_map.get(match.group(0), match.group(0)), value
+        )
     if isinstance(value, list):
-        return [rewrite_references(item, key_map) for item in value]
+        return [rewrite_references(item, key_map, _compiled_pattern) for item in value]
     if isinstance(value, dict):
         return {
-            key_map.get(str(key), str(key)): rewrite_references(item, key_map)
+            key_map.get(str(key), str(key)): rewrite_references(item, key_map, _compiled_pattern)
             for key, item in value.items()
         }
     return value
@@ -1850,6 +1889,32 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         for field in ("name", "species", "birth_date", "origin", "id", "rolle", "sex"):
             if not str(record.get(field, "")).strip():
                 errors.append(f"missing {field}: {ipid}")
+        role_value = canonical_role_value(record.get("rolle"), default="unknown")
+        expected_limits = default_experimental_limits(role_value)
+        actual_limits = record.get("experimental_limits")
+        if not isinstance(actual_limits, dict):
+            errors.append(f"experimental limits are not a map: {ipid}")
+            actual_limits = {}
+        for limit_key in expected_limits:
+            value = actual_limits.get(limit_key)
+            if value is None:
+                errors.append(f"missing experimental limit: {ipid}.{limit_key}")
+                continue
+            try:
+                if float(value) < 0:
+                    errors.append(f"negative experimental limit: {ipid}.{limit_key}")
+            except (TypeError, ValueError):
+                errors.append(f"invalid experimental limit: {ipid}.{limit_key}")
+            if record.get(limit_key) != value:
+                errors.append(f"experimental limit projection mismatch: {ipid}.{limit_key}")
+        unsupported_flat = sorted(
+            field for field in KNOWN_LIMIT_FIELDS
+            if field not in expected_limits and field in record
+        )
+        if unsupported_flat:
+            errors.append(
+                f"unsupported experimental limit fields for {ipid}: {unsupported_flat}"
+            )
         for ref_field in (
             "eizellspenderin", "samenspender", "ziehmutter", "ziehvater",
             "partner_von", "verpaart_mit",
@@ -2134,6 +2199,25 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
     if otof.get("Legolas", {}).get("rolle") != "experimental_offspring":
         errors.append("OTOF example cohort role mismatch: Legolas")
 
+    role_configuration = records.get(("configuration", "animal-roles"), {})
+    configured_roles = role_configuration.get("roles", []) if isinstance(role_configuration, dict) else []
+    configured_by_value = {
+        canonical_role_value(role.get("value"), default="") : role
+        for role in configured_roles
+        if isinstance(role, dict) and canonical_role_value(role.get("value"), default="")
+    }
+    for role_value in sorted({canonical_role_value(record.get("rolle"), default="unknown") for record in all_animals.values()}):
+        expected = default_experimental_limits(role_value)
+        configured = configured_by_value.get(role_value)
+        if configured is None:
+            errors.append(f"missing Role Setup definition: {role_value}")
+            continue
+        actual = configured.get("experimental_limit_defaults")
+        if actual != expected:
+            errors.append(
+                f"Role Setup limit defaults mismatch: {role_value} -> {actual!r}"
+            )
+
     mice = {
         ipid: record for ipid, record in all_animals.items()
         if str(record.get("species") or "") == "Mus musculus"
@@ -2234,6 +2318,22 @@ def main() -> int:
     _normalise_seed_project_assignments(core)
     _apply_otof_example_experiment_status(core)
     _normalise_seed_partner_relationships(core)
+    # Role rewrites (for example mature offspring promoted to breeding
+    # animals, or Legolas becoming experimental offspring) happen after the
+    # authoring records were normalized.  Reapply defaults once at the end so
+    # every final role has the correct map and no stale flat fields.
+    for record in [
+        *core.get("animals", {}).values(),
+        *core.get("archived_animals", {}).values(),
+    ]:
+        if isinstance(record, dict):
+            synchronize_experimental_limits(
+                record,
+                canonical_role_value(record.get("rolle"), default="unknown"),
+                prefer_flat=True,
+                prune_unsupported=True,
+                replace_nonpositive=True,
+            )
     complete_scientific_histories(core)
     records = domain_records(core, key_map, scenario)
     result = validate(core, records, scenario)

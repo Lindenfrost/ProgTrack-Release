@@ -6,6 +6,10 @@ import re
 from copy import deepcopy
 from typing import Any, Dict, Iterable, List, Optional
 
+from .experimental_limits import (
+    normalize_experimental_limit_defaults,
+)
+
 
 SCHEMA_VERSION = 2
 
@@ -764,6 +768,9 @@ def normalize_role_definition(raw: Dict[str, Any], *, default_order: int = 1000)
         "built_in": built_in,
         "base_editor": base_editor,
         "field_preset": field_preset,
+        "experimental_limit_defaults": normalize_experimental_limit_defaults(
+            raw.get("experimental_limit_defaults"), normalized_value
+        ),
         "dialog_blocks": normalized_blocks,
         "custom_preset_names": raw.get("custom_preset_names") if isinstance(raw.get("custom_preset_names"), dict) else {},
         "event_recipe": normalized_event_recipe,
@@ -1077,6 +1084,10 @@ class AnimalRoleRegistry:
                         "order": normalized.get("order", default_normalized["order"]),
                         "active": normalized.get("active", default_normalized["active"]),
                         "dialog_blocks": normalized.get("dialog_blocks", default_normalized["dialog_blocks"]),
+                        "experimental_limit_defaults": normalized.get(
+                            "experimental_limit_defaults",
+                            default_normalized.get("experimental_limit_defaults", {}),
+                        ),
                         "custom_preset_names": normalized.get("custom_preset_names", default_normalized.get("custom_preset_names", {})),
                         "event_recipe": normalized.get("event_recipe", default_normalized["event_recipe"]),
                         "eligibility": normalized.get("eligibility", default_normalized.get("eligibility", {})),

@@ -128,6 +128,10 @@ from Plugins.core.animal_roles import (
     role_color_for_record,
     validate_role_colors,
 )
+from Plugins.core.experimental_limits import (
+    default_experimental_limits,
+    synchronize_experimental_limits,
+)
 from Plugins.core.role_block_presets import (
     RoleBlockPresetRegistry,
     normalized_preset_name,
@@ -6034,8 +6038,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ------------------------
         for rec in list(self.animals.values()) + list(self.archived.values()):
             rec.setdefault('gewicht', [])
-            rec.setdefault('ref_weight', 450)
-            rec.setdefault('max_geburten', DEFAULT_MAX_GEBURTEN)  # neu
+            synchronize_experimental_limits(
+                rec,
+                self._animal_role_value(rec, default=Role.UNKNOWN.value),
+            )
         QTimer.singleShot(0, self._plot_selected)
         if getattr(self, 'has_master_track', False):
             QTimer.singleShot(0, self._apply_startup_master_state)
@@ -6106,10 +6112,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 "origin": "",
                 "special_status": "",
                 "in_experiment": False,
+                "experimental_limits": {},
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat()
             }
-            
+        synchronize_experimental_limits(
+            self.animals[name],
+            self._animal_role_value(self.animals[name], default=Role.UNKNOWN.value),
+        )
         return self.animals[name]
 
     @staticmethod
@@ -10832,7 +10842,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if isinstance(value, (int, float)):
                 value = round(float(value), 2)
             probe = measurement.get('probennummer', '')
-            max_samples = animal_data.get('max_messungen', '?')
+            max_samples = self._experimental_limit_value(animal_data, 'max_messungen', '?')
             # Include blood sample count
             blood_sample_label = messages.get('daily.blood_sample', 'Blood Sample')
             sample_info = f" [{blood_sample_label}: {prog_up_to_date}/{max_samples}]"
@@ -11868,25 +11878,45 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return str(custom.get("name") or custom.get("label") or custom.get("event_type") or typ_lower)
         return labels.get(typ_lower, typ_lower)
 
+    @staticmethod
+    def _experimental_limit_value(
+        animal_data: Dict[str, Any], key: str, default: Any = None
+    ) -> Any:
+        """Read one limit from the canonical map with a flat-field fallback.
+
+        The fallback keeps hand-built records and old in-memory test fixtures
+        readable; persisted records are synchronized on load and dialog save,
+        so the map remains the authoritative value in normal operation.
+        """
+        if not isinstance(animal_data, dict):
+            return default
+        limits = animal_data.get("experimental_limits")
+        if isinstance(limits, dict) and key in limits:
+            return limits.get(key)
+        if key in animal_data and animal_data.get(key) is not None:
+            return animal_data.get(key)
+        role = canonical_role_value(animal_data.get("rolle"), default=Role.UNKNOWN.value)
+        return default_experimental_limits(role).get(key, default)
+
     def _get_report_event_max(self, typ_lower: str, animal_data: Dict[str, Any]):
         if typ_lower == 'fsh':
-            return animal_data.get('max_fsh', '?')
+            return self._experimental_limit_value(animal_data, 'max_fsh', '?')
         if typ_lower == 'surgery':
-            return animal_data.get('max_op', '?')
+            return self._experimental_limit_value(animal_data, 'max_op', '?')
         if typ_lower == 'measurement':
-            return animal_data.get('max_measurements', '?')
+            return self._experimental_limit_value(animal_data, 'max_measurements', '?')
         if typ_lower == 'embryo_transfer':
-            return animal_data.get('max_embryo', '?')
+            return self._experimental_limit_value(animal_data, 'max_embryo', '?')
         if typ_lower == 'pregnancy':
-            return animal_data.get('max_pregnancies', '?')
+            return self._experimental_limit_value(animal_data, 'max_pregnancies', '?')
         if typ_lower == 'birth':
-            return animal_data.get('max_geburten', '?')
+            return self._experimental_limit_value(animal_data, 'max_geburten', '?')
         if typ_lower == 'pgf':
-            return animal_data.get('max_pgf', '?')
+            return self._experimental_limit_value(animal_data, 'max_pgf', '?')
         if typ_lower == 'special_measurement':
-            return animal_data.get('max_special', '?')
+            return self._experimental_limit_value(animal_data, 'max_special', '?')
         if typ_lower == 'progesterone':
-            return animal_data.get('max_messungen', '?')
+            return self._experimental_limit_value(animal_data, 'max_messungen', '?')
         custom = self._custom_event_definition_for_type(typ_lower)
         if custom and str(custom.get("kind") or "limiting") == "limiting":
             block_id = str(custom.get("block_id") or custom.get("limit_block") or "")
@@ -12014,7 +12044,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Sperm donor: show sperm samples
             sperm_count = len(set(s['datum'].date() for s in animal_data.get('sperm', []) 
                                 if isinstance(s.get('datum'), datetime)))
-            max_sperm = animal_data.get('max_spermaproben') if animal_data.get('max_spermaproben') is not None else DEFAULT_MAX_SPERM_SAMPLES
+            max_sperm = self._experimental_limit_value(
+                animal_data, 'max_spermaproben', DEFAULT_MAX_SPERM_SAMPLES
+            )
             label_sperm = self.messages.get('stats.sperm', 'Sperm')
             stats.append(f"{label_sperm}: {sperm_count}/{max_sperm}")
         
@@ -12023,8 +12055,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             events = animal_data.get('events', [])
             sonder_count = sum(1 for ev in events if ev.get('typ') == 'special_measurement')
             op_count = sum(1 for ev in events if ev.get('typ') == 'surgery')
-            max_special = animal_data.get('max_special', 0)
-            max_op = animal_data.get('max_op', 0)
+            max_special = self._experimental_limit_value(animal_data, 'max_special', 0)
+            max_op = self._experimental_limit_value(animal_data, 'max_op', 0)
             if max_special > 0:
                 label_special = self.messages.get('stats.special', 'Special')
                 stats.append(f"{label_special}: {sonder_count}/{max_special}")
@@ -12037,8 +12069,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             events = animal_data.get('events', [])
             op_count   = sum(1 for ev in events if ev.get('typ') == 'surgery')
             meas_count = sum(1 for ev in events if ev.get('typ') == 'measurement')
-            max_op   = animal_data.get('max_op', 0)
-            max_meas = animal_data.get('max_measurements', 0)
+            max_op   = self._experimental_limit_value(animal_data, 'max_op', 0)
+            max_meas = self._experimental_limit_value(animal_data, 'max_measurements', 0)
             label_op   = self.messages.get('stats.surgery',     'Surgery')
             label_meas = self.messages.get('stats.measurement', 'Measurement')
             if max_op > 0:
@@ -12054,10 +12086,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             op_count = len(event_dates(animal_data, 'surgery'))
             fsh_count = sum(1 for ev in animal_data.get('events', []) if ev.get('typ') == 'fsh')
             
-            max_messungen = animal_data.get('max_messungen', 0)
-            max_pgf = animal_data.get('max_pgf', 0)
-            max_op = animal_data.get('max_op', 0)
-            max_fsh = animal_data.get('max_fsh', 0)
+            max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
+            max_pgf = self._experimental_limit_value(animal_data, 'max_pgf', 0)
+            max_op = self._experimental_limit_value(animal_data, 'max_op', 0)
+            max_fsh = self._experimental_limit_value(animal_data, 'max_fsh', 0)
 
             label_blood   = self.messages.get('stats.blood_samples', 'Blood Samples')
             label_pgf     = self.messages.get('stats.pgf', 'PGF')
@@ -12085,11 +12117,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             birth_count = sum(1 for ev in animal_data.get('events', []) 
                             if ev.get('typ') == 'birth')
             
-            max_messungen = animal_data.get('max_messungen', 0)
-            max_pgf = animal_data.get('max_pgf', 0)
-            max_embryo = animal_data.get('max_embryo', 0)
-            max_pregnancies = animal_data.get('max_pregnancies', 0)
-            max_geburten = animal_data.get('max_geburten', 0)
+            max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
+            max_pgf = self._experimental_limit_value(animal_data, 'max_pgf', 0)
+            max_embryo = self._experimental_limit_value(animal_data, 'max_embryo', 0)
+            max_pregnancies = self._experimental_limit_value(animal_data, 'max_pregnancies', 0)
+            max_geburten = self._experimental_limit_value(animal_data, 'max_geburten', 0)
 
             label_blood     = self.messages.get('stats.blood_samples', 'Blood Samples')
             label_pgf       = self.messages.get('stats.pgf', 'PGF')
@@ -12114,8 +12146,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             pregnancy_count = sum(1 for ev in events if ev.get('typ') == 'pregnancy')
             birth_count = sum(1 for ev in events if ev.get('typ') == 'birth')
             
-            max_pregnancies = animal_data.get('max_pregnancies', 0)
-            max_geburten = animal_data.get('max_geburten', 0)
+            max_pregnancies = self._experimental_limit_value(animal_data, 'max_pregnancies', 0)
+            max_geburten = self._experimental_limit_value(animal_data, 'max_geburten', 0)
 
             label_pregnancy = self.messages.get('stats.pregnancy', 'Pregnancy')
             label_birth     = self.messages.get('stats.birth', 'Birth')
@@ -12137,7 +12169,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Sperm donor: show sperm samples
             sperm_count = len(set(s['datum'].date() for s in animal_data.get('sperm', []) 
                                 if isinstance(s.get('datum'), datetime)))
-            max_sperm = animal_data.get('max_spermaproben') if animal_data.get('max_spermaproben') is not None else DEFAULT_MAX_SPERM_SAMPLES
+            max_sperm = self._experimental_limit_value(
+                animal_data, 'max_spermaproben', DEFAULT_MAX_SPERM_SAMPLES
+            )
             stats.append(f"{messages.get('stats.sperm', 'Sperm')}: {sperm_count}/{max_sperm}")
         
         elif role == Role.OFFSPRING.value:
@@ -12145,8 +12179,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             events = animal_data.get('events', [])
             sonder_count = sum(1 for ev in events if ev.get('typ') == 'special_measurement')
             op_count = sum(1 for ev in events if ev.get('typ') == 'surgery')
-            max_special = animal_data.get('max_special', 0)
-            max_op = animal_data.get('max_op', 0)
+            max_special = self._experimental_limit_value(animal_data, 'max_special', 0)
+            max_op = self._experimental_limit_value(animal_data, 'max_op', 0)
             if max_special > 0:
                 stats.append(f"{messages.get('plot.event.special_measurement', messages.get('stats.special', 'Special measurement'))}: {sonder_count}/{max_special}")
             if max_op > 0:
@@ -12157,8 +12191,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             events = animal_data.get('events', [])
             op_count   = sum(1 for ev in events if ev.get('typ') == 'surgery')
             meas_count = sum(1 for ev in events if ev.get('typ') == 'measurement')
-            max_op   = animal_data.get('max_op', 0)
-            max_meas = animal_data.get('max_measurements', 0)
+            max_op   = self._experimental_limit_value(animal_data, 'max_op', 0)
+            max_meas = self._experimental_limit_value(animal_data, 'max_measurements', 0)
             if max_op > 0:
                 stats.append(f"{messages.get('stats.surgery', 'Surgery')}: {op_count}/{max_op}")
             if max_meas > 0:
@@ -12171,10 +12205,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             op_count = len(event_dates(animal_data, 'surgery'))
             fsh_count = sum(1 for ev in animal_data.get('events', []) if ev.get('typ') == 'fsh')
             
-            max_messungen = animal_data.get('max_messungen', 0)
-            max_pgf = animal_data.get('max_pgf', 0)
-            max_op = animal_data.get('max_op', 0)
-            max_fsh = animal_data.get('max_fsh', 0)
+            max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
+            max_pgf = self._experimental_limit_value(animal_data, 'max_pgf', 0)
+            max_op = self._experimental_limit_value(animal_data, 'max_op', 0)
+            max_fsh = self._experimental_limit_value(animal_data, 'max_fsh', 0)
             
             if max_messungen > 0:
                 stats.append(f"{messages.get('stats.blood_samples', 'Blood Samples')}: {prog_count}/{max_messungen}")
@@ -12196,11 +12230,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             birth_count = sum(1 for ev in animal_data.get('events', []) 
                             if ev.get('typ') == 'birth')
             
-            max_messungen = animal_data.get('max_messungen', 0)
-            max_pgf = animal_data.get('max_pgf', 0)
-            max_embryo = animal_data.get('max_embryo', 0)
-            max_pregnancies = animal_data.get('max_pregnancies', 0)
-            max_geburten = animal_data.get('max_geburten', 0)
+            max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
+            max_pgf = self._experimental_limit_value(animal_data, 'max_pgf', 0)
+            max_embryo = self._experimental_limit_value(animal_data, 'max_embryo', 0)
+            max_pregnancies = self._experimental_limit_value(animal_data, 'max_pregnancies', 0)
+            max_geburten = self._experimental_limit_value(animal_data, 'max_geburten', 0)
             
             if max_messungen > 0:
                 stats.append(f"{messages.get('stats.blood_samples', 'Blood Samples')}: {prog_count}/{max_messungen}")
@@ -12219,8 +12253,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             pregnancy_count = sum(1 for ev in events if ev.get('typ') == 'pregnancy')
             birth_count = sum(1 for ev in events if ev.get('typ') == 'birth')
             
-            max_pregnancies = animal_data.get('max_pregnancies', 0)
-            max_geburten = animal_data.get('max_geburten', 0)
+            max_pregnancies = self._experimental_limit_value(animal_data, 'max_pregnancies', 0)
+            max_geburten = self._experimental_limit_value(animal_data, 'max_geburten', 0)
             
             if max_pregnancies > 0:
                 stats.append(f"{messages.get('stats.pregnancy', 'Pregnancy')}: {pregnancy_count}/{max_pregnancies}")
@@ -14910,15 +14944,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
                 # Configured maximum event counts.
                 max_allowed = {
-                    'pgf': a.get('max_pgf', '?'),
-                    'embryo_transfer': a.get('max_embryo', '?'),
-                    'surgery': a.get('max_op', '?'),
-                    'birth': a.get('max_geburten', '?'),
-                    'pregnancy': a.get('max_pregnancies', '?'),
-                    'pregnancy_verification': a.get('max_pregnancies', '?'),
-                    'abortion': a.get('max_geburten', '?'),
-                    'special_measurement': a.get('max_special', '?'),
-                    'fsh': a.get('max_fsh', '?'),
+                    'pgf': self._experimental_limit_value(a, 'max_pgf', '?'),
+                    'embryo_transfer': self._experimental_limit_value(a, 'max_embryo', '?'),
+                    'surgery': self._experimental_limit_value(a, 'max_op', '?'),
+                    'birth': self._experimental_limit_value(a, 'max_geburten', '?'),
+                    'pregnancy': self._experimental_limit_value(a, 'max_pregnancies', '?'),
+                    'pregnancy_verification': self._experimental_limit_value(a, 'max_pregnancies', '?'),
+                    'abortion': self._experimental_limit_value(a, 'max_geburten', '?'),
+                    'special_measurement': self._experimental_limit_value(a, 'max_special', '?'),
+                    'fsh': self._experimental_limit_value(a, 'max_fsh', '?'),
                 }
                 for definition in self._custom_event_definitions(include_retired=True):
                     event_type = str(definition.get("event_type") or "")
@@ -19490,6 +19524,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """
         editing = bool(name)
         rec: Dict[str, Any] = self.animals.get(name, {}) if editing else {}
+        rec.setdefault("rolle", Role.PARTNER.value)
+        synchronize_experimental_limits(rec, rec.get("rolle"))
 
         # Standardized dialog shell (uniform width/label alignment)
         dlg_title = self.messages.get(
@@ -20097,6 +20133,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         steroid_active = self._is_steroid_track_active()
         
         # Seed defaults
+        rec.setdefault('rolle', Role.SAMENSP.value)
+        synchronize_experimental_limits(rec, rec.get('rolle'))
         rec.setdefault('sick', False)
         rec.setdefault('ref_weight', DEFAULT_REF_WEIGHT)
         rec.setdefault('recovery_time', DEFAULT_RECOVERY_TIME)
@@ -20744,6 +20782,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """
         editing = bool(name)
         rec: Dict[str, Any] = self.animals.get(name, {}) if editing else {}
+        rec.setdefault('rolle', Role.OFFSPRING.value)
+        synchronize_experimental_limits(rec, rec.get('rolle'))
         # Standardized dialog shell (uniform width/label alignment)
         dlg_title = self.messages.get(
             "dialog.offspring.title_edit", "Edit Offspring: {name}"
@@ -21450,6 +21490,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         rec.setdefault('events', [])
         rec.setdefault('daten', [])
         rec.setdefault('pdg', [])
+        synchronize_experimental_limits(rec, rec.get('rolle'))
 
         if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
             try:
@@ -22164,6 +22205,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if editing and canonical_role_value(rec.get('rolle')) == ROLE_VALUE_EXPERIMENTAL_OFFSPRING:
             role_value = ROLE_VALUE_EXPERIMENTAL_OFFSPRING
             rec['rolle'] = role_value
+        synchronize_experimental_limits(rec, role_value)
         rec.setdefault('sex',            'Female')
         rec.setdefault('genotype',       '')
         rec.setdefault('ref_weight',     DEFAULT_REF_WEIGHT)
@@ -22762,6 +22804,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         rec: Dict[str, Any] = {} if creating else dict(self.animals.get(name, {}))
         role_value = canonical_role_value(role_value or rec.get("rolle"), default=Role.UNKNOWN.value)
         rec["rolle"] = role_value
+        synchronize_experimental_limits(rec, role_value)
         rec.setdefault("daten", [])
         rec.setdefault("pdg", [])
         rec.setdefault("gewicht", [])
@@ -23168,6 +23211,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not creating and role_now not in (Role.SPENDER.value, Role.AMME.value):
             role_now = Role.SPENDER.value
         rec.setdefault('rolle', role_now)
+        rec['rolle'] = role_now
+        synchronize_experimental_limits(rec, role_now)
         rec.setdefault('ref_weight', DEFAULT_REF_WEIGHT)
         rec.setdefault('max_messungen', DEFAULT_MAX_MESS)
         rec.setdefault('max_pgf', DEFAULT_MAX_PGF)
@@ -24683,7 +24728,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 # assign sensible defaults. Donors, surrogates, and sperm donors get
                 # the default recovery period; others get 0. All animals start
                 # without a manual plus flag.
-                role = self._animal_role_value(rec, default=Role.SPENDER.value)
+                role = self._animal_role_value(rec, default=Role.UNKNOWN.value)
+                # Promote legacy flat limit fields into the canonical map on
+                # load.  When a map already exists it remains authoritative;
+                # custom/retired block IDs are preserved by the synchronizer.
+                synchronize_experimental_limits(rec, role)
                 if 'recovery_time' not in rec:
                     rec['recovery_time'] = DEFAULT_RECOVERY_TIME if role in (Role.SPENDER.value, Role.AMME.value, Role.SAMENSP.value) else 0
                 # Migrate manual_plus to sick for backward compatibility
@@ -25074,6 +25123,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _save_persistence(self, defer_post_save_work: bool = False):
         """Persist backend data after enriching dynamic event snapshots."""
         for _record in list(self.animals.values()) + list(self.archived.values()):
+            if isinstance(_record, dict):
+                synchronize_experimental_limits(
+                    _record,
+                    self._animal_role_value(_record, default=Role.UNKNOWN.value),
+                    prefer_flat=True,
+                    prune_unsupported=True,
+                )
             for _event in _record.get("events", []) if isinstance(_record, dict) else []:
                 _event_type = str(_event.get("typ") or "") if isinstance(_event, dict) else ""
                 if _event_type and self._custom_event_definition_for_type(_event_type):
