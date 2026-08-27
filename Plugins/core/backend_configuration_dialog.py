@@ -189,13 +189,68 @@ class BackendConfigurationDialog(QDialog):
         self.pages.setCurrentIndex(0 if sqlite_selected else 1)
         QTimer.singleShot(0, self._resize_for_profile)
 
+    def _profile_size_hint(self) -> QSize:
+        """Return a top-level size hint for the visible backend profile only.
+
+        ``QStackedWidget`` normally reports the largest page and Qt may call
+        the dialog's size hint again after a layout request.  That made a
+        compact SQLite page grow back to the PostgreSQL height on native
+        styles, even after ``_resize_for_profile`` had explicitly shrunk it.
+        Measure the visible page in the root layout and keep the profile
+        width/height contract in one place so both the geometry guard and Qt's
+        own post-event negotiation use the same value.
+        """
+        pages = getattr(self, "pages", None)
+        root_layout = self.layout()
+        if pages is None or root_layout is None:
+            return super().sizeHint()
+        current = pages.currentWidget()
+        margins = root_layout.contentsMargins()
+        height = margins.top() + margins.bottom()
+        count = root_layout.count()
+        for index in range(count):
+            item = root_layout.itemAt(index)
+            if item is None:
+                continue
+            if item.widget() is pages and current is not None:
+                item_height = current.sizeHint().height()
+            else:
+                item_height = item.sizeHint().height()
+            height += max(0, int(item_height))
+            if index < count - 1:
+                height += max(0, int(root_layout.spacing()))
+        radio = getattr(self, "sqlite_radio", None)
+        sqlite = True if radio is None else radio.isChecked()
+        width = 560 if sqlite else 760
+        return QSize(width, max(300, height))
+
+    def _clear_profile_geometry_target(self, generation: int) -> None:
+        """Release a profile-switch geometry request after native settling."""
+        if generation == getattr(self, "_profile_geometry_generation", 0):
+            self._progtrack_geometry_target = None
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt API name
+        """Keep native Qt layout negotiation tied to the active profile."""
+        return self._profile_size_hint()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API name
+        """Keep the geometry guard profile-aware as well as ``sizeHint``.
+
+        The shared native geometry guard uses ``minimumSizeHint``.  If that
+        hint still reflects the hidden PostgreSQL page, Windows keeps the
+        larger minimum after switching back to SQLite and the compact page is
+        stretched again on the next event-loop turn.
+        """
+        return self._profile_size_hint()
+
     def _resize_for_profile(self) -> None:
         target_width = 560 if self.sqlite_radio.isChecked() else 760
         # The shared geometry guard may have raised the dialog's minimum
         # height for the previously visible PostgreSQL page.  Reset that
         # profile-independent floor before measuring the current page so a
         # SQLite -> PostgreSQL -> SQLite switch can really compact again.
-        self.setMinimumHeight(300)
+        self.setMinimumSize(520, 300)
+        self.setMaximumSize(16777215, 16777215)
         # QStackedWidget can retain the previous (PostgreSQL) page's cached
         # size hint for one event-loop turn.  Clear that cache before taking a
         # profile-specific measurement; otherwise switching back to SQLite
@@ -208,7 +263,9 @@ class BackendConfigurationDialog(QDialog):
             current.adjustSize()
         self.layout().invalidate()
         self.layout().activate()
-        self.adjustSize()
+        # Use the profile-aware hint rather than QDialog's default hint,
+        # which is based on the largest (PostgreSQL) stacked page.
+        profile_hint = self._profile_size_hint()
         # Measure the visible page explicitly.  The top-level layout's cached
         # sizeHint may still include hidden controls from the other profile;
         # summing its visible items avoids inheriting that stale height while
@@ -229,7 +286,24 @@ class BackendConfigurationDialog(QDialog):
             content_height += max(0, int(item_height))
             if index < item_count - 1:
                 content_height += max(0, int(root_layout.spacing()))
-        self.resize(target_width, max(self.minimumHeight(), content_height))
+        target_height = max(
+            self.minimumHeight(), min(content_height, profile_hint.height())
+        )
+        # The native geometry guard runs after a resize event.  Supplying the
+        # requested profile geometry lets it preserve the compact SQLite size
+        # instead of retaining the previous PostgreSQL height for one event
+        # loop turn.
+        generation = getattr(self, "_profile_geometry_generation", 0) + 1
+        self._profile_geometry_generation = generation
+        self._progtrack_geometry_target = QSize(target_width, target_height)
+        # Native Qt styles can issue a second layout resize a few event-loop
+        # turns after the stacked page changed.  Keep the requested geometry
+        # active while that settles, then allow ordinary user resizing again.
+        QTimer.singleShot(
+            500,
+            lambda: self._clear_profile_geometry_target(generation),
+        )
+        self.resize(target_width, target_height)
 
     def _build_postgres_page(self) -> None:
         page = QWidget(self)

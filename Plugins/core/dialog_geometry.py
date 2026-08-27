@@ -27,7 +27,15 @@ class _DialogGeometryGuard(QObject):
             QEvent.Type.WindowStateChange,
         }:
             # Let Qt finish layout negotiation before measuring the hint.
-            QTimer.singleShot(0, self.clamp)
+            # Profile-switch dialogs publish an explicit target geometry; for
+            # those resize events clamp synchronously so native Qt cannot
+            # briefly paint the stale (larger) page size before the deferred
+            # callback runs.  Other dialogs retain the deferred behavior.
+            target = getattr(self.dialog, "_progtrack_geometry_target", None)
+            if event.type() is QEvent.Type.Resize and isinstance(target, QSize):
+                self.clamp()
+            else:
+                QTimer.singleShot(0, self.clamp)
         return False
 
     def clamp(self) -> None:
@@ -67,8 +75,18 @@ class _DialogGeometryGuard(QObject):
             self.dialog.setMinimumSize(min_width, min_height)
             self.dialog.setMaximumSize(max_width, max_height)
 
-            width = min(max(client.width(), min_width), max_width)
-            height = min(max(client.height(), min_height), max_height)
+            target = getattr(self.dialog, "_progtrack_geometry_target", None)
+            if isinstance(target, QSize):
+                # Profile-aware dialogs can request a compact geometry while
+                # switching pages.  Keep the request active while native Qt
+                # settles any delayed stacked-page relayout; the owning
+                # dialog clears it once that transition is complete. Ordinary
+                # user resizes then continue to use the client geometry.
+                width = min(max(target.width(), min_width), max_width)
+                height = min(max(target.height(), min_height), max_height)
+            else:
+                width = min(max(client.width(), min_width), max_width)
+                height = min(max(client.height(), min_height), max_height)
             frame_width = width + frame_left + frame_right
             frame_height = height + frame_top + frame_bottom
             frame_x = max(
