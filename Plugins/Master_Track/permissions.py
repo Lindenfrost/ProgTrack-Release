@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.2.2
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Master Track permission definitions and resolution logic.
@@ -218,9 +218,13 @@ DEFAULT_JOB_BUNDLES: Dict[str, Set[str]] = {
         PERM_MEDI_UPLOAD_DOCUMENT,
         PERM_MEDI_STATUS_ENABLE, PERM_MEDI_STATUS_MANAGE,
         PERM_MEDI_ADD_DOCS,
-        # Vet may inspect planned procedures without receiving edit/publish
-        # rights; mutation remains gated by op_scheduler.use.
+        # Vet may open and operate the Surgery Planner.  The planner uses
+        # op_scheduler.use for every mutating control (schedule generation,
+        # manual events, date blocking, save/delete and animal selection),
+        # while op_scheduler.view keeps the plugin available for viewing and
+        # export.
         PERM_OP_SCHEDULER_VIEW,
+        PERM_OP_SCHEDULER_USE,
         PERM_REPORTS_VIEW,
     },
     JOB_ANIMAL_WELFARE: {

@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.2.1",
+    [string]$Version = "0.2.2",
     [string]$Commit = "HEAD",
     [string]$RuntimeDirectory = (Join-Path $PSScriptRoot "dist\ProgTrack_small"),
     [string]$OutputDirectory = (Join-Path $PSScriptRoot "release")

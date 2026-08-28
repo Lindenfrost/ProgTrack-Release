@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.1
+# Part of: ProgTrack 0.2.2
 # Required Launcher version: 0.2.1 or newer.
 # Module: Main application entry point and core user interface.
 # Minimum Python version: 3.9.
@@ -43,7 +43,6 @@ import copy
 import numbers
 import importlib
 import functools
-import inspect
 import logging
 import tempfile
 import errno
@@ -2230,11 +2229,9 @@ class StyleSettingsDialog(QDialog):
 
         icon_value = canonical_icon_value(icon_value)
         path = self._role_icon_path(icon_value)
-        # Use the shared palette-aware SVG renderer here as well as in the
-        # normal UI. Loading the file directly through QIcon leaves the
-        # canonical dark outline unchanged, which makes outlines disappear
-        # on the dark Role Setup/picker palette even though the same SVG is
-        # readable in the light README preview.
+        # Use the shared SVG renderer here as well as in the normal UI.  The
+        # canonical black outline is intentionally kept unchanged across Qt
+        # palettes so the picker and README show the same artwork.
         button.setIcon(
             ui_icon(icon_value, palette=button.palette())
             if path is not None else QIcon()
@@ -3956,7 +3953,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 postgres_pool_min=pool_min,
                 postgres_pool_max=pool_max,
             )
-            self.plugin_manager = PluginManager(APP_BASE_DIR / "Plugins", app_version="0.2.1")
+            self.plugin_manager = PluginManager(APP_BASE_DIR / "Plugins", app_version="0.2.2")
             self.plugin_diagnostics = {}
             self.authorization = AuthorizationService(None, disabled=False, backend=self.backend)
             logger.info(
@@ -4808,7 +4805,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             logger.error(f"Master_Track plugin initialization failed: {e}")
 
     def _master_can(self, action: str) -> bool:
-        """Central fail-closed authorization boundary."""
+        """Central fail-closed authorization boundary.
+
+        Permission checks are also used while rebuilding menus, filters and
+        selection-dependent button states.  They must therefore be pure
+        queries: a successful check is not evidence that the protected
+        operation was executed.  Audit records are emitted by the mutation
+        that actually commits data (or by the explicit denial path below),
+        never by this UI-state probe.
+        """
         service = getattr(self, "authorization", None)
         if service is None:
             return False if AuthorizationService.is_write_action(action) else True
@@ -4820,12 +4825,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 "ProgTrack",
                 f"action={action}",
             )
-        if allowed and not trusted_local and action in {
-            "core.create_animals", "core.edit_animal_core", "core.edit_animal_immutable",
-            "core.archive_animals", "core.delete_animals", "core.import",
-            "reports.write",
-        }:
-            self._audit_data_operation(action)
         return allowed
 
     def _master_can_for_unit(self, action: str, owner_unit_id: str) -> bool:
@@ -4846,130 +4845,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
         return allowed
 
-    def _infer_audit_source(self) -> Tuple[str, str, Dict[str, Any]]:
-        """Infer plugin/module + caller function/context for audit entries."""
-        try:
-            skip_functions = {
-                "_infer_audit_source",
-                "_audit_data_operation",
-                "_master_can",
-                "_master_audit",
-                "_can",
-                "can",
-            }
-
-            for frame_info in inspect.stack()[3:]:
-                func_name = str(getattr(frame_info, "function", "") or "")
-                if not func_name or func_name in skip_functions:
-                    continue
-
-                filename = str(getattr(frame_info, "filename", "") or "")
-                normalized = filename.replace("\\", "/")
-                plugin_name = "ProgTrack"
-
-                marker = "/Plugins/"
-                idx = normalized.lower().find(marker.lower())
-                if idx >= 0:
-                    rel = normalized[idx + len(marker):]
-                    first = rel.split("/", 1)[0].strip()
-                    if first:
-                        plugin_name = first
-
-                context: Dict[str, Any] = {}
-                frame = getattr(frame_info, "frame", None)
-                local_vars = getattr(frame, "f_locals", {}) if frame is not None else {}
-                _missing = object()
-
-                def _pick_first(keys: Tuple[str, ...]) -> Any:
-                    for key in keys:
-                        if key in local_vars:
-                            return local_vars.get(key)
-                    return _missing
-
-                animal_value = _pick_first((
-                    "animal_name", "new_name", "name", "selected_animal", "animal", "key"
-                ))
-                if isinstance(animal_value, str) and animal_value.strip():
-                    context["animal"] = animal_value.strip()
-
-                owner = local_vars.get("self") if isinstance(local_vars, dict) else None
-                if "animal" not in context and owner is not None:
-                    try:
-                        report_animal = str(getattr(owner, "report_current_animal", "") or "").strip()
-                        if report_animal:
-                            context["animal"] = report_animal
-                    except Exception:
-                        pass
-                if "animal" not in context and owner is not None:
-                    try:
-                        selected_animals = getattr(owner, "selected_animals", None)
-                        if isinstance(selected_animals, list) and len(selected_animals) == 1:
-                            one = str(selected_animals[0] or "").strip()
-                            if one:
-                                context["animal"] = one
-                    except Exception:
-                        pass
-
-                parameter_value = _pick_first(("parameter", "field", "column", "typ", "event_type"))
-                if isinstance(parameter_value, str) and parameter_value.strip():
-                    context["parameter"] = parameter_value.strip()
-
-                prev_value = _pick_first(("old_value", "previous_value", "before"))
-                new_value = _pick_first(("new_value", "after", "value"))
-
-                simple_types = (str, int, float, bool, list, dict, tuple, type(None))
-                if prev_value is not _missing and isinstance(prev_value, simple_types):
-                    context["previous"] = prev_value
-                if new_value is not _missing and isinstance(new_value, simple_types):
-                    context["new"] = new_value
-
-                return plugin_name, func_name, context
-        except Exception:
-            pass
-
-        return "ProgTrack", "", {}
-
-    def _audit_data_operation(self, action: str) -> None:
-        """Write standardized audit entry for successful data operations."""
-        plugin_name, func_name, context = self._infer_audit_source()
-        if func_name in {
-            "_save_database",
-            "_dlg_new_animal",
-            "_dlg_edit_animal",
-            "_import_excel",
-            "_archive_current",
-            "_restore_archived",
-            "_delete_archived",
-            "_report_cell_clicked",
-            "_report_cell_changed",
-            "_report_cell_double_clicked",
-        }:
-            return
-        if (
-            plugin_name == "ProgTrack"
-            and not context.get("animal")
-            and not context.get("parameter")
-            and "previous" not in context
-            and "new" not in context
-        ):
-            return
-
-        detail_parts: List[str] = []
-        if func_name:
-            detail_parts.append(f"function={func_name}")
-        detail_parts.append(f"animal={context.get('animal', '<unknown>')}")
-        detail_parts.append(f"parameter={context.get('parameter', '<unknown>')}")
-        if "previous" in context:
-            detail_parts.append(f"previous={self._audit_value_to_string(context['previous'])}")
-        else:
-            detail_parts.append("previous=<unknown>")
-        if "new" in context:
-            detail_parts.append(f"new={self._audit_value_to_string(context['new'])}")
-        else:
-            detail_parts.append("new=<unknown>")
-
-        details = "; ".join(detail_parts)
-        self._master_audit(f"data_{action}", plugin_name, details)
+    # Audit records are emitted by explicit mutation handlers.  The former
+    # stack-inspection based inference was intentionally removed: permission
+    # checks also run during UI refresh/filter updates and are not mutations.
 
     def _show_permission_denied(self) -> None:
         """Show a message box indicating the action is not permitted."""
@@ -4989,18 +4867,66 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if mt:
             mt.audit(action, target, details)
 
-    def _audit_value_to_string(self, value: Any, max_len: int = 600) -> str:
-        """Render audit values as compact JSON-compatible strings."""
+    def _audit_animal_created(
+        self,
+        animal_name: str,
+        record: Optional[Dict[str, Any]],
+    ) -> None:
+        """Record a committed animal creation with the complete new record.
+
+        Lifecycle transitions are intentionally explicit.  The generic
+        snapshot diff below only records edits, so moving an animal between
+        active and archived scopes cannot masquerade as a create/delete pair.
+        """
+        name = str(animal_name or "").strip()
+        if not name:
+            return
+        details = (
+            f"animal={name}; parameter=<record>; "
+            f"previous={self._audit_value_to_string(None)}; "
+            f"new={self._audit_value_to_string(record or {})}; "
+            "scope=animals"
+        )
+        self._master_audit("create", "ProgTrack", details)
+
+    def _audit_value_to_string(
+        self,
+        value: Any,
+        max_len: Optional[int] = None,
+    ) -> str:
+        """Render the complete audit value as a JSON-compatible string.
+
+        Audit records are evidence, not a UI preview.  Earlier versions
+        silently truncated values at 600 characters, which made the old/new
+        columns incomplete (and could hide the field that actually changed).
+        A bounded representation remains available for non-audit callers, but
+        all audit call sites deliberately use the lossless default.
+        """
         try:
-            text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+            text = json.dumps(
+                value,
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            )
         except Exception:
             text = repr(value)
-        if len(text) > max_len:
+        # Details use semicolons as field separators.  Escape semicolons
+        # inside JSON values so a free-text value such as ``"x; new=y"``
+        # cannot be mistaken for another key by the legacy line parser.
+        text = text.replace(";", "\\u003b")
+        if max_len is not None and max_len > 3 and len(text) > max_len:
             return text[: max_len - 3] + "..."
         return text
 
     def _audit_data_snapshot_diff(self, before_data: Dict[str, Any], after_data: Dict[str, Any]) -> None:
-        """Audit parameter-level before/after changes for core animal data."""
+        """Audit parameter-level changes for records in the same scope.
+
+        Record creation and lifecycle transitions are emitted by their
+        successful mutation handlers.  Deliberately omitting full-record
+        create/delete inference here prevents an archive/restore operation or
+        an identity-key rewrite from being reported as a destructive delete.
+        """
         if not isinstance(before_data, dict):
             before_data = {}
         if not isinstance(after_data, dict):
@@ -5016,26 +4942,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             before_names = set(before_scope.keys())
             after_names = set(after_scope.keys())
-
-            # Full-record creates
-            for animal_name in sorted(after_names - before_names, key=str.lower):
-                new_rec = after_scope.get(animal_name, {})
-                details = (
-                    f"scope={scope}; animal={animal_name}; parameter=<record>; "
-                    f"previous={self._audit_value_to_string(None)}; "
-                    f"new={self._audit_value_to_string(new_rec)}"
-                )
-                self._master_audit("data_create", "ProgTrack", details)
-
-            # Full-record deletes
-            for animal_name in sorted(before_names - after_names, key=str.lower):
-                old_rec = before_scope.get(animal_name, {})
-                details = (
-                    f"scope={scope}; animal={animal_name}; parameter=<record>; "
-                    f"previous={self._audit_value_to_string(old_rec)}; "
-                    f"new={self._audit_value_to_string(None)}"
-                )
-                self._master_audit("data_delete", "ProgTrack", details)
 
             # Parameter-level edits
             for animal_name in sorted(before_names & after_names, key=str.lower):
@@ -5245,8 +5151,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # allow "missing" weight entries to display a tooltip
             if value is None:
                 return f"{date_label}: {date_str}\n{weight_label}: {na_label}"
-            if rolle == Role.OFFSPRING.value:
-                # For offspring compare to the last weight before this date
+            if self._uses_offspring_weight_evaluation(rolle):
+                # Offspring weight-evaluation block: compare to the last
+                # measurement before this date.
                 prev_val = None
                 try:
                     series = sorted(rec.get('gewicht', []), key=lambda t: t['datum'])
@@ -5519,7 +5426,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         origin: str,
         editing: bool,
         old_record: Optional[Mapping[str, Any]] = None,
-        preview_property: str = "",
+        preview_property: str = "_auto_id_preview",
         manual_override_property: str = "_manual_id_override",
     ) -> Tuple[str, Optional[Dict[str, Any]]]:
         """Return the canonical ID for a New/Edit Animal dialog.
@@ -7309,6 +7216,133 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         form.addRow(self.messages.get("dialog.field.id", "ID:"), id_w)
         return id_le, chip_le, origin_le
 
+    def _animal_dialog_existing_ids(self) -> Iterable[str]:
+        """Yield active and archived IDs for a non-mutating dialog preview."""
+        for records in (
+            getattr(self, "animals", {}),
+            getattr(self, "archived", {}),
+        ):
+            if not isinstance(records, Mapping):
+                continue
+            for record in records.values():
+                if isinstance(record, Mapping):
+                    value = str(record.get("id") or "").strip()
+                    if value:
+                        yield value
+
+    @staticmethod
+    def _animal_dialog_widget_value(widget: QWidget) -> str:
+        """Read a canonical combo value or text from a dialog input widget."""
+        if widget is None:
+            return ""
+        current_data = getattr(widget, "currentData", None)
+        if callable(current_data):
+            try:
+                value = current_data()
+                if value not in (None, ""):
+                    return str(value).strip()
+            except (RuntimeError, TypeError):
+                pass
+        current_text = getattr(widget, "currentText", None)
+        if callable(current_text):
+            try:
+                return str(current_text() or "").strip()
+            except (RuntimeError, TypeError):
+                return ""
+        text = getattr(widget, "text", None)
+        if callable(text):
+            try:
+                return str(text() or "").strip()
+            except (RuntimeError, TypeError):
+                return ""
+        return ""
+
+    def _install_new_animal_id_preview(
+        self,
+        id_widget: QLineEdit,
+        *,
+        name_widget: QWidget,
+        species_widget: QWidget,
+        birth_widget: QWidget,
+        sex_widget: QWidget,
+        origin_widget: QWidget,
+        editing: bool,
+        sex_override: Optional[str] = None,
+        preview_property: str = "_auto_id_preview",
+    ) -> None:
+        """Keep a generated identity preview current while creating an animal.
+
+        The preview is deliberately non-reserving: the same backend-backed
+        allocator is called only at save time.  Until a component is known,
+        ``preview_next_generated_id`` renders the convention's explicit X
+        placeholders (for example ``XX`` for an unknown year).  User-entered
+        IDs remain respected through the existing manual-override property.
+        """
+        if editing or id_widget is None:
+            return
+
+        try:
+            can_override = bool(self._master_can("core.edit_animal_identity"))
+        except Exception:
+            can_override = False
+        id_widget.setProperty("_manual_id_override", False)
+        if not can_override:
+            id_widget.setReadOnly(True)
+            id_widget.setStyleSheet(
+                "min-width: 0; background: #f0f0f0; color: #666;"
+            )
+        elif id_widget.isReadOnly():
+            id_widget.setReadOnly(False)
+
+        if can_override:
+            id_widget.textEdited.connect(
+                lambda _text: id_widget.setProperty("_manual_id_override", True)
+            )
+
+        def update_id_preview(*_args: Any) -> None:
+            if bool(id_widget.property("_manual_id_override")):
+                return
+            try:
+                conventions = self._load_identity_conventions()
+                sex_value = sex_override
+                if sex_value is None:
+                    sex_value = self._animal_dialog_widget_value(sex_widget)
+                preview = preview_next_generated_id(
+                    conventions,
+                    name=self._animal_dialog_widget_value(name_widget),
+                    species=self._animal_dialog_widget_value(species_widget),
+                    birth_date=self._animal_dialog_widget_value(birth_widget),
+                    sex=str(sex_value or ""),
+                    origin=self._animal_dialog_widget_value(origin_widget),
+                    existing_ids=self._animal_dialog_existing_ids(),
+                )
+                id_widget.setProperty(preview_property, preview)
+                if id_widget.text() != preview:
+                    id_widget.setText(preview)
+            except (RuntimeError, AttributeError, TypeError, ValueError):
+                logging.debug("Unable to refresh new-animal ID preview", exc_info=True)
+
+        for widget in (
+            name_widget,
+            birth_widget,
+            sex_widget,
+            origin_widget,
+        ):
+            if widget is None:
+                continue
+            signal = getattr(widget, "textChanged", None)
+            if signal is None:
+                signal = getattr(widget, "currentIndexChanged", None)
+            if signal is not None:
+                signal.connect(update_id_preview)
+        if species_widget is not None:
+            signal = getattr(species_widget, "currentIndexChanged", None)
+            if signal is None:
+                signal = getattr(species_widget, "textChanged", None)
+            if signal is not None:
+                signal.connect(update_id_preview)
+        update_id_preview()
+
     def _species_from_combo(self, species_cb: QComboBox) -> str:
         selected = species_cb.currentData()
         if isinstance(selected, str):
@@ -7495,13 +7529,45 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         _set_field_visible("surrogate_mother", True)
         _set_field_visible("surrogate_father", True)
 
+    @staticmethod
+    def _set_animal_dialog_context(
+        dlg: QDialog,
+        *,
+        role: str,
+        editing: bool,
+    ) -> None:
+        """Attach stable, localization-independent dialog identity metadata."""
+        dlg.setProperty("animal_dialog_role", str(role or "").strip())
+        dlg.setProperty("animal_dialog_mode", "edit" if editing else "new")
+
+    def _heritage_parentage_ui_available(self) -> bool:
+        """Return whether editable pedigree controls may be shown."""
+        return bool(
+            getattr(self, "has_heritage_plugin", False)
+            and getattr(self, "heritage_plugin", None) is not None
+        )
+
+    @staticmethod
+    def _add_animal_identity_separator(form: QFormLayout) -> QFrame:
+        """Add the single compact separator used after common identity data."""
+        separator = QFrame()
+        separator.setObjectName("animalDialogIdentitySeparator")
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        separator.setFixedHeight(1)
+        separator.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        form.addRow(separator)
+        return separator
+
     def _animal_section_preferences(self, dlg: QDialog) -> tuple[dict, str] | None:
         mt = getattr(self, "master_track", None)
         username = str(getattr(mt, "current_username", "") or "").strip()
         if not username or username.casefold() in {"guest", "anonymous"}:
             return None
-        mode = "edit" if str(dlg.windowTitle()).casefold().startswith("edit") else "new"
-        role = str(dlg.property("animal_dialog_role") or dlg.windowTitle()).strip()
+        mode = str(dlg.property("animal_dialog_mode") or "new").strip().casefold()
+        if mode not in {"new", "edit"}:
+            mode = "new"
+        role = str(dlg.property("animal_dialog_role") or Role.UNKNOWN.value).strip()
         key = f"animal-dialog-sections:{username}"
         payload = self.backend.records.get("preferences", key, default={})
         return (payload if isinstance(payload, dict) else {}), f"{mode}:{role}"
@@ -9795,11 +9861,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             checkbox.setChecked(True)
             apply_icon(checkbox, semantic_id)
             checkbox.setIconSize(QSize(20, 20))
-            checkbox.setFixedWidth(36)
             checkbox.setStyleSheet(
                 "QCheckBox { spacing: 0px; }"
                 "QCheckBox::indicator { width: 14px; height: 14px; }"
             )
+            # A check box with both an indicator and an icon needs more than
+            # the old hard-coded 36 px.  Qt's style reports the complete
+            # content width through sizeHint(); using it here prevents the
+            # right edge of the SVG from being clipped on Windows styles
+            # (and adapts to other platform styles as well).
+            checkbox.ensurePolished()
+            checkbox.setFixedWidth(max(1, checkbox.sizeHint().width() + 2))
             checkbox.toggled.connect(self._on_animal_sex_filter_changed)
             self.sex_filter_checkboxes[token] = checkbox
             layout.addWidget(checkbox)
@@ -10206,6 +10278,30 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if block_id in REQUIRED_DIALOG_BLOCKS:
             return True
         return block_id in self._role_dialog_blocks(role_value, mode)
+
+    def _uses_offspring_weight_evaluation(
+        self, role_value: str, mode: str = "edit"
+    ) -> bool:
+        """Return whether a role uses the offspring weight workflow.
+
+        The explicit ``offspring_weight_evaluation`` block controls both
+        built-in offspring roles.  When enabled, the plot/reference overlay
+        and gain calculations use the age/previous-measurement workflow; when
+        disabled, the ordinary reference-weight comparison is retained.
+        Other roles are never affected by this switch.
+        """
+        role = canonical_role_value(role_value, default="")
+        if role not in {Role.OFFSPRING.value, ROLE_VALUE_EXPERIMENTAL_OFFSPRING}:
+            return False
+        try:
+            return bool(self._role_block_enabled(
+                role, "offspring_weight_evaluation", mode
+            ))
+        except Exception:
+            # A partially initialized app/test harness must fail closed to the
+            # ordinary reference-weight calculation, never inventing a
+            # juvenile overlay.
+            return False
 
     def _role_import_capabilities(self, role_value: str) -> Dict[str, bool]:
         blocks = set(self._role_dialog_blocks(role_value, "new"))
@@ -11020,15 +11116,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
                 # Calculate percentage change
                 reference_weight = None
-                if role == Role.OFFSPRING.value:
-                    # For offspring: compare to last measurement before this date
+                if self._uses_offspring_weight_evaluation(role):
+                    # Offspring weight-evaluation block: compare to the last
+                    # measurement before this date.
                     previous_weight = report_index.previous_weight_before(date)
                     if previous_weight is not None:
                         last_weight = previous_weight.get('wert')
                         if isinstance(last_weight, (int, float)):
                             reference_weight = float(last_weight)
                 else:
-                    # For non-offspring: compare to reference weight
+                    # Ordinary workflow: compare to the configured reference
+                    # weight.
                     ref_w = animal_data.get('ref_weight')
                     if isinstance(ref_w, (int, float)):
                         reference_weight = float(ref_w)
@@ -14628,8 +14726,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 weight_ax.set_ylabel(self.messages.get('plot.ylabel.weight', 'Weight (g)'), 
                                      color=getattr(self, 'weight_color', QColor('purple')).name())
                 
-                # Add reference band for offspring animals (only if still offspring role)
-                if rolle == Role.OFFSPRING.value and sorted_weight_dates:
+                # Add the species reference band only for offspring roles whose
+                # dedicated weight-evaluation block is enabled.
+                if self._uses_offspring_weight_evaluation(rolle) and sorted_weight_dates:
                     reference_data = self._load_reference_weights(species=a.get('species', ''))
                     if reference_data:
                         # Determine age-0 anchor: birth date if set, else first measurement
@@ -14714,7 +14813,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
  
                 weight_ax.tick_params(axis='y', labelcolor='purple')
                 # precompute midpoint of weight axis for offspring events
-                if rolle == Role.OFFSPRING.value:
+                if self._uses_offspring_weight_evaluation(rolle):
                     w_ymin, w_ymax = weight_ax.get_ylim()
                     weight_ymid = (w_ymin + w_ymax) / 2
 
@@ -15894,42 +15993,199 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         except (RuntimeError, AttributeError, TypeError):
             return
 
-    def _register_animal_dialog_tabs(self, dlg: QDialog, tabs: QTabWidget) -> None:
-        """Fit a role dialog's tabs to its active page without empty growth."""
-        if dlg is None or tabs is None:
+    def _register_animal_dialog_tabs(
+        self, dlg: QDialog, tabs: Optional[QTabWidget]
+    ) -> None:
+        """Fit a role dialog to its active page without role-specific sizing rules."""
+        if dlg is None:
             return
 
-        tabs.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        if tabs is not None:
+            tabs.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
-        def fit_tabs() -> None:
+        def fit_dialog_width() -> None:
             try:
-                if tabs.isHidden():
-                    tabs.setMinimumHeight(0)
-                    tabs.setMaximumHeight(0)
-                    return
-                tabs.setMaximumHeight(16777215)
-                page = tabs.currentWidget()
-                if page is None:
-                    tabs.setFixedHeight(0)
-                    return
-                page.ensurePolished()
-                if page.layout() is not None:
-                    page.layout().activate()
-                page_h = max(
-                    int(page.sizeHint().height()),
-                    int(page.minimumSizeHint().height()),
+                dlg.ensurePolished()
+                layout = dlg.layout()
+                if layout is not None:
+                    layout.activate()
+                margins = layout.contentsMargins() if layout is not None else None
+                outer_width = (
+                    int(margins.left() + margins.right()) if margins is not None else 0
                 )
-                bar_h = max(1, int(tabs.tabBar().sizeHint().height()))
-                tabs.setFixedHeight(max(32, page_h + bar_h + 6))
-                dlg.updateGeometry()
-                dlg.adjustSize()
+                width_candidates = [UI_STD_DIALOG_WIDTH]
+                form_scroll = dlg.findChild(QScrollArea, "animalDialogFormScroll")
+                if form_scroll is not None and form_scroll.widget() is not None:
+                    form_scroll.widget().ensurePolished()
+                    width_candidates.append(
+                        int(form_scroll.widget().sizeHint().width()) + outer_width + 28
+                    )
+                if tabs is not None and not tabs.isHidden():
+                    page = tabs.currentWidget()
+                    if page is not None:
+                        page.ensurePolished()
+                        width_candidates.append(
+                            max(
+                                int(page.sizeHint().width()),
+                                int(tabs.tabBar().sizeHint().width()),
+                            ) + outer_width + 24
+                        )
+                if len(width_candidates) == 1:
+                    width_candidates.append(int(dlg.sizeHint().width()))
+                natural = max(width_candidates)
+                screen = dlg.screen() or QApplication.primaryScreen()
+                if screen is not None:
+                    available = screen.availableGeometry()
+                    natural = min(natural, max(UI_STD_DIALOG_WIDTH, int(available.width() * 0.92)))
+                dlg.setMinimumWidth(UI_STD_DIALOG_WIDTH)
+                dlg.resize(natural, dlg.height())
             except (RuntimeError, AttributeError, TypeError):
                 return
 
-        tabs._progtrack_fit = fit_tabs
+        def fit_dialog_height() -> None:
+            """Reserve enough vertical space for the form *and* active tabs.
+
+            The form is a scroll area and the history pages are deliberately
+            capped, but a fixed tab height must not be allowed to consume the
+            dialog's existing height.  Measure the visible form content first,
+            reserve the tab and button chrome, and only then choose the
+            viewport height.  If the complete form cannot fit on the current
+            screen, the form keeps a bounded viewport and scrolls instead of
+            being covered by the tabs.  This also makes the default geometry
+            shrink again when history rows or sections are collapsed.
+            """
+            try:
+                dlg.ensurePolished()
+                layout = dlg.layout()
+                if layout is None:
+                    return
+                layout.activate()
+                margins = layout.contentsMargins()
+                spacing = max(0, int(layout.spacing()))
+                form_scroll = dlg.findChild(QScrollArea, "animalDialogFormScroll")
+                body = form_scroll.widget() if form_scroll is not None else None
+
+                # Measure the current (visible) upper form, not the old
+                # viewport height.  The body hint includes expanded section
+                # content and therefore protects Address/Parents/Health rows.
+                upper_hint = 0
+                if body is not None:
+                    body.ensurePolished()
+                    if body.layout() is not None:
+                        body.layout().activate()
+                    upper_hint = max(
+                        int(body.sizeHint().height()),
+                        int(body.minimumSizeHint().height()),
+                        int(body.minimumHeight()),
+                    )
+                if form_scroll is not None:
+                    upper_hint = max(upper_hint, int(form_scroll.minimumSizeHint().height()))
+
+                tabs_visible = tabs is not None and not tabs.isHidden()
+                tab_height = 0
+                if tabs_visible:
+                    tab_height = max(
+                        int(tabs.height()),
+                        int(tabs.sizeHint().height()),
+                    )
+
+                # Sum fixed chrome (margins, save/action rows, etc.) while
+                # excluding the two independently sized vertical areas.  Do
+                # not count hidden tabs as a spacing slot: New dialogs keep
+                # their history tabs hidden and must remain genuinely compact.
+                visible_items = []
+                for index in range(layout.count()):
+                    item = layout.itemAt(index)
+                    widget = item.widget() if item is not None else None
+                    if widget is not None and widget.isHidden():
+                        continue
+                    if item is not None:
+                        visible_items.append((item, widget))
+                fixed_height = margins.top() + margins.bottom()
+                fixed_height += spacing * max(0, len(visible_items) - 1)
+                for item, widget in visible_items:
+                    if widget is form_scroll or widget is tabs:
+                        continue
+                    fixed_height += max(0, int(item.sizeHint().height()))
+
+                screen = dlg.screen() or QApplication.primaryScreen()
+                max_height = None
+                if screen is not None:
+                    available = screen.availableGeometry()
+                    max_height = max(260, int(available.height() * 0.92))
+
+                # Prefer the complete visible form, but cap it to the screen
+                # after reserving tabs and fixed controls.  A capped form is
+                # intentionally scrollable; it is never overlapped.
+                if max_height is None:
+                    upper_target = upper_hint
+                else:
+                    upper_target = min(
+                        upper_hint,
+                        max(0, max_height - fixed_height - tab_height),
+                    )
+                if form_scroll is not None:
+                    form_scroll.setMinimumHeight(max(0, int(upper_target)))
+
+                desired = max(260, fixed_height + tab_height + int(upper_target))
+                if max_height is not None:
+                    desired = min(desired, max_height)
+                dlg.setMinimumHeight(int(desired))
+                dlg.updateGeometry()
+                dlg.adjustSize()
+                desired = max(int(desired), int(dlg.minimumSizeHint().height()))
+                if max_height is not None:
+                    desired = min(desired, max_height)
+                dlg.resize(dlg.width(), desired)
+                dlg.setProperty("_progtrack_content_height", int(desired))
+            except (RuntimeError, AttributeError, TypeError):
+                return
+
+        def fit_tabs() -> None:
+            try:
+                if tabs is not None and tabs.isHidden():
+                    tabs.setMinimumHeight(0)
+                    tabs.setMaximumHeight(0)
+                elif tabs is not None:
+                    tabs.setMaximumHeight(16777215)
+                    page = tabs.currentWidget()
+                    if page is None:
+                        tabs.setFixedHeight(0)
+                    else:
+                        page.ensurePolished()
+                        if page.layout() is not None:
+                            page.layout().activate()
+                        page_h = max(
+                            int(page.sizeHint().height()),
+                            int(page.minimumSizeHint().height()),
+                        )
+                        bar_h = max(1, int(tabs.tabBar().sizeHint().height()))
+                        tabs.setFixedHeight(max(32, page_h + bar_h + 6))
+                fit_dialog_height()
+                fit_dialog_width()
+            except (RuntimeError, AttributeError, TypeError):
+                return
+
+        if tabs is not None:
+            tabs._progtrack_fit = fit_tabs
         dlg._progtrack_fit_animal_tabs = fit_tabs
-        tabs.currentChanged.connect(lambda _index: QTimer.singleShot(0, fit_tabs))
+        dlg._progtrack_refit_animal_dialog = fit_tabs
+        if tabs is not None:
+            tabs.currentChanged.connect(lambda _index: QTimer.singleShot(0, fit_tabs))
+        try:
+            from Plugins.core.animal_dialog_sections import AnimalDialogSection
+            for section in dlg.findChildren(AnimalDialogSection):
+                section.toggled.connect(lambda _expanded: QTimer.singleShot(0, fit_tabs))
+        except (ImportError, RuntimeError, AttributeError):
+            pass
         QTimer.singleShot(0, fit_tabs)
+
+    @staticmethod
+    def _request_animal_dialog_refit(dlg: QDialog) -> None:
+        """Schedule the shared dialog fit after role/sex visibility changes."""
+        callback = getattr(dlg, "_progtrack_refit_animal_dialog", None)
+        if callable(callback):
+            QTimer.singleShot(0, callback)
 
     # ------------------------
     # 7.19 Build Editable List
@@ -18048,13 +18304,32 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
 
         def audit(payload: Dict[str, Any]) -> None:
+            # Backend administration services pass the concrete event action
+            # (for example ``database_created``) through this callback. Keep
+            # that action intact so it remains visible in Master Track's
+            # canonical audit viewer instead of collapsing every operation
+            # into the generic profile-save event.
+            event = dict(payload or {})
+            action = str(event.pop("action", "") or "backend_profile_saved").strip()
+            actor_login = str(event.pop("actor_login", "") or actor).strip()
+            if action.startswith("database_"):
+                entity_type = "database"
+                entity_id = str(
+                    event.get("database")
+                    or event.get("target")
+                    or event.get("package")
+                    or "backend"
+                )
+            else:
+                entity_type = "installation"
+                entity_id = "backend"
             self.backend.audit.append(
-                actor_login=actor,
+                actor_login=actor_login,
                 category="configuration",
-                action="backend_profile_saved",
-                entity_type="installation",
-                entity_id="backend",
-                payload=payload,
+                action=action,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                payload=event,
             )
 
         try:
@@ -19302,6 +19577,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     # Build a new record for the planner
                     new_rec = {
                         'name': name,
+                        # Keep the immutable IPID for tooltips and the
+                        # generated animal ID for compact planner labels.
+                        'ipid': name,
+                        'id': rec.get('id', rec.get('generated_id', '')),
                         'rolle': role,
                         # Normalise maximum values; default to zero if missing
                         'OP_max':         rec.get('max_op',     rec.get('OP_max',     0)),
@@ -19771,7 +20050,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             "dialog.partner.title_edit", "Edit Partner: {name}"
         ).format(name=self._display_name(name)) if editing else self.messages.get("dialog.partner.title_new", "New Partner")
         dlg, vbox, form = self._new_std_dialog(dlg_title)
-        dlg.setProperty("animal_dialog_role", Role.PARTNER.value)
+        self._set_animal_dialog_context(
+            dlg, role=Role.PARTNER.value, editing=editing
+        )
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
             name_value=name or "",
@@ -19851,11 +20132,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         dates_layout.addWidget(special_status_le)
         form.addRow(self.messages.get("dialog.field.birth_death_date", "Birth / Death Date:"), dates_layout)
 
-        # Separation line
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        form.addRow(separator)
+        self._add_animal_identity_separator(form)
 
         _cage_addr_group = None
         cage_address_fields = None
@@ -19892,6 +20169,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         sex_cb.setCurrentIndex(sex_index if sex_index >= 0 else 0)
         genotype_le = self._add_sex_genotype_row(
             form, sex_cb, species_cb, str(rec.get("genotype", ""))
+        )
+
+        self._install_new_animal_id_preview(
+            id_le,
+            name_widget=name_le,
+            species_widget=species_cb,
+            birth_widget=birth_date_le,
+            sex_widget=sex_cb,
+            origin_widget=origin_le,
+            editing=editing,
+            preview_property="_auto_id_preview",
         )
 
         rep_cb = QComboBox()
@@ -19971,7 +20259,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Hide tabs in the create-new dialog; only show when editing
         tabs.setVisible(editing)
         weights_tab = QWidget()
-        tabs.addTab(weights_tab, self.messages.get("dialog.partner.tab.weights", "Weight"))
+        tabs.addTab(weights_tab, self.messages.get("dialog.animal.tab.weights", "Weights"))
         
         # Partner dialogs deliberately do not expose a PdG tab.  Existing
         # PdG records remain owned and editable by the PdG plugin workflow.
@@ -20312,6 +20600,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("partner.save.persistence.before", new_name=new_name)
             self._save_persistence(defer_post_save_work=True)
             self._save_trace("partner.save.persistence.after", new_name=new_name)
+            if not editing:
+                self._audit_animal_created(new_name, rec_obj)
             self._save_trace("partner.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
             self._save_trace("partner.save.dialog_accept.after", new_name=new_name)
@@ -20333,26 +20623,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         save_btn.clicked.connect(on_save)
         
-        # Adjust dialog width based on tab content
-        def adjust_dialog_width():
-            if tabs.isVisible():
-                current_widget = tabs.currentWidget()
-                if current_widget:
-                    # Force layout update to get accurate size
-                    current_widget.updateGeometry()
-                    QApplication.processEvents()
-                    
-                    # Get the actual content width including all widgets
-                    content_width = current_widget.sizeHint().width()
-                    # Add extra padding for margins, scrollbars, and fixed-width elements
-                    dialog_width = max(700, content_width + 150)
-                    dlg.setMinimumWidth(dialog_width)
-                    dlg.resize(dialog_width, dlg.height())
-        
-        tabs.currentChanged.connect(lambda: adjust_dialog_width())
-        
         self._apply_dialog_width(dlg)
-        QTimer.singleShot(100, adjust_dialog_width)
         # ── Field-level permissions ───────────────────────────────────────────
         _pdg_extra = list(_pdg_tabs) if isinstance(_pdg_tabs, (list, tuple)) else []
         self._apply_dialog_field_permissions({
@@ -20395,7 +20666,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         dlg_title = self.messages.get("dialog.sperm_donor.edit_title", "Edit Sperm Donor: {name}").format(name=self._display_name(name)) if editing else \
                    self.messages.get("dialog.sperm_donor.new_title", "New Sperm Donor")
         dlg, v, form = self._new_std_dialog(dlg_title)
-        dlg.setProperty("animal_dialog_role", Role.SAMENSP.value)
+        self._set_animal_dialog_context(
+            dlg, role=Role.SAMENSP.value, editing=editing
+        )
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
             name_value=name or "",
@@ -20475,11 +20748,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         dates_layout.addWidget(special_status_le)
         form.addRow(self.messages.get("dialog.field.birth_death_date", "Birth / Death Date:"), dates_layout)
 
-        # Separation line
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        form.addRow(separator)
+        self._add_animal_identity_separator(form)
 
         _cage_addr_group = None
         cage_address_fields = None
@@ -20504,18 +20773,23 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         genotype_le = self._add_sex_genotype_row(
             form, sex_display, species_cb, str(rec.get("genotype", ""))
         )
+        self._install_new_animal_id_preview(
+            id_le,
+            name_widget=name_le,
+            species_widget=species_cb,
+            birth_widget=birth_date_le,
+            sex_widget=sex_display,
+            sex_override="Male",
+            origin_widget=origin_le,
+            editing=editing,
+            preview_property="_auto_id_preview",
+        )
         self._move_form_row_after(form, _cage_addr_group, genotype_le)
 
         # Reference weight
         ref_w_le = QLineEdit(str(rec.get('ref_weight', DEFAULT_REF_WEIGHT))); self._std_widen(ref_w_le)
         ref_w_le.setValidator(QDoubleValidator(0.0, 10000.0, 2))
         form.addRow(self.messages.get("dialog.sperm_donor.label.ref_weight", "Reference Weight (g):"), ref_w_le)
-        
-        # Separator after reference weight
-        separator2 = QFrame()
-        separator2.setFrameShape(QFrame.Shape.HLine)
-        separator2.setFrameShadow(QFrame.Shadow.Sunken)
-        form.addRow(separator2)
         
         # Max sperm samples
         lbl_max_sperm = QLabel(self.messages.get("dialog.sperm_donor.label.max_sperm_samples", "Max Sperm Samples:"))
@@ -20542,7 +20816,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         rec_le.setVisible(steroid_active)
         sperm_limits_section = self._wrap_form_rows_in_section(
             form, self.messages.get("dialog.experimental_limits.title", "Experimental limits"),
-            [ref_w_le, separator2, lbl_max_sperm, max_sperm_le, lbl_recovery, rec_le],
+            [ref_w_le, lbl_max_sperm, max_sperm_le, lbl_recovery, rec_le],
             after=_cage_addr_group)
 
         # Health status
@@ -20744,7 +21018,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         sorted_gewicht = sorted(rec.get('gewicht', []), key=lambda x: x['datum'])
         weight_sc, weight_widgets = self._build_editable_list(
-            self.messages.get("dialog.tab.weights", "Weights"), 
+            self.messages.get("dialog.animal.tab.weights", "Weights"),
             sorted_gewicht, 
             fmt_weight, 
             def_weight,
@@ -20755,7 +21029,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
         )
         wlay.addWidget(weight_sc, 0)
-        tabs.addTab(weight_tab, self.messages.get("dialog.tab.weights", "Weight"))
+        tabs.addTab(weight_tab, self.messages.get("dialog.animal.tab.weights", "Weights"))
         v.addWidget(tabs, 1)
         self._register_animal_dialog_tabs(dlg, tabs)
 
@@ -20971,6 +21245,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("sperm_donor.save.persistence.before", new_name=new_name)
             self._save_persistence(defer_post_save_work=True)
             self._save_trace("sperm_donor.save.persistence.after", new_name=new_name)
+            if not editing:
+                self._audit_animal_created(new_name, rec_obj)
             # Sync to Heritage Track (including role-determined sex)
             if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
                 try:
@@ -20996,27 +21272,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         save_btn.clicked.connect(on_save)
         v.addWidget(save_btn)
 
-        # Adjust dialog width based on tab content
-        def adjust_dialog_width():
-            if tabs.isVisible():
-                current_widget = tabs.currentWidget()
-                if current_widget:
-                    # Force layout update to get accurate size
-                    current_widget.updateGeometry()
-                    QApplication.processEvents()
-
-                    # Get the actual content width including all widgets
-                    content_width = current_widget.sizeHint().width()
-                    # Add extra padding for margins, scrollbars, and fixed-width elements
-                    dialog_width = max(700, content_width + 200)
-                    dlg.setMinimumWidth(dialog_width)
-                    dlg.resize(dialog_width, dlg.height())
-
-        tabs.currentChanged.connect(lambda: adjust_dialog_width())
-
-        # finalize width so constants take effect
         self._apply_dialog_width(dlg)
-        QTimer.singleShot(100, adjust_dialog_width)
         # ── Field-level permissions ───────────────────────────────────────────
         self._apply_dialog_field_permissions({
             'core.edit_animal_identity': [
@@ -21054,7 +21310,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             "dialog.offspring.title_edit", "Edit Offspring: {name}"
         ).format(name=self._display_name(name)) if editing else self.messages.get("dialog.offspring.title_new", "New Offspring")
         dlg, layout, form = self._new_std_dialog(dlg_title)
-        dlg.setProperty("animal_dialog_role", Role.OFFSPRING.value)
+        self._set_animal_dialog_context(
+            dlg, role=Role.OFFSPRING.value, editing=editing
+        )
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
             name_value=name or "",
@@ -21133,7 +21391,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         dates_layout.addWidget(QLabel(self.messages.get("dialog.field.special_status", "Special Status:")))
         dates_layout.addWidget(special_status_le)
         form.addRow(self.messages.get("dialog.field.birth_death_date", "Birth / Death Date:"), dates_layout)
-            
+
+        self._add_animal_identity_separator(form)
+
         # Sex
         sex_cb = QComboBox()
         # Show localized labels but store canonical values as userData
@@ -21152,43 +21412,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             form, sex_cb, species_cb, str(rec.get("genotype", ""))
         )
 
-        if not editing:
-            can_override_id = self._master_can('core.edit_animal_identity')
-            id_le.setReadOnly(not can_override_id)
-            if not can_override_id:
-                id_le.setStyleSheet(
-                    "min-width: 0; background: #f0f0f0; color: #666;"
-                )
-            id_le.setProperty("_manual_id_override", False)
-            if can_override_id:
-                id_le.textEdited.connect(
-                    lambda _text: id_le.setProperty("_manual_id_override", True)
-                )
-
-            def update_id_preview(*_args) -> None:
-                if bool(id_le.property("_manual_id_override")):
-                    return
-                conventions = self._load_identity_conventions()
-                preview = preview_next_generated_id(
-                    conventions,
-                    name=name_le.text(),
-                    species=self._species_from_combo(species_cb),
-                    birth_date=birth_date_le.text(),
-                    sex=str(sex_cb.currentData() or ""),
-                    origin=origin_le.currentText(),
-                    existing_ids=(
-                        record.get("id", "") for record in self.animals.values()
-                    ),
-                )
-                id_le.setProperty("_auto_id_preview", preview)
-                id_le.setText(preview)
-
-            name_le.textChanged.connect(update_id_preview)
-            species_cb.currentIndexChanged.connect(update_id_preview)
-            birth_date_le.textChanged.connect(update_id_preview)
-            sex_cb.currentIndexChanged.connect(update_id_preview)
-            origin_le.currentTextChanged.connect(update_id_preview)
-            update_id_preview()
+        self._install_new_animal_id_preview(
+            id_le,
+            name_widget=name_le,
+            species_widget=species_cb,
+            birth_widget=birth_date_le,
+            sex_widget=sex_cb,
+            origin_widget=origin_le,
+            editing=editing,
+            preview_property="_auto_id_preview",
+        )
 
         _cage_addr_group = None
         cage_address_fields = None
@@ -21207,67 +21440,30 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 logging.error(f"Cage_Track address fields failed: {e}")
                 cage_address_fields = None
 
-        # Parentage
-        parents_group = QGroupBox(self.messages.get("dialog.offspring.parents", "Parents"))
-        parents_layout = QFormLayout(parents_group)
-        
-        eizell_le = build_relationship_combo(
-            self.animals, rec.get('eizellspenderin', ''), "Female",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(eizell_le)
-        parents_layout.addRow(
-            self.messages.get("dialog.offspring.field.egg_donor", "Egg Donor:"), 
-            eizell_le
-        )
-        
-        sperm_le = build_relationship_combo(
-            self.animals, rec.get('samenspender', ''), "Male",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(sperm_le)
-        parents_layout.addRow(
-            self.messages.get("dialog.offspring.field.sperm_donor", "Sperm Donor:"), 
-            sperm_le
-        )
-        
-        ziehmutter_le = build_relationship_combo(
-            self.animals, rec.get('ziehmutter', ''), "Female",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(ziehmutter_le)
-        parents_layout.addRow(
-            self.messages.get("dialog.offspring.field.surrogate_mother", "Surrogate Mother:"), 
-            ziehmutter_le
-        )
-        
-        ziehvater_le = build_relationship_combo(
-            self.animals, rec.get('ziehvater', ''), "Male",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(ziehvater_le)
-        parents_layout.addRow(
-            self.messages.get("dialog.offspring.field.surrogate_father", "Surrogate Father:"), 
-            ziehvater_le
-        )
+        # Parentage is a HeritageTrack capability.  When the plugin is absent,
+        # omit the complete section and preserve any stored relationship data.
+        parents_group = None
+        offspring_parent_fields: Dict[str, QComboBox] = {}
+        if self._heritage_parentage_ui_available():
+            parents_group = QGroupBox(self.messages.get("dialog.offspring.parents", "Parents"))
+            parents_layout = QFormLayout(parents_group)
+            parent_specs = (
+                ("egg_donor", "eizellspenderin", "Female", "dialog.offspring.field.egg_donor", "Egg Donor:"),
+                ("sperm_donor", "samenspender", "Male", "dialog.offspring.field.sperm_donor", "Sperm Donor:"),
+                ("surrogate_mother", "ziehmutter", "Female", "dialog.offspring.field.surrogate_mother", "Surrogate Mother:"),
+                ("surrogate_father", "ziehvater", "Male", "dialog.offspring.field.surrogate_father", "Surrogate Father:"),
+            )
+            for field_key, record_key, sex, label_key, fallback in parent_specs:
+                combo = build_relationship_combo(
+                    self.animals, rec.get(record_key, ''), sex,
+                    species=initial_species, exclude_id=name or "")
+                self._std_widen(combo)
+                parents_layout.addRow(self.messages.get(label_key, fallback), combo)
+                offspring_parent_fields[field_key] = combo
+            self._add_parent_mode_selector(
+                form, parents_group, offspring_parent_fields, default_mode="embryo"
+            )
 
-        offspring_parent_fields = {
-            "egg_donor": eizell_le,
-            "sperm_donor": sperm_le,
-            "surrogate_mother": ziehmutter_le,
-            "surrogate_father": ziehvater_le,
-        }
-        self._add_parent_mode_selector(form, parents_group, offspring_parent_fields, default_mode="embryo")
-
-        # Offspring dialogs expose one concise infant-weight entry in the
-        # identity section.  Full historical weight data remains in the
-        # bounded Weights tab; this field only appends a dated value on save.
-        infant_weight_le = QLineEdit("")
-        infant_weight_le.setValidator(QDoubleValidator(0.0, 100000.0, 3, infant_weight_le))
-        infant_weight_le.setPlaceholderText(self.messages.get(
-            "dialog.field.infant_weight.placeholder", "Weight (g)"
-        ))
-        form.addRow(
-            self.messages.get("dialog.field.infant_weight", "Infant weight (g):"),
-            infant_weight_le,
-        )
-        
         # Health status
         _health_w_o = QWidget()
         _health_hl_o = QHBoxLayout(_health_w_o)
@@ -21316,7 +21512,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         sorted_gewicht = sorted(rec.get('gewicht', []), key=lambda x: x['datum'])
         wg_sc, wg_widgets = self._build_editable_list(
-            self.messages.get("dialog.offspring.tab.weights", "Weights"), 
+            self.messages.get("dialog.animal.tab.weights", "Weights"),
             sorted_gewicht, 
             fmt_wg, 
             def_wg,
@@ -21328,7 +21524,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
         
         wlay.addWidget(wg_sc, 0)
-        tabs.addTab(weight_tab, self.messages.get("dialog.offspring.tab.weights", "Weights"))
+        tabs.addTab(weight_tab, self.messages.get("dialog.animal.tab.weights", "Weights"))
         
         # Events tab (special measurement or OP)
         _events_tab = None
@@ -21553,10 +21749,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj["id"] = animal_id
             if generated_id_meta:
                 rec_obj.update(generated_id_meta)
-            rec_obj['eizellspenderin'] = eizell_le.text().strip()
-            rec_obj['samenspender']    = sperm_le.text().strip()
-            rec_obj['ziehmutter']      = ziehmutter_le.text().strip()
-            rec_obj['ziehvater']       = ziehvater_le.text().strip()
+            if offspring_parent_fields:
+                rec_obj['eizellspenderin'] = offspring_parent_fields['egg_donor'].text().strip()
+                rec_obj['samenspender'] = offspring_parent_fields['sperm_donor'].text().strip()
+                rec_obj['ziehmutter'] = offspring_parent_fields['surrogate_mother'].text().strip()
+                rec_obj['ziehvater'] = offspring_parent_fields['surrogate_father'].text().strip()
             _was_sick_o     = bool(rec_obj.get('sick', False))
             _was_abnormal_o = bool(rec_obj.get('abnormal_current', False))
             is_sick = bool(sick_chk.isChecked())
@@ -21588,16 +21785,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception:
                     pass
             rec_obj['gewicht'] = weights_list
-            if infant_weight_le.text().strip():
-                try:
-                    infant_value = float(infant_weight_le.text().strip().replace(',', '.'))
-                except ValueError:
-                    self._show_message(
-                        "error.invalid_weight_values",
-                        self.messages.get("error.invalid_weight_values", "Invalid weight value."),
-                    )
-                    return
-                rec_obj['gewicht'].append({"datum": datetime.now(), "wert": infant_value})
             rec_obj['project'] = project_le.currentText().strip()
             rec_obj['severity'] = severity_cb.currentData()
             # events
@@ -21626,17 +21813,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 old_severity=_old_severity,
             )
 
-            if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
+            if self._heritage_parentage_ui_available() and offspring_parent_fields:
                 try:
                     self._save_trace("offspring.save.heritage.before", new_name=new_name)
                     # Offspring is in main animals list, so in_main_animals=True
                     self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
                     # Save parentage to heritage store
                     parent_values = {
-                        "egg_donor": eizell_le.text().strip(),
-                        "sperm_donor": sperm_le.text().strip(),
-                        "surrogate_mother": ziehmutter_le.text().strip(),
-                        "surrogate_father": ziehvater_le.text().strip(),
+                        key: widget.text().strip()
+                        for key, widget in offspring_parent_fields.items()
                     }
                     self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
                     # Create heritage-only placeholders for non-existing parents
@@ -21680,6 +21865,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("offspring.save.persistence.before", new_name=new_name)
             self._save_persistence(defer_post_save_work=True)
             self._save_trace("offspring.save.persistence.after", new_name=new_name)
+            if not editing:
+                self._audit_animal_created(new_name, rec_obj)
             # Force heritage visible to show newly created parent placeholders
             _heritage_fields_present = (
                 getattr(self, 'has_heritage_plugin', False)
@@ -21698,27 +21885,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         save_btn2.clicked.connect(on_save_offspring)
         layout.addWidget(save_btn2)
 
-        # Adjust dialog width based on tab content
-        def adjust_dialog_width():
-            if tabs.isVisible():
-                current_widget = tabs.currentWidget()
-                if current_widget:
-                    # Force layout update to get accurate size
-                    current_widget.updateGeometry()
-                    QApplication.processEvents()
-                    
-                    # Get the actual content width including all widgets
-                    content_width = current_widget.sizeHint().width()
-                    # Add extra padding for margins, scrollbars, and fixed-width elements
-                    dialog_width = max(700, content_width + 150)
-                    dlg.setMinimumWidth(dialog_width)
-                    dlg.resize(dialog_width, dlg.height())
-        
-        tabs.currentChanged.connect(lambda: adjust_dialog_width())
-
-        # finalize width so constants take effect
         self._apply_dialog_width(dlg)
-        QTimer.singleShot(100, adjust_dialog_width)
         # ── Field-level permissions ───────────────────────────────────────────
         identity_edit_widgets = [
                 name_le, species_cb, id_le, chip_le, origin_le,
@@ -21779,7 +21946,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             dlg_title = self.messages.get("dialog.zuchttier.title_edit", "Edit Zuchttier: {name}").format(name=self._display_name(name))
         dlg, layout, form = self._new_std_dialog(dlg_title)
-        dlg.setProperty("animal_dialog_role", Role.ZUCHTTIER.value)
+        self._set_animal_dialog_context(
+            dlg, role=Role.ZUCHTTIER.value, editing=editing
+        )
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
             name_value=name or "",
@@ -21859,11 +22028,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         dates_layout.addWidget(special_status_le)
         form.addRow(self.messages.get("dialog.field.birth_death_date", "Birth / Death Date:"), dates_layout)
         
-        # Separation line
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        form.addRow(separator)
+        self._add_animal_identity_separator(form)
 
         _cage_addr_group = None
         cage_address_fields = None
@@ -21903,6 +22068,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._std_widen(sex_cb)
         genotype_le = self._add_sex_genotype_row(
             form, sex_cb, species_cb, str(rec.get("genotype", ""))
+        )
+        self._install_new_animal_id_preview(
+            id_le,
+            name_widget=name_le,
+            species_widget=species_cb,
+            birth_widget=birth_date_le,
+            sex_widget=sex_cb,
+            origin_widget=origin_le,
+            editing=editing,
+            preview_property="_auto_id_preview",
         )
         
         # Controlled partner relationship stored by stable animal identity.
@@ -21958,58 +22133,32 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._std_widen(maxb_sb)
         form.addRow(lbl_maxb, maxb_sb)
         
-        # Parentage fields
-        parents_group = QGroupBox(self.messages.get("dialog.zuchttier.parents", "Parents"))
-        parents_layout = QFormLayout(parents_group)
-        
-        eizell_le = build_relationship_combo(
-            self.animals, rec.get('eizellspenderin', ''), "Female",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(eizell_le)
-        parents_layout.addRow(
-            self.messages.get("dialog.zuchttier.field.egg_donor", "Egg Donor:"),
-            eizell_le
-        )
-        
-        sperm_le = build_relationship_combo(
-            self.animals, rec.get('samenspender', ''), "Male",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(sperm_le)
-        parents_layout.addRow(
-            self.messages.get("dialog.zuchttier.field.sperm_donor", "Sperm Donor:"),
-            sperm_le
-        )
-        
-        ziehmutter_le = build_relationship_combo(
-            self.animals, rec.get('ziehmutter', ''), "Female",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(ziehmutter_le)
-        parents_layout.addRow(
-            self.messages.get("dialog.zuchttier.field.surrogate_mother", "Surrogate Mother:"),
-            ziehmutter_le
-        )
-        
-        ziehvater_le = build_relationship_combo(
-            self.animals, rec.get('ziehvater', ''), "Male",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(ziehvater_le)
-        parents_layout.addRow(
-            self.messages.get("dialog.zuchttier.field.surrogate_father", "Surrogate Father:"),
-            ziehvater_le
-        )
-
-        zuchttier_parent_fields = {
-            "egg_donor": eizell_le,
-            "sperm_donor": sperm_le,
-            "surrogate_mother": ziehmutter_le,
-            "surrogate_father": ziehvater_le,
-        }
+        parents_group = None
+        zuchttier_parent_fields: Dict[str, QComboBox] = {}
+        if self._heritage_parentage_ui_available():
+            parents_group = QGroupBox(self.messages.get("dialog.zuchttier.parents", "Parents"))
+            parents_layout = QFormLayout(parents_group)
+            parent_specs = (
+                ("egg_donor", "eizellspenderin", "Female", "dialog.zuchttier.field.egg_donor", "Egg Donor:"),
+                ("sperm_donor", "samenspender", "Male", "dialog.zuchttier.field.sperm_donor", "Sperm Donor:"),
+                ("surrogate_mother", "ziehmutter", "Female", "dialog.zuchttier.field.surrogate_mother", "Surrogate Mother:"),
+                ("surrogate_father", "ziehvater", "Male", "dialog.zuchttier.field.surrogate_father", "Surrogate Father:"),
+            )
+            for field_key, record_key, sex, label_key, fallback in parent_specs:
+                combo = build_relationship_combo(
+                    self.animals, rec.get(record_key, ''), sex,
+                    species=initial_species, exclude_id=name or "")
+                self._std_widen(combo)
+                parents_layout.addRow(self.messages.get(label_key, fallback), combo)
+                zuchttier_parent_fields[field_key] = combo
         zuchttier_limits_section = self._wrap_form_rows_in_section(
             form, self.messages.get("dialog.experimental_limits.title", "Experimental limits"),
             [ref_w_le, lbl_maxpr, maxpr_sb, lbl_maxb, maxb_sb],
             after=_cage_addr_group)
-        zuchttier_parent_section = self._add_parent_mode_selector(
-            form, parents_group, zuchttier_parent_fields, default_mode="hide")
+        zuchttier_parent_section = None
+        if parents_group is not None:
+            zuchttier_parent_section = self._add_parent_mode_selector(
+                form, parents_group, zuchttier_parent_fields, default_mode="hide")
         # Parents is created after the role-specific rows.  Wrapping the
         # limits rows already places it immediately after Experimental limits;
         # moving this spanning row a second time can detach it from QFormLayout.
@@ -22034,7 +22183,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         sorted_gewicht = sorted(rec.get('gewicht', []), key=lambda x: x['datum'])
         wg_sc, wg_widgets = self._build_editable_list(
-            self.messages.get("dialog.zuchttier.tab.weights", "Weights"),
+            self.messages.get("dialog.animal.tab.weights", "Weights"),
             sorted_gewicht,
             fmt_wg,
             def_wg,
@@ -22046,7 +22195,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
         
         wlay.addWidget(wg_sc, 0)
-        tabs.addTab(weight_tab, self.messages.get("dialog.zuchttier.tab.weights", "Weights"))
+        tabs.addTab(weight_tab, self.messages.get("dialog.animal.tab.weights", "Weights"))
         
         # Events tab
         _events_tab = None
@@ -22205,6 +22354,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             maxb_sb.setVisible(is_female)
             # tabs are only hidden during creation; always visible in edit
             tabs.setVisible(editing)
+            self._request_animal_dialog_refit(dlg)
         
         sex_cb.currentTextChanged.connect(lambda _t: _update_sex_fields(sex_cb.currentData() or "Female"))
         _update_sex_fields(sex_cb.currentData() or "Female")
@@ -22321,10 +22471,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['in_experiment'] = new_in_exp_z
             rec_obj['max_pregnancies'] = maxpr_sb.value()
             rec_obj['max_geburten'] = maxb_sb.value()
-            rec_obj['eizellspenderin'] = eizell_le.text().strip()
-            rec_obj['samenspender'] = sperm_le.text().strip()
-            rec_obj['ziehmutter'] = ziehmutter_le.text().strip()
-            rec_obj['ziehvater'] = ziehvater_le.text().strip()
+            if zuchttier_parent_fields:
+                rec_obj['eizellspenderin'] = zuchttier_parent_fields['egg_donor'].text().strip()
+                rec_obj['samenspender'] = zuchttier_parent_fields['sperm_donor'].text().strip()
+                rec_obj['ziehmutter'] = zuchttier_parent_fields['surrogate_mother'].text().strip()
+                rec_obj['ziehvater'] = zuchttier_parent_fields['surrogate_father'].text().strip()
             
             # Weights
             weights_list = []
@@ -22363,17 +22514,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 old_severity=_old_severity,
             )
 
-            if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
+            if self._heritage_parentage_ui_available() and zuchttier_parent_fields:
                 try:
                     self._save_trace("zuchttier.save.heritage.before", new_name=new_name)
                     # Breeding animals are in the main animals list.
                     self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
                     # Save parentage to heritage store
                     parent_values = {
-                        "egg_donor": eizell_le.text().strip(),
-                        "sperm_donor": sperm_le.text().strip(),
-                        "surrogate_mother": ziehmutter_le.text().strip(),
-                        "surrogate_father": ziehvater_le.text().strip(),
+                        key: widget.text().strip()
+                        for key, widget in zuchttier_parent_fields.items()
                     }
                     self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
                     # Create heritage-only placeholders for non-existing parents
@@ -22418,6 +22567,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("zuchttier.save.persistence.before", new_name=new_name)
             self._save_persistence(defer_post_save_work=True)
             self._save_trace("zuchttier.save.persistence.after", new_name=new_name)
+            if not editing:
+                self._audit_animal_created(new_name, rec_obj)
             # Force heritage visible to show newly created parent placeholders
             _heritage_fields_present = (
                 getattr(self, 'has_heritage_plugin', False)
@@ -22437,27 +22588,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         save_btn.clicked.connect(on_save_zuchttier)
         layout.addWidget(save_btn)
         
-        # Adjust dialog width based on tab content
-        def adjust_dialog_width():
-            if tabs.isVisible():
-                current_widget = tabs.currentWidget()
-                if current_widget:
-                    # Force layout update to get accurate size
-                    current_widget.updateGeometry()
-                    QApplication.processEvents()
-                    
-                    # Get the actual content width including all widgets
-                    content_width = current_widget.sizeHint().width()
-                    # Add extra padding for margins, scrollbars, and fixed-width elements
-                    dialog_width = max(700, content_width + 150)
-                    dlg.setMinimumWidth(dialog_width)
-                    dlg.resize(dialog_width, dlg.height())
-        
-        tabs.currentChanged.connect(lambda: adjust_dialog_width())
-        
-        # Finalize width
         self._apply_dialog_width(dlg)
-        QTimer.singleShot(100, adjust_dialog_width)
         # ── Field-level permissions ───────────────────────────────────────────
         self._apply_dialog_field_permissions({
             'core.edit_animal_identity': [
@@ -22517,7 +22648,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                               'Edit Experimental Animal: {name}').format(name=self._display_name(name))
         )
         dlg, layout, form = self._new_std_dialog(dlg_title)
-        dlg.setProperty("animal_dialog_role", role_value)
+        self._set_animal_dialog_context(
+            dlg, role=role_value, editing=editing
+        )
 
         # ── Name + Species ───────────────────────────────────────────────────
         name_le, species_cb, initial_species = self._build_name_species_inputs(
@@ -22604,6 +22737,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.messages.get('dialog.field.birth_death_date', 'Birth / Death Date:'),
             dates_layout)
 
+        self._add_animal_identity_separator(form)
+
         # ── Cage address (build_address_group style) ──────────────────────────
         _cage_addr_group = None
         cage_address_fields = None
@@ -22632,6 +22767,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         genotype_le = self._add_sex_genotype_row(
             form, sex_cb, species_cb, str(rec.get("genotype", ""))
         )
+        self._install_new_animal_id_preview(
+            id_le,
+            name_widget=name_le,
+            species_widget=species_cb,
+            birth_widget=birth_date_le,
+            sex_widget=sex_cb,
+            origin_widget=origin_le,
+            editing=editing,
+            preview_property="_auto_id_preview",
+        )
         # Keep the identity row directly below Birth/Death before the
         # collapsible Address section.  The shared helper resolves the nested
         # sex/genotype wrapper as a form-row anchor.
@@ -22639,6 +22784,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ── Genotype ─────────────────────────────────────────────────────────
         # ── Ref. weight ──────────────────────────────────────────────────────
         ref_w_le = QLineEdit(str(rec.get('ref_weight', DEFAULT_REF_WEIGHT)))
+        self._std_widen(ref_w_le)
         form.addRow(self.messages.get('dialog.field.reference_weight', 'Reference weight (g):'), ref_w_le)
 
         # ── Max Surgeries + Max Measurements ─────────────────────────────────
@@ -22664,62 +22810,34 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Sex/Genotype in the experimental-offspring dialog.
         self._move_form_row_after(form, _cage_addr_group, genotype_le)
 
-        # ── Parents (collapsible, natural/embryo toggle) ──────────────────────
-        parents_group = QGroupBox(self.messages.get('dialog.offspring.parents', 'Parents'))
-        parents_layout = QFormLayout(parents_group)
-        eizell_le = build_relationship_combo(
-            self.animals, rec.get('eizellspenderin', ''), "Female",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(eizell_le)
-        parents_layout.addRow(
-            self.messages.get('dialog.offspring.field.egg_donor', 'Egg Donor:'), eizell_le)
-        sperm_le = build_relationship_combo(
-            self.animals, rec.get('samenspender', ''), "Male",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(sperm_le)
-        parents_layout.addRow(
-            self.messages.get('dialog.offspring.field.sperm_donor', 'Sperm Donor:'), sperm_le)
-        ziehmutter_le = build_relationship_combo(
-            self.animals, rec.get('ziehmutter', ''), "Female",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(ziehmutter_le)
-        parents_layout.addRow(
-            self.messages.get('dialog.offspring.field.surrogate_mother', 'Surrogate Mother:'), ziehmutter_le)
-        ziehvater_le = build_relationship_combo(
-            self.animals, rec.get('ziehvater', ''), "Male",
-            species=initial_species, exclude_id=name or "")
-        self._std_widen(ziehvater_le)
-        parents_layout.addRow(
-            self.messages.get('dialog.offspring.field.surrogate_father', 'Surrogate Father:'), ziehvater_le)
-        vt_parent_fields = {
-            'egg_donor':       eizell_le,
-            'sperm_donor':     sperm_le,
-            'surrogate_mother': ziehmutter_le,
-            'surrogate_father': ziehvater_le,
-        }
+        # ── Parents (HeritageTrack capability only) ──────────────────────────
+        parents_group = None
+        vt_parent_fields: Dict[str, QComboBox] = {}
+        if self._heritage_parentage_ui_available():
+            parents_group = QGroupBox(self.messages.get('dialog.offspring.parents', 'Parents'))
+            parents_layout = QFormLayout(parents_group)
+            parent_specs = (
+                ('egg_donor', 'eizellspenderin', 'Female', 'dialog.offspring.field.egg_donor', 'Egg Donor:'),
+                ('sperm_donor', 'samenspender', 'Male', 'dialog.offspring.field.sperm_donor', 'Sperm Donor:'),
+                ('surrogate_mother', 'ziehmutter', 'Female', 'dialog.offspring.field.surrogate_mother', 'Surrogate Mother:'),
+                ('surrogate_father', 'ziehvater', 'Male', 'dialog.offspring.field.surrogate_father', 'Surrogate Father:'),
+            )
+            for field_key, record_key, sex, label_key, fallback in parent_specs:
+                combo = build_relationship_combo(
+                    self.animals, rec.get(record_key, ''), sex,
+                    species=initial_species, exclude_id=name or "")
+                self._std_widen(combo)
+                parents_layout.addRow(self.messages.get(label_key, fallback), combo)
+                vt_parent_fields[field_key] = combo
         vt_limits_section = self._wrap_form_rows_in_section(
             form, self.messages.get("dialog.experimental_limits.title", "Experimental limits"),
             [ref_w_le, max_op_sb, max_meas_sb], after=_cage_addr_group)
-        vt_parent_section = self._add_parent_mode_selector(
-            form, parents_group, vt_parent_fields, default_mode="hide")
+        vt_parent_section = None
+        if parents_group is not None:
+            vt_parent_section = self._add_parent_mode_selector(
+                form, parents_group, vt_parent_fields, default_mode="hide")
         # The parent row already follows the rows wrapped into Experimental
         # limits.  A second move of this spanning row can detach it.
-
-        infant_weight_le = None
-        if role_value == ROLE_VALUE_EXPERIMENTAL_OFFSPRING:
-            infant_weight_le = QLineEdit("")
-            infant_weight_le.setValidator(
-                QDoubleValidator(0.0, 100000.0, 3, infant_weight_le)
-            )
-            infant_weight_le.setPlaceholderText(self.messages.get(
-                "dialog.field.infant_weight.placeholder", "Weight (g)"
-            ))
-            form.addRow(
-                self.messages.get(
-                    "dialog.field.infant_weight", "Infant weight (g):"
-                ),
-                infant_weight_le,
-            )
 
         # ── Health status checkboxes ──────────────────────────────────────────
         _health_w_vt = QWidget()
@@ -22761,7 +22879,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         wlay = QVBoxLayout(weight_tab)
         sorted_gewicht = sorted(rec.get('gewicht', []), key=lambda x: x['datum'])
         wg_sc, wg_widgets = self._build_editable_list(
-            self.messages.get('dialog.versuchstier.tab.weights', 'Weights'),
+            self.messages.get('dialog.animal.tab.weights', 'Weights'),
             sorted_gewicht,
             lambda item: (item['datum'].strftime(DATE_FORMAT), str(int(item['wert'])), ''),
             lambda ws:   (datetime.now().date().strftime(DATE_FORMAT), '0', ''),
@@ -22773,7 +22891,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
         wlay.addWidget(wg_sc, 0)
         tabs.addTab(weight_tab,
-                    self.messages.get('dialog.versuchstier.tab.weights', 'Weights'))
+                    self.messages.get('dialog.animal.tab.weights', 'Weights'))
 
         # Events tab (Surgery / Measurement – always shown, not gated on steroid_active)
         events_tab = QWidget()
@@ -22960,22 +23078,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception:
                     pass
 
-            if infant_weight_le is not None and infant_weight_le.text().strip():
-                try:
-                    infant_value = float(
-                        infant_weight_le.text().strip().replace(',', '.')
-                    )
-                except ValueError:
-                    self._show_message_raw(
-                        self.messages.get('error.title', 'Error'),
-                        self.messages.get(
-                            'error.invalid_weight_values',
-                            'Invalid weight value.',
-                        ),
-                    )
-                    return
-                weights_list.append({"datum": datetime.now(), "wert": infant_value})
-
             rec_obj = dict(self.animals.get(name, {})) if editing else {}
             animal_id, generated_id_meta = self._id_for_animal_dialog(
                 id_le,
@@ -23006,10 +23108,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
             rec_obj['max_op']           = max_op_sb.value()
             rec_obj['max_measurements'] = max_meas_sb.value()
-            rec_obj['eizellspenderin']  = eizell_le.text().strip()
-            rec_obj['samenspender']     = sperm_le.text().strip()
-            rec_obj['ziehmutter']       = ziehmutter_le.text().strip()
-            rec_obj['ziehvater']        = ziehvater_le.text().strip()
+            if vt_parent_fields:
+                rec_obj['eizellspenderin'] = vt_parent_fields['egg_donor'].text().strip()
+                rec_obj['samenspender'] = vt_parent_fields['sperm_donor'].text().strip()
+                rec_obj['ziehmutter'] = vt_parent_fields['surrogate_mother'].text().strip()
+                rec_obj['ziehvater'] = vt_parent_fields['surrogate_father'].text().strip()
             rec_obj['gewicht']          = weights_list
             rec_obj['events']           = events_list
             rec_obj.setdefault('daten', [])
@@ -23073,17 +23176,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("versuchstier.save.persistence.before", new_name=new_name)
             self._save_persistence(defer_post_save_work=True)
             self._save_trace("versuchstier.save.persistence.after", new_name=new_name)
+            if not editing:
+                self._audit_animal_created(new_name, rec_obj)
             # Sync to Heritage Track (including sex from dialog)
-            if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
+            if self._heritage_parentage_ui_available() and vt_parent_fields:
                 try:
                     self._save_trace("versuchstier.save.heritage.before", new_name=new_name)
                     self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
                     # Save parentage to heritage store
                     parent_values = {
-                        "egg_donor": eizell_le.text().strip(),
-                        "sperm_donor": sperm_le.text().strip(),
-                        "surrogate_mother": ziehmutter_le.text().strip(),
-                        "surrogate_father": ziehvater_le.text().strip(),
+                        key: widget.text().strip()
+                        for key, widget in vt_parent_fields.items()
                     }
                     self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
                     # Create heritage-only placeholders for non-existing parents
@@ -23162,7 +23265,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.messages.get("dialog.basic_role.title_edit", "Edit animal: {name}").format(name=self._display_name(name))
         )
         dlg, v, form = self._new_std_dialog(title)
-        dlg.setProperty("animal_dialog_role", role_value)
+        self._set_animal_dialog_context(
+            dlg, role=role_value, editing=not creating
+        )
 
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
@@ -23220,6 +23325,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             dates_layout.addWidget(age_label)
         form.addRow(self.messages.get("dialog.field.birth_death_date", "Birth / Death Date:"), dates_layout)
 
+        self._add_animal_identity_separator(form)
+
         sex_cb = QComboBox()
         sex_cb.addItem(self.messages.get("sex.unknown", "Unknown"), "Unknown")
         sex_cb.addItem(self.messages.get("sex.male", "Male"), "Male")
@@ -23230,6 +23337,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._std_widen(sex_cb)
         genotype_le = self._add_sex_genotype_row(
             form, sex_cb, species_cb, str(rec.get("genotype", ""))
+        )
+
+        self._install_new_animal_id_preview(
+            id_le,
+            name_widget=name_le,
+            species_widget=species_cb,
+            birth_widget=birth_date_le,
+            sex_widget=sex_cb,
+            origin_widget=origin_le,
+            editing=not creating,
+            preview_property="_auto_id_preview",
         )
 
         cage_address_fields = None
@@ -23252,34 +23370,40 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 logging.warning(f"Could not build basic-role cage address block: {exc}")
 
         parent_fields: Dict[str, AnimalRelationshipCombo] = {}
-        parents_group = QGroupBox(self.messages.get("dialog.offspring.parents", "Parents"))
-        parents_layout = QFormLayout(parents_group)
-        parent_specs = [
-            ("eizellspenderin", "dialog.offspring.field.egg_donor", "Egg Donor:"),
-            ("samenspender", "dialog.offspring.field.sperm_donor", "Sperm Donor:"),
-            ("ziehmutter", "dialog.offspring.field.surrogate_mother", "Surrogate Mother:"),
-            ("ziehvater", "dialog.offspring.field.surrogate_father", "Surrogate Father:"),
-        ]
-        for field_name, label_key, default_label in parent_specs:
-            required_sex = (
-                "Female" if field_name in {"eizellspenderin", "ziehmutter"}
-                else "Male"
-            )
-            parent_fields[field_name] = build_relationship_combo(
-                self.animals,
-                str(rec.get(field_name, "")),
-                required_sex,
-                species=initial_species,
-                exclude_id=name or "",
-            )
-            parents_layout.addRow(self.messages.get(label_key, default_label), parent_fields[field_name])
-        basic_parent_section = self._add_parent_mode_selector(
-            form, parents_group, parent_fields, default_mode="hide")
+        parents_group = None
+        basic_parent_section = None
+        if self._heritage_parentage_ui_available():
+            parents_group = QGroupBox(self.messages.get("dialog.offspring.parents", "Parents"))
+            parents_layout = QFormLayout(parents_group)
+            parent_specs = [
+                ("eizellspenderin", "dialog.offspring.field.egg_donor", "Egg Donor:"),
+                ("samenspender", "dialog.offspring.field.sperm_donor", "Sperm Donor:"),
+                ("ziehmutter", "dialog.offspring.field.surrogate_mother", "Surrogate Mother:"),
+                ("ziehvater", "dialog.offspring.field.surrogate_father", "Surrogate Father:"),
+            ]
+            for field_name, label_key, default_label in parent_specs:
+                required_sex = (
+                    "Female" if field_name in {"eizellspenderin", "ziehmutter"}
+                    else "Male"
+                )
+                combo = build_relationship_combo(
+                    self.animals,
+                    str(rec.get(field_name, "")),
+                    required_sex,
+                    species=initial_species,
+                    exclude_id=name or "",
+                )
+                self._std_widen(combo)
+                parent_fields[field_name] = combo
+                parents_layout.addRow(self.messages.get(label_key, default_label), combo)
+            basic_parent_section = self._add_parent_mode_selector(
+                form, parents_group, parent_fields, default_mode="hide")
 
         ref_w_le = None
         if "reference_weight" in enabled_blocks:
             ref_w_le = QLineEdit(str(rec.get("ref_weight", "")))
             ref_w_le.setValidator(QDoubleValidator(0.0, 100000.0, 3, ref_w_le))
+            self._std_widen(ref_w_le)
             form.addRow(self.messages.get("dialog.field.reference_weight", "Reference weight (g):"), ref_w_le)
 
         custom_limit_widgets = {}
@@ -23371,9 +23495,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             custom_event_header.addWidget(QLabel(self.messages.get(
                 "table.header.event_type", "Event type"
             )), 1)
-            custom_event_header.addWidget(QLabel(self.messages.get(
+            custom_delete_header = QLabel(self.messages.get(
                 "table.header.delete", "Delete"
-            )), 0)
+            ))
+            custom_delete_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            custom_delete_header.setFixedWidth(50)
+            custom_event_header.addWidget(custom_delete_header, 0)
             custom_event_rows_layout.addLayout(custom_event_header)
             add_custom_event = QPushButton(self.messages.get(
                 "dialog.basic_role.button.new_event", "New event"
@@ -23470,13 +23597,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
             custom_event_layout.addWidget(custom_event_scroll, 1)
             custom_tabs = QTabWidget()
+            custom_tabs.setVisible(not creating)
             custom_tabs.addTab(
                 custom_event_tab,
-                self.messages.get("dialog.tab.events", "Events"),
+                self.messages.get("dialog.animal.tab.events", "Events"),
             )
             v.addWidget(custom_tabs, 0)
         else:
             custom_tabs = None
+        self._register_animal_dialog_tabs(dlg, custom_tabs)
 
         save_btn = QPushButton(self.messages.get("button.save", "Save"))
         save_btn.setEnabled(not read_only and (
@@ -23676,6 +23805,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 creating,
             )
             self._save_persistence(defer_post_save_work=True)
+            if creating:
+                self._audit_animal_created(new_key, rec_obj)
             if cage_address_fields and extract_address_values and getattr(self, 'cage_track_plugin', None) is not None:
                 try:
                     self.cage_track_plugin.save_address_from_dialog(
@@ -23684,7 +23815,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     )
                 except Exception as exc:
                     logging.warning(f"Could not save basic-role cage address block: {exc}")
-            if getattr(self, 'heritage_plugin', None) is not None:
+            if self._heritage_parentage_ui_available() and parent_fields:
                 try:
                     self.heritage_plugin.save_parentage(
                         new_key,
@@ -23754,7 +23885,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             dlg_title = self.messages.get("dialog.female_animal.title_edit", "Edit Female Animal: {name}").format(name=self._display_name(name))
         dlg, v, form = self._new_std_dialog(dlg_title)
-        dlg.setProperty("animal_dialog_role", role_now)
+        self._set_animal_dialog_context(
+            dlg, role=role_now, editing=not creating
+        )
         name_le, species_cb, initial_species = self._build_name_species_inputs(
             form,
             name_value="" if creating else (name or ""),
@@ -23842,6 +23975,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             form, sex_display, species_cb, str(rec.get("genotype", ""))
         )
 
+        self._install_new_animal_id_preview(
+            id_le,
+            name_widget=name_le,
+            species_widget=species_cb,
+            birth_widget=birth_date_le,
+            sex_widget=sex_display,
+            sex_override="Female",
+            origin_widget=origin_le,
+            editing=not creating,
+            preview_property="_auto_id_preview",
+        )
+
         # Role: only the two valid female roles
         role_cb = QComboBox()
         # Show localized labels but store the internal role code as userData
@@ -23856,11 +24001,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._std_widen(role_cb)
         form.addRow(self.messages.get("dialog.female_animal.role", "Role:"), role_cb)
 
-        # First separation line
-        separator1 = QFrame()
-        separator1.setFrameShape(QFrame.Shape.HLine)
-        separator1.setFrameShadow(QFrame.Shadow.Sunken)
-        form.addRow(separator1)
+        self._add_animal_identity_separator(form)
 
         _cage_addr_group = None
         cage_address_fields = None
@@ -23884,12 +24025,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ref_w_le.setValidator(QDoubleValidator(0.0, 10000.0, 2))
         self._std_widen(ref_w_le)
         form.addRow(self.messages.get("dialog.female_animal.ref_weight", "Reference Weight (g):"), ref_w_le)
-
-        # Separator after reference weight
-        separator2 = QFrame()
-        separator2.setFrameShape(QFrame.Shape.HLine)
-        separator2.setFrameShadow(QFrame.Shadow.Sunken)
-        form.addRow(separator2)
 
         steroid_active = self._is_steroid_track_active()
 
@@ -23935,12 +24070,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         row_maxb = form.rowCount()
         form.addRow(lbl_maxb, maxb_le)
 
-        # Second separation line
-        separator_limits = QFrame()
-        separator_limits.setFrameShape(QFrame.Shape.HLine)
-        separator_limits.setFrameShadow(QFrame.Shadow.Sunken)
-        form.addRow(separator_limits)
-
         # Max Blood Samples (renamed from Max Measurements)
         lbl_maxm = QLabel(self.messages.get("dialog.field.max_blood_samples", "Max Blood Samples:"))
         maxm_le = QLineEdit(str(rec.get('max_messungen', DEFAULT_MAX_MESS)))
@@ -23963,9 +24092,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         form.addRow(lbl_maxfsh, maxfsh_le)
         female_limits_section = self._wrap_form_rows_in_section(
             form, self.messages.get("dialog.experimental_limits.title", "Experimental limits"),
-            [ref_w_le, separator2, lbl_maxop, maxop_le, lbl_maxe, maxe_le,
+            [ref_w_le, lbl_maxop, maxop_le, lbl_maxe, maxe_le,
              lbl_rec, rec_le, lbl_maxpr, maxpr_le, lbl_maxb, maxb_le,
-             separator_limits, lbl_maxm, maxm_le, lbl_maxp, maxp_le,
+             lbl_maxm, maxm_le, lbl_maxp, maxp_le,
              lbl_maxfsh, maxfsh_le], after=_cage_addr_group)
 
         # Health Status
@@ -24054,7 +24183,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 _set_row_visible(lbl_maxb, is_amme)
                 maxb_le.setVisible(is_amme)
 
-                _set_row_visible(separator_limits, True)
                 _set_row_visible(lbl_maxm, True)
                 maxm_le.setVisible(True)
                 _set_row_visible(lbl_maxp, True)
@@ -24071,7 +24199,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 maxpr_le.setVisible(False)
                 _set_row_visible(lbl_maxb, False)
                 maxb_le.setVisible(False)
-                _set_row_visible(separator_limits, False)
                 _set_row_visible(lbl_maxm, False)
                 maxm_le.setVisible(False)
                 _set_row_visible(lbl_maxp, False)
@@ -24103,6 +24230,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_le.setVisible(steroid_active)
             # tabs are only hidden during creation; always visible in edit
             tabs.setVisible(not creating)
+            self._request_animal_dialog_refit(dlg)
 
         role_cb.currentTextChanged.connect(_update_role_fields)
         role_cb.currentIndexChanged.connect(
@@ -24151,7 +24279,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         sorted_gewicht = sorted(rec.get('gewicht', []), key=lambda x: x['datum'])
         gew_sc, gew_w = self._build_editable_list(
-            self.messages.get("dialog.female_animal.tab.weights", "Weights"), 
+            self.messages.get("dialog.animal.tab.weights", "Weights"),
             sorted_gewicht, 
             fmt_gewicht, 
             def_gewicht,
@@ -24164,7 +24292,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         gewicht_tab = QWidget()
         gewicht_lay = QVBoxLayout(gewicht_tab)
         gewicht_lay.addWidget(gew_sc, 0)
-        tabs.addTab(gewicht_tab, self.messages.get("dialog.tab.weights", "Weight"))
+        tabs.addTab(gewicht_tab, self.messages.get("dialog.animal.tab.weights", "Weights"))
 
         # ---------------- Events tab ----------------
         _events_tab = None
@@ -24608,6 +24736,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("female_like.save.persistence.before", key=key)
             self._save_persistence(defer_post_save_work=True)
             self._save_trace("female_like.save.persistence.after", key=key)
+            if creating:
+                self._audit_animal_created(key, rec)
             # Sync to Heritage Track (including role-determined sex)
             if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
                 try:
@@ -24666,27 +24796,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         save_btn.clicked.connect(on_save)
         v.addWidget(save_btn)
         
-        # Adjust dialog width based on tab content
-        def adjust_dialog_width():
-            if tabs.isVisible():
-                current_widget = tabs.currentWidget()
-                if current_widget:
-                    # Force layout update to get accurate size
-                    current_widget.updateGeometry()
-                    QApplication.processEvents()
-                    
-                    # Get the actual content width including all widgets
-                    content_width = current_widget.sizeHint().width()
-                    # Add extra padding for margins, scrollbars, and fixed-width elements
-                    dialog_width = max(700, content_width + 150)
-                    dlg.setMinimumWidth(dialog_width)
-                    dlg.resize(dialog_width, dlg.height())
-        
-        # Connect to tab changes
-        tabs.currentChanged.connect(lambda: adjust_dialog_width())
-        
         self._apply_dialog_width(dlg)
-        QTimer.singleShot(100, adjust_dialog_width)
         # ── Field-level permissions ───────────────────────────────────────────
         _pdg_extra = list(_pdg_tabs) if isinstance(_pdg_tabs, (list, tuple)) else []
         self._apply_dialog_field_permissions({
@@ -25722,6 +25832,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not archived_names:
             self._show_message("error.archive.no_selection")
             return
+        previous_records = {
+            name: copy.deepcopy(data["animals"].get(name, {}))
+            for name in archived_names
+        }
         conventions = self._load_identity_conventions()
         living = [
             name for name in archived_names
@@ -25780,6 +25894,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._on_select()
         details = (
             f"animals={self._audit_value_to_string(archived_names)}; "
+            f"animal={', '.join(archived_names)}; parameter=<record>; "
+            f"previous={self._audit_value_to_string(previous_records)}; "
+            f"new={self._audit_value_to_string({name: data['archived_animals'].get(name, {}) for name in archived_names})}; "
             f"count={len(archived_names)}; "
             "from_scope=animals; to_scope=archived_animals"
         )
@@ -25800,12 +25917,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not name or name == no_archived_msg:
             return
         data = self._read_json()
-        data['animals'][name] = data['archived_animals'].pop(name, {})
+        previous_record = data.get('archived_animals', {}).get(name)
+        if not isinstance(previous_record, dict):
+            return
+        previous_record = copy.deepcopy(previous_record)
+        data['animals'][name] = data['archived_animals'].pop(name)
         self._write_json(data)
         self._load_persistence()
         self._on_select()
         details = (
-            f"animal={name}; "
+            f"animal={name}; parameter=<record>; "
+            f"previous={self._audit_value_to_string(previous_record)}; "
+            f"new={self._audit_value_to_string(data['animals'].get(name, {}))}; "
             "from_scope=archived_animals; to_scope=animals"
         )
         self._master_audit("restore", "ProgTrack", details)
@@ -25832,11 +25955,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if reply != QMessageBox.StandardButton.Yes:
             return
         data = self._read_json()
-        data['archived_animals'].pop(name, None)
+        old_record = data.get('archived_animals', {}).get(name)
+        if not isinstance(old_record, dict):
+            return
+        old_record = copy.deepcopy(old_record)
+        data['archived_animals'].pop(name)
         self._write_json(data)
         self._load_persistence()
         self._on_select()
-        details = f"animal={name}; scope=archived_animals"
+        details = (
+            f"animal={name}; parameter=<record>; "
+            f"previous={self._audit_value_to_string(old_record)}; "
+            f"new={self._audit_value_to_string(None)}; scope=archived_animals"
+        )
         self._master_audit("delete", "ProgTrack", details)
         logging.info(f"Deleted archived animal: {name}")
         self._show_message("deletion.delete_archived.success", name=name)

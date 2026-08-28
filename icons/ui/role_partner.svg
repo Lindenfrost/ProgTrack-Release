@@ -35,20 +35,20 @@
      id="style1">
     .line{
       fill:none;
-      stroke:#25364a;
+      stroke:#000000;
       stroke-width:4;
       stroke-linecap:round;
       stroke-linejoin:round
     }
     .blue{
       fill:#2f80ed;
-      stroke:#25364a;
+      stroke:#000000;
       stroke-width:4;
       stroke-linejoin:round
     }
     .red{
       fill:#e7539f;
-      stroke:#25364a;
+      stroke:#000000;
       stroke-width:4;
       stroke-linejoin:round
     }

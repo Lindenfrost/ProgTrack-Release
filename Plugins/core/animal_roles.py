@@ -156,6 +156,7 @@ OPTIONAL_DIALOG_BLOCKS = (
     "lifecycle",
     "project_severity",
     "reference_weight",
+    "offspring_weight_evaluation",
     "health_flags",
     "limits_reproductive",
     "limits_measurements",
@@ -241,14 +242,29 @@ DEFAULT_DIALOG_RECIPES: Dict[str, Dict[str, Any]] = {
         "new": [
             "identity", "id_chip_origin", "project_severity", "lifecycle",
             "cage_address", "parenting", "limits_measurements", "health_flags",
-            "weight", "procedure_events",
+            "weight", "offspring_weight_evaluation", "procedure_events",
         ],
         "edit": [
             "identity", "id_chip_origin", "project_severity", "lifecycle",
             "cage_address", "parenting", "limits_measurements", "health_flags",
-            "weight", "procedure_events",
+            "weight", "offspring_weight_evaluation", "procedure_events",
         ],
         "events": ["special_measurement", "surgery"],
+    },
+    "experimental_offspring": {
+        "new": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "limits_measurements",
+            "health_flags", "weight", "offspring_weight_evaluation",
+            "procedure_events", "experimental_fields",
+        ],
+        "edit": [
+            "identity", "id_chip_origin", "project_severity", "lifecycle",
+            "cage_address", "parenting", "reference_weight", "limits_measurements",
+            "health_flags", "weight", "offspring_weight_evaluation",
+            "procedure_events", "experimental_fields",
+        ],
+        "events": ["surgery", "measurement"],
     },
     "partner": {
         "new": [
@@ -383,7 +399,7 @@ DEFAULT_ROLE_DEFINITIONS: List[Dict[str, Any]] = [
         "active": True,
         "built_in": True,
         "base_editor": "experimental_animal",
-        "field_preset": "experimental",
+        "field_preset": "experimental_offspring",
         "show_new_animal_button": True,
     },
     {

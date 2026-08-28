@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Edit">
   <style>
-    .outline{stroke:#25364a;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+    .outline{stroke:#000000;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
   </style>
   <!-- Pencil body -->
   <path class="outline" fill="#2f80ed" d="M16.2 39.8 39.8 16.2 47.8 24.2 24.2 47.8 12 52z"/>
   <!-- Wooden tip -->
   <path class="outline" fill="#f4d6a0" d="M16.2 39.8 24.2 47.8 12 52z"/>
   <!-- Graphite point -->
-  <path fill="#25364a" d="m12 52 2.2-6.5 4.3 4.3z"/>
+  <path fill="#000000" d="m12 52 2.2-6.5 4.3 4.3z"/>
   <!-- Ferrule -->
   <path class="outline" fill="#c9d1d9" d="m39.8 16.2 4.8-4.8 8 8-4.8 4.8z"/>
   <!-- Eraser -->

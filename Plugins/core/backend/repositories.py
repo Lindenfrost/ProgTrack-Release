@@ -430,6 +430,75 @@ class AuditRepository:
             )
         return event_id
 
+    def list_events(self) -> list[dict[str, Any]]:
+        """Return the canonical backend audit events in reverse time order.
+
+        Master Track still has a legacy text-log reader for older installations,
+        but backend-owned events must be read from ``audit_events`` directly so
+        database administration, branding, and lock operations are visible in
+        the same audit viewer.  The adapter abstraction keeps this portable for
+        SQLite and PostgreSQL (including PostgreSQL JSONB rows).
+        """
+        with self.adapter.transaction() as connection:
+            rows = _fetchall(
+                connection,
+                "SELECT event_id,occurred_at,actor_login,category,action,"
+                "entity_type,entity_id,correlation_id,payload_json "
+                "FROM audit_events "
+                "ORDER BY occurred_at DESC,event_id DESC",
+            )
+
+        events: list[dict[str, Any]] = []
+        fields = (
+            "event_id",
+            "occurred_at",
+            "actor_login",
+            "category",
+            "action",
+            "entity_type",
+            "entity_id",
+            "correlation_id",
+            "payload_json",
+        )
+        for row in rows:
+            if isinstance(row, dict):
+                values = {field: row.get(field) for field in fields}
+            else:
+                values = {
+                    field: row[index] if index < len(row) else None
+                    for index, field in enumerate(fields)
+                }
+
+            payload_raw = values.get("payload_json")
+            if isinstance(payload_raw, (dict, list)):
+                payload = payload_raw
+            else:
+                try:
+                    payload = loads(payload_raw, {})
+                except (TypeError, ValueError):
+                    payload = {}
+
+            occurred_at = values.get("occurred_at")
+            if isinstance(occurred_at, datetime):
+                occurred_text = occurred_at.isoformat()
+            else:
+                occurred_text = str(occurred_at or "")
+
+            events.append(
+                {
+                    "event_id": str(values.get("event_id") or ""),
+                    "occurred_at": occurred_text,
+                    "actor_login": str(values.get("actor_login") or ""),
+                    "category": str(values.get("category") or ""),
+                    "action": str(values.get("action") or ""),
+                    "entity_type": str(values.get("entity_type") or ""),
+                    "entity_id": str(values.get("entity_id") or ""),
+                    "correlation_id": str(values.get("correlation_id") or ""),
+                    "payload": payload if isinstance(payload, (dict, list)) else {},
+                }
+            )
+        return events
+
 
 def deterministic_record_id(*parts: Any) -> str:
     material = "\x1f".join(str(part) for part in parts)

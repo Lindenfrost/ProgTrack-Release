@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.1
+# Part of: ProgTrack 0.2.2
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.2.1 or newer.
 # Module: Surgery Planner scheduling and Gantt-chart tools.
@@ -64,6 +64,26 @@ def _backend_save(backend, record_id: str, payload) -> None:
 
 def _animal_role_value(animal: Dict[str, Any]) -> str:
     return canonical_role_value((animal or {}).get('rolle', ''))
+
+
+def _animal_identity_display(animal: Dict[str, Any]) -> tuple[str, str, str]:
+    """Return ``(name, generated_id, ipid)`` for compact planner labels.
+
+    The backend uses the immutable IPID as the animal record key.  Showing that
+    key in every planner row makes the available-animal list needlessly wide,
+    so the list uses the human name plus generated ID while retaining the full
+    IPID in the item's tooltip for unambiguous identification.
+    """
+    record = animal or {}
+    ipid = str(record.get('ipid') or record.get('name') or '').strip()
+    # The main application intentionally passes a small planner projection and
+    # may omit ``display_name``; in that case parse the immutable IPID rather
+    # than echoing the full key as the visible label.
+    name = str(record.get('_base_name') or record.get('display_name') or '').strip()
+    if not name:
+        name = animal_base_name(ipid)
+    generated_id = str(record.get('id') or record.get('generated_id') or '').strip()
+    return name or ipid, generated_id, ipid
 
 
 def _canonical_event_count(animal: Dict[str, Any], event_type: str) -> int:
@@ -1394,7 +1414,8 @@ class GanttWidget(QDialog):
 
         # For each animal, compute performed vs. allowed
         for a in sorted_animals:
-            name = a.get('name')
+            name = str(a.get('name') or a.get('ipid') or '').strip()
+            display_name, generated_id, ipid = _animal_identity_display(a)
             role = _animal_role_value(a)
             status = a.get('status', '')
             
@@ -1417,9 +1438,21 @@ class GanttWidget(QDialog):
 
             # Show all animals with allowed > 0
             if allowed > 0:
-                # Create checkbox with animal name
-                checkbox = QCheckBox(f"{name} ({role_label})")
+                # Keep the compact, unambiguous name/ID label in the list.  The
+                # immutable IPID remains available on hover for users who need
+                # the complete identity key.
+                identity_label = display_name
+                if generated_id:
+                    identity_label += f" ({generated_id})"
+                checkbox = QCheckBox(f"{identity_label} ({role_label})")
                 checkbox.setObjectName(name)
+
+                tooltip_lines = []
+                if ipid:
+                    tooltip_lines.append(
+                        tr(self.messages, 'surgery_planner.tooltip.ipid', 'IPID: {ipid}')
+                        .format(ipid=ipid)
+                    )
                 
                 # Determine checked state - auto-check if status is empty (normal/available)
                 if not status:  # Empty status means normal/available
@@ -1431,8 +1464,15 @@ class GanttWidget(QDialog):
                 # Add status indicator if excluded (has any status)
                 if status:
                     checkbox.setStyleSheet("QCheckBox { color: gray; }")
-                    checkbox.setToolTip(tr(self.messages, 'surgery_planner.tooltip.auto_excluded', 
-                                          'Auto-excluded: {status}').format(status=status))
+                    tooltip_lines.append(
+                        tr(
+                            self.messages,
+                            'surgery_planner.tooltip.auto_excluded',
+                            'Auto-excluded: {status}',
+                        ).format(status=status)
+                    )
+                if tooltip_lines:
+                    checkbox.setToolTip("\n".join(tooltip_lines))
                 
                 # Connect checkbox to update checked_animals
                 checkbox.stateChanged.connect(lambda state, n=name: self._on_animal_checkbox_changed(n, state))
@@ -2727,7 +2767,11 @@ class GanttWidget(QDialog):
             # Populate with available animals (donors and surrogates)
             available_animals = []
             for animal in self.animals:
-                name = animal.get('name', '')
+                name = str(animal.get('name') or animal.get('ipid') or '').strip()
+                display_name, generated_id, ipid = _animal_identity_display(animal)
+                identity_label = display_name
+                if generated_id:
+                    identity_label += f" ({generated_id})"
                 role = _animal_role_value(animal)
                 
                 if role == ROLE_VALUE_SPENDER:
@@ -2737,8 +2781,10 @@ class GanttWidget(QDialog):
                     if performed < total_allowed:
                         available_animals.append({
                             'name': name,
+                            'ipid': ipid,
+                            'id': generated_id,
                             'role': 'donor',
-                            'display': f"{name} (Donor: {performed}/{total_allowed})"
+                            'display': f"{identity_label} (Donor: {performed}/{total_allowed})"
                         })
                 elif role == ROLE_VALUE_AMME:
                     # Check if surrogate has remaining capacity
@@ -2747,8 +2793,10 @@ class GanttWidget(QDialog):
                     if performed < total_allowed:
                         available_animals.append({
                             'name': name,
+                            'ipid': ipid,
+                            'id': generated_id,
                             'role': 'surrogate',
-                            'display': f"{name} (Surrogate: {performed}/{total_allowed})"
+                            'display': f"{identity_label} (Surrogate: {performed}/{total_allowed})"
                         })
             
             if not available_animals:
@@ -2762,6 +2810,17 @@ class GanttWidget(QDialog):
             # Add animals to combo box
             for animal in available_animals:
                 animal_combo.addItem(animal['display'], animal)
+                index = animal_combo.count() - 1
+                if animal.get('ipid'):
+                    animal_combo.setItemData(
+                        index,
+                        tr(
+                            self.messages,
+                            'surgery_planner.tooltip.ipid',
+                            'IPID: {ipid}',
+                        ).format(ipid=animal['ipid']),
+                        Qt.ItemDataRole.ToolTipRole,
+                    )
             
             # Event type display - determined by animal role (read-only)
             event_type_label = QLabel(tr(self.messages, 'surgery_planner.label.event_type', 'Event Type:'))

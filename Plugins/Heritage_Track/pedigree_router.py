@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.1
+# Part of: ProgTrack 0.2.2
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: see release metadata.
 # Module: Heritage Track semantic pedigree connector router.

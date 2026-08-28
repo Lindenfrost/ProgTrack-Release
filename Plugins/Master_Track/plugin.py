@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.2.2
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.1-log-menu or newer.
 # Module: Master Track core plugin logic.
@@ -516,11 +516,20 @@ class MasterTrackPlugin:
     # ------------------------------------------------------------------
 
     def audit(self, action: str, target: str = "", details: str = "") -> None:
+        """Append one single-line audit event.
+
+        Audit records are line-oriented for portability.  Free-text details
+        therefore encode line breaks instead of writing additional physical
+        lines that the reader would mistake for unrelated/corrupt events.
+        Structured old/new values are JSON-escaped by the caller and remain
+        lossless in the resulting record.
+        """
         username = self._current_username or "guest"
         ts = datetime.now().isoformat(timespec="seconds")
         month = date.today().strftime("%Y-%m")
         path = os.path.join(self.audit_logs_dir(), f"audit_{month}.log")
-        line = f"[{ts}] [{username}] [{action}] [{target}] {details}\n"
+        safe_details = str(details or "").replace("\r", "\\r").replace("\n", "\\n")
+        line = f"[{ts}] [{username}] [{action}] [{target}] {safe_details}\n"
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "a", encoding="utf-8") as f:

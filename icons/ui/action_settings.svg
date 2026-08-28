@@ -2,13 +2,13 @@
   <style>
     .gear {
       fill: #2f80ed;
-      stroke: #25364a;
+      stroke: #000000;
       stroke-width: 4;
       stroke-linejoin: round;
     }
     .hole {
       fill: #f7fafc;
-      stroke: #25364a;
+      stroke: #000000;
       stroke-width: 4;
     }
   </style>

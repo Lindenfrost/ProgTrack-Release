@@ -2,13 +2,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" version="1.1">
   <!-- Compact experimental-offspring flask with explicit Qt-safe strokes. -->
   <path d="M18.9 15.55h7.8v5.2h-7.8z"
-        fill="#9b7ad0" stroke="#25364a" stroke-width="3.5"
+        fill="#9b7ad0" stroke="#000000" stroke-width="3.5"
         stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M20.2 20.75v6.5L11.75 43.5a2.6 2.6 0 0 0 2.6 3.9h16.9a2.6 2.6 0 0 0 2.6-3.9L25.4 27.25v-6.5z"
-        fill="#9b7ad0" stroke="#25364a" stroke-width="3.5"
+        fill="#9b7ad0" stroke="#000000" stroke-width="3.5"
         stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M17.6 15.55h10.4M20.2 20.75h5.2"
-        fill="none" stroke="#25364a" stroke-width="3.5"
+        fill="none" stroke="#000000" stroke-width="3.5"
         stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M15.65 37.65c2.6 1.95 11.7 1.95 14.3 0"
         fill="none" stroke="#ffffff" stroke-width="3.5"
@@ -19,9 +19,9 @@
 
   <!-- Offspring marker retained alongside the flask. -->
   <circle cx="41" cy="31" r="8"
-          fill="#2f80ed" stroke="#25364a" stroke-width="4"
+          fill="#2f80ed" stroke="#000000" stroke-width="4"
           stroke-linejoin="round"/>
   <path d="M33 50c2-8 14-8 16 0"
-        fill="none" stroke="#25364a" stroke-width="4"
+        fill="none" stroke="#000000" stroke-width="4"
         stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -104,9 +104,10 @@ stale local-process lock is reclaimed.
 exact text fallbacks. The editable SVG masters are maintained under
 `Q:\GitHub\Graphics\SVG\UI`. Code resolves icons with
 `Plugins.core.ui_icons` and must retain readable localized text and tooltips.
-The release's semantic UI package is SVG-only and has no PNG fallback. The
-loader preserves master colours on Qt light palettes and substitutes a
-palette-derived outline only when the canonical outline lacks contrast on Qt
-dark or high-contrast surfaces. Semantic IDs may intentionally share one
-canonical SVG; duplicate alias files are not shipped. Network Track discovers
-only root-level `icons/*.png` and never loads `icons/ui/`.
+The release's semantic UI package is SVG-only and has no PNG fallback. UI
+masters use a fixed black outline; the loader does not recolour it for Qt dark
+or high-contrast palettes, so the same outline is rendered on every
+workstation. Only deliberately coloured details (for example status accents
+and flag artwork) retain their own colours. Semantic IDs may intentionally
+share one canonical SVG; duplicate alias files are not shipped. Network Track
+discovers only root-level `icons/*.png` and never loads `icons/ui/`.

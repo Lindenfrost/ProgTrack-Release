@@ -1,13 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.1.0 RC
+# Part of: ProgTrack 0.2.2
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Master Track PyQt6 dialogs.
 
 from __future__ import annotations
 
-import difflib
 import html
 import json
 import os
@@ -1529,34 +1528,6 @@ class AuditLogsDialog(QDialog):
         return text.strip()
 
     @staticmethod
-    def _diff_changed_words(previous_text: str, new_text: str) -> tuple[str, str]:
-        old = (previous_text or "").strip()
-        new = (new_text or "").strip()
-
-        if old == new:
-            return old, new
-        if not old:
-            return "-", new
-        if not new:
-            return old, "-"
-
-        old_tokens = old.split()
-        new_tokens = new.split()
-        matcher = difflib.SequenceMatcher(None, old_tokens, new_tokens)
-
-        old_changed: List[str] = []
-        new_changed: List[str] = []
-        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-            if tag == "equal":
-                continue
-            old_changed.extend(old_tokens[i1:i2])
-            new_changed.extend(new_tokens[j1:j2])
-
-        old_text = " ".join(old_changed).strip() or old
-        new_text = " ".join(new_changed).strip() or new
-        return old_text, new_text
-
-    @staticmethod
     def _report_field_key(parameter: str) -> str:
         raw = (parameter or "").strip()
         if not raw.lower().startswith("report."):
@@ -1671,30 +1642,12 @@ class AuditLogsDialog(QDialog):
         previous_value = self._try_parse_json(previous_raw)
         new_value = self._try_parse_json(new_raw)
 
-        if isinstance(previous_value, list) and isinstance(new_value, list):
-            if len(new_value) > len(previous_value) and new_value[: len(previous_value)] == previous_value:
-                appended = new_value[len(previous_value):]
-                new_payload: Any
-                if len(appended) == 1:
-                    new_payload = appended[0]
-                else:
-                    new_payload = appended
-                return "-", self._format_value(new_payload)
-
         report_field = self._report_field_key(parameter)
         if report_field:
             if isinstance(previous_value, str):
                 previous_value = self._strip_html_markup(previous_value)
             if isinstance(new_value, str):
                 new_value = self._strip_html_markup(new_value)
-
-            if (
-                report_field in {"daily_data", "scores", "signatures"}
-                and isinstance(previous_value, str)
-                and isinstance(new_value, str)
-            ):
-                old_changed, new_changed = self._diff_changed_words(previous_value, new_value)
-                return self._format_scalar(old_changed), self._format_scalar(new_changed)
 
         return self._format_value(previous_value), self._format_value(new_value)
 
@@ -1752,6 +1705,54 @@ class AuditLogsDialog(QDialog):
             return _msg(self.messages, "master_track.logs.action.restore", "Restore animal")
         if action_lower == "delete":
             return _msg(self.messages, "master_track.logs.action.delete", "Delete animal")
+        if action_lower == "create":
+            return _msg(self.messages, "master_track.logs.action.create", "Create animal")
+
+        backend_action_keys = {
+            "database_created": (
+                "master_track.logs.action.database_created",
+                "Create database",
+            ),
+            "database_selected": (
+                "master_track.logs.action.database_selected",
+                "Select database",
+            ),
+            "database_archived": (
+                "master_track.logs.action.database_archived",
+                "Archive database",
+            ),
+            "database_unarchived": (
+                "master_track.logs.action.database_unarchived",
+                "Unarchive database",
+            ),
+            "database_deleted": (
+                "master_track.logs.action.database_deleted",
+                "Delete database",
+            ),
+            "database_backup": (
+                "master_track.logs.action.database_backup",
+                "Database backup",
+            ),
+            "database_restore": (
+                "master_track.logs.action.database_restore",
+                "Database restore",
+            ),
+            "database_interchange_import": (
+                "master_track.logs.action.database_interchange_import",
+                "Import database interchange",
+            ),
+            "institution_branding_update": (
+                "master_track.logs.action.institution_branding_update",
+                "Update institution branding",
+            ),
+            "force_release": (
+                "master_track.logs.action.force_release",
+                "Force-release lock",
+            ),
+        }
+        backend_action = backend_action_keys.get(action_lower)
+        if backend_action is not None:
+            return _msg(self.messages, backend_action[0], backend_action[1])
 
         if not action_text:
             return "-"
@@ -1862,6 +1863,68 @@ class AuditLogsDialog(QDialog):
             if names:
                 row["animal"] = ", ".join(names)
 
+    def _backend_audit_rows(self) -> List[Dict[str, Any]]:
+        """Adapt canonical backend audit events to the legacy viewer row shape."""
+        try:
+            app = self.parentWidget()
+            backend = getattr(app, "backend", None)
+            repository = getattr(backend, "audit", None)
+            list_events = getattr(repository, "list_events", None)
+            if not callable(list_events):
+                return []
+            events = list_events()
+        except Exception:
+            # The viewer must remain usable while a backend is unavailable or
+            # during a clean backend switch. Legacy file logs can still load.
+            return []
+
+        rows: List[Dict[str, Any]] = []
+        for event in events or []:
+            if not isinstance(event, dict):
+                continue
+            action = str(event.get("action") or "").strip()
+            occurred_at = str(event.get("occurred_at") or "").strip()
+            actor = str(event.get("actor_login") or "").strip()
+            entity_id = str(event.get("entity_id") or "").strip()
+            payload = event.get("payload")
+            details = payload if isinstance(payload, dict) else {}
+
+            # Prefer human-readable target fields from the payload. Database
+            # admin events use ``database``; interchange imports use ``package``.
+            target_value: Any = None
+            for key in ("animal", "animals", "location", "database", "target", "package"):
+                candidate = details.get(key)
+                if not self._is_empty_value(candidate):
+                    target_value = candidate
+                    break
+            if self._is_empty_value(target_value):
+                target_value = entity_id or event.get("entity_type") or "-"
+
+            previous = details.get("previous", details.get("old"))
+            new_value = details.get("new")
+            if previous is not None or new_value is not None:
+                old_display = self._format_value(previous)
+                new_display = self._format_value(new_value)
+            else:
+                old_display = "-"
+                new_display = self._format_value(details)
+
+            rows.append(
+                {
+                    "date": self._format_scalar(occurred_at),
+                    "animal": self._format_value(target_value),
+                    "change": self._format_change_type(action, "", details),
+                    "old": old_display,
+                    "new": new_display,
+                    "user": self._format_scalar(actor),
+                    "_date_obj": self._parse_timestamp_to_date(occurred_at),
+                    "_raw_action": action.lower(),
+                    "_raw_parameter": "",
+                    "_backend_event_id": str(event.get("event_id") or ""),
+                }
+            )
+        return rows
+
     def _load_rows(self) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         for path in self._audit_files():
@@ -1873,6 +1936,12 @@ class AuditLogsDialog(QDialog):
                             rows.append(parsed)
             except Exception:
                 continue
+
+        # Backend-owned events are canonical and include operations that have
+        # no legacy text-log equivalent (database administration, branding,
+        # force-release). Keep legacy records for historical installations and
+        # show both sources in one chronological viewer.
+        rows.extend(self._backend_audit_rows())
 
         self._fill_legacy_action_animals(rows)
 
@@ -2047,6 +2116,12 @@ class AuditLogsDialog(QDialog):
             fontName="Helvetica",
             fontSize=8,
             leading=9,
+            # Audit values can be long JSON records or free text without
+            # whitespace.  CJK wrapping tells ReportLab it may break such
+            # tokens at character boundaries instead of letting them run out
+            # of the cell and become visually clipped.
+            wordWrap="CJK",
+            splitLongWords=True,
         )
         title_style = ParagraphStyle(
             "AuditTitle",
@@ -2080,6 +2155,18 @@ class AuditLogsDialog(QDialog):
             text = text.replace("{", "{{").replace("}", "}}")
             return text
 
+        def _table_value_chunks(value: Any, chunk_size: int = 650) -> List[str]:
+            """Split a long audit value into bounded, lossless table rows.
+
+            ReportLab cannot split a single table row whose Paragraph is taller
+            than the page frame.  Old/new records can legitimately be large,
+            so continuation rows keep every character while allowing the
+            document to paginate safely.
+            """
+            text = str(value if value is not None else "-")
+            text = text if text.strip() else "-"
+            return [text[index:index + chunk_size] for index in range(0, len(text), chunk_size)] or ["-"]
+
         def _draw_header(canvas, doc) -> None:
             canvas.saveState()
             title = Paragraph(f"<b>{_safe_paragraph_text(title_text)}</b>", title_style)
@@ -2098,7 +2185,11 @@ class AuditLogsDialog(QDialog):
                     Paragraph(_safe_paragraph_text(str(len(rows))), normal_style),
                 ]
             ]
-            header_table = Table(header_data, colWidths=[3.0 * cm, 6.5 * cm, 2.5 * cm, 3.0 * cm])
+            header_table = Table(
+                header_data,
+                colWidths=[3.0 * cm, 6.5 * cm, 2.5 * cm, 3.0 * cm],
+                hAlign="CENTER",
+            )
             header_table.setStyle(TableStyle([
                 ("FONT", (0, 0), (-1, -1), "Helvetica", 8),
                 ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#ECF0F1")),
@@ -2110,7 +2201,12 @@ class AuditLogsDialog(QDialog):
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
             ]))
             w3, h3 = header_table.wrap(doc.width, doc.topMargin)
-            header_table.drawOn(canvas, doc.leftMargin, doc.height + doc.topMargin - h - h2 - h3 - 0.45 * cm)
+            header_x = doc.leftMargin + max(0.0, (doc.width - w3) / 2.0)
+            header_table.drawOn(
+                canvas,
+                header_x,
+                doc.height + doc.topMargin - h - h2 - h3 - 0.45 * cm,
+            )
             canvas.restoreState()
 
         doc = BaseDocTemplate(
@@ -2136,19 +2232,29 @@ class AuditLogsDialog(QDialog):
         ]
 
         for row in rows:
-            table_data.append(
-                [
-                    Paragraph(_safe_paragraph_text(row.get("date", "-")), normal_style),
-                    Paragraph(_safe_paragraph_text(row.get("animal", "-")), normal_style),
-                    Paragraph(_safe_paragraph_text(row.get("change", "-")), normal_style),
-                    Paragraph(_safe_paragraph_text(row.get("old", "-")), normal_style),
-                    Paragraph(_safe_paragraph_text(row.get("new", "-")), normal_style),
-                    Paragraph(_safe_paragraph_text(row.get("user", "-")), normal_style),
-                ]
-            )
+            old_chunks = _table_value_chunks(row.get("old", "-"))
+            new_chunks = _table_value_chunks(row.get("new", "-"))
+            for chunk_index in range(max(len(old_chunks), len(new_chunks))):
+                first_chunk = chunk_index == 0
+                table_data.append(
+                    [
+                        Paragraph(_safe_paragraph_text(row.get("date", "-")) if first_chunk else "", normal_style),
+                        Paragraph(_safe_paragraph_text(row.get("animal", "-")) if first_chunk else "", normal_style),
+                        Paragraph(_safe_paragraph_text(row.get("change", "-")) if first_chunk else "", normal_style),
+                        Paragraph(_safe_paragraph_text(old_chunks[chunk_index] if chunk_index < len(old_chunks) else ""), normal_style),
+                        Paragraph(_safe_paragraph_text(new_chunks[chunk_index] if chunk_index < len(new_chunks) else ""), normal_style),
+                        Paragraph(_safe_paragraph_text(row.get("user", "-")) if first_chunk else "", normal_style),
+                    ]
+                )
 
         col_widths = [3.2 * cm, 3.2 * cm, 4.2 * cm, 6.2 * cm, 6.2 * cm, 2.8 * cm]
-        table = Table(table_data, colWidths=col_widths, repeatRows=1, splitByRow=1)
+        table = Table(
+            table_data,
+            colWidths=col_widths,
+            repeatRows=1,
+            splitByRow=1,
+            hAlign="CENTER",
+        )
         table.setStyle(TableStyle([
             ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 9),
             ("FONT", (0, 1), (-1, -1), "Helvetica", 7),

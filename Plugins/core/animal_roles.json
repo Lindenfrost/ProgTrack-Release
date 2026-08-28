@@ -223,6 +223,7 @@
           "lifecycle",
           "limits_measurements",
           "health_flags",
+          "offspring_weight_evaluation",
           "procedure_events"
         ],
         "edit": [
@@ -235,6 +236,7 @@
           "lifecycle",
           "limits_measurements",
           "health_flags",
+          "offspring_weight_evaluation",
           "procedure_events"
         ]
       },
@@ -267,7 +269,7 @@
       "active": true,
       "built_in": true,
       "base_editor": "experimental_animal",
-      "field_preset": "experimental",
+      "field_preset": "experimental_offspring",
       "dialog_blocks": {
         "new": [
           "identity",
@@ -280,6 +282,7 @@
           "reference_weight",
           "limits_measurements",
           "health_flags",
+          "offspring_weight_evaluation",
           "procedure_events",
           "experimental_fields"
         ],
@@ -294,6 +297,7 @@
           "reference_weight",
           "limits_measurements",
           "health_flags",
+          "offspring_weight_evaluation",
           "procedure_events",
           "experimental_fields"
         ]

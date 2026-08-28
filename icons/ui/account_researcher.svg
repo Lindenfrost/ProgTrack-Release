@@ -33,13 +33,13 @@
      inkscape:current-layer="g4" />
   <style
      id="style1">
-    .line{fill:none;stroke:#25364a;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
-    .blue{fill:#2f80ed;stroke:#25364a;stroke-width:4;stroke-linejoin:round}
-    .light{fill:#f7fafc;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
-    .green{fill:#4caf82;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
-    .amber{fill:#f4b942;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
-    .red{fill:#df5b5b;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
-    .purple{fill:#9b7ad0;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
+    .line{fill:none;stroke:#000000;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+    .blue{fill:#2f80ed;stroke:#000000;stroke-width:4;stroke-linejoin:round}
+    .light{fill:#f7fafc;stroke:#000000;stroke-width:3;stroke-linejoin:round}
+    .green{fill:#4caf82;stroke:#000000;stroke-width:3;stroke-linejoin:round}
+    .amber{fill:#f4b942;stroke:#000000;stroke-width:3;stroke-linejoin:round}
+    .red{fill:#df5b5b;stroke:#000000;stroke-width:3;stroke-linejoin:round}
+    .purple{fill:#9b7ad0;stroke:#000000;stroke-width:3;stroke-linejoin:round}
   </style>
   <circle
      class="blue"
@@ -73,7 +73,7 @@
        height="8.3611145"
        rx="0.71148854"
        id="rect1-9"
-       style="fill:#f7fafc;stroke:#25364a;stroke-width:1.80197;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;paint-order:stroke fill markers"
+       style="fill:#f7fafc;stroke:#000000;stroke-width:1.80197;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;paint-order:stroke fill markers"
        transform="matrix(0.9555289,0.29489748,-0.35739952,0.9339516,0,0)" />
     <path
        class="purple"

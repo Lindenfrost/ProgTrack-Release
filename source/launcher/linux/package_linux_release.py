@@ -25,6 +25,8 @@ from pathlib import Path, PurePosixPath
 VERSION = "0.3.0"
 ARCH = "x86_64"
 PYTHON_TAG = "cp313"
+APPLICATION_PAYLOAD_VERSION = "0.2.2"
+APPLICATION_PAYLOAD_FILE = f"ProgTrack.v.{APPLICATION_PAYLOAD_VERSION}.py"
 LINUX_FILES = (
     "ProgTrack",
     "launcher.py",
@@ -44,7 +46,7 @@ PAYLOAD_FILES = (
     "info_en.json",
     "info_it.json",
     "info_ru.json",
-    "ProgTrack.v.0.2.1.py",
+    APPLICATION_PAYLOAD_FILE,
 )
 PAYLOAD_DIRECTORIES = (
     "Plugins",
@@ -292,7 +294,7 @@ def _write_metadata(stage: Path, commit: str, epoch: int, manifest: dict) -> Non
     metadata = {
         "artifact": f"ProgTrack-{VERSION}-linux-{ARCH}.tar.gz",
         "artifact_version": VERSION,
-        "application_payload_version": "0.2.1",
+        "application_payload_version": APPLICATION_PAYLOAD_VERSION,
         "source_commit": commit,
         "source_date_epoch": epoch,
         "platform": f"linux-{ARCH}",

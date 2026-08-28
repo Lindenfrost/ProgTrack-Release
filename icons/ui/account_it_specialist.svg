@@ -33,13 +33,13 @@
      inkscape:current-layer="g2" />
   <style
      id="style1">
-    .line{fill:none;stroke:#25364a;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
-    .blue{fill:#2f80ed;stroke:#25364a;stroke-width:4;stroke-linejoin:round}
-    .light{fill:#f7fafc;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
-    .green{fill:#4caf82;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
-    .amber{fill:#f4b942;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
-    .red{fill:#df5b5b;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
-    .purple{fill:#9b7ad0;stroke:#25364a;stroke-width:3;stroke-linejoin:round}
+    .line{fill:none;stroke:#000000;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+    .blue{fill:#2f80ed;stroke:#000000;stroke-width:4;stroke-linejoin:round}
+    .light{fill:#f7fafc;stroke:#000000;stroke-width:3;stroke-linejoin:round}
+    .green{fill:#4caf82;stroke:#000000;stroke-width:3;stroke-linejoin:round}
+    .amber{fill:#f4b942;stroke:#000000;stroke-width:3;stroke-linejoin:round}
+    .red{fill:#df5b5b;stroke:#000000;stroke-width:3;stroke-linejoin:round}
+    .purple{fill:#9b7ad0;stroke:#000000;stroke-width:3;stroke-linejoin:round}
   </style>
   <circle
      class="blue"
@@ -68,7 +68,7 @@
        d="m 38.776082,46.07682 c 4.882693,3.018062 5.286783,3.175668 -0.233316,5.075606"
        id="path2" />
     <path
-       style="fill:#25364a;fill-opacity:1;stroke:#ffffff;stroke-width:2;stroke-linecap:round;stroke-dasharray:none;stroke-opacity:1;paint-order:fill markers stroke"
+       style="fill:#000000;fill-opacity:1;stroke:#ffffff;stroke-width:2;stroke-linecap:round;stroke-dasharray:none;stroke-opacity:1;paint-order:fill markers stroke"
        d="m 44.542757,50.993805 c 1.274365,-0.04583 2.549309,0.02467 3.806679,0.07931"
        id="path3" />
   </g>
