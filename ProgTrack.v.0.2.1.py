@@ -7611,8 +7611,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             after_row, _after_role = form.getWidgetPosition(after_anchor)
             insert_at = after_row + 1 if after_row >= 0 else form.rowCount()
-        self._set_form_item(form, insert_at, QFormLayout.ItemRole.LabelRole, result.labelItem)
-        self._set_form_item(form, insert_at, QFormLayout.ItemRole.FieldRole, result.fieldItem)
+        # ``addRow(widget)`` creates a spanning row.  ``takeRow`` represents
+        # that row as ``labelItem=None, fieldItem=<widget>``; putting the item
+        # back into FieldRole silently moves the section into the form's field
+        # column.  Address is the only shared section that is deliberately
+        # moved after role-specific identity rows, so this showed up as an
+        # unexplained extra indent in the New Partner, Breeding and Sperm
+        # Donor dialogs.  Preserve the original spanning role when moving a
+        # row, while retaining the normal two-column behavior for labelled
+        # rows.
+        if result.labelItem is None and result.fieldItem is not None:
+            self._set_form_item(form, insert_at, QFormLayout.ItemRole.SpanningRole, result.fieldItem)
+        else:
+            self._set_form_item(form, insert_at, QFormLayout.ItemRole.LabelRole, result.labelItem)
+            self._set_form_item(form, insert_at, QFormLayout.ItemRole.FieldRole, result.fieldItem)
 
     def _wrap_form_rows_in_section(
         self,
