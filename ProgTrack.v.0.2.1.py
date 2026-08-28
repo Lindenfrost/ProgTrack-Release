@@ -15041,6 +15041,26 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             for ev in a.get('events', [])
                             if ev['typ'] in ('fsh', 'pgf', 'surgery')]
 
+                # Backend event rows are canonical, but tolerate an older
+                # snapshot containing an exact duplicate (same type/date).
+                # A duplicate must not render as a second birth/OP marker or
+                # inflate the visible 1/X count.  Distinct dates remain
+                # independent events, including the four Ringbearer surgeries.
+                unique_evs = []
+                seen_plot_events = set()
+                for event_type, event_date in evs:
+                    event_key = (
+                        str(event_type or "").strip().casefold(),
+                        event_date.isoformat()
+                        if hasattr(event_date, "isoformat")
+                        else str(event_date or "").strip(),
+                    )
+                    if event_key in seen_plot_events:
+                        continue
+                    seen_plot_events.add(event_key)
+                    unique_evs.append((event_type, event_date))
+                evs = unique_evs
+
                 # Custom events are admitted only when the active role recipe
                 # contains their block. Keep built-in role filtering unchanged.
                 custom_types = self._custom_event_types_for_role(rolle, mode='edit')

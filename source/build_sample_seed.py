@@ -66,6 +66,18 @@ SEED_PROJECTS = frozenset({"Backcrossing", "OTOF-", "Oakshield", "Ringbearer"})
 OTOF_EXPERIMENTAL_ANIMAL_NAMES = frozenset({
     "Thranduil", "Ekaterina", "Olga", "Svetlana", "Legolas",
 })
+# The four fictional Ringbearer animals are experimental subjects.  Keep one
+# deterministic procedure date per animal so the sample data exercises the
+# surgery event path in Plots while keeping birth in immutable identity only.
+# The dates
+# are deliberately close together because this is one cohort/procedure window
+# and keeps all four events visible when the cohort is plotted together.
+RINGBEARER_SURGERY_DATES = {
+    "Frodo": "2024-09-15",
+    "Sam": "2024-09-16",
+    "Merry": "2024-09-17",
+    "Pippin": "2024-09-18",
+}
 # Disposable probes and superseded examples must never return when the
 # canonical package is rebuilt from the archived authoring snapshot.  Keep
 # this list in one place so Core and every domain payload are pruned by the
@@ -399,7 +411,34 @@ def complete_record(record: dict[str, Any], *, name: str, species: str,
             event["typ"] = event_type
             event["datum"] = str(event_date)
             canonical_events.append(event)
-    result["events"] = canonical_events
+    # Authoring inputs can contain the same lifecycle event more than once
+    # (for example when an old domain export and the animal record are both
+    # merged).  Retain distinct same-day events with different payloads, but
+    # drop exact duplicates so the backend and plots cannot double-count them.
+    unique_events: list[dict[str, Any]] = []
+    seen_event_keys: set[tuple[str, str, str]] = set()
+    for event in canonical_events:
+        event_type = str(event.get("typ") or "").strip()
+        event_date = str(event.get("datum") or "").strip()
+        sample_id = str(event.get("sample_id") or "").strip()
+        payload_key = sample_id or json.dumps(
+            event, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        )
+        key = (event_type, event_date, payload_key)
+        if key in seen_event_keys:
+            continue
+        seen_event_keys.add(key)
+        unique_events.append(event)
+    # Mouse birth dates are immutable identity fields, not plot events in the
+    # sample model.  Keep the mouse timeline focused on procedures and other
+    # scientific events; this also removes stale birth rows from archived
+    # authoring snapshots when the seed is rebuilt.
+    if species == "Mus musculus":
+        unique_events = [
+            event for event in unique_events
+            if str(event.get("typ") or "").strip().casefold() != "birth"
+        ]
+    result["events"] = unique_events
     result.setdefault("daten", [])
     result.setdefault("pdg", [])
     result.setdefault("sperm", [])
@@ -569,9 +608,9 @@ def add_mouse_animal(
         "in_experiment": bool(in_experiment),
         "partner_von": partner,
         "verpaart_mit": partner,
-        "events": [{"typ": "birth", "datum": datetime.strptime(
-            birth, "%d.%m.%Y"
-        ).date().isoformat()}],
+        # Mouse birth date is represented by the immutable identity field;
+        # mouse event timelines start with scientific/procedure entries.
+        "events": [],
     }, name=name, species=species, birth=birth, origin=origin)
     record["ipid"] = key
     core["animals"][key] = record
@@ -661,6 +700,12 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
             parent_f=mother, parent_m=father,
             project=project, in_experiment=in_experiment,
         )
+        surgery_date = RINGBEARER_SURGERY_DATES.get(name)
+        if surgery_date:
+            core["animals"][child_keys[name]]["events"].append({
+                "typ": "surgery",
+                "datum": surgery_date,
+            })
 
     # Elanor is Sam and Rosie's daughter.  Rosie is retained as the canonical
     # partner from the Gamgee family, rather than being Hamfast's partner.
@@ -1849,6 +1894,47 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
              scenario: dict[str, Any]) -> dict[str, Any]:
     all_animals = {**core["animals"], **core["archived_animals"]}
     errors = []
+    # The Ringbearer fixture is used to exercise experimental procedure plots.
+    # Validate its canonical lifecycle explicitly so a seed cannot silently
+    # lose the surgery events or reintroduce mouse birth rows.
+    ringbearer = {
+        str(record.get("name") or "").strip(): record
+        for record in all_animals.values()
+        if str(record.get("species") or "").strip() == "Mus musculus"
+        and str(record.get("project") or "").strip() == "Ringbearer"
+    }
+    for name, expected_surgery_date in RINGBEARER_SURGERY_DATES.items():
+        record = ringbearer.get(name)
+        if record is None:
+            errors.append(f"Ringbearer experimental mouse missing: {name}")
+            continue
+        events = [
+            event for event in record.get("events", []) or []
+            if isinstance(event, dict)
+        ]
+        birth_dates = [
+            parse_record_date(event.get("datum") or event.get("date"))
+            for event in events
+            if str(event.get("typ") or event.get("type") or "").strip().casefold() == "birth"
+        ]
+        surgery_dates = [
+            parse_record_date(event.get("datum") or event.get("date"))
+            for event in events
+            if str(event.get("typ") or event.get("type") or "").strip().casefold() == "surgery"
+        ]
+        if birth_dates:
+            errors.append(f"Mouse birth event must not be present: {name}")
+        if len(surgery_dates) != 1 or surgery_dates[0] != parse_record_date(expected_surgery_date):
+            errors.append(f"Ringbearer surgery event is not canonical: {name}")
+    for ipid, record in all_animals.items():
+        if str(record.get("species") or "").strip() != "Mus musculus":
+            continue
+        if any(
+            isinstance(event, dict)
+            and str(event.get("typ") or event.get("type") or "").strip().casefold() == "birth"
+            for event in record.get("events", []) or []
+        ):
+            errors.append(f"Mouse birth event must not be present: {ipid}")
     for (namespace, record_id), payload in sorted(records.items()):
         for path in removed_animal_reference_paths(payload):
             errors.append(
@@ -2382,7 +2468,7 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | Weight history | Every active and archived animal through its latest researcher-entered scientific/clinical record |
 | Species | Callitrix, Macaca, Papio, Mus |
 | Mus musculus | Canonical Hobbit-derived genealogy (Drogo + Primula -> Frodo), Italian partner names, realistic mouse weights and connected ancestry |
-| Ringbearer | Frodo/Sam and Merry/Pippin are adult experimental mice in one project and two pair cages |
+| Ringbearer | Frodo/Sam and Merry/Pippin are adult experimental mice in one project and two pair cages; each has one surgery event and no birth event |
 | Mouse House | Dedicated building/unit/room; two Ringbearer pair cages, breeding group, and Bilbo's deliberate single cage |
 | Denethor family | Elros descendant; Boromir and Faramir with distinct donors/surrogates |
 | OTOF- success | Two complete transfer, pregnancy-verification, and live-birth paths |

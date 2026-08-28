@@ -10,7 +10,7 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | Weight history | Every active and archived animal through its latest researcher-entered scientific/clinical record |
 | Species | Callitrix, Macaca, Papio, Mus |
 | Mus musculus | Canonical Hobbit-derived genealogy (Drogo + Primula -> Frodo), Italian partner names, realistic mouse weights and connected ancestry |
-| Ringbearer | Frodo/Sam and Merry/Pippin are adult experimental mice in one project and two pair cages |
+| Ringbearer | Frodo/Sam and Merry/Pippin are adult experimental mice in one project and two pair cages; each has one surgery event and no birth event |
 | Mouse House | Dedicated building/unit/room; two Ringbearer pair cages, breeding group, and Bilbo's deliberate single cage |
 | Denethor family | Elros descendant; Boromir and Faramir with distinct donors/surrogates |
 | OTOF- success | Two complete transfer, pregnancy-verification, and live-birth paths |
