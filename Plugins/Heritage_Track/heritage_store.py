@@ -89,6 +89,8 @@ class HeritageStore:
             "node_positions": {},
             "collapsed_families": [],
             "genotype_colors": {},
+            "pedigree_revision": "",
+            "pedigree_sequence": 0,
             "animals": {},
         }
 
@@ -141,6 +143,37 @@ class HeritageStore:
         if text in {"u", "unknown", "unknown sex", "unbekannt", "sconosciuto", "sconosciuta"}:
             return "unknown"
         return ""
+
+    def _normalize_inbreeding_cache(self, value: Any) -> Optional[Dict[str, Any]]:
+        """Validate one structured, lineage-bound F cache entry.
+
+        A legacy scalar ``inbreeding_f`` value deliberately does not satisfy
+        this contract; callers must recalculate it when revision metadata is
+        absent or malformed.
+        """
+        if not isinstance(value, dict):
+            return None
+        status = self._normalize_text(value.get("status", "")).casefold()
+        if status not in {"valid", "unavailable"}:
+            return None
+        pedigree_revision = self._normalize_text(value.get("pedigree_revision", ""))
+        lineage_fingerprint = self._normalize_text(value.get("lineage_fingerprint", ""))
+        if not pedigree_revision or not lineage_fingerprint:
+            return None
+        numeric: Optional[float] = None
+        if status == "valid":
+            try:
+                numeric = float(value.get("value"))
+            except (TypeError, ValueError):
+                return None
+            if not math.isfinite(numeric) or numeric < 0.0 or numeric > 1.0:
+                return None
+        return {
+            "value": numeric,
+            "pedigree_revision": pedigree_revision,
+            "lineage_fingerprint": lineage_fingerprint,
+            "status": status,
+        }
 
     def _normalize_genotype_key(self, value: Any) -> str:
         return self._normalize_text(value).lower()
@@ -266,6 +299,11 @@ class HeritageStore:
             raw["genotype_colors"] = {}
         if not isinstance(raw.get("collapsed_families"), list):
             raw["collapsed_families"] = []
+        raw["pedigree_revision"] = self._normalize_text(raw.get("pedigree_revision", ""))
+        try:
+            raw["pedigree_sequence"] = max(0, int(raw.get("pedigree_sequence", 0) or 0))
+        except (TypeError, ValueError):
+            raw["pedigree_sequence"] = 0
 
         raw_settings = raw.get("settings", {})
         if not isinstance(raw_settings, dict):
@@ -350,6 +388,9 @@ class HeritageStore:
             normalized_entry["parentage_revision_display"] = self._normalize_text(
                 entry.get("parentage_revision_display", "")
             )
+            normalized_entry["genetic_parentage_revision"] = self._normalize_text(
+                entry.get("genetic_parentage_revision", "")
+            )
             if entry.get("identity_review_required"):
                 normalized_entry["identity_review_required"] = True
                 normalized_entry["identity_review_reason"] = self._normalize_text(
@@ -362,6 +403,9 @@ class HeritageStore:
                     normalized_entry["inbreeding_f"] = float(raw_f)
                 except (TypeError, ValueError):
                     normalized_entry["inbreeding_f"] = None
+            f_cache = self._normalize_inbreeding_cache(entry.get("inbreeding_f_cache"))
+            if f_cache is not None:
+                normalized_entry["inbreeding_f_cache"] = f_cache
             normalized_animals[name.strip()] = normalized_entry
 
         # Backfill genotype color map from existing entries (migration path).
@@ -465,6 +509,8 @@ class HeritageStore:
                 "inbreeding_f": None,
                 "parentage_revision": "",
                 "parentage_revision_display": "",
+                "genetic_parentage_revision": "",
+                "inbreeding_f_cache": None,
             }
         return animals[key]
 
@@ -1147,6 +1193,69 @@ class HeritageStore:
             return float(val)
         except (TypeError, ValueError):
             return None
+
+    def get_pedigree_revision(self) -> str:
+        """Return the latest committed genetic-pedigree revision token."""
+        return self._normalize_text(self.load().get("pedigree_revision", ""))
+
+    def get_inbreeding_cache(self, animal_name: str) -> Optional[Dict[str, Any]]:
+        """Return validated lineage-bound F metadata, never a legacy scalar."""
+        key = self._normalize_text(animal_name)
+        if not key:
+            return None
+        entry = self.load().get("animals", {}).get(key, {})
+        if not isinstance(entry, dict):
+            return None
+        cached = self._normalize_inbreeding_cache(entry.get("inbreeding_f_cache"))
+        return deepcopy(cached) if cached is not None else None
+
+    def set_inbreeding_cache_batch(
+        self,
+        updates: Dict[str, Dict[str, Any]],
+        *,
+        persist: bool = True,
+    ) -> bool:
+        """Store validated derived F metadata in one optional deferred write.
+
+        Only already-materialized Core/Heritage records are updated; an
+        unresolved parent must not become a new animal merely because a render
+        calculated an unavailable value for it.
+        """
+        if not isinstance(updates, dict) or not updates:
+            return False
+        data = self.load()
+        animals = data.get("animals", {}) if isinstance(data, dict) else {}
+        if not isinstance(animals, dict):
+            return False
+        changed = False
+        now_iso = self._utc_now_iso()
+        for animal_name, raw_meta in updates.items():
+            key = self._normalize_text(animal_name)
+            if not key or key not in animals or not isinstance(raw_meta, dict):
+                continue
+            metadata = self._normalize_inbreeding_cache(raw_meta)
+            if metadata is None:
+                continue
+            entry = animals[key]
+            if self._normalize_inbreeding_cache(entry.get("inbreeding_f_cache")) != metadata:
+                entry["inbreeding_f_cache"] = metadata
+                entry["updated_at"] = now_iso
+                changed = True
+            scalar = metadata["value"] if metadata["status"] == "valid" else None
+            if entry.get("inbreeding_f") != scalar:
+                # Keep the historical scalar as a read-only mirror for old
+                # exports/tests; render code accepts it only through the
+                # structured metadata above.
+                entry["inbreeding_f"] = scalar
+                entry["updated_at"] = now_iso
+                changed = True
+        if not changed:
+            return False
+        if persist:
+            self._save_animals()
+        else:
+            self._mark_pending_sections(animals=True)
+        return True
 
     def set_inbreeding_f_batch(
         self, updates: Dict[str, float], *, persist: bool = True

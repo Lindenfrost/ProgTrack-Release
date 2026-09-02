@@ -470,6 +470,7 @@ class HeritageTrackWidget(QWidget):
         self._legend_dragging = False
         self._legend_drag_start_px: Optional[Tuple[float, float]] = None
         self._legend_drag_start_anchor: Optional[Tuple[float, float]] = None
+        self._malformed_f_nodes: Set[str] = set()
         # Screen-independent spatial index for hover/click hit testing.  The
         # previous implementation transformed every node on every mouse move,
         # which made dense trees increasingly sluggish.  A small data-space
@@ -789,6 +790,157 @@ class HeritageTrackWidget(QWidget):
         """Return a deterministic revision token for a render dependency."""
         encoded = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def _f_record(self, node: str, engine: PedigreeEngine) -> Dict[str, Any]:
+        """Return the authoritative identity record used by F provenance."""
+        record = engine.animals.get(node) if isinstance(engine.animals, dict) else None
+        if isinstance(record, dict):
+            return record
+        record = engine.heritage_entries.get(node) if isinstance(engine.heritage_entries, dict) else None
+        if isinstance(record, dict):
+            return record
+        return self._get_node_record(node)
+
+    @staticmethod
+    def _find_malformed_f_nodes(
+        parent_map: Dict[str, Tuple[Optional[str], Optional[str]]],
+        known_nodes: Set[str],
+    ) -> Set[str]:
+        """Find malformed genetic roots and propagate them to descendants."""
+        calculator = InbreedingCalculator(parent_map)
+        malformed = set(calculator.cycle_nodes)
+        reverse: Dict[str, Set[str]] = defaultdict(set)
+        for child, parents in parent_map.items():
+            for parent in parents:
+                if not parent:
+                    continue
+                reverse[str(parent)].add(str(child))
+                if str(parent) not in known_nodes:
+                    malformed.add(str(child))
+
+        pending = list(malformed)
+        while pending:
+            ancestor = pending.pop()
+            for child in reverse.get(ancestor, set()):
+                if child in malformed:
+                    continue
+                malformed.add(child)
+                pending.append(child)
+        return malformed
+
+    def _f_lineage_fingerprint(
+        self,
+        node: str,
+        parent_map: Dict[str, Tuple[Optional[str], Optional[str]]],
+        engine: PedigreeEngine,
+    ) -> str:
+        """Fingerprint one complete reachable genetic lineage.
+
+        The global pedigree token is intentionally not part of this fingerprint:
+        an unrelated component may receive a new global revision without
+        invalidating a numerically identical lineage.
+        """
+        store_animals = self._render_store_animals
+        if not isinstance(store_animals, dict):
+            store_animals = self.plugin.store.get_all_entries()
+        rows: List[Tuple[str, str, Tuple[str, str], str]] = []
+        visited: Set[str] = set()
+        stack: Set[str] = set()
+
+        def visit(current: str) -> None:
+            key = str(current or "").strip()
+            if not key:
+                return
+            if key in stack:
+                rows.append(("<cycle>", key, ("", ""), ""))
+                return
+            if key in visited:
+                return
+            visited.add(key)
+            pair = parent_map.get(key, (None, None))
+            normalized_pair = tuple(str(value or "").strip() for value in pair)
+            record = self._f_record(key, engine)
+            stable_id = str(record.get("ipid", "") or key).strip()
+            stored = store_animals.get(key, {}) if isinstance(store_animals, dict) else {}
+            genetic_revision = ""
+            if isinstance(stored, dict):
+                genetic_revision = str(stored.get("genetic_parentage_revision", "") or "").strip()
+            rows.append((stable_id, key, normalized_pair, genetic_revision))
+            stack.add(key)
+            for parent in normalized_pair:
+                visit(parent)
+            stack.remove(key)
+
+        visit(node)
+        return self._render_revision({"schema": "heritage-f-lineage.v1", "rows": sorted(rows)})
+
+    def _compute_inbreeding_state(
+        self,
+        engine: PedigreeEngine,
+        display_nodes: Set[str],
+        *,
+        show_f: bool,
+    ) -> Tuple[Dict[str, float], Dict[str, str]]:
+        """Resolve F and malformed state before an immutable frame is painted."""
+        f_values: Dict[str, float] = {}
+        f_status: Dict[str, str] = {}
+        parent_map = engine.get_genetic_parent_map()
+        calculator = InbreedingCalculator(parent_map)
+        self._cycle_nodes = calculator.cycle_nodes
+        known_nodes = set(engine.animals) | set(engine.heritage_entries)
+        self._malformed_f_nodes = self._find_malformed_f_nodes(parent_map, known_nodes)
+        if not show_f:
+            return f_values, f_status
+
+        current_revision = self.plugin.store.get_pedigree_revision() or "genesis"
+        required_nodes = set(parent_map)
+        required_nodes.update(
+            str(parent)
+            for pair in parent_map.values()
+            for parent in pair
+            if parent
+        )
+        updates: Dict[str, Dict[str, Any]] = {}
+        for node in sorted(required_nodes, key=str.casefold):
+            fingerprint = self._f_lineage_fingerprint(node, parent_map, engine)
+            if node in self._malformed_f_nodes:
+                status = "unavailable"
+                value = None
+            else:
+                cached = self.plugin.store.get_inbreeding_cache(node)
+                if (
+                    cached
+                    and cached.get("status") == "valid"
+                    and cached.get("lineage_fingerprint") == fingerprint
+                ):
+                    status = "cached"
+                    value = float(cached["value"])
+                else:
+                    status = "calculated"
+                    value = float(calculator.self_inbreeding_F(node))
+            metadata = {
+                "value": value,
+                "pedigree_revision": current_revision,
+                "lineage_fingerprint": fingerprint,
+                "status": "valid" if value is not None else "unavailable",
+            }
+            updates[node] = metadata
+            if node in display_nodes:
+                if value is not None:
+                    f_values[node] = value
+                f_status[node] = status if value is not None else "unavailable"
+
+        if updates:
+            try:
+                if self.plugin.store.set_inbreeding_cache_batch(updates, persist=False):
+                    self.plugin.schedule_store_flush()
+            except Exception:
+                # Derived cache persistence must never invalidate the complete
+                # frame that was already calculated for this render.
+                logging.getLogger(__name__).exception(
+                    "Could not queue Heritage inbreeding cache update"
+                )
+        return f_values, f_status
 
     def _render_cache_key(
         self,
@@ -2245,7 +2397,7 @@ class HeritageTrackWidget(QWidget):
                     "heritage_track.node.inbreeding_unavailable",
                     "F: unavailable (cyclic pedigree)",
                 )
-                if node in self._cycle_nodes
+                if node in self._malformed_f_nodes
                 else "F: ~0.0000"
             )
         return max((primary, detail), key=len)
@@ -3196,30 +3348,11 @@ class HeritageTrackWidget(QWidget):
         # belongs to explicit data mutations and the dedicated F-cache issue.
         label_detail_mode = str(self.settings.get("animal_label_detail", "inbreeding_f"))
         show_f = label_detail_mode == "inbreeding_f"
-        f_values: Dict[str, float] = {}
-        f_status: Dict[str, str] = {}
-        _genetic_map = engine.get_genetic_parent_map()
-        _f_calculator = InbreedingCalculator(_genetic_map)
-        self._cycle_nodes = _f_calculator.cycle_nodes
-        if show_f:
-            _store_anims = self._render_store_animals or {}
-            for _node in display_nodes:
-                if self._is_family_node(_node):
-                    continue
-                if _node in self._cycle_nodes:
-                    f_status[_node] = "unavailable_cycle"
-                    continue
-                _anim_entry = _store_anims.get(_node, {}) if isinstance(_store_anims, dict) else {}
-                _cached_f = _anim_entry.get("inbreeding_f") if isinstance(_anim_entry, dict) else None
-                if _cached_f is not None:
-                    try:
-                        f_values[_node] = float(_cached_f)
-                        f_status[_node] = "cached"
-                        continue
-                    except (TypeError, ValueError):
-                        pass
-                f_values[_node] = _f_calculator.self_inbreeding_F(_node)
-                f_status[_node] = "calculated"
+        f_values, f_status = self._compute_inbreeding_state(
+            engine,
+            display_nodes,
+            show_f=show_f,
+        )
 
         self._configure_subplot_geometry(chronological_mode)
 
@@ -3415,7 +3548,7 @@ class HeritageTrackWidget(QWidget):
                 node,
                 record,
                 f_values.get(node),
-                inbreeding_unavailable=node in self._cycle_nodes,
+                inbreeding_unavailable=node in self._malformed_f_nodes,
             )
             f_artist = None
             if detail_text:
@@ -3539,17 +3672,17 @@ class HeritageTrackWidget(QWidget):
             ).format(count=len(route_plan.unresolved))
             status_text = f"{status_text} | {routing_warning}"
             tooltip_lines.extend(route_plan.unresolved)
-        visible_cycle_nodes = sorted(
-            set(display_nodes) & set(self._cycle_nodes), key=str.casefold
+        visible_malformed_nodes = sorted(
+            set(display_nodes) & set(self._malformed_f_nodes), key=str.casefold
         )
-        if visible_cycle_nodes:
+        if visible_malformed_nodes:
             cycle_warning = self.messages.get(
                 "heritage_track.status.cycle_warning",
                 "Warning: {count} cyclic or malformed pedigree records; inbreeding F is unavailable",
-            ).format(count=len(visible_cycle_nodes))
+            ).format(count=len(visible_malformed_nodes))
             status_text = f"{status_text} | {cycle_warning}"
             tooltip_lines.append(
-                ", ".join(visible_cycle_nodes)
+                ", ".join(visible_malformed_nodes)
                 + " — "
                 + self.messages.get(
                     "heritage_track.node.inbreeding_unavailable",
@@ -4691,6 +4824,8 @@ class HeritageTrackPlugin:
             "inbreeding_f": None,
             "parentage_revision": "",
             "parentage_revision_display": "",
+            "genetic_parentage_revision": "",
+            "inbreeding_f_cache": None,
         }
 
     def _parentage_date(self, value: Any) -> Optional[datetime]:
@@ -4921,12 +5056,25 @@ class HeritageTrackPlugin:
         if self._parentage_has_cycle(new_map):
             raise self._parentage_error("heritage_track.error.circular_parentage", "Invalid parent assignment: it would create a circular pedigree.")
 
+        genetic_changed = old_map.get(target_key, ("", "")) != new_map.get(target_key, ("", ""))
+
         sequence = 0
         try:
             sequence = int(latest_snapshot.get("parentage_sequence", 0) or 0) + 1
         except (TypeError, ValueError):
             sequence = 1
         token, display_token = self._parentage_token(self._parentage_actor(actor), sequence)
+        pedigree_sequence = 0
+        pedigree_token = str(latest_snapshot.get("pedigree_revision", "") or "").strip()
+        try:
+            pedigree_sequence = int(latest_snapshot.get("pedigree_sequence", 0) or 0)
+        except (TypeError, ValueError):
+            pedigree_sequence = 0
+        if genetic_changed:
+            pedigree_sequence += 1
+            pedigree_token, _pedigree_display = self._parentage_token(
+                self._parentage_actor(actor), pedigree_sequence
+            )
 
         def mutate(data: Dict[str, Any]) -> bool:
             animals = data.setdefault("animals", {})
@@ -4958,9 +5106,15 @@ class HeritageTrackPlugin:
                         entry[metadata_key] = deepcopy(target_metadata[metadata_key])
             entry["parentage_revision"] = token
             entry["parentage_revision_display"] = display_token
+            if genetic_changed:
+                entry["genetic_parentage_revision"] = pedigree_token
+                entry.pop("inbreeding_f_cache", None)
             entry["updated_at"] = self.store._utc_now_iso()
-            entry["inbreeding_f"] = None
             data["parentage_sequence"] = sequence
+            if genetic_changed:
+                data["pedigree_sequence"] = pedigree_sequence
+                data["pedigree_revision"] = pedigree_token
+                entry["inbreeding_f"] = None
             return True
 
         try:
