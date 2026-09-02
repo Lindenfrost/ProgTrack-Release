@@ -1,10 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
   <style>
-    .outlined{stroke:#000000;stroke-width:4;stroke-linejoin:round}
-    .blue{fill:#2f80ed}
+    .blue{fill:#2f80ed;stroke:#000000;stroke-width:4;stroke-linejoin:round}
+    .silver{fill:#c0c0c0;stroke:#000000;stroke-width:3;stroke-linejoin:round}
   </style>
-  <circle class="outlined blue" cx="32" cy="23" r="11"/>
-  <path class="outlined blue" d="M13 54c2-16 36-16 38 0z"/>
-  <path d="M21.5 14.8Q32 12.8 42.5 14.8L41.4 21Q32 19.2 22.6 21Z"
-        fill="#e6edf3" stroke="#000000" stroke-width="4" stroke-linejoin="round"/>
+  <!-- ordinary user silhouette (Master is an account, not a crowned role) -->
+  <circle class="blue" cx="32" cy="23" r="11"/>
+  <path class="blue" d="M13 54c2-16 36-16 38 0z"/>
+  <!-- silver key held at the right side -->
+  <g transform="rotate(-38 47 43)">
+    <circle class="silver" cx="43" cy="40" r="5"/>
+    <circle cx="43" cy="40" r="1.8" fill="#f7fafc" stroke="#000000" stroke-width="1.5"/>
+    <path class="silver" d="M47 38.5H61V43h-3v4h-3v-4h-8z"/>
+  </g>
 </svg>
