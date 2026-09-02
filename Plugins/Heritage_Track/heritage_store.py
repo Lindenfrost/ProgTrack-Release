@@ -29,6 +29,8 @@ class HeritageStore:
     collapse state, and settings are read from the configured backend record.
     """
 
+    POSITION_CACHE_LIMIT = 1000
+
     def __init__(self, plugin_dir: str, backend: Any):
         self.backend_store = BackendJsonStore(backend, "heritage", "graph")
         self._data: Optional[Dict[str, Any]] = None
@@ -92,6 +94,10 @@ class HeritageStore:
             "updated_at": self._utc_now_iso(),
             "settings": self._default_settings(),
             "node_positions": {},
+            # User/selection-scoped logical positions.  The legacy
+            # ``node_positions`` map is intentionally not migrated into this
+            # cache: it has no reliable selection or user ownership metadata.
+            "position_cache": {},
             "collapsed_families": [],
             "genotype_colors": {},
             "pedigree_revision": "",
@@ -206,6 +212,54 @@ class HeritageStore:
             return None
         return x, y
 
+    def _normalize_position_cache_entry(self, value: Any) -> Optional[Dict[str, Any]]:
+        """Normalize one persisted, user-owned selection position map.
+
+        Cache records are deliberately independent of the historical global
+        ``node_positions`` map.  Invalid coordinates are discarded at the
+        cache boundary so a malformed saved entry can never reach routing.
+        """
+        if not isinstance(value, dict):
+            return None
+        raw_positions = value.get("positions", {})
+        if not isinstance(raw_positions, dict):
+            return None
+        positions: Dict[str, Dict[str, float]] = {}
+        for raw_name, raw_position in raw_positions.items():
+            name = self._normalize_text(raw_name)
+            normalized = self._normalize_position(raw_position)
+            if not name or normalized is None:
+                return None
+            x, y = normalized
+            positions[name] = {"x": x, "y": y}
+        revision = self._normalize_text(value.get("pedigree_revision", ""))
+        if not revision:
+            return None
+        raw_dependencies = value.get("dependency_ids", ())
+        if isinstance(raw_dependencies, (str, bytes)):
+            raw_dependencies = (raw_dependencies,)
+        if not isinstance(raw_dependencies, (list, tuple, set, frozenset)):
+            return None
+        dependencies = sorted(
+            {
+                self._normalize_text(item)
+                for item in raw_dependencies
+                if self._normalize_text(item)
+            },
+            key=lambda item: (item.casefold(), item),
+        )
+        updated_at = self._normalize_text(value.get("updated_at", ""))
+        if not updated_at:
+            return None
+        selection_type = self._normalize_text(value.get("selection_type", "selected")) or "selected"
+        return {
+            "pedigree_revision": revision,
+            "dependency_ids": dependencies,
+            "positions": positions,
+            "selection_type": selection_type,
+            "updated_at": updated_at,
+        }
+
     def load(self) -> Dict[str, Any]:
         if self._data is not None:
             return self._data
@@ -310,6 +364,33 @@ class HeritageStore:
             raw["node_positions"] = {}
         else:
             self._invalid_node_positions = {}
+        raw_position_cache = raw.get("position_cache", {})
+        if not isinstance(raw_position_cache, dict):
+            raw_position_cache = {}
+        normalized_position_cache: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        for raw_user, raw_entries in raw_position_cache.items():
+            user = self._normalize_text(raw_user) or "guest"
+            if not isinstance(raw_entries, dict):
+                continue
+            user_entries: Dict[str, Dict[str, Any]] = {}
+            for raw_key, raw_entry in raw_entries.items():
+                key = self._normalize_text(raw_key)
+                normalized_entry = self._normalize_position_cache_entry(raw_entry)
+                if key and normalized_entry is not None:
+                    user_entries[key] = normalized_entry
+            if user_entries:
+                # Existing payloads may have been written before the bound was
+                # introduced.  Keep the newest deterministic entries only.
+                ordered = sorted(
+                    user_entries.items(),
+                    key=lambda item: (
+                        str(item[1].get("updated_at", "")),
+                        item[0],
+                    ),
+                    reverse=True,
+                )[: self.POSITION_CACHE_LIMIT]
+                normalized_position_cache[user] = dict(ordered)
+        raw["position_cache"] = normalized_position_cache
         if not isinstance(raw.get("genotype_colors"), dict):
             raw["genotype_colors"] = {}
         if not isinstance(raw.get("collapsed_families"), list):
@@ -682,6 +763,226 @@ class HeritageStore:
                 continue
             positions[key] = normalized
         return positions
+
+    @staticmethod
+    def _normalize_position_cache_user(value: Any) -> str:
+        return str(value or "guest").strip() or "guest"
+
+    def get_position_cache_entry(
+        self,
+        user_id: Any,
+        cache_key: Any,
+        *,
+        pedigree_revision: Optional[str] = None,
+        dependency_ids: Optional[Iterable[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Return one complete logical position cache record, read-only.
+
+        Optional revision/dependency arguments are checked without mutating
+        storage.  This keeps redraws, language changes and viewport changes
+        strictly read-only; stale records are replaced by the next successful
+        automatic layout or explicitly removed by invalidation.
+        """
+        user = self._normalize_position_cache_user(user_id)
+        key = self._normalize_text(cache_key)
+        if not key:
+            return None
+        # Refresh the read from the backend so a second session's committed
+        # cache replacement is visible immediately.  The helper restores this
+        # object's in-memory/pending state and does not write normalization.
+        data, _revision = self.load_latest_with_revision()
+        cache = data.get("position_cache", {}) if isinstance(data, dict) else {}
+        entries = cache.get(user, {}) if isinstance(cache, dict) else {}
+        if not isinstance(entries, dict):
+            return None
+        entry = self._normalize_position_cache_entry(entries.get(key))
+        if entry is None:
+            return None
+        expected_revision = self._normalize_text(pedigree_revision)
+        if expected_revision and entry["pedigree_revision"] != expected_revision:
+            return None
+        if dependency_ids is not None:
+            expected_dependencies = sorted(
+                {
+                    self._normalize_text(item)
+                    for item in dependency_ids
+                    if self._normalize_text(item)
+                },
+                key=lambda item: (item.casefold(), item),
+            )
+            if entry["dependency_ids"] != expected_dependencies:
+                return None
+        return deepcopy(entry)
+
+    def set_position_cache_entry(
+        self,
+        user_id: Any,
+        cache_key: Any,
+        positions: Dict[str, Any],
+        pedigree_revision: str,
+        dependency_ids: Iterable[str],
+        *,
+        selection_type: str = "selected",
+    ) -> Dict[str, Any]:
+        """Atomically replace one user's complete selection position map.
+
+        Returns deterministic eviction metadata for a localized UI notice.
+        Validation happens before the backend mutation, and the mutation is
+        performed through ``atomic_update`` so a failed write leaves the
+        previous cache entry untouched.
+        """
+        user = self._normalize_position_cache_user(user_id)
+        key = self._normalize_text(cache_key)
+        revision = self._normalize_text(pedigree_revision)
+        if not key or not revision or not isinstance(positions, dict):
+            raise ValueError("A cache key, pedigree revision and position map are required")
+        normalized_positions: Dict[str, Dict[str, float]] = {}
+        for raw_name, raw_position in positions.items():
+            name = self._normalize_text(raw_name)
+            normalized = self._normalize_position(raw_position)
+            if not name:
+                continue
+            if normalized is None:
+                raise ValueError(f"Invalid non-finite cached node position for {name}")
+            x, y = normalized
+            normalized_positions[name] = {"x": x, "y": y}
+        dependencies = sorted(
+            {
+                self._normalize_text(item)
+                for item in dependency_ids
+                if self._normalize_text(item)
+            },
+            key=lambda item: (item.casefold(), item),
+        )
+        normalized_type = self._normalize_text(selection_type) or "selected"
+
+        # A render may have queued derived F metadata immediately before the
+        # position write.  ``atomic_update`` intentionally refreshes from the
+        # backend, so flush those queued changes first rather than replacing
+        # them with a cache-only snapshot.
+        if self.has_pending_changes():
+            self.flush_pending()
+
+        def mutate(data: Dict[str, Any]) -> Dict[str, Any]:
+            cache = data.setdefault("position_cache", {})
+            if not isinstance(cache, dict):
+                cache = {}
+                data["position_cache"] = cache
+            entries = cache.setdefault(user, {})
+            if not isinstance(entries, dict):
+                entries = {}
+                cache[user] = entries
+            replaced = key in entries
+            entries[key] = {
+                "pedigree_revision": revision,
+                "dependency_ids": list(dependencies),
+                "positions": deepcopy(normalized_positions),
+                "selection_type": normalized_type,
+                "updated_at": self._utc_now_iso(),
+            }
+            evicted_key = None
+            if len(entries) > self.POSITION_CACHE_LIMIT:
+                # Oldest timestamp wins; key is a deterministic tie-breaker.
+                oldest = min(
+                    entries.items(),
+                    key=lambda item: (
+                        str(item[1].get("updated_at", "")),
+                        item[0],
+                    ),
+                )[0]
+                if oldest != key:
+                    evicted_key = oldest
+                    entries.pop(oldest, None)
+                else:
+                    # A clock collision must never evict the just-written
+                    # entry; remove the next deterministic oldest record.
+                    candidates = sorted(
+                        (item for item in entries if item != key),
+                        key=lambda item: (
+                            str(entries[item].get("updated_at", "")),
+                            item,
+                        ),
+                    )
+                    if candidates:
+                        evicted_key = candidates[0]
+                        entries.pop(evicted_key, None)
+            return {
+                "replaced": replaced,
+                "evicted_key": evicted_key,
+                "count": len(entries),
+            }
+
+        result = self.atomic_update(mutate)
+        return dict(result or {})
+
+    def remove_position_cache_entry(self, user_id: Any, cache_key: Any) -> bool:
+        """Atomically remove exactly one user/selection cache entry."""
+        user = self._normalize_position_cache_user(user_id)
+        key = self._normalize_text(cache_key)
+        current = self.load().get("position_cache", {})
+        current_entries = current.get(user, {}) if isinstance(current, dict) else {}
+        if not isinstance(current_entries, dict) or key not in current_entries:
+            return False
+
+        def mutate(data: Dict[str, Any]) -> bool:
+            cache = data.get("position_cache", {})
+            entries = cache.get(user, {}) if isinstance(cache, dict) else {}
+            if not isinstance(entries, dict) or key not in entries:
+                return False
+            entries.pop(key, None)
+            if not entries:
+                cache.pop(user, None)
+            return True
+
+        return bool(self.atomic_update(mutate))
+
+    def invalidate_position_cache_dependencies(self, dependency_ids: Iterable[str]) -> int:
+        """Drop cached maps that depend on changed animals, atomically."""
+        dependencies = {
+            self._normalize_text(item)
+            for item in dependency_ids
+            if self._normalize_text(item)
+        }
+        if not dependencies:
+            return 0
+        current = self.load().get("position_cache", {})
+        if not isinstance(current, dict):
+            return 0
+        has_match = False
+        for raw_entries in current.values():
+            if not isinstance(raw_entries, dict):
+                continue
+            for raw_entry in raw_entries.values():
+                entry = self._normalize_position_cache_entry(raw_entry)
+                if entry is not None and set(entry["dependency_ids"]) & dependencies:
+                    has_match = True
+                    break
+            if has_match:
+                break
+        if not has_match:
+            return 0
+
+        def mutate(data: Dict[str, Any]) -> int:
+            cache = data.get("position_cache", {})
+            if not isinstance(cache, dict):
+                return 0
+            removed = 0
+            for user in list(cache):
+                entries = cache.get(user)
+                if not isinstance(entries, dict):
+                    cache.pop(user, None)
+                    continue
+                for key in list(entries):
+                    entry = self._normalize_position_cache_entry(entries.get(key))
+                    entry_dependencies = set(entry.get("dependency_ids", [])) if entry else set()
+                    if entry is None or entry_dependencies & dependencies:
+                        entries.pop(key, None)
+                        removed += 1
+                if not entries:
+                    cache.pop(user, None)
+            return removed
+
+        return int(self.atomic_update(mutate) or 0)
 
     def get_invalid_node_positions(self) -> Dict[str, Any]:
         """Return invalid legacy coordinates awaiting explicit cleanup."""

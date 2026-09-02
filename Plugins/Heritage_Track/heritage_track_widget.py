@@ -492,6 +492,11 @@ class HeritageTrackWidget(QWidget):
         self.layout_mode = LAYOUT_MODE_OVERVIEW
         self._canonical_selection_ids: Tuple[str, ...] = ()
         self._force_relayout = False
+        self._active_position_cache_key: Optional[str] = None
+        self._active_position_cache_user = "guest"
+        self._active_position_cache_revision = ""
+        self._active_position_cache_dependencies: Set[str] = set()
+        self._position_cache_notice = ""
 
         # Double-click detection state (timer-based for reliability across backends)
         self._last_click_time: float = 0.0
@@ -684,8 +689,10 @@ class HeritageTrackWidget(QWidget):
                     "Could not persist HeritageTrack generation limit",
                     exc_info=True,
                 )
-        # Mark for relayout on next refresh; do not auto-refresh
-        self._force_relayout = True
+        # The generation limit is part of the selection/layout cache key.  A
+        # new limit therefore checks its own entry instead of invalidating or
+        # overwriting positions belonging to another display type.
+        self._force_relayout = False
 
 
     def _connect_canvas_events(self) -> None:
@@ -969,6 +976,131 @@ class HeritageTrackWidget(QWidget):
             selection_type="selected",
             display_mode=display_mode,
         )
+
+    def _position_cache_user_id(self) -> str:
+        master_track = getattr(self.app, "master_track", None)
+        value = str(getattr(master_track, "current_username", "") or "").strip()
+        return value or "guest"
+
+    def _position_cache_key(
+        self,
+        selected_animals: List[str],
+        *,
+        display_mode: Optional[str] = None,
+        chronological_mode: Optional[bool] = None,
+    ) -> str:
+        """Build a locale/DPI/viewport-neutral key for logical positions."""
+        canonical = tuple(
+            self._canonicalize_selection(selected_animals)
+            if tuple(selected_animals) != self._canonical_selection_ids
+            else self._canonical_selection_ids
+        )
+        chronological = (
+            chronological_mode
+            if chronological_mode is not None
+            else self.settings.get("vertical_layout_mode") == VERTICAL_LAYOUT_CHRONOLOGICAL
+        )
+        semantic_mode = str(display_mode or self.layout_mode).strip() or self.layout_mode
+        payload = {
+            "schema": "heritage-position-cache.v1",
+            "selection": canonical,
+            "selection_type": "selected",
+            "display_mode": semantic_mode,
+            "vertical_layout_mode": "chronological" if chronological else "partner_normalized",
+            "max_generations": int(self._max_generations),
+            "show_heritage_only": bool(self.settings.get("show_heritage_only", True)),
+            "exclude_archived": bool(self.settings.get("exclude_archived", False)),
+        }
+        return self._render_revision(payload)
+
+    @staticmethod
+    def _position_cache_dependencies(
+        engine: PedigreeEngine,
+        display_nodes: Set[str],
+    ) -> Set[str]:
+        dependencies = {str(node).strip() for node in display_nodes if str(node).strip()}
+        parent_map = getattr(engine, "child_to_parents", {}) or {}
+        for child in display_nodes:
+            values = parent_map.get(child, {}) if isinstance(parent_map, dict) else {}
+            if isinstance(values, dict):
+                dependencies.update(
+                    str(parent).strip()
+                    for parent in values.values()
+                    if str(parent or "").strip()
+                )
+        return dependencies
+
+    def _save_position_cache(
+        self,
+        positions: Dict[str, Tuple[float, float]],
+        *,
+        confirm_delete_on_failure: bool = False,
+    ) -> bool:
+        """Persist one complete map, retrying exactly once on backend failure."""
+        key = self._active_position_cache_key
+        if not key or not positions:
+            return True
+        payload = {
+            node: tuple(point)
+            for node, point in positions.items()
+            if node in self._active_position_cache_dependencies
+            and not self._is_family_node(node)
+        }
+        if not payload:
+            return True
+        last_error: Optional[Exception] = None
+        for _attempt in range(2):
+            try:
+                result = self.plugin.store.set_position_cache_entry(
+                    self._active_position_cache_user,
+                    key,
+                    payload,
+                    self._active_position_cache_revision or "genesis",
+                    self._active_position_cache_dependencies,
+                    selection_type=(
+                        f"selected:{self.layout_mode}:"
+                        f"{self.settings.get('vertical_layout_mode', VERTICAL_LAYOUT_PARTNER_NORMALIZED)}"
+                    ),
+                )
+                evicted = str(result.get("evicted_key", "") or "").strip()
+                if evicted:
+                    self._position_cache_notice = self.messages.get(
+                        "heritage_track.position_cache.full",
+                        "Position cache limit reached; the oldest layout was replaced.",
+                    )
+                return True
+            except Exception as exc:  # pragma: no cover - backend-specific failures
+                last_error = exc
+                logging.getLogger(__name__).exception(
+                    "Could not persist Heritage selection position cache"
+                )
+
+        self._position_cache_notice = self.messages.get(
+            "heritage_track.position_cache.write_failed",
+            "The pedigree layout could not be saved; the previous saved layout was kept.",
+        )
+        if confirm_delete_on_failure and key:
+            answer = QMessageBox.question(
+                self,
+                self.messages.get("heritage_track.position_cache.write_failed_title", "Layout not saved"),
+                self.messages.get(
+                    "heritage_track.position_cache.delete_failed_entry",
+                    "Delete the saved layout for this selection?",
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer == QMessageBox.StandardButton.Yes:
+                try:
+                    self.plugin.store.remove_position_cache_entry(
+                        self._active_position_cache_user, key
+                    )
+                except Exception:
+                    logging.getLogger(__name__).exception(
+                        "Could not remove failed Heritage position cache entry"
+                    )
+        _ = last_error
+        return False
 
     def _build_render_cache_entry(
         self,
@@ -1600,7 +1732,10 @@ class HeritageTrackWidget(QWidget):
         self.plugin.set_settings(self.settings)
         placement_changed = self.settings["vertical_layout_mode"] != current_vertical_mode
         if placement_changed:
-            self._force_relayout = True
+            # Chronological and partner-normalized layouts have independent
+            # position-cache identities; let the selected mode restore its
+            # own map (or create one on a miss).
+            self._force_relayout = False
             self.current_xlim = None
             self.current_ylim = None
         self.refresh_graph(keep_view=not placement_changed)
@@ -1640,8 +1775,9 @@ class HeritageTrackWidget(QWidget):
                     "HeritageTrack selection callback failed while clearing selection"
                 )
 
-        # Force relayout when switching modes
-        self._force_relayout = True
+        # Selection identity is part of the persistent position-cache key.
+        # Switching selection therefore checks that selection's own entry.
+        self._force_relayout = False
 
         # Refresh graph - will now show "selected animals" mode (empty)
         self.refresh_graph(keep_view=True)
@@ -1722,7 +1858,7 @@ class HeritageTrackWidget(QWidget):
         # together with the relayout request. Persistent Overview positions are
         # still kept in the backend and are handled separately by refresh_graph.
         self.temp_positions.clear()
-        self._force_relayout = True
+        self._force_relayout = False
 
         # Refresh graph to show the updated selection
         self.refresh_graph(keep_view=True)
@@ -1769,10 +1905,30 @@ class HeritageTrackWidget(QWidget):
                     self.plugin.remove_render_cache_entry(self._render_cache_entry.cache_key)
                     self._render_cache_entry = None
 
-        # Check if there are any saved positions
-        saved_positions = self.plugin.store.get_node_positions()
-        
-        if saved_positions:
+        # Refresh only concerns the current user's selection-scoped layout.
+        # The historical global node_positions map is not part of this reset.
+        selected_animals = list(self._canonicalize_selection())
+        cache_key = self._position_cache_key(selected_animals)
+        cache_revision = self.plugin.store.get_pedigree_revision() or "genesis"
+        cache_dependencies = set(self._active_position_cache_dependencies)
+        if not cache_dependencies:
+            current_engine = self.plugin.build_engine(sync=False)
+            current_nodes = (
+                set(self._render_cache_entry.display_nodes)
+                if self._render_cache_entry is not None
+                else set(current_engine.get_display_nodes(selected_animals))
+            )
+            cache_dependencies = self._position_cache_dependencies(
+                current_engine, current_nodes
+            )
+        saved_entry = self.plugin.store.get_position_cache_entry(
+            self._position_cache_user_id(),
+            cache_key,
+            pedigree_revision=cache_revision,
+            dependency_ids=cache_dependencies,
+        )
+
+        if saved_entry:
             # Ask user if they want to reset positions
             # Create custom message box with warning.png icon
             msg = QMessageBox(self)
@@ -1800,7 +1956,8 @@ class HeritageTrackWidget(QWidget):
             if confirm != QMessageBox.StandardButton.Yes:
                 return
         
-        # Normal refresh without clearing positions
+        # Normal refresh without consuming the old entry.  refresh_graph()
+        # replaces it only after a complete automatic frame is accepted.
         self._force_relayout = True
         self.selected_nodes.clear()
         self.temp_positions.clear()
@@ -3238,10 +3395,11 @@ class HeritageTrackWidget(QWidget):
         # membership set when a ghost is promoted to an active selection.
         self._ghost_nodes = set(ghost_nodes)
 
-        # Force relayout if display nodes have changed (new selection)
-        # This ensures proper placement algorithms run on first selection
+        # A changed display scope selects a different persistent map.  Do not
+        # force a global relayout here: the canonical selection/layout key
+        # below determines whether its own map is restored.
         if hasattr(self, '_prev_display_nodes') and self._prev_display_nodes != display_nodes:
-            self._force_relayout = True
+            self.temp_positions.clear()
         self._prev_display_nodes = display_nodes.copy()
 
         # Switch to canvas for graph display
@@ -3295,18 +3453,60 @@ class HeritageTrackWidget(QWidget):
         # Build final families ONCE after all filtering
         families = self._build_family_units(display_nodes, levels, engine)
         families.update(collapsed_family_nodes)
-        saved_positions_all = self.plugin.store.get_node_positions()
-        saved_positions = {
-            node: pos
-            for node, pos in saved_positions_all.items()
-            if node in display_nodes
-        }
-
-        locked_positions = (
-            saved_positions
-            if self.no_selection_mode and not self._force_relayout
-            else {}
+        # Read only the current user's complete selection map.  Legacy global
+        # coordinates are deliberately ignored for selected views and are
+        # never migrated into this cache.
+        chronological_mode = (
+            self.settings.get("vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED)
+            == VERTICAL_LAYOUT_CHRONOLOGICAL
         )
+        position_cache_key = self._position_cache_key(
+            selected_animals,
+            display_mode=self.layout_mode,
+            chronological_mode=chronological_mode,
+        )
+        position_cache_user = self._position_cache_user_id()
+        position_cache_revision = self.plugin.store.get_pedigree_revision() or "genesis"
+        position_cache_dependencies = self._position_cache_dependencies(
+            engine, set(display_nodes)
+        )
+        cached_entry = None
+        if not self._force_relayout:
+            cached_entry = self.plugin.store.get_position_cache_entry(
+                position_cache_user,
+                position_cache_key,
+                pedigree_revision=position_cache_revision,
+                dependency_ids=position_cache_dependencies,
+            )
+        cached_positions: Dict[str, Tuple[float, float]] = {}
+        if isinstance(cached_entry, dict):
+            raw_cached_positions = cached_entry.get("positions", {})
+            if isinstance(raw_cached_positions, dict):
+                cached_positions = {
+                    node: (float(value["x"]), float(value["y"]))
+                    for node, value in raw_cached_positions.items()
+                    if node in display_nodes
+                    and not self._is_family_node(node)
+                    and isinstance(value, dict)
+                    and "x" in value
+                    and "y" in value
+                }
+            visible_animals = {
+                node for node in display_nodes if not self._is_family_node(node)
+            }
+            if visible_animals and set(cached_positions) != visible_animals:
+                # Partial records are not a valid cache hit; rebuild the
+                # complete map instead of mixing maps from other selections.
+                cached_entry = None
+                cached_positions = {}
+
+        self._active_position_cache_key = position_cache_key
+        self._active_position_cache_user = position_cache_user
+        self._active_position_cache_revision = position_cache_revision
+        self._active_position_cache_dependencies = set(position_cache_dependencies)
+        self._position_cache_hit = bool(cached_entry)
+
+        locked_positions = cached_positions if cached_entry else {}
 
         try:
             auto_positions = self._compute_positions(
@@ -3319,11 +3519,6 @@ class HeritageTrackWidget(QWidget):
         except GeometryValidationError as exc:
             self._report_geometry_failure(exc)
             return
-        chronological_mode = (
-            self.settings.get("vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED)
-            == VERTICAL_LAYOUT_CHRONOLOGICAL
-        )
-
         def _respect_vertical_mode(
             stored: Tuple[float, float],
             automatic: Tuple[float, float],
@@ -3332,50 +3527,17 @@ class HeritageTrackWidget(QWidget):
                 return float(stored[0]), float(automatic[1])
             return float(stored[0]), float(stored[1])
 
-        previous_positions = {
-            node: pos
-            for node, pos in self.node_positions.items()
-            if node in display_nodes and not self._is_family_node(node)
-        }
-
-        if self.no_selection_mode:
-            animal_positions: Dict[str, Tuple[float, float]] = {}
-            protected_nodes: Set[str] = set()
-            for node, pos in auto_positions.items():
-                if node in self.temp_positions:
-                    animal_positions[node] = _respect_vertical_mode(self.temp_positions[node], pos)
-                    protected_nodes.add(node)
-                elif node in saved_positions and not self._force_relayout:
-                    animal_positions[node] = _respect_vertical_mode(saved_positions[node], pos)
-                    protected_nodes.add(node)
-                else:
-                    animal_positions[node] = pos
-
-            # Position persistence is performed only by explicit drag/reset
-            # actions, never by a view refresh.
-        else:
-            # Selected animals mode - handle position computation with relayout support
-            animal_positions = {}
-            protected_nodes = set()
-            for node, pos in auto_positions.items():
-                if node in self.temp_positions:
-                    # User-dragged position takes priority
-                    animal_positions[node] = _respect_vertical_mode(self.temp_positions[node], pos)
-                    protected_nodes.add(node)
-                elif self._force_relayout:
-                    # Force relayout: use computed positions for all nodes (ignore cached positions)
-                    animal_positions[node] = pos
-                elif node in previous_positions:
-                    # Use existing position from previous frame
-                    animal_positions[node] = _respect_vertical_mode(previous_positions[node], pos)
-                    protected_nodes.add(node)
-                elif node in saved_positions:
-                    # Use saved position from store
-                    animal_positions[node] = _respect_vertical_mode(saved_positions[node], pos)
-                    protected_nodes.add(node)
-                else:
-                    # New node: use computed position
-                    animal_positions[node] = pos
+        # Every non-family animal is either restored from the complete cache
+        # or taken from one fresh automatic layout.  No previous selection or
+        # legacy global map can leak into this scope.
+        animal_positions = {}
+        protected_nodes: Set[str] = set()
+        for node, pos in auto_positions.items():
+            if node in cached_positions:
+                animal_positions[node] = _respect_vertical_mode(cached_positions[node], pos)
+                protected_nodes.add(node)
+            else:
+                animal_positions[node] = pos
 
         # Partner order and ancestry locality are resolved together by the
         # router's row-block pass.  The former pre-route swap marked automatic
@@ -3542,7 +3704,8 @@ class HeritageTrackWidget(QWidget):
         positions: Dict[str, Tuple[float, float]] = dict(animal_positions)
         positions.update(family_positions)
 
-        self._force_relayout = False
+        # Keep the force flag set until the automatic frame has been fully
+        # validated and its complete animal map has been persisted below.
 
         # Compute the diagnostic/F state before accepting the render frame.
         # No values are written back during a view refresh; derived persistence
@@ -3586,6 +3749,24 @@ class HeritageTrackWidget(QWidget):
             # pedigree.
             self._report_geometry_failure("\n".join(fatal_geometry))
             return
+
+        # A cache miss (or explicit Refresh) stores the complete final map,
+        # including nodes that were not moved.  Cache hits remain read-only.
+        # The write happens after routing/bounds validation, so a partial or
+        # malformed automatic layout can never replace a valid entry.
+        if not getattr(self, "_position_cache_hit", False):
+            saved_position_cache = self._save_position_cache(
+                animal_positions,
+                confirm_delete_on_failure=self._force_relayout,
+            )
+            if saved_position_cache:
+                self._force_relayout = False
+            elif self._render_cache_entry is not None:
+                # A failed replacement must not paint a new frame over the
+                # last accepted visible layout.  The next refresh retries the
+                # automatic write while the previous frame remains intact.
+                self._render_store_animals = None
+                return
 
         self.ax.clear()
         self._legend_artist = None
@@ -3911,14 +4092,19 @@ class HeritageTrackWidget(QWidget):
                     "F: unavailable (cyclic pedigree)",
                 )
             )
+        if self._position_cache_notice:
+            status_text = f"{status_text} | {self._position_cache_notice}"
+            tooltip_lines.append(self._position_cache_notice)
+            self._position_cache_notice = ""
         self.status_label.setToolTip("\n".join(tooltip_lines))
         self.status_label.setText(status_text)
 
         # Do not persist collapsed-family or position cleanup as a side effect
         # of painting.  Explicit user actions own those writes.
-        # Update temp_positions at the very end (only for no-selection mode)
-        if self.no_selection_mode:
-            self.temp_positions = {n: pos for n, pos in animal_positions.items() if n in display_nodes}
+        # Transient drag coordinates have now either been persisted as the
+        # complete selection map or rejected; never carry them into another
+        # selection's layout.
+        self.temp_positions.clear()
 
         self._hover_annotation.set_visible(False)
         self.canvas.draw_idle()
@@ -3955,6 +4141,10 @@ class HeritageTrackWidget(QWidget):
         self.node_meta.clear()
         self._ghost_nodes = set()
         self._chronological_undated_nodes = set()
+        self._active_position_cache_key = None
+        self._active_position_cache_dependencies = set()
+        self._active_position_cache_revision = ""
+        self._position_cache_hit = False
         self.selected_nodes.clear()
         self.temp_positions.clear()
         self._hit_grid.clear()
@@ -4347,26 +4537,27 @@ class HeritageTrackWidget(QWidget):
                         == VERTICAL_LAYOUT_CHRONOLOGICAL
                     )
                     if self.drag_group_nodes:
-                        positions_to_save: Dict[str, Tuple[float, float]] = {}
                         for member in sorted(self.drag_group_nodes, key=str.lower):
                             x, y = self.temp_positions.get(member, self.node_positions.get(member, (0.0, 0.0)))
                             sx, sy = self._snap_to_grid(x, y)
                             if chronological_mode:
                                 sy = self.node_positions.get(member, (sx, sy))[1]
                             self.temp_positions[member] = (sx, sy)
-                            if self.no_selection_mode:
-                                positions_to_save[member] = (sx, sy)
-                        if positions_to_save:
-                            self.plugin.store.set_node_positions_batch(positions_to_save)
                     elif not self._is_family_node(self.drag_node):
                         x, y = self.temp_positions.get(self.drag_node, self.node_positions.get(self.drag_node, (0.0, 0.0)))
                         sx, sy = self._snap_to_grid(x, y)
                         if chronological_mode:
                             sy = self.node_positions.get(self.drag_node, (sx, sy))[1]
                         self.temp_positions[self.drag_node] = (sx, sy)
-                        # Save the position to heritage_store for persistence
-                        if self.no_selection_mode:
-                            self.plugin.store.set_node_position(self.drag_node, (sx, sy))
+                    # Replace the complete current selection map, not just
+                    # the node/group that was dragged.  This is intentionally
+                    # independent of the historical all-animals flag.
+                    complete_positions = {
+                        node: self.temp_positions.get(node, point)
+                        for node, point in self.node_positions.items()
+                        if not self._is_family_node(node)
+                    }
+                    self._save_position_cache(complete_positions)
                     self._finish_drag_blit()
                     self.refresh_graph(keep_view=True)
                 elif self._is_family_node(self.drag_node):
@@ -4872,7 +5063,29 @@ class HeritageTrackPlugin:
 
     def invalidate_render_dependencies(self, dependencies: Set[str]) -> int:
         """Drop frames depending on changed stable animal/IPID keys."""
-        return self._render_cache.invalidate({str(value).strip() for value in dependencies if str(value).strip()})
+        normalized = {
+            str(value).strip()
+            for value in dependencies
+            if str(value).strip()
+        }
+        removed = self._render_cache.invalidate(normalized)
+        if normalized:
+            try:
+                self.store.invalidate_position_cache_dependencies(normalized)
+            except Exception:
+                # A derived position-cache cleanup must not turn a successful
+                # Core/Heritage mutation into a failed command.  The revision
+                # check on the next render still rejects stale entries.
+                logging.getLogger(__name__).exception(
+                    "Could not invalidate persisted Heritage position cache"
+                )
+        return removed
+
+    def get_position_cache_entry(self, user_id: Any, cache_key: Any, **kwargs: Any) -> Optional[Dict[str, Any]]:
+        return self.store.get_position_cache_entry(user_id, cache_key, **kwargs)
+
+    def set_position_cache_entry(self, user_id: Any, cache_key: Any, positions: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+        return self.store.set_position_cache_entry(user_id, cache_key, positions, **kwargs)
 
     def clear_render_cache(self) -> None:
         self._render_cache.clear()
