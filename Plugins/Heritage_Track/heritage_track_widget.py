@@ -1632,16 +1632,14 @@ class HeritageTrackWidget(QWidget):
         # Check if this is a heritage-only animal
         is_heritage_only = self.plugin.is_heritage_only(animal_name)
 
-        # For heritage-only animals, add to both lists for compatibility
+        # Heritage-only animals are kept in their dedicated compatibility list;
+        # the canonical helper merges that list with Core selection exactly
+        # once.  Do not append the same key to both semantic registries.
         if is_heritage_only:
-            # Track in heritage-only list for internal use
             if not hasattr(self.app, '_selected_heritage_only'):
                 self.app._selected_heritage_only = []
             if animal_name not in self.app._selected_heritage_only:
                 self.app._selected_heritage_only.append(animal_name)
-            # Also add to main selected_animals so the rest of the system sees it
-            if animal_name not in self.app.selected_animals:
-                self.app.selected_animals.append(animal_name)
         else:
             # Skip if already selected (avoid redundant work)
             if animal_name in self.app.selected_animals:
