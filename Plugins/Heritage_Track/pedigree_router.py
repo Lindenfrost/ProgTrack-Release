@@ -18,6 +18,11 @@ Segment = Tuple[Point, Point]
 RouteKey = Tuple[str, str, int]
 
 _EPSILON = 1e-7
+# The semantic marker radius is deliberately independent of the pixel-sized
+# obstacle rectangles used by the widget.  It is the single tolerance used
+# when deciding whether two routes really meet at their shared animal.
+_MARKER_RADIUS = 0.30
+_MARKER_TOLERANCE = max(1e-6, _MARKER_RADIUS + _EPSILON)
 LAYOUT_MODE_FOCUSED = "focused"
 LAYOUT_MODE_OVERVIEW = "overview"
 
@@ -225,6 +230,11 @@ class _OwnedSegment:
     endpoint: str
     index: int
     segment: Segment
+    # Parent routes for multiple mating families may share a short terminal
+    # rail on their way into the same marker.  Keeping this bit of topology
+    # metadata lets the crossing classifier distinguish that intentional
+    # terminal merge from an arbitrary same-name overlap.
+    is_terminal: bool = False
 
 
 class PedigreeRouter:
@@ -374,7 +384,15 @@ class PedigreeRouter:
                         f"{family_id}: route to {endpoint} shares a segment with another family"
                     )
                 for index, segment in enumerate(_path_segments(path)):
-                    new_owned.append(_OwnedSegment(family_id, endpoint, index, segment))
+                    new_owned.append(
+                        _OwnedSegment(
+                            family_id,
+                            endpoint,
+                            index,
+                            segment,
+                            is_terminal=index == len(_path_segments(path)) - 1,
+                        )
+                    )
 
             routes[family_id] = endpoint_routes
             owned_segments.extend(new_owned)
@@ -718,7 +736,34 @@ class PedigreeRouter:
                 relation, point = _segment_relation(first.segment, second.segment)
                 if relation == "none":
                     continue
-                if self._is_shared_animal_endpoint(first, second, point, plan.animal_positions):
+                missing_endpoint = self._missing_shared_animal_endpoint(
+                    first,
+                    second,
+                    plan.animal_positions,
+                )
+                if missing_endpoint is not None:
+                    problems.append(
+                        f"{first.family_id}/{second.family_id}: shared animal endpoint "
+                        f"{missing_endpoint} has missing geometry"
+                    )
+                    continue
+                if self._is_shared_animal_endpoint(
+                    first,
+                    second,
+                    point,
+                    plan.animal_positions,
+                    relation=relation,
+                    marker_tolerance=_MARKER_TOLERANCE,
+                ):
+                    continue
+                if self._is_terminal_shared_endpoint_merge(
+                    first,
+                    second,
+                    relation,
+                    point,
+                    plan.animal_positions,
+                    marker_tolerance=_MARKER_TOLERANCE,
+                ):
                     continue
                 if relation == "overlap":
                     problems.append(
@@ -4271,11 +4316,24 @@ class PedigreeRouter:
                 relation, point = _segment_relation(segment, other.segment)
                 if relation == "none":
                     continue
-                if other.endpoint == endpoint:
-                    # Multiple mating families legitimately merge on the way
-                    # into their shared animal port.  Treating that merge as a
-                    # crossing creates doglegs and even a spurious gap in the
-                    # common terminal stub.
+                # Multiple mating families legitimately merge on the way into
+                # their shared animal port.  Keep that terminal rail
+                # continuous, but do not suppress arbitrary same-name
+                # crossings (the structural classifier checks those against
+                # the actual marker below).
+                if self._is_terminal_shared_endpoint_merge(
+                    _OwnedSegment(
+                        family_id,
+                        endpoint,
+                        index,
+                        segment,
+                        is_terminal=index == len(segments) - 1,
+                    ),
+                    other,
+                    relation,
+                    point,
+                    {endpoint: path[-1]},
+                ):
                     continue
                 if relation == "overlap":
                     overlap = True
@@ -4456,7 +4514,34 @@ class PedigreeRouter:
             relation, point = _segment_relation(first.segment, second.segment)
             if relation == "none":
                 continue
-            if self._is_shared_animal_endpoint(first, second, point, animal_positions):
+            missing_endpoint = self._missing_shared_animal_endpoint(
+                first,
+                second,
+                animal_positions,
+            )
+            if missing_endpoint is not None:
+                problems.append(
+                    f"{first.family_id}/{second.family_id}: shared animal endpoint "
+                    f"{missing_endpoint} has missing geometry"
+                )
+                continue
+            if self._is_shared_animal_endpoint(
+                first,
+                second,
+                point,
+                animal_positions,
+                relation=relation,
+                marker_tolerance=_MARKER_TOLERANCE,
+            ):
+                continue
+            if self._is_terminal_shared_endpoint_merge(
+                first,
+                second,
+                relation,
+                point,
+                animal_positions,
+                marker_tolerance=_MARKER_TOLERANCE,
+            ):
                 continue
             if relation == "overlap":
                 problems.append(
@@ -4586,8 +4671,17 @@ class PedigreeRouter:
         output: List[_OwnedSegment] = []
         for family_id in sorted(routes, key=str.casefold):
             for endpoint in sorted(routes[family_id], key=str.casefold):
-                for index, segment in enumerate(_path_segments(routes[family_id][endpoint])):
-                    output.append(_OwnedSegment(family_id, endpoint, index, segment))
+                segments = _path_segments(routes[family_id][endpoint])
+                for index, segment in enumerate(segments):
+                    output.append(
+                        _OwnedSegment(
+                            family_id,
+                            endpoint,
+                            index,
+                            segment,
+                            is_terminal=index == len(segments) - 1,
+                        )
+                    )
         return output
 
     @staticmethod
@@ -4596,9 +4690,113 @@ class PedigreeRouter:
         second: _OwnedSegment,
         point: Optional[Point],
         animal_positions: Mapping[str, Point],
+        *,
+        relation: Optional[str] = None,
+        marker_tolerance: float = _MARKER_TOLERANCE,
     ) -> bool:
-        del point, animal_positions
-        return first.endpoint == second.endpoint
+        """Return whether a route interaction is confined to one marker.
+
+        Route endpoint names alone are not sufficient: a malformed or
+        side-crossing route can carry the same endpoint name while meeting
+        far away from its animal.  Point crossings use Euclidean distance to
+        the marker.  Collinear overlaps are exempt only when *both* ends of
+        their overlap are inside the same marker radius, so any extension
+        outside the marker remains a reported conflict.
+        """
+        first_endpoint = str(first.endpoint or "").strip()
+        second_endpoint = str(second.endpoint or "").strip()
+        if not first_endpoint or first_endpoint != second_endpoint:
+            return False
+        position = animal_positions.get(first_endpoint)
+        if not is_finite_point(position):
+            return False
+        try:
+            tolerance = max(1e-6, float(marker_tolerance))
+        except (TypeError, ValueError, OverflowError):
+            tolerance = _MARKER_TOLERANCE
+        if not math.isfinite(tolerance):
+            tolerance = _MARKER_TOLERANCE
+        center = (float(position[0]), float(position[1]))
+        if relation == "overlap" or point is None:
+            overlap = _segment_overlap(first.segment, second.segment)
+            if overlap is None:
+                return False
+            return all(
+                math.hypot(overlap_point[0] - center[0], overlap_point[1] - center[1])
+                <= tolerance + _EPSILON
+                for overlap_point in overlap
+            )
+        if not is_finite_point(point):
+            return False
+        return (
+            math.hypot(float(point[0]) - center[0], float(point[1]) - center[1])
+            <= tolerance + _EPSILON
+        )
+
+    @staticmethod
+    def _is_terminal_shared_endpoint_merge(
+        first: _OwnedSegment,
+        second: _OwnedSegment,
+        relation: str,
+        point: Optional[Point],
+        animal_positions: Mapping[str, Point],
+        *,
+        marker_tolerance: float = _MARKER_TOLERANCE,
+    ) -> bool:
+        """Allow only an intentional terminal rail into a shared marker.
+
+        The canonical parent-entry route can contain a common vertical stub
+        for multiple families mating with one animal.  That stub is a
+        topology merge, not a foreign crossing, and is retained for compact
+        multi-mate drawings.  It must be terminal on both routes and touch
+        the real marker; manually constructed/non-terminal overlaps remain
+        errors under :meth:`_is_shared_animal_endpoint`.
+        """
+        del point
+        if relation != "overlap" or not first.is_terminal or not second.is_terminal:
+            return False
+        if not all(
+            abs(segment[0][0] - segment[1][0]) <= _EPSILON
+            for segment in (first.segment, second.segment)
+        ):
+            return False
+        first_endpoint = str(first.endpoint or "").strip()
+        second_endpoint = str(second.endpoint or "").strip()
+        if not first_endpoint or first_endpoint != second_endpoint:
+            return False
+        position = animal_positions.get(first_endpoint)
+        if not is_finite_point(position):
+            return False
+        try:
+            tolerance = max(1e-6, float(marker_tolerance))
+        except (TypeError, ValueError, OverflowError):
+            tolerance = _MARKER_TOLERANCE
+        if not math.isfinite(tolerance):
+            tolerance = _MARKER_TOLERANCE
+        overlap = _segment_overlap(first.segment, second.segment)
+        if overlap is None:
+            return False
+        center = (float(position[0]), float(position[1]))
+        return any(
+            math.hypot(overlap_point[0] - center[0], overlap_point[1] - center[1])
+            <= tolerance + _EPSILON
+            for overlap_point in overlap
+        )
+
+    @staticmethod
+    def _missing_shared_animal_endpoint(
+        first: _OwnedSegment,
+        second: _OwnedSegment,
+        animal_positions: Mapping[str, Point],
+    ) -> Optional[str]:
+        """Return a shared endpoint whose marker geometry is unavailable."""
+        first_endpoint = str(first.endpoint or "").strip()
+        second_endpoint = str(second.endpoint or "").strip()
+        if not first_endpoint or first_endpoint != second_endpoint:
+            return None
+        if not is_finite_point(animal_positions.get(first_endpoint)):
+            return first_endpoint
+        return None
 
     @staticmethod
     def _crossing_is_gapped(
@@ -4707,6 +4905,37 @@ def _segment_relation(first: Segment, second: Segment) -> Tuple[str, Optional[Po
     if -_EPSILON <= t <= 1.0 + _EPSILON and -_EPSILON <= u <= 1.0 + _EPSILON:
         return "cross", (p[0] + (t * r[0]), p[1] + (t * r[1]))
     return "none", None
+
+
+def _segment_overlap(first: Segment, second: Segment) -> Optional[Segment]:
+    """Return the closed collinear overlap interval, if one exists."""
+    p, p2 = first
+    q, q2 = second
+    r = (p2[0] - p[0], p2[1] - p[1])
+    s = (q2[0] - q[0], q2[1] - q[1])
+
+    def cross(first_vector: Point, second_vector: Point) -> float:
+        return (first_vector[0] * second_vector[1]) - (
+            first_vector[1] * second_vector[0]
+        )
+
+    length_sq = (r[0] * r[0]) + (r[1] * r[1])
+    if length_sq <= _EPSILON:
+        return None
+    q_minus_p = (q[0] - p[0], q[1] - p[1])
+    if abs(cross(r, s)) > _EPSILON or abs(cross(q_minus_p, r)) > _EPSILON:
+        return None
+    t0 = ((q_minus_p[0] * r[0]) + (q_minus_p[1] * r[1])) / length_sq
+    q2_minus_p = (q2[0] - p[0], q2[1] - p[1])
+    t1 = ((q2_minus_p[0] * r[0]) + (q2_minus_p[1] * r[1])) / length_sq
+    overlap_low = max(0.0, min(t0, t1))
+    overlap_high = min(1.0, max(t0, t1))
+    if overlap_high < overlap_low - _EPSILON:
+        return None
+    return (
+        (p[0] + (overlap_low * r[0]), p[1] + (overlap_low * r[1])),
+        (p[0] + (overlap_high * r[0]), p[1] + (overlap_high * r[1])),
+    )
 
 
 def _point_is_interior(segment: Segment, point: Point) -> bool:

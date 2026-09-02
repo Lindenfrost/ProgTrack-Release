@@ -1229,6 +1229,7 @@
   "heritage_track.status.mode_none": "Nessuna selezione",
   "heritage_track.status.selected": "Selezionati nel grafico: {count}",
   "heritage_track.status.routing_warning": "Avviso: rimangono {count} conflitti nei percorsi genealogici",
+  "heritage_track.status.missing_geometry": "Geometria mancante per l'estremità animale condivisa: {endpoint}",
   "heritage_track.status.cycle_warning": "Avviso: {count} record genealogici ciclici o non validi; F di consanguineità non disponibile",
   "heritage_track.node.inbreeding_unavailable": "F: non disponibile (genealogia ciclica)",
   "heritage_track.parents.group": "Genitori",

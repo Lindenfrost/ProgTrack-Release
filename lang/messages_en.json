@@ -1273,6 +1273,7 @@
   "heritage_track.status.mode_none": "No selection",
   "heritage_track.status.selected": "Selected in graph: {count}",
   "heritage_track.status.routing_warning": "Warning: {count} pedigree route conflicts remain",
+  "heritage_track.status.missing_geometry": "Missing geometry for shared animal endpoint: {endpoint}",
   "heritage_track.status.cycle_warning": "Warning: {count} cyclic or malformed pedigree records; inbreeding F is unavailable",
   "heritage_track.node.inbreeding_unavailable": "F: unavailable (cyclic pedigree)",
   "heritage_track.parents.group": "Parents",

@@ -3881,7 +3881,19 @@ class HeritageTrackWidget(QWidget):
                 "Warning: {count} pedigree route conflicts remain",
             ).format(count=len(route_plan.unresolved))
             status_text = f"{status_text} | {routing_warning}"
-            tooltip_lines.extend(route_plan.unresolved)
+            for problem in route_plan.unresolved:
+                marker = "shared animal endpoint "
+                suffix = " has missing geometry"
+                if marker in problem and problem.endswith(suffix):
+                    endpoint = problem.split(marker, 1)[1][:-len(suffix)]
+                    tooltip_lines.append(
+                        self.messages.get(
+                            "heritage_track.status.missing_geometry",
+                            "Missing geometry for shared animal endpoint: {endpoint}",
+                        ).format(endpoint=endpoint)
+                    )
+                else:
+                    tooltip_lines.append(problem)
         visible_malformed_nodes = sorted(
             set(display_nodes) & set(self._malformed_f_nodes), key=str.casefold
         )
