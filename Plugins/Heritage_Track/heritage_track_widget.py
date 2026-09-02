@@ -849,14 +849,7 @@ class HeritageTrackWidget(QWidget):
             + list(route_plan.route_obstacle_hits)
         )
         cache_key = self._render_cache_key(selected_animals, chronological_mode)
-        fatal: List[str] = []
-        for point in route_plan.all_points():
-            if len(point) != 2 or not all(math.isfinite(float(value)) for value in point):
-                fatal.append("non-finite route geometry")
-                break
-        for node, point in positions.items():
-            if len(point) != 2 or not all(math.isfinite(float(value)) for value in point):
-                fatal.append(f"{node}: non-finite node position")
+        fatal = self._render_geometry_fatal_diagnostics(route_plan, positions)
         return RenderCacheEntry(
             cache_key=cache_key,
             core_projection_revision=core_revision,
@@ -884,6 +877,30 @@ class HeritageTrackWidget(QWidget):
             diagnostics=diagnostics,
             fatal_diagnostics=tuple(fatal),
         )
+
+    @staticmethod
+    def _render_geometry_fatal_diagnostics(
+        route_plan: RoutePlan,
+        positions: Dict[str, Tuple[float, float]],
+    ) -> List[str]:
+        """Reject non-finite geometry before a frame can replace the view."""
+        fatal: List[str] = []
+        for point in route_plan.all_points():
+            try:
+                finite = len(point) == 2 and all(math.isfinite(float(value)) for value in point)
+            except (TypeError, ValueError):
+                finite = False
+            if not finite:
+                fatal.append("non-finite route geometry")
+                break
+        for node, point in positions.items():
+            try:
+                finite = len(point) == 2 and all(math.isfinite(float(value)) for value in point)
+            except (TypeError, ValueError):
+                finite = False
+            if not finite:
+                fatal.append(f"{node}: non-finite node position")
+        return fatal
 
     def _replace_route_collections(self) -> None:
         """Redraw only genealogy lines after masks or zoom scale change."""
@@ -3204,6 +3221,21 @@ class HeritageTrackWidget(QWidget):
             view_ylim = fit_ylim
 
         view_xlim, view_ylim = self._apply_aspect_fill(view_xlim, view_ylim)
+
+        fatal_geometry = self._render_geometry_fatal_diagnostics(route_plan, positions)
+        if fatal_geometry:
+            # Keep the last accepted artists/frame intact.  A malformed
+            # transaction is reported, not painted as a plausible partial
+            # pedigree.
+            self.status_label.setToolTip("\n".join(fatal_geometry))
+            self.status_label.setText(
+                self.messages.get(
+                    "heritage_track.status.geometry_invalid",
+                    "Unable to render pedigree: invalid geometry",
+                )
+            )
+            self._render_store_animals = None
+            return
 
         self.ax.clear()
         self._legend_artist = None
