@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Dict, FrozenSet, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, FrozenSet, Optional, Set, Tuple
 
 from .pedigree_engine import PedigreeEngine
 
@@ -215,6 +215,8 @@ class FrozenRoutePlan:
 class RenderCacheEntry:
     """Complete immutable result accepted for one Heritage render cycle."""
 
+    CACHE_SCHEMA_VERSION: ClassVar[str] = "heritage-render-cache.v1"
+
     cache_key: RenderCacheKey
     core_projection_revision: str
     pedigree_f_revision: str
@@ -240,6 +242,7 @@ class RenderCacheEntry:
     f_status: Mapping[str, str] = field(default_factory=dict)
     diagnostics: Tuple[str, ...] = ()
     fatal_diagnostics: Tuple[str, ...] = ()
+    schema_version: str = CACHE_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "canonical_selection", tuple(self.canonical_selection))
@@ -259,6 +262,7 @@ class RenderCacheEntry:
         object.__setattr__(self, "f_status", _freeze_value(self.f_status))
         object.__setattr__(self, "diagnostics", tuple(self.diagnostics))
         object.__setattr__(self, "fatal_diagnostics", tuple(self.fatal_diagnostics))
+        object.__setattr__(self, "schema_version", str(self.schema_version or self.CACHE_SCHEMA_VERSION))
         if not isinstance(self.route_plan, FrozenRoutePlan):
             object.__setattr__(self, "route_plan", FrozenRoutePlan.from_route_plan(self.route_plan))
 
