@@ -9862,16 +9862,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             apply_icon(checkbox, semantic_id)
             checkbox.setIconSize(QSize(20, 20))
             checkbox.setStyleSheet(
-                "QCheckBox { spacing: 0px; }"
+                "QCheckBox { spacing: 0px; padding-left: 2px; padding-right: 2px; }"
                 "QCheckBox::indicator { width: 14px; height: 14px; }"
             )
-            # A check box with both an indicator and an icon needs more than
-            # the old hard-coded 36 px.  Qt's style reports the complete
-            # content width through sizeHint(); using it here prevents the
-            # right edge of the SVG from being clipped on Windows styles
-            # (and adapts to other platform styles as well).
+            # The leading/trailing padding keeps the native indicator border
+            # inside the paint area on Windows styles.  Measure only after
+            # the stylesheet has been polished so the fixed hit target
+            # includes the indicator, SVG icon and both insets.
             checkbox.ensurePolished()
-            checkbox.setFixedWidth(max(1, checkbox.sizeHint().width() + 2))
+            checkbox.setFixedWidth(max(1, checkbox.sizeHint().width()))
             checkbox.toggled.connect(self._on_animal_sex_filter_changed)
             self.sex_filter_checkboxes[token] = checkbox
             layout.addWidget(checkbox)

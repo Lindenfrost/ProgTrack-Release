@@ -562,6 +562,7 @@ therefore remain separate packages with the same application data model.
 
 | Version / generation | Focus |
 | --- | --- |
+| `0.2.2` / Phase 2B native retest release | Windows portable release with responsive backend/profile dialogs, identity-compliant IDs, role-dialog and permission fixes, localized SVG UI, plotting/Heritage refinements, and verified release packaging. |
 | `0.2.1` / Backend release | Shared backend services and adapters, deterministic seed, runtime paths, immutable identities, locks, interchange packages, SVG icon registry, PDF branding, and launcher/runtime hardening. |
 | `0.2.0` / Backend foundation | Canonical data dictionary, storage matrix, interchange contract, and approved PostgreSQL/SQLite architecture. |
 | `0.1.2` / First portable workflow | Role tabs, Cage Track, Heritage Track, imports, reports, and medical history. |
