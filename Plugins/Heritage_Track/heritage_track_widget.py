@@ -4830,6 +4830,20 @@ class HeritageTrackPlugin:
 
         def _species_aware_lookup(animal_name: str, record) -> Dict[str, str]:
             base_parentage = _store_lookup(animal_name, record)
+            if not sync and isinstance(record, dict):
+                # Read-only render builds must still see the current Core
+                # parent fields without synchronizing/persisting the combined
+                # Heritage store.  Explicit Heritage-only values remain the
+                # fallback; a populated Core field is the live projection.
+                for field, core_key in (
+                    ("egg_donor", "eizellspenderin"),
+                    ("sperm_donor", "samenspender"),
+                    ("surrogate_mother", "ziehmutter"),
+                    ("surrogate_father", "ziehvater"),
+                ):
+                    core_value = self.store._normalize_text(record.get(core_key, ""))
+                    if core_value:
+                        base_parentage[field] = core_value
             if not _base_to_variants:
                 return base_parentage
             child_rec = _identity_records.get(animal_name, {})
