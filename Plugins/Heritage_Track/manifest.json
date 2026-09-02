@@ -2,7 +2,7 @@
   "name": "Heritage_Track",
   "display_name": "Heritage Track",
   "version": "0.2.1",
-  "description": "Interactive pedigree visualization with parent-child relationships, kinship and inbreeding analysis, heritage-only animals, genotype annotations, species filtering, family-node collapsing, and draggable nodes.",
+  "description": "Interactive pedigree visualization with parent-child relationships, kinship and inbreeding analysis, heritage-only animals, genotype annotations, family-node collapsing, and draggable nodes.",
   "author": "DLL",
   "SPDX-License-Identifier": "GPL-3.0-or-later",
   "Copyright": "Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH",
@@ -24,7 +24,6 @@
     "inbreeding_analysis",
     "heritage_only_animals",
     "genotype_annotations",
-    "species_filtering",
     "family_node_collapsing",
     "draggable_nodes"
   ],
@@ -36,7 +35,6 @@
     "inbreeding_analysis",
     "heritage_only_animals",
     "genotype_annotations",
-    "species_filtering",
     "family_node_collapsing",
     "draggable_nodes"
   ],

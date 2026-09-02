@@ -98,7 +98,6 @@ remain `KEEP_MINIMUM`.
 | `Plugins/Heritage_Track/layout_pipeline.py` | line 3 |
 | `Plugins/Heritage_Track/pedigree_engine.py` | line 3 |
 | `Plugins/Heritage_Track/pedigree_router.py` | line 3 |
-| `Plugins/Heritage_Track/scope_provider.py` | line 3 |
 | `Plugins/Heritage_Track/ui_parent_fields.py` | line 3 |
 | `Plugins/Master_Track/__init__.py` | line 3 |
 | `Plugins/Master_Track/auth.py` | line 3 |

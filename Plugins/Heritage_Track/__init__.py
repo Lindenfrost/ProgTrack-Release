@@ -30,13 +30,6 @@ from .ghost_strategies import (
 from .heritage_track_widget import HeritageTrackPlugin
 from .layout_pipeline import LayoutPipeline
 from .pedigree_router import PedigreeRouter, RoutePlan
-from .scope_provider import (
-    ExplicitScopeProvider,
-    NullScopeProvider,
-    ProjectsTrackScopeProvider,
-    ScopeFilter,
-    ScopeProvider,
-)
 
 __all__ = [
     # Main plugin
@@ -57,12 +50,6 @@ __all__ = [
     "ArchivedGhostStrategy",
     "CompositeGhostStrategy",
     "NoGhostStrategy",
-    # Scope
-    "ScopeProvider",
-    "NullScopeProvider",
-    "ProjectsTrackScopeProvider",
-    "ExplicitScopeProvider",
-    "ScopeFilter",
     # Layout
     "LayoutPipeline",
     "PedigreeRouter",

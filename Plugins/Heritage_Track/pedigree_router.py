@@ -96,6 +96,10 @@ class RoutePlan:
     # Internal diagnostics only: endpoint routes that had to accept an
     # obstacle overlap while preserving canonical topology.
     route_obstacle_hits: List[str] = field(default_factory=list)
+    # Semantic display mode selected by the widget.  Keeping it on the plan
+    # makes the decision observable and prevents downstream consumers from
+    # inferring a second mode from a differently shaped focus set.
+    display_mode: str = LAYOUT_MODE_OVERVIEW
 
     def mark_geometry_changed(self) -> None:
         """Invalidate structural geometry caches after an in-place edit."""
@@ -188,6 +192,7 @@ class PedigreeRouter:
         labels: Optional[Mapping[str, str]] = None,
         protected_nodes: Optional[Set[str]] = None,
         focus_nodes: Optional[Set[str]] = None,
+        display_mode: Optional[str] = None,
         show_inbreeding: bool = True,
         vertical_layout_mode: str = "partner_normalized",
     ) -> RoutePlan:
@@ -195,13 +200,20 @@ class PedigreeRouter:
         protected = set(protected_nodes or set())
         focus = set(focus_nodes or set()) & set(animal_positions)
         chronological = str(vertical_layout_mode or "").strip().casefold() == "chronological"
-        # Keep the mode explicit at the router boundary.  The overview-only
-        # origin-anchor rule must never leak into a focused/small selection.
-        layout_mode = (
-            LAYOUT_MODE_FOCUSED
-            if bool(focus) and len(focus) <= 8
-            else LAYOUT_MODE_OVERVIEW
-        )
+        # The widget supplies one explicit semantic mode for the complete
+        # render transaction. ``None`` retains the standalone router's old
+        # focus-node convenience for external callers; widget renders never
+        # use that fallback.
+        if display_mode is None:
+            layout_mode = (
+                LAYOUT_MODE_FOCUSED
+                if bool(focus) and len(focus) <= 8
+                else LAYOUT_MODE_OVERVIEW
+            )
+        else:
+            layout_mode = str(display_mode).strip().casefold()
+            if layout_mode not in {LAYOUT_MODE_FOCUSED, LAYOUT_MODE_OVERVIEW}:
+                layout_mode = LAYOUT_MODE_OVERVIEW
         adjusted = self._arrange_nodes(
             animal_positions,
             families,
@@ -307,6 +319,7 @@ class PedigreeRouter:
             routes=routes,
             unresolved=sorted(set(unresolved)),
             route_obstacle_hits=sorted(set(route_obstacle_hits)),
+            display_mode=layout_mode,
         )
         self.recompute_line_gaps(
             plan,

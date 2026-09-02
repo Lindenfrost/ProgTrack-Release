@@ -17,7 +17,6 @@ from .pedigree_engine import PedigreeEngine
 if TYPE_CHECKING:
     from .display_strategies import DisplaySetStrategy
     from .ghost_strategies import GhostNodeStrategy
-    from .scope_provider import ScopeProvider
 
 
 Point = Tuple[float, float]
@@ -377,6 +376,11 @@ class DisplayContext:
     family_nodes: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     positions: Dict[str, Tuple[float, float]] = field(default_factory=dict)
     locked_positions: Dict[str, Tuple[float, float]] = field(default_factory=dict)
+    # Selection metadata is part of the immutable context so every downstream
+    # stage renders the same semantic scope and mode decision.
+    canonical_selection: Tuple[str, ...] = field(default_factory=tuple)
+    selection_type: str = "selected"
+    display_mode: str = "focused"
 
     def __post_init__(self) -> None:
         # Keep the context itself and every nested collection immutable.  A
@@ -390,6 +394,18 @@ class DisplayContext:
         object.__setattr__(self, "family_nodes", _freeze_value(self.family_nodes))
         object.__setattr__(self, "positions", _freeze_value(self.positions))
         object.__setattr__(self, "locked_positions", _freeze_value(self.locked_positions))
+        object.__setattr__(
+            self,
+            "canonical_selection",
+            tuple(
+                sorted(
+                    {str(value).strip() for value in self.canonical_selection if str(value).strip()},
+                    key=lambda value: (value.casefold(), value),
+                )
+            ),
+        )
+        object.__setattr__(self, "selection_type", str(self.selection_type or "selected").strip() or "selected")
+        object.__setattr__(self, "display_mode", str(self.display_mode or "focused").strip() or "focused")
 
     def get_visible_nodes(self) -> Set[str]:
         """Return nodes that should be rendered (display nodes minus hidden)."""
@@ -437,6 +453,9 @@ class DisplayContext:
             family_nodes=family_nodes if family_nodes is not None else self.family_nodes,
             positions=positions if positions is not None else self.positions,
             locked_positions=locked_positions if locked_positions is not None else self.locked_positions,
+            canonical_selection=self.canonical_selection,
+            selection_type=self.selection_type,
+            display_mode=self.display_mode,
         )
 
 
@@ -456,13 +475,11 @@ class DisplayContextBuilder:
         settings: Dict[str, Any],
         display_strategy: "DisplaySetStrategy",
         ghost_strategy: Optional["GhostNodeStrategy"] = None,
-        scope_provider: Optional["ScopeProvider"] = None,
     ):
         self.engine = engine
         self.settings = settings
         self.display_strategy = display_strategy
         self.ghost_strategy = ghost_strategy
-        self.scope_provider = scope_provider
         self._max_generations: int = settings.get("max_generations", 999)
         self._exclude_archived: bool = settings.get("exclude_archived", False)
 
@@ -470,6 +487,9 @@ class DisplayContextBuilder:
         self,
         selected_animals: list[str],
         archived_animals: Optional[Set[str]] = None,
+        *,
+        display_mode: str = "focused",
+        selection_type: str = "selected",
     ) -> DisplayContext:
         """Build a complete DisplayContext from the current state."""
         archived = archived_animals or set()
@@ -480,8 +500,8 @@ class DisplayContextBuilder:
         )
 
         # Step 2: Handle archived exclusion in all-animals mode
-        is_all_animals_mode = len(selected_animals) == 0
-        if is_all_animals_mode and self._exclude_archived:
+        is_no_selection = len(selected_animals) == 0
+        if is_no_selection and self._exclude_archived:
             display_nodes = display_nodes - archived
 
         # Step 3: Find ghost nodes
@@ -503,6 +523,9 @@ class DisplayContextBuilder:
             family_nodes={},
             positions={},
             locked_positions={},
+            canonical_selection=tuple(selected_animals),
+            selection_type=selection_type,
+            display_mode=display_mode,
         )
 
     def _compute_modified_levels(

@@ -58,6 +58,7 @@ import matplotlib.patheffects as path_effects
 from Plugins.core.animal_identity import (
     animal_base_name,
     animal_identity_key,
+    animal_identity_label,
     normalize_birth_date,
     resolve_animal_reference_text,
     split_animal_identity_key,
@@ -481,11 +482,13 @@ class HeritageTrackWidget(QWidget):
         # One precedence-resolved store snapshot per refresh.  Lookups outside
         # a refresh continue to read the store normally.
         self._render_store_animals: Optional[Dict[str, Dict[str, Any]]] = None
-        self.all_animals_mode = True
-        # all_animals_mode remains the no-selection persistence flag;
-        # layout_mode is the visible Focused/Overview decision for large
-        # explicit selections as well.
+        self.no_selection_mode = True
+        # ``layout_mode`` is the single Focused/Selection-overview decision
+        # for a complete render transaction.  The canonical selection is
+        # cached here so viewport/aspect helpers cannot reread a differently
+        # shaped app list during the same refresh.
         self.layout_mode = LAYOUT_MODE_OVERVIEW
+        self._canonical_selection_ids: Tuple[str, ...] = ()
         self._force_relayout = False
 
         # Double-click detection state (timer-based for reliability across backends)
@@ -946,13 +949,21 @@ class HeritageTrackWidget(QWidget):
         self,
         selected_animals: List[str],
         chronological_mode: bool,
+        display_mode: Optional[str] = None,
     ) -> RenderCacheKey:
         master_track = getattr(self.app, "master_track", None)
         user_id = getattr(master_track, "current_username", None) if master_track else None
-        display_mode = f"{self.layout_mode}:{'chronological' if chronological_mode else 'partner_normalized'}"
+        cached_selection = getattr(self, "_canonical_selection_ids", ())
+        canonical_selection = (
+            cached_selection
+            if tuple(selected_animals) == cached_selection
+            else self._canonicalize_selection(selected_animals)
+        )
+        semantic_mode = str(display_mode or self.layout_mode).strip() or self.layout_mode
+        display_mode = f"{semantic_mode}:{'chronological' if chronological_mode else 'partner_normalized'}"
         return RenderCacheKey.create(
             user_id=user_id or "anonymous",
-            selection=selected_animals,
+            selection=canonical_selection,
             selection_type="selected",
             display_mode=display_mode,
         )
@@ -974,6 +985,7 @@ class HeritageTrackWidget(QWidget):
         f_status: Dict[str, str],
         obstacle_labels: Dict[str, str],
         chronological_mode: bool,
+        display_mode: str,
     ) -> RenderCacheEntry:
         """Freeze one complete render transaction before any artists paint."""
         record_index = {
@@ -1005,7 +1017,7 @@ class HeritageTrackWidget(QWidget):
                 "positions": positions,
                 "locked": locked_positions,
                 "routes": route_plan.routes,
-                "display_mode": self.layout_mode,
+                "display_mode": display_mode,
                 "chronological": chronological_mode,
             }
         )
@@ -1014,7 +1026,11 @@ class HeritageTrackWidget(QWidget):
             + list(route_plan.line_crossing_problems)
             + list(route_plan.route_obstacle_hits)
         )
-        cache_key = self._render_cache_key(selected_animals, chronological_mode)
+        cache_key = self._render_cache_key(
+            selected_animals,
+            chronological_mode,
+            display_mode=display_mode,
+        )
         fatal = self._render_geometry_fatal_diagnostics(route_plan, positions)
         return RenderCacheEntry(
             cache_key=cache_key,
@@ -1026,7 +1042,7 @@ class HeritageTrackWidget(QWidget):
             record_index=record_index,
             canonical_selection=cache_key.canonical_selection,
             selection_type="selected",
-            display_mode=f"{self.layout_mode}:{'chronological' if chronological_mode else 'partner_normalized'}",
+            display_mode=f"{display_mode}:{'chronological' if chronological_mode else 'partner_normalized'}",
             effective_parent_map=parent_map,
             display_nodes=frozenset(display_nodes),
             ghost_nodes=frozenset(ghost_nodes),
@@ -1746,7 +1762,7 @@ class HeritageTrackWidget(QWidget):
         self._render_store_animals = (
             raw_store_animals if isinstance(raw_store_animals, dict) else {}
         )
-        selected_animals = list(getattr(self.app, "selected_animals", []) or [])
+        selected_animals = list(self._canonicalize_selection())
         display_nodes = engine.get_display_nodes(selected_animals)
         
         for node in display_nodes:
@@ -2056,12 +2072,7 @@ class HeritageTrackWidget(QWidget):
         not be separated by moving their Y coordinates.
         """
 
-        selected = {
-            str(node)
-            for node in list(getattr(self.app, "selected_animals", []) or [])
-            + list(getattr(self.app, "_selected_heritage_only", []) or [])
-            if str(node).strip()
-        }
+        selected = set(self._canonical_selection_ids or self._canonicalize_selection())
         if 0 < len(selected) <= 8:
             # Chronological rows need extra horizontal capacity because dates
             # close in time cannot be separated vertically.  Normalized rows
@@ -2319,6 +2330,63 @@ class HeritageTrackWidget(QWidget):
         for record in reversed(self._iter_node_records(node)):
             merged.update(record)
         return merged
+
+    def _canonicalize_selection(self, values: Optional[List[str]] = None) -> Tuple[str, ...]:
+        """Return one deterministic, duplicate-free selection of animal keys.
+
+        The main list and Heritage-only interaction path historically kept
+        separate selections and occasionally supplied display names/public IDs
+        instead of the engine's identity key.  Build a temporary alias index
+        from the current Core/archived/Heritage records, resolve each value to
+        its stable key where possible, and sort it once for all render stages.
+        Ambiguous or not-yet-loaded values are retained as trimmed keys so a
+        refresh remains lossless; the engine will simply omit an unknown key.
+        """
+        if values is None:
+            values = list(getattr(self.app, "selected_animals", []) or [])
+            values.extend(list(getattr(self.app, "_selected_heritage_only", []) or []))
+
+        records: Dict[str, Dict[str, Any]] = {}
+        try:
+            source = self.plugin._all_identity_records()
+        except Exception:
+            source = {}
+        if isinstance(source, dict):
+            records = {
+                str(key).strip(): value
+                for key, value in source.items()
+                if str(key).strip() and isinstance(value, dict)
+            }
+
+        aliases: Dict[str, Optional[str]] = {}
+        for key, record in records.items():
+            candidates = {
+                key,
+                record.get("ipid"),
+                record.get("id"),
+                record.get("animal_id"),
+                record.get("public_id"),
+                animal_base_name(key, record),
+                animal_identity_label(key, record),
+            }
+            for candidate in candidates:
+                alias = str(candidate or "").strip()
+                if not alias:
+                    continue
+                folded = alias.casefold()
+                if folded not in aliases:
+                    aliases[folded] = key
+                elif aliases[folded] != key:
+                    aliases[folded] = None
+
+        canonical: Set[str] = set()
+        for value in values:
+            raw = str(value or "").strip()
+            if not raw:
+                continue
+            resolved = aliases.get(raw.casefold())
+            canonical.add(resolved if resolved else raw)
+        return tuple(sorted(canonical, key=lambda item: (item.casefold(), item)))
 
     def _get_node_display_label(self, node: str, record: Optional[Dict[str, Any]] = None) -> str:
         source_record = record if isinstance(record, dict) else self._get_node_record(node)
@@ -2883,8 +2951,7 @@ class HeritageTrackWidget(QWidget):
             return full_xlim, full_ylim
         selected = [
             node
-            for node in list(getattr(self.app, "selected_animals", []) or [])
-            + list(getattr(self.app, "_selected_heritage_only", []) or [])
+            for node in (self._canonical_selection_ids or self._canonicalize_selection())
             if node in positions and not self._is_family_node(node)
         ]
         min_pixels_per_unit = 36.0
@@ -2952,13 +3019,18 @@ class HeritageTrackWidget(QWidget):
         """Return the visible layout mode for the current selection.
 
         A single or small selection stays in the focused relationship view.
-        A large selection uses the all-animals/Overview presentation even
+        A large selection uses the Selection overview presentation even
         though its selected IDs still define the authorized display scope.
         The threshold is shared with the router plan.
         """
+        unique_selection = {
+            str(value).strip()
+            for value in selected_animals
+            if str(value).strip()
+        }
         return (
             LAYOUT_MODE_FOCUSED
-            if 0 < len(selected_animals) <= 8
+            if 0 < len(unique_selection) <= 8
             else LAYOUT_MODE_OVERVIEW
         )
 
@@ -2967,6 +3039,7 @@ class HeritageTrackWidget(QWidget):
         engine: PedigreeEngine,
         selected_animals: List[str],
         all_graph_families: Dict[str, Dict[str, Any]],
+        display_mode: str,
     ) -> DisplayContext:
         """Build display context using the new strategy-based architecture.
 
@@ -3015,12 +3088,13 @@ class HeritageTrackWidget(QWidget):
             settings=settings,
             display_strategy=display_strategy,
             ghost_strategy=ghost_strategy,
-            scope_provider=None,
         )
 
         context = builder.build(
             selected_animals=selected_animals,
             archived_animals=archived_animals,
+            display_mode=display_mode,
+            selection_type="selected",
         )
 
         # Handle heritage-only filtering (needs plugin access)
@@ -3037,18 +3111,18 @@ class HeritageTrackWidget(QWidget):
         raw_store = self.plugin.store.load()
         store_animals = raw_store.get("animals", {}) if isinstance(raw_store, dict) else {}
         self._render_store_animals = store_animals if isinstance(store_animals, dict) else {}
-        selected_animals = list(getattr(self.app, "selected_animals", []) or [])
-        # Also include selected heritage-only animals from the app
-        selected_heritage_only = list(getattr(self.app, "_selected_heritage_only", []) or [])
-        if selected_heritage_only:
-            selected_animals = selected_animals + selected_heritage_only
+        # Merge Core and Heritage-only selections once.  Every stage below
+        # receives this same sorted identity tuple; the raw app lists are not
+        # consulted again during the refresh.
+        selected_animals = list(self._canonicalize_selection())
+        self._canonical_selection_ids = tuple(selected_animals)
         self.layout_mode = self._layout_mode_for_selection(selected_animals)
-        self.all_animals_mode = len(selected_animals) == 0
+        self.no_selection_mode = not selected_animals
 
         # No-selection mode only shows the splash screen.  Avoid building the
         # complete pedigree, level map, families, layout, and routes merely to
         # discard them a few lines later.
-        if self.all_animals_mode:
+        if self.no_selection_mode:
             self._show_splash_screen()
             self._render_store_animals = None
             return
@@ -3059,13 +3133,20 @@ class HeritageTrackWidget(QWidget):
 
         # Use the new strategy-based architecture to build display context
         # This handles: display set computation, ghost detection, level computation
-        context = self._build_display_context(engine, selected_animals, all_graph_families)
+        context = self._build_display_context(
+            engine,
+            selected_animals,
+            all_graph_families,
+            self.layout_mode,
+        )
 
         # Extract data from context
         display_nodes = context.display_nodes
         pre_collapse_levels = context.levels
         ghost_nodes = context.ghost_nodes
-        self._ghost_nodes = ghost_nodes
+        # DisplayContext is immutable; interaction code needs its own mutable
+        # membership set when a ghost is promoted to an active selection.
+        self._ghost_nodes = set(ghost_nodes)
 
         # Force relayout if display nodes have changed (new selection)
         # This ensures proper placement algorithms run on first selection
@@ -3133,7 +3214,7 @@ class HeritageTrackWidget(QWidget):
 
         locked_positions = (
             saved_positions
-            if self.all_animals_mode and not self._force_relayout
+            if self.no_selection_mode and not self._force_relayout
             else {}
         )
 
@@ -3163,7 +3244,7 @@ class HeritageTrackWidget(QWidget):
             if node in display_nodes and not self._is_family_node(node)
         }
 
-        if self.all_animals_mode:
+        if self.no_selection_mode:
             animal_positions: Dict[str, Tuple[float, float]] = {}
             protected_nodes: Set[str] = set()
             for node, pos in auto_positions.items():
@@ -3252,6 +3333,7 @@ class HeritageTrackWidget(QWidget):
             labels=obstacle_labels,
             protected_nodes=protected_nodes,
             focus_nodes=set(selected_animals),
+            display_mode=self.layout_mode,
             show_inbreeding=has_secondary_label,
             vertical_layout_mode=self.settings.get(
                 "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
@@ -3430,6 +3512,7 @@ class HeritageTrackWidget(QWidget):
                 f_status=f_status,
                 obstacle_labels=obstacle_labels,
                 chronological_mode=chronological_mode,
+                display_mode=self.layout_mode,
             )
             if render_entry.valid:
                 self._render_cache_entry = render_entry
@@ -3666,7 +3749,9 @@ class HeritageTrackWidget(QWidget):
         self.current_ylim = self.ax.get_ylim()
 
         mode_text = (
-            self.messages.get("heritage_track.status.mode_all", "All animals mode")
+            self.messages.get(
+                "heritage_track.status.mode_overview", "Selection overview"
+            )
             if self.layout_mode == LAYOUT_MODE_OVERVIEW
             else self.messages.get("heritage_track.status.mode_selected", "Selection mode")
         )
@@ -3704,8 +3789,8 @@ class HeritageTrackWidget(QWidget):
 
         # Do not persist collapsed-family or position cleanup as a side effect
         # of painting.  Explicit user actions own those writes.
-        # Update temp_positions at the very end (only for all_animals_mode)
-        if self.all_animals_mode:
+        # Update temp_positions at the very end (only for no-selection mode)
+        if self.no_selection_mode:
             self.temp_positions = {n: pos for n, pos in animal_positions.items() if n in display_nodes}
 
         self._hover_annotation.set_visible(False)
@@ -3748,7 +3833,7 @@ class HeritageTrackWidget(QWidget):
         self._hit_grid.clear()
 
         # Update status label
-        mode_text = self.messages.get("heritage_track.status.mode_all", "All animals mode")
+        mode_text = self.messages.get("heritage_track.status.mode_none", "No selection")
         instruction_status = self.messages.get("heritage_track.splash.status", "No scope selected")
         self.status_label.setText(f"{mode_text} | {instruction_status}")
 
@@ -4142,7 +4227,7 @@ class HeritageTrackWidget(QWidget):
                             if chronological_mode:
                                 sy = self.node_positions.get(member, (sx, sy))[1]
                             self.temp_positions[member] = (sx, sy)
-                            if self.all_animals_mode:
+                            if self.no_selection_mode:
                                 positions_to_save[member] = (sx, sy)
                         if positions_to_save:
                             self.plugin.store.set_node_positions_batch(positions_to_save)
@@ -4153,7 +4238,7 @@ class HeritageTrackWidget(QWidget):
                             sy = self.node_positions.get(self.drag_node, (sx, sy))[1]
                         self.temp_positions[self.drag_node] = (sx, sy)
                         # Save the position to heritage_store for persistence
-                        if self.all_animals_mode:
+                        if self.no_selection_mode:
                             self.plugin.store.set_node_position(self.drag_node, (sx, sy))
                     self._finish_drag_blit()
                     self.refresh_graph(keep_view=True)
