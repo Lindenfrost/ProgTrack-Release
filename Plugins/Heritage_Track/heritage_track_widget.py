@@ -4551,7 +4551,13 @@ class HeritageTrackPlugin:
         """Check the write permission at the command boundary, not just in UI."""
         checker = getattr(self.app, "_master_can", None)
         if callable(checker):
-            return bool(checker("heritage.edit_links"))
+            try:
+                return bool(checker("heritage.edit_links"))
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "Heritage parentage authorization check failed", exc_info=True
+                )
+                return False
         authorization = getattr(self.app, "authorization", None)
         # A missing Master Track is the documented trusted-local mode.  A
         # configured managed authorization service without its UI boundary is
