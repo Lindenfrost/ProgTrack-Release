@@ -1,7 +1,7 @@
 {
   "name": "Heritage_Track",
   "display_name": "Heritage Track",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Interactive pedigree visualization with parent-child relationships, kinship and inbreeding analysis, heritage-only animals, genotype annotations, family-node collapsing, and draggable nodes.",
   "author": "DLL",
   "SPDX-License-Identifier": "GPL-3.0-or-later",
@@ -13,7 +13,7 @@
     "numpy"
   ],
   "data_files": [],
-  "min_progtrack_version": "0.2.1",
+  "min_progtrack_version": "0.2.3",
   "menu_location": "Tab",
   "icon": "progtrack_icon.ico",
   "optional": true,
@@ -25,7 +25,8 @@
     "heritage_only_animals",
     "genotype_annotations",
     "family_node_collapsing",
-    "draggable_nodes"
+    "draggable_nodes",
+    "selection_scoped_position_persistence"
   ],
   "bootstrap_entry_point": "__init__.initialize",
   "capabilities": [
@@ -36,10 +37,16 @@
     "heritage_only_animals",
     "genotype_annotations",
     "family_node_collapsing",
-    "draggable_nodes"
+    "draggable_nodes",
+    "selection_scoped_position_persistence"
   ],
-  "permissions": [],
-  "backend_namespaces": [],
+  "permissions": [
+    "heritage.view",
+    "heritage.edit_links"
+  ],
+  "backend_namespaces": [
+    "heritage"
+  ],
   "resources": [],
   "docs": [
     "../../manual/ProgTrack_User_Guide - en.html#plugins"

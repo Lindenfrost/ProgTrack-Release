@@ -366,6 +366,30 @@ The Version column below is taken from each shipped plugin's `manifest.json`; th
 | Projects Track | `0.2.1` | Sidebar and tab | Project/species visibility, project history, IACUC/AWO assignment, documents/SOPs, and experiment state. Each project has a localized `Draft`, `Active`, or `Closed` lifecycle state; lifecycle and archive state are independent. |
 | Network Track | `0.2.1` | Window | Backend-backed team chat with polling and optional notification sounds. |
 
+### Heritage Track
+
+Heritage Track is selection-driven: with no animal selected it shows its
+splash screen, and selecting one or more animals builds only their connected
+pedigree. Up to eight selected animals use the focused relationship view;
+larger selections use the Selection overview. Selected animals are rendered as
+normal nodes and connected context animals as translucent ghosts; clicking a
+ghost adds it to the selection. Genetic (egg/sperm donor) links are used for
+kinship and inbreeding, while surrogate links remain visible relationships but
+do not change those coefficients. A family with one represented parent is
+completed only when the other parent is available; missing or malformed
+lineages are omitted or warned about instead of being invented.
+
+The graph uses canonical ProgTrack identities (IPIDs), so duplicate display
+names cannot silently merge. Archived and Heritage-only/dummy records retain
+their status in the graph. Labels can show nothing, inbreeding **F**, birth
+date, or public animal ID; pairwise comparison reports kinship **φ** and
+relationship **r**, and malformed pedigrees explicitly mark **F** as
+unavailable. Manual node positions are saved per signed-in user, selection and
+vertical layout, and are restored when that view is reopened. **Refresh**
+deliberately resets that saved layout after confirmation. The vertical layout
+offers the compact partner-normalized view and an optional chronological
+birth-date axis.
+
 Terminology: the **Reports** tab and File-menu report actions are the user-facing surface provided by the **Animal Reports** plugin; they are not separate report databases. In Cage Track, a **Unit** is a physical housing level between a building and room. An organizational unit or workgroup is a user/project membership scope managed in Master Track and is unrelated to cage placement.
 
 ## Users, account roles, and job bundles

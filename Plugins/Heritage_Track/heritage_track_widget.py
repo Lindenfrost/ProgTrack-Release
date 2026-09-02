@@ -375,7 +375,7 @@ class CoefficientDialog(QDialog):
         self.tabs.clear()
         self.tabs.addTab(
             self._build_table(lambda a, b: self.calculator.kinship_phi(a, b)),
-            self.messages.get("heritage_track.compare.tab.phi", "Kinship Ï†"),
+            self.messages.get("heritage_track.compare.tab.phi", "Kinship φ"),
         )
         self.tabs.addTab(
             self._build_table(lambda a, b: self.calculator.relationship_r(a, b)),
