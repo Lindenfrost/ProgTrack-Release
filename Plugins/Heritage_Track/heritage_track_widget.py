@@ -3207,6 +3207,16 @@ class HeritageTrackWidget(QWidget):
         # nodes as manually protected and therefore prevented the router from
         # keeping their complete partner row contiguous.
 
+        # Prepare malformed-lineage state before the router estimates label
+        # obstacles.  Descendants of an unresolved/cyclic pedigree need the
+        # larger unavailable-F label footprint in this same frame.
+        _layout_parent_map = engine.get_genetic_parent_map()
+        self._cycle_nodes = InbreedingCalculator(_layout_parent_map).cycle_nodes
+        self._malformed_f_nodes = self._find_malformed_f_nodes(
+            _layout_parent_map,
+            set(engine.animals) | set(engine.heritage_entries),
+        )
+
         obstacle_labels = {
             node: self._get_node_obstacle_label(node, self._get_node_record(node))
             for node in animal_positions
