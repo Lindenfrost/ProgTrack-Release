@@ -1,13 +1,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.2
+# Part of: ProgTrack 0.2.3
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: see release metadata.
 # Module: Heritage Track plugin bootstrap.
 
 import logging
 
-from .display_context import DisplayContext, DisplayContextBuilder
+from .display_context import (
+    DisplayContext,
+    DisplayContextBuilder,
+    FrozenRoutePlan,
+    RenderCacheEntry,
+    RenderCacheKey,
+    RenderCacheRegistry,
+)
 from .display_strategies import (
     CompositeDisplayStrategy,
     DisplaySetStrategy,
@@ -38,6 +45,10 @@ __all__ = [
     # Display context
     "DisplayContext",
     "DisplayContextBuilder",
+    "FrozenRoutePlan",
+    "RenderCacheEntry",
+    "RenderCacheKey",
+    "RenderCacheRegistry",
     # Strategies
     "DisplaySetStrategy",
     "SelectedAnimalsStrategy",

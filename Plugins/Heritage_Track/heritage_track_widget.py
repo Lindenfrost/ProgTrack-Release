@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.2
+# Part of: ProgTrack 0.2.3
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: see release metadata.
 # Module: Heritage Track main plugin implementation.
@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
 import math
 import os
 import time
@@ -66,7 +68,13 @@ from Plugins.core.resource_catalogs import (
     ordered_species_for_display,
 )
 
-from .display_context import DisplayContext, DisplayContextBuilder
+from .display_context import (
+    DisplayContext,
+    DisplayContextBuilder,
+    RenderCacheEntry,
+    RenderCacheKey,
+    RenderCacheRegistry,
+)
 from .display_strategies import SelectedAnimalsStrategy
 from .ghost_strategies import (
     ArchivedGhostStrategy,
@@ -408,6 +416,10 @@ class HeritageTrackWidget(QWidget):
         self.node_meta: Dict[str, Dict[str, Any]] = {}
         self._pedigree_router = PedigreeRouter()
         self._route_plan: Optional[RoutePlan] = None
+        # Last accepted complete render frame.  Painting, hit testing and
+        # export helpers may consult this immutable boundary; transient
+        # matplotlib artists remain a view concern only.
+        self._render_cache_entry: Optional[RenderCacheEntry] = None
         self._route_collections: List[LineCollection] = []
         self._relationship_highlight_collections: List[LineCollection] = []
         self._rendered_families: Dict[str, Dict[str, object]] = {}
@@ -720,8 +732,15 @@ class HeritageTrackWidget(QWidget):
             max(1.0, abs(float(y1 - y0))),
         )
 
-    def _recompute_route_visual_gaps(self) -> None:
+    def _recompute_route_visual_gaps(self, route_plan: Optional[RoutePlan] = None) -> None:
         """Rebuild marker/crossing gaps for the final current pixel scale."""
+        if route_plan is not None:
+            self._route_plan = route_plan
+        elif self._route_plan is None and self._render_cache_entry is not None:
+            # Resize/zoom is a pixel-only view operation.  Start from a
+            # detached copy of the accepted frame so the immutable cache
+            # remains valid while matplotlib receives new gap geometry.
+            self._route_plan = self._render_cache_entry.route_plan.to_mutable()
         if self._route_plan is None:
             return
         x_pixels_per_unit, y_pixels_per_unit = self._route_pixel_scale()
@@ -752,6 +771,117 @@ class HeritageTrackWidget(QWidget):
             animal_gap_obstacles=marker_obstacles,
             junction_gap_obstacles=junction_obstacles,
             recompute_crossings=False,
+        )
+
+    @staticmethod
+    def _render_revision(payload: Any) -> str:
+        """Return a deterministic revision token for a render dependency."""
+        encoded = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def _render_cache_key(
+        self,
+        selected_animals: List[str],
+        chronological_mode: bool,
+    ) -> RenderCacheKey:
+        master_track = getattr(self.app, "master_track", None)
+        user_id = getattr(master_track, "current_username", None) if master_track else None
+        display_mode = f"{self.layout_mode}:{'chronological' if chronological_mode else 'partner_normalized'}"
+        return RenderCacheKey.create(
+            user_id=user_id or "anonymous",
+            selection=selected_animals,
+            selection_type="selected",
+            display_mode=display_mode,
+        )
+
+    def _build_render_cache_entry(
+        self,
+        *,
+        engine: PedigreeEngine,
+        selected_animals: List[str],
+        display_nodes: Set[str],
+        ghost_nodes: Set[str],
+        levels: Dict[str, int],
+        families: Dict[str, Dict[str, Any]],
+        positions: Dict[str, Tuple[float, float]],
+        locked_positions: Dict[str, Tuple[float, float]],
+        route_plan: RoutePlan,
+        bounds: Tuple[Tuple[float, float], Tuple[float, float]],
+        f_values: Dict[str, float],
+        f_status: Dict[str, str],
+        obstacle_labels: Dict[str, str],
+        chronological_mode: bool,
+    ) -> RenderCacheEntry:
+        """Freeze one complete render transaction before any artists paint."""
+        record_index = {
+            node: dict(self._get_node_record(node))
+            for node in sorted(display_nodes, key=str.casefold)
+        }
+        parent_map = {
+            child: dict(values)
+            for child, values in engine.child_to_parents.items()
+            if child in display_nodes
+        }
+        dependencies: Set[str] = set(display_nodes)
+        for values in parent_map.values():
+            dependencies.update(value for value in values.values() if value)
+        core_revision = self._render_revision(
+            {node: record_index.get(node, {}) for node in sorted(record_index, key=str.casefold)}
+        )
+        pedigree_revision = self._render_revision(parent_map)
+        engine_revision = self._render_revision(
+            {"nodes": sorted(engine.all_nodes, key=str.casefold), "parents": parent_map}
+        )
+        layout_revision = self._render_revision(
+            {
+                "levels": levels,
+                "families": families,
+                "positions": positions,
+                "locked": locked_positions,
+                "routes": route_plan.routes,
+                "display_mode": self.layout_mode,
+                "chronological": chronological_mode,
+            }
+        )
+        diagnostics = tuple(
+            list(route_plan.unresolved)
+            + list(route_plan.line_crossing_problems)
+            + list(route_plan.route_obstacle_hits)
+        )
+        fatal: List[str] = []
+        for point in route_plan.all_points():
+            if len(point) != 2 or not all(math.isfinite(float(value)) for value in point):
+                fatal.append("non-finite route geometry")
+                break
+        for node, point in positions.items():
+            if len(point) != 2 or not all(math.isfinite(float(value)) for value in point):
+                fatal.append(f"{node}: non-finite node position")
+        return RenderCacheEntry(
+            cache_key=self._render_cache_key(selected_animals, chronological_mode),
+            core_projection_revision=core_revision,
+            pedigree_f_revision=pedigree_revision,
+            engine_resolution_revision=engine_revision,
+            logical_layout_revision=layout_revision,
+            dependencies=frozenset(dependencies),
+            record_index=record_index,
+            canonical_selection=tuple(selected_animals),
+            selection_type="selected",
+            display_mode=f"{self.layout_mode}:{'chronological' if chronological_mode else 'partner_normalized'}",
+            effective_parent_map=parent_map,
+            display_nodes=frozenset(display_nodes),
+            ghost_nodes=frozenset(ghost_nodes),
+            levels=levels,
+            family_nodes=families,
+            family_members=route_plan.family_members,
+            positions=positions,
+            locked_positions=locked_positions,
+            route_plan=route_plan,
+            obstacles=obstacle_labels,
+            bounds=bounds,
+            f_values=f_values,
+            f_status=f_status,
+            diagnostics=diagnostics,
+            fatal_diagnostics=tuple(fatal),
         )
 
     def _replace_route_collections(self) -> None:
@@ -1417,11 +1547,12 @@ class HeritageTrackWidget(QWidget):
         self.refresh_graph()
     
     def _cleanup_stale_positions(self, current_nodes: Set[str]) -> None:
-        """Remove saved positions for animals that no longer exist in the graph."""
-        saved_positions = self.plugin.store.get_node_positions()
-        for node in list(saved_positions.keys()):
-            if node not in current_nodes:
-                self.plugin.store.remove_node_position(node)
+        """Identify stale positions without mutating storage during a redraw.
+
+        Position cleanup is deliberately deferred to an explicit reset or
+        data mutation.  Refreshing a view must remain a read-only operation.
+        """
+        _ = current_nodes
     
     def _clear_all_saved_positions(self) -> None:
         """Clear all saved animal positions (for reset functionality)."""
@@ -2716,7 +2847,12 @@ class HeritageTrackWidget(QWidget):
         return context
 
     def refresh_graph(self, keep_view: bool = False) -> None:
-        engine = self.plugin.build_engine()
+        # Rendering is a read-only transaction.  Native records are resolved
+        # directly by the engine; persistence belongs to explicit mutations.
+        engine = self.plugin.build_engine(sync=False)
+        raw_store = self.plugin.store.load()
+        store_animals = raw_store.get("animals", {}) if isinstance(raw_store, dict) else {}
+        self._render_store_animals = store_animals if isinstance(store_animals, dict) else {}
         selected_animals = list(getattr(self.app, "selected_animals", []) or [])
         # Also include selected heritage-only animals from the app
         selected_heritage_only = list(getattr(self.app, "_selected_heritage_only", []) or [])
@@ -2731,7 +2867,6 @@ class HeritageTrackWidget(QWidget):
         if self.all_animals_mode:
             self._show_splash_screen()
             self._render_store_animals = None
-            self.plugin.schedule_store_flush()
             return
 
         all_graph_nodes = engine.get_display_nodes([])
@@ -2857,15 +2992,8 @@ class HeritageTrackWidget(QWidget):
                 else:
                     animal_positions[node] = pos
 
-            if self._force_relayout:
-                self.plugin.store.set_node_positions_batch(animal_positions)
-            else:
-                to_save = {n: p for n, p in animal_positions.items()
-                           if n not in saved_positions}
-                if to_save:
-                    self.plugin.store.set_node_positions_batch(to_save)
-
-            # temp_positions will be updated at the end of refresh
+            # Position persistence is performed only by explicit drag/reset
+            # actions, never by a view refresh.
         else:
             # Selected animals mode - handle position computation with relayout support
             animal_positions = {}
@@ -3031,6 +3159,36 @@ class HeritageTrackWidget(QWidget):
 
         self._force_relayout = False
 
+        # Compute the diagnostic/F state before accepting the render frame.
+        # No values are written back during a view refresh; derived persistence
+        # belongs to explicit data mutations and the dedicated F-cache issue.
+        label_detail_mode = str(self.settings.get("animal_label_detail", "inbreeding_f"))
+        show_f = label_detail_mode == "inbreeding_f"
+        f_values: Dict[str, float] = {}
+        f_status: Dict[str, str] = {}
+        _genetic_map = engine.get_genetic_parent_map()
+        _f_calculator = InbreedingCalculator(_genetic_map)
+        self._cycle_nodes = _f_calculator.cycle_nodes
+        if show_f:
+            _store_anims = self._render_store_animals or {}
+            for _node in display_nodes:
+                if self._is_family_node(_node):
+                    continue
+                if _node in self._cycle_nodes:
+                    f_status[_node] = "unavailable_cycle"
+                    continue
+                _anim_entry = _store_anims.get(_node, {}) if isinstance(_store_anims, dict) else {}
+                _cached_f = _anim_entry.get("inbreeding_f") if isinstance(_anim_entry, dict) else None
+                if _cached_f is not None:
+                    try:
+                        f_values[_node] = float(_cached_f)
+                        f_status[_node] = "cached"
+                        continue
+                    except (TypeError, ValueError):
+                        pass
+                f_values[_node] = _f_calculator.self_inbreeding_F(_node)
+                f_status[_node] = "calculated"
+
         self._configure_subplot_geometry(chronological_mode)
 
         prev_xlim = self.current_xlim
@@ -3061,7 +3219,41 @@ class HeritageTrackWidget(QWidget):
         # Text stays readable through its white halo and never generates a
         # broken route. Only marker footprints and true line intersections are
         # calibrated to the final axes pixels.
-        self._recompute_route_visual_gaps()
+        self._recompute_route_visual_gaps(route_plan)
+
+        # Publish the complete frame atomically before any visible artists are
+        # created.  Every later view operation can derive its pixel-only route
+        # copy from this accepted entry without rereading mutable backend data.
+        try:
+            render_entry = self._build_render_cache_entry(
+                engine=engine,
+                selected_animals=selected_animals,
+                display_nodes=display_nodes,
+                ghost_nodes=ghost_nodes,
+                levels=levels,
+                families=families,
+                positions=positions,
+                locked_positions=locked_positions,
+                route_plan=route_plan,
+                bounds=(view_xlim, view_ylim),
+                f_values=f_values,
+                f_status=f_status,
+                obstacle_labels=obstacle_labels,
+                chronological_mode=chronological_mode,
+            )
+            if render_entry.valid:
+                self._render_cache_entry = render_entry
+                self.plugin.cache_render_entry(render_entry)
+            else:
+                logging.getLogger(__name__).error(
+                    "Rejected Heritage render frame: %s",
+                    "; ".join(render_entry.fatal_diagnostics),
+                )
+        except Exception:
+            # A failed cache publication must never paint a plausible partial
+            # frame.  Keep the previous accepted entry and report the failure
+            # through the normal status/diagnostic channel.
+            logging.getLogger(__name__).exception("Could not publish Heritage render cache entry")
 
         if self.settings.get("show_grid", False):
             self._draw_grid()
@@ -3102,39 +3294,8 @@ class HeritageTrackWidget(QWidget):
 
         legend_entries: Dict[str, Dict[str, str]] = {}
 
-        # Build the cycle diagnostic for every label mode.  Malformed pedigrees
-        # must be warned about even when the user is showing birth dates or
-        # animal IDs rather than the inbreeding-F detail.
-        label_detail_mode = str(self.settings.get("animal_label_detail", "inbreeding_f"))
-        show_f = label_detail_mode == "inbreeding_f"
-        f_values: Dict[str, float] = {}
-        _genetic_map = engine.get_genetic_parent_map()
-        _f_calculator = InbreedingCalculator(_genetic_map)
-        self._cycle_nodes = _f_calculator.cycle_nodes
-        if show_f:
-            _store_anims = self.plugin.store.load().get("animals", {})
-            _f_to_save: Dict[str, float] = {}
-            for _node in display_nodes:
-                if self._is_family_node(_node):
-                    continue
-                if _node in self._cycle_nodes:
-                    # Do not persist or display a plausible numeric F for a
-                    # malformed cyclic pedigree. The visible detail text and
-                    # status warning carry the actionable diagnostic.
-                    continue
-                _anim_entry = _store_anims.get(_node, {}) if isinstance(_store_anims, dict) else {}
-                _cached_f = _anim_entry.get("inbreeding_f") if isinstance(_anim_entry, dict) else None
-                if _cached_f is not None:
-                    try:
-                        f_values[_node] = float(_cached_f)
-                        continue
-                    except (TypeError, ValueError):
-                        pass
-                _f_val = _f_calculator.self_inbreeding_F(_node)
-                f_values[_node] = _f_val
-                _f_to_save[_node] = _f_val
-            if _f_to_save:
-                self.plugin.store.set_inbreeding_f_batch(_f_to_save, persist=False)
+        # F values and cycle status were computed before the frame was
+        # accepted, so painting consumes one coherent render transaction.
 
         for node in sorted(display_nodes, key=str.lower):
             x, y = animal_positions.get(node, (0.0, 0.0))
@@ -3346,9 +3507,8 @@ class HeritageTrackWidget(QWidget):
         self.status_label.setToolTip("\n".join(tooltip_lines))
         self.status_label.setText(status_text)
 
-        # DEFERRED PERSISTENCE: Save collapsed families and temp positions once at the end
-        if stale_collapsed:
-            self.plugin.store.set_collapsed_families(sorted(self.collapsed_families, key=str.lower))
+        # Do not persist collapsed-family or position cleanup as a side effect
+        # of painting.  Explicit user actions own those writes.
         # Update temp_positions at the very end (only for all_animals_mode)
         if self.all_animals_mode:
             self.temp_positions = {n: pos for n, pos in animal_positions.items() if n in display_nodes}
@@ -3356,7 +3516,6 @@ class HeritageTrackWidget(QWidget):
         self._hover_annotation.set_visible(False)
         self.canvas.draw_idle()
         self._render_store_animals = None
-        self.plugin.schedule_store_flush()
 
     def closeEvent(self, event) -> None:
         '''Flush derived Heritage data before the window is closed.'''
@@ -3376,6 +3535,7 @@ class HeritageTrackWidget(QWidget):
         self.family_positions = {}
         self.family_routes = {}
         self._route_plan = None
+        self._render_cache_entry = None
         self._route_collections = []
         self._relationship_highlight_collections = []
         self._legend_artist = None
@@ -3403,12 +3563,21 @@ class HeritageTrackWidget(QWidget):
         if event.x is None or event.y is None:
             return None
 
+        # Hit testing reads the same accepted logical positions as painting.
+        # During an active drag the transient positions intentionally take
+        # precedence until the next frame is committed.
+        hit_positions = (
+            self.node_positions
+            if self.drag_active or self._render_cache_entry is None
+            else self._render_cache_entry.positions
+        )
+
         # Use event data coordinates to select only nearby grid cells.  The
         # screen threshold is still evaluated exactly below, so this is an
         # optimization rather than a change to hit-test behavior.
         candidates: List[str]
         if event.xdata is None or event.ydata is None or not self._hit_grid:
-            candidates = list(self.node_positions)
+            candidates = list(hit_positions)
         else:
             cell = self._hit_grid_cell_size
             cell_x = int(math.floor(float(event.xdata) / cell))
@@ -3420,7 +3589,7 @@ class HeritageTrackWidget(QWidget):
             pixels_per_cell = max(abs(sx1 - sx0), abs(sy1 - sy0), 1e-6)
             cell_radius = max(1, int(math.ceil(pixel_threshold / pixels_per_cell)) + 1)
             if cell_radius > 8:
-                candidates = list(self.node_positions)
+                candidates = list(hit_positions)
                 cell_radius = 0
             else:
                 candidates = []
@@ -3436,7 +3605,7 @@ class HeritageTrackWidget(QWidget):
             if name in seen:
                 continue
             seen.add(name)
-            point = self.node_positions.get(name)
+            point = hit_positions.get(name)
             if point is None:
                 continue
             x, y = point
@@ -4236,6 +4405,7 @@ class HeritageTrackPlugin:
         self.store = HeritageStore(self.plugin_dir, app.backend)
         self.store.load()
         self._engine_cache = PedigreeEngineCache()
+        self._render_cache = RenderCacheRegistry()
         self._store_flush_scheduled = False
 
         self.window: Optional[HeritageTrackWidget] = None
@@ -4260,6 +4430,30 @@ class HeritageTrackPlugin:
             return
         self._store_flush_scheduled = True
         QTimer.singleShot(0, self._flush_scheduled_store)
+
+    def cache_render_entry(self, entry: RenderCacheEntry) -> None:
+        """Atomically publish one complete, immutable Heritage frame."""
+        self._render_cache.put(entry)
+
+    def get_render_entry(
+        self,
+        key: RenderCacheKey,
+        *,
+        revisions: Optional[Tuple[str, str, str, str]] = None,
+        dependencies: Optional[Set[str]] = None,
+    ) -> Optional[RenderCacheEntry]:
+        return self._render_cache.get_valid(
+            key,
+            revisions=revisions,
+            dependencies=dependencies,
+        )
+
+    def invalidate_render_dependencies(self, dependencies: Set[str]) -> int:
+        """Drop frames depending on changed stable animal/IPID keys."""
+        return self._render_cache.invalidate({str(value).strip() for value in dependencies if str(value).strip()})
+
+    def clear_render_cache(self) -> None:
+        self._render_cache.clear()
 
     def update_language(self, messages: Dict[str, Any]) -> None:
         self.messages = messages or {}
@@ -4358,15 +4552,20 @@ class HeritageTrackPlugin:
 
     def save_parentage(self, animal_name: str, parent_values: Dict[str, Any], source: str = "plugin") -> None:
         self.store.set_parentage(animal_name, parent_values, source=source)
+        self.invalidate_render_dependencies({animal_name})
 
     def get_settings(self) -> Dict[str, Any]:
         return self.store.get_settings()
 
     def set_settings(self, settings: Dict[str, Any]) -> None:
         self.store.set_settings(settings)
+        # Layout/display settings are part of the render identity.  Existing
+        # entries must not be reused after a setting change.
+        self.clear_render_cache()
 
     def sync_from_record(self, animal_name: str, record: Dict[str, Any], in_main_animals: bool = True) -> None:
         self.store.sync_from_record(animal_name, record, in_main_animals=in_main_animals)
+        self.invalidate_render_dependencies({animal_name})
 
     def is_heritage_only(self, animal_name: str) -> bool:
         key = str(animal_name or "").strip()
@@ -4380,12 +4579,16 @@ class HeritageTrackPlugin:
             return False
         if not self.is_heritage_only(key):
             return False
-        return self.store.delete_animal(key)
+        deleted = self.store.delete_animal(key)
+        if deleted:
+            self.invalidate_render_dependencies({key})
+        return deleted
 
     def set_manual_sex(self, animal_name: str, sex: Optional[str]) -> None:
         if self._is_core_animal(animal_name):
             return
         self.store.set_manual_sex(animal_name, sex)
+        self.invalidate_render_dependencies({animal_name})
 
     def get_manual_sex(self, animal_name: str) -> str:
         if self._is_core_animal(animal_name):
@@ -4531,6 +4734,7 @@ class HeritageTrackPlugin:
             review_required=review_required,
             review_reason=review_reason,
         )
+        self.invalidate_render_dependencies({key, resolved_mother, resolved_father})
         return True
 
     def _parent_exists_in_system(self, parent_name: str) -> bool:
@@ -4594,16 +4798,19 @@ class HeritageTrackPlugin:
                 species=offspring_species,
             )
 
-    def build_engine(self) -> PedigreeEngine:
+    def build_engine(self, *, sync: bool = True) -> PedigreeEngine:
         animals = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
         # Include archived animals in the pedigree graph
         archived = getattr(self.app, "archived", {}) or {}
         if isinstance(archived, dict):
             animals = {**animals, **archived}
-        # keep store up-to-date with native fields for offspring/zuchttier etc.
-        sync_changed = self.store.sync_from_animals(animals, persist=False)
-        if sync_changed:
-            self.schedule_store_flush()
+        # Keep the store up-to-date with native fields for offspring/zuchttier
+        # etc.  A render refresh can opt out: view actions must not enqueue
+        # backend writes while an immutable frame is being assembled.
+        if sync:
+            sync_changed = self.store.sync_from_animals(animals, persist=False)
+            if sync_changed:
+                self.schedule_store_flush()
 
         # Build base-name → [(key, species)] map for resolving same-name animals by species.
         _base_to_variants: Dict[str, List[tuple]] = {}
