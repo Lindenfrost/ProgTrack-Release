@@ -5072,9 +5072,11 @@ class HeritageTrackPlugin:
             pedigree_sequence = 0
         if genetic_changed:
             pedigree_sequence += 1
-            pedigree_token, _pedigree_display = self._parentage_token(
-                self._parentage_actor(actor), pedigree_sequence
-            )
+            # The command revision is also the pedigree revision for this
+            # mutation.  A single comparable token avoids two timestamps for
+            # one commit while the separate pedigree_sequence remains useful
+            # for lineage diagnostics.
+            pedigree_token = token
 
         def mutate(data: Dict[str, Any]) -> bool:
             animals = data.setdefault("animals", {})
