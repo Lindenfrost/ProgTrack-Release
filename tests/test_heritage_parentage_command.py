@@ -137,6 +137,32 @@ class HeritageParentageCommandTest(unittest.TestCase):
             )
         self.assertEqual(self.plugin.store.get_all_entries()["Child"]["parentage_revision"], revision)
 
+    def test_stale_target_token_is_checked_against_latest_backend_snapshot(self):
+        self.plugin.set_parentage(
+            actor="researcher", animal_id="Child", values={
+                "egg_donor": "Mother", "sperm_donor": "Father",
+            },
+        )
+        stale_token = self.plugin.store.get_all_entries()["Child"]["parentage_revision"]
+
+        # A second plugin instance represents another open session.  The first
+        # instance's in-memory graph is intentionally left stale.
+        other = HeritageTrackPlugin(self.app)
+        other.set_parentage(
+            actor="manager", animal_id="Child", values={
+                "egg_donor": "Mother", "sperm_donor": "Father",
+                "surrogate_mother": "OldMother",
+            },
+        )
+        writes = self.app.backend.records.put_count
+        with self.assertRaises(ParentageCommandError):
+            self.plugin.set_parentage(
+                actor="researcher", animal_id="Child",
+                expected_revision=stale_token,
+                values={"egg_donor": "Mother", "sperm_donor": "Father"},
+            )
+        self.assertEqual(self.app.backend.records.put_count, writes)
+
     def test_atomic_callback_rollback_keeps_cached_graph(self):
         before = copy.deepcopy(self.plugin.store.load())
         with self.assertRaises(RuntimeError):

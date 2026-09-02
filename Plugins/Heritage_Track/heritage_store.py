@@ -183,6 +183,27 @@ class HeritageStore:
         """Load the combined Heritage record from the shared backend."""
         return self.backend_store.load(None)
 
+    def load_latest_with_revision(self) -> Tuple[Dict[str, Any], int]:
+        """Read and normalize the current backend graph without persisting it.
+
+        Command handlers must not build a write payload from a long-lived
+        in-memory graph: another session may have committed a change since
+        the plugin was opened.  Normalization is therefore applied to a copy
+        of the latest backend payload and the command caller decides when the
+        resulting snapshot is published.
+        """
+        raw, revision = self.backend_store.load_with_revision(None)
+        previous = self._data
+        try:
+            if raw is None:
+                snapshot = deepcopy(self._default_data())
+            else:
+                snapshot = deepcopy(self._normalize_and_cache(deepcopy(raw), persist=False))
+        finally:
+            self._data = previous
+            self._genotype_colors_cache = None
+        return snapshot, int(revision or 0)
+
     def get_backend_revision(self) -> int:
         """Return the current backend revision for the combined graph record."""
         _raw, revision = self.backend_store.load_with_revision(None)
@@ -198,8 +219,7 @@ class HeritageStore:
         transaction; tiny legacy test stores continue to work via the
         BackendJsonStore fallback.
         """
-        current = deepcopy(self.load())
-        current_revision = self.get_backend_revision()
+        current, current_revision = self.load_latest_with_revision()
         if expected_revision is not None and int(expected_revision) != current_revision:
             raise ConflictError(
                 f"Stale Heritage graph revision {expected_revision}; "
@@ -224,7 +244,9 @@ class HeritageStore:
         self._pending_settings_save = False
         return result
 
-    def _normalize_and_cache(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_and_cache(
+        self, raw: Dict[str, Any], *, persist: bool = True
+    ) -> Dict[str, Any]:
         """Normalize a raw combined dict, populate self._data, and trigger save."""
         original = deepcopy(raw) if isinstance(raw, dict) else None
         if not isinstance(raw, dict):
@@ -363,7 +385,7 @@ class HeritageStore:
         raw["animals"] = normalized_animals
         self._genotype_colors_cache = None
         self._data = raw
-        if original != raw:
+        if persist and original != raw:
             self._save_sections(animals=True, settings=True)
         return self._data
     # end _normalize_and_cache

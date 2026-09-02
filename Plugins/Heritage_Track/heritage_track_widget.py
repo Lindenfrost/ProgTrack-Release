@@ -4573,15 +4573,43 @@ class HeritageTrackPlugin:
         display = now.strftime("%Y-%m-%d %H.%M") + f" {actor}"
         return token, display
 
-    def _parentage_records(self, core_record: Optional[Dict[str, Any]] = None,
-                           target_key: str = "") -> Dict[str, Dict[str, Any]]:
+    def _parentage_records(
+        self,
+        core_record: Optional[Dict[str, Any]] = None,
+        target_key: str = "",
+        *,
+        store_snapshot: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
         records = {
             str(key): value
             for key, value in self._all_identity_records().items()
             if isinstance(value, dict)
         }
+        if isinstance(store_snapshot, dict):
+            store_animals = store_snapshot.get("animals", {})
+            if isinstance(store_animals, dict):
+                for key, value in store_animals.items():
+                    if isinstance(value, dict):
+                        records.setdefault(str(key), value)
         if core_record is not None and target_key:
-            records[str(target_key).strip()] = core_record
+            target_text = str(target_key).strip()
+            if target_text in records:
+                records[target_text] = core_record
+            else:
+                # Dialog callers normally pass the canonical identity key,
+                # but resolving a display name here should not manufacture a
+                # second identity that turns an otherwise valid target into an
+                # ambiguity.  Keep the uncommitted record on the one matching
+                # canonical key when the display name is unique.
+                folded = target_text.casefold()
+                matches = [
+                    key for key, value in records.items()
+                    if animal_base_name(key, value).casefold() == folded
+                ]
+                if len(matches) == 1:
+                    records[matches[0]] = core_record
+                else:
+                    records[target_text] = core_record
         return records
 
     def _resolve_parentage_reference(
@@ -4757,7 +4785,12 @@ class HeritageTrackPlugin:
             if self.store._normalize_text(value)
         }
 
-        records = self._parentage_records(core_record, target_text)
+        latest_snapshot, backend_revision = self.store.load_latest_with_revision()
+        records = self._parentage_records(
+            core_record,
+            target_text,
+            store_snapshot=latest_snapshot,
+        )
         target_key, target_record, target_status = self._resolve_parentage_reference(
             target_text, records, target_species=""
         )
@@ -4772,9 +4805,10 @@ class HeritageTrackPlugin:
         target_birth = self._parentage_date(target_birth_text)
         if target_birth_text and target_birth is None and target_birth_text.casefold() not in {"undated", "unknown"}:
             raise self._parentage_error("heritage_track.error.invalid_date", "The animal birth date is invalid.")
-        old_stored = self.store.get_all_entries().get(target_key, {})
+        old_stored = latest_snapshot.get("animals", {}).get(target_key, {})
+        if not isinstance(old_stored, dict):
+            old_stored = {}
         old_revision_token = str((old_stored or {}).get("parentage_revision", "") or "").strip()
-        backend_revision = self.store.get_backend_revision()
         if expected_revision is not None:
             expected_text = str(expected_revision).strip()
             if expected_text.isdigit() and int(expected_text) != backend_revision:
@@ -4861,7 +4895,11 @@ class HeritageTrackPlugin:
         if canonical["surrogate_mother"] and canonical["surrogate_mother"] == canonical["surrogate_father"]:
             raise self._parentage_error("heritage_track.error.parent_same", "Surrogate parents must be different animals.")
 
-        old_records = self._parentage_records(core_record, target_key)
+        old_records = self._parentage_records(
+            core_record,
+            target_key,
+            store_snapshot=latest_snapshot,
+        )
         old_map = self._parentage_lineage_map(old_records)
         new_map = dict(old_map)
         new_map[target_key] = (canonical["egg_donor"], canonical["sperm_donor"])
@@ -4871,7 +4909,7 @@ class HeritageTrackPlugin:
 
         sequence = 0
         try:
-            sequence = int(self.store.load().get("parentage_sequence", 0) or 0) + 1
+            sequence = int(latest_snapshot.get("parentage_sequence", 0) or 0) + 1
         except (TypeError, ValueError):
             sequence = 1
         token, display_token = self._parentage_token(self._parentage_actor(actor), sequence)
