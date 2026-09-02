@@ -1,11 +1,11 @@
-# ProgTrack 0.2.2
+# ProgTrack 0.2.3
 
 <p align="center">
   <img src="icons/Splash.png" alt="ProgTrack splash" width="520">
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.2.2-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.2.3-blue">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-portable%20Python-green">
   <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue">
@@ -17,7 +17,7 @@ reproductive events, medical history, cage placement, pedigree data, sample
 tracking, projects, reports, and planning tools in one inspectable Windows
 bundle.
 
-Version 0.2.2 is a backend-based maintenance release built for a complete, traceable
+Version 0.2.3 is a backend-based maintenance release built for a complete, traceable
 animal workflow. The application uses one service contract for every module and
 offers a tiny local SQLite profile for one workstation or testing, plus a shared
 PostgreSQL profile for networked facilities. The same animal identities, history,
@@ -121,7 +121,7 @@ account is `123456`; change these passwords before any sensitive or shared use.
 
 ### Application payload
 
-- `ProgTrack.v.0.2.2.py` — editable main application script;
+- `ProgTrack.v.0.2.3.py` — editable main application script;
 - `Plugins/` — the core and optional plugin modules;
 - `icons/` — splash, file-type, job, language, and UI assets;
 - `lang/` — English, German, Italian, and Russian message catalogs;
@@ -131,7 +131,7 @@ account is `123456`; change these passwords before any sensitive or shared use.
 
 ### Portable runtime
 
-- `Launcher.exe` — neutral portable launcher for the current `0.2.2` application payload;
+- `Launcher.exe` — neutral portable launcher for the current `0.2.3` application payload;
 - `_internal/` — the bundled Python/Qt runtime and native libraries;
 - `third_party_licenses/`, `THIRD_PARTY_NOTICES.md`, and `LICENSE`.
 
@@ -148,17 +148,17 @@ account is `123456`; change these passwords before any sensitive or shared use.
 To select a script explicitly:
 
 ```text
-Launcher.exe --script ProgTrack.v.0.2.2.py
+Launcher.exe --script ProgTrack.v.0.2.3.py
 ```
 
 ## Platform support and release artifacts
 
-The 0.2.2 release published here is a native Windows portable release. Its
+The 0.2.3 release described here is a native Windows portable release. Its
 `Launcher.exe`, Windows Qt/Python runtime, and bundled native libraries must be
 kept together; this ZIP is not a native Linux package and is not supported
 through Wine.
 
-A separate native Linux artifact uses the same current `0.2.2` application
+A separate native Linux artifact uses the same current `0.2.3` application
 payload and backend contracts. A local engineering archive is now assembled as
 `ProgTrack-0.3.0-linux-x86_64.tar.gz`: it contains a pinned CPython runtime, Qt/PyQt6,
 scientific/PDF/XLSX dependencies, bundled fonts, and the Psycopg binary client.
@@ -173,7 +173,7 @@ Windows and Linux artifacts remain separate rather than combining incompatible
 | --- | --- |
 | `Launcher.exe` | Portable Windows launcher. |
 | `_internal/` | Bundled Python, Qt, Psycopg/libpq, and third-party libraries. |
-| `ProgTrack.v.0.2.2.py` | Main application payload. |
+| `ProgTrack.v.0.2.3.py` | Main application payload. |
 | `Plugins/` | Core services and plugin modules. |
 | `icons/ui/` | Canonical UI SVG registry and manifest used by the application. |
 | `icons/` | Splash, file-type, language, and other non-UI assets. |
@@ -347,7 +347,7 @@ across selected animals.
 
 Plugins are loaded from `Plugins/` at startup. Some are tabs, some are dialogs,
 and some provide feature gates or backend services.
-The Version column below is taken from each shipped plugin's `manifest.json`; the current `0.2.2` application payload is required for this release. Plugin manifest versions remain independently declared compatibility metadata. The table is a release inventory, not a promise that a future roadmap feature is already enabled.
+The Version column below is taken from each shipped plugin's `manifest.json`; the current `0.2.3` application payload is required for this release. Plugin manifest versions remain independently declared compatibility metadata. The table is a release inventory, not a promise that a future roadmap feature is already enabled.
 
 
 | Plugin | Version | Kind | Purpose |
@@ -479,7 +479,7 @@ force-release an entity lock, and it requires an audited reason.
 
 Check the launcher/runtime logs below the configured runtime state directory,
 or use `Master Track -> Open tech logs` when logged in as Lord or Master.
-Confirm that `Launcher.exe`, `_internal/`, `ProgTrack.v.0.2.2.py`, `Plugins/`,
+Confirm that `Launcher.exe`, `_internal/`, `ProgTrack.v.0.2.3.py`, `Plugins/`,
 `icons/`, `lang/`, `manual/`, and `Resources/` remain together. A partial copy
 usually causes missing Qt, SciPy, Excel, PDF, or PostgreSQL-library errors.
 
@@ -524,6 +524,10 @@ interchange contracts are versioned below
 Launcher build sources are in source/ and are not part of the compact release
 ZIP. Each platform has one self-contained source tree: `source/launcher/windows/`
 and `source/launcher/linux/`.
+The application-version inventory and semantic patch map is maintained at
+`source/versionsinfo.md`; it distinguishes current product markers from
+minimum compatibility, plugin/schema, historical, third-party, and
+launcher-owned versions.
 
 Windows build inputs are all under `source/launcher/windows/`:
 

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.2
+# Part of: ProgTrack 0.2.3
 # Module: shared animal identity helpers.
 
 from __future__ import annotations

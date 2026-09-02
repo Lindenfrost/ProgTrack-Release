@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.2
+# Part of: ProgTrack 0.2.3
 # Required Launcher version: 0.2.1 or newer.
 # Module: Main application entry point and core user interface.
 # Minimum Python version: 3.9.
@@ -3953,7 +3953,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 postgres_pool_min=pool_min,
                 postgres_pool_max=pool_max,
             )
-            self.plugin_manager = PluginManager(APP_BASE_DIR / "Plugins", app_version="0.2.2")
+            self.plugin_manager = PluginManager(APP_BASE_DIR / "Plugins", app_version="0.2.3")
             self.plugin_diagnostics = {}
             self.authorization = AuthorizationService(None, disabled=False, backend=self.backend)
             logger.info(

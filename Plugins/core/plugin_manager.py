@@ -51,7 +51,7 @@ def _module_and_attr(entry_point: str) -> tuple[str, str]:
 
 class PluginManager:
     """Discover every manifest and keep plugin capabilities deterministic."""
-    def __init__(self, plugins_root: str | Path, *, app_version: str = "0.2.2"):
+    def __init__(self, plugins_root: str | Path, *, app_version: str = "0.2.3"):
         self.plugins_root = Path(plugins_root)
         self.app_version = app_version
         self.diagnostics: dict[str, ManifestDiagnostic] = {}
