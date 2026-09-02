@@ -848,6 +848,7 @@ class HeritageTrackWidget(QWidget):
             + list(route_plan.line_crossing_problems)
             + list(route_plan.route_obstacle_hits)
         )
+        cache_key = self._render_cache_key(selected_animals, chronological_mode)
         fatal: List[str] = []
         for point in route_plan.all_points():
             if len(point) != 2 or not all(math.isfinite(float(value)) for value in point):
@@ -857,14 +858,14 @@ class HeritageTrackWidget(QWidget):
             if len(point) != 2 or not all(math.isfinite(float(value)) for value in point):
                 fatal.append(f"{node}: non-finite node position")
         return RenderCacheEntry(
-            cache_key=self._render_cache_key(selected_animals, chronological_mode),
+            cache_key=cache_key,
             core_projection_revision=core_revision,
             pedigree_f_revision=pedigree_revision,
             engine_resolution_revision=engine_revision,
             logical_layout_revision=layout_revision,
             dependencies=frozenset(dependencies),
             record_index=record_index,
-            canonical_selection=tuple(selected_animals),
+            canonical_selection=cache_key.canonical_selection,
             selection_type="selected",
             display_mode=f"{self.layout_mode}:{'chronological' if chronological_mode else 'partner_normalized'}",
             effective_parent_map=parent_map,
