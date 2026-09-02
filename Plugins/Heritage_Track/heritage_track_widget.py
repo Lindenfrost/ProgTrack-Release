@@ -4762,7 +4762,10 @@ class HeritageTrackPlugin:
             )
         target_key = str(target_key).strip()
         target_species = self.store._normalize_text(target_record.get("species", ""))
-        target_birth = self._parentage_date(target_record.get("birth_date", ""))
+        target_birth_text = self.store._normalize_text(target_record.get("birth_date", ""))
+        target_birth = self._parentage_date(target_birth_text)
+        if target_birth_text and target_birth is None and target_birth_text.casefold() not in {"undated", "unknown"}:
+            raise self._parentage_error("heritage_track.error.invalid_date", "The animal birth date is invalid.")
         old_stored = self.store.get_all_entries().get(target_key, {})
         old_revision_token = str((old_stored or {}).get("parentage_revision", "") or "").strip()
         backend_revision = self.store.get_backend_revision()
@@ -4838,7 +4841,10 @@ class HeritageTrackPlugin:
             parent_species = self.store._normalize_text(parent_record.get("species", ""))
             if target_species and parent_species != target_species:
                 raise self._parentage_error("heritage_track.error.parent_wrong_species", "Selected parents must have the same species as the animal.")
-            parent_birth = self._parentage_date(parent_record.get("birth_date", ""))
+            parent_birth_text = self.store._normalize_text(parent_record.get("birth_date", ""))
+            parent_birth = self._parentage_date(parent_birth_text)
+            if parent_birth_text and parent_birth is None and parent_birth_text.casefold() not in {"undated", "unknown"}:
+                raise self._parentage_error("heritage_track.error.invalid_date", "The parent birth date is invalid.")
             if target_birth and parent_birth and parent_birth >= target_birth:
                 raise self._parentage_error("heritage_track.error.parent_too_young", "A parent must be older than the animal.")
             if canonical[field] == target_key:
