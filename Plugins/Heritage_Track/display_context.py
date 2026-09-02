@@ -145,6 +145,8 @@ class FrozenRoutePlan:
     geometry_revision: int = 0
     gap_geometry_revision: int = -1
     pixel_gap_revision: int = 0
+    last_animal_gap_obstacles: Mapping[str, Any] = field(default_factory=dict)
+    last_junction_gap_obstacles: Mapping[str, Any] = field(default_factory=dict)
     route_obstacle_hits: Tuple[str, ...] = ()
     layout_diagnostics: Tuple[str, ...] = ()
 
@@ -158,6 +160,8 @@ class FrozenRoutePlan:
             "routes",
             "crossing_gaps",
             "line_crossing_gaps",
+            "last_animal_gap_obstacles",
+            "last_junction_gap_obstacles",
         ):
             object.__setattr__(self, field_name, _freeze_value(getattr(self, field_name)))
         for field_name in (
@@ -196,6 +200,8 @@ class FrozenRoutePlan:
             geometry_revision=int(plan.geometry_revision),
             gap_geometry_revision=int(plan.gap_geometry_revision),
             pixel_gap_revision=int(plan.pixel_gap_revision),
+            last_animal_gap_obstacles=dict(getattr(plan, "last_animal_gap_obstacles", {})),
+            last_junction_gap_obstacles=dict(getattr(plan, "last_junction_gap_obstacles", {})),
             route_obstacle_hits=tuple(plan.route_obstacle_hits),
             layout_diagnostics=tuple(getattr(plan, "layout_diagnostics", ())),
         )
@@ -266,6 +272,8 @@ class FrozenRoutePlan:
             geometry_revision=self.geometry_revision,
             gap_geometry_revision=self.gap_geometry_revision,
             pixel_gap_revision=self.pixel_gap_revision,
+            last_animal_gap_obstacles=dict(self.last_animal_gap_obstacles),
+            last_junction_gap_obstacles=dict(self.last_junction_gap_obstacles),
             route_obstacle_hits=list(self.route_obstacle_hits),
             layout_diagnostics=list(self.layout_diagnostics),
         )

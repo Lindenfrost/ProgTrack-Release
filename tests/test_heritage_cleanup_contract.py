@@ -10,6 +10,7 @@ from pathlib import Path
 from Plugins.Heritage_Track.display_context import DisplayContext
 from Plugins.Heritage_Track.engine_cache import PedigreeEngineCache
 from Plugins.Heritage_Track.pedigree_engine import PedigreeEngine
+from Plugins.Heritage_Track.pedigree_router import PedigreeRouter, Rect, RoutePlan
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,6 +89,49 @@ class HeritageCleanupContractTest(unittest.TestCase):
         script = (ROOT / "source" / "launcher" / "windows" / "package_release.ps1").read_text(encoding="utf-8")
         payload_block = script.split("$payloadPaths = @(", 1)[1].split(")", 1)[0]
         self.assertNotRegex(payload_block, r"(?i)archive|__pycache__")
+
+    def test_recompute_line_gaps_reuses_current_obstacle_calibration(self):
+        router = PedigreeRouter()
+        plan = RoutePlan(
+            animal_positions={"A": (0.0, 0.0)},
+            family_positions={},
+            family_members={},
+            routes={},
+        )
+        animal_obstacles = {"A": Rect(-0.1, 0.1, -0.1, 0.1)}
+        router.recompute_line_gaps(
+            plan,
+            animal_gap_obstacles=animal_obstacles,
+            junction_gap_obstacles={},
+        )
+        router.recompute_line_gaps(plan)
+        self.assertEqual(plan.last_animal_gap_obstacles, animal_obstacles)
+        self.assertEqual(plan.last_junction_gap_obstacles, {})
+
+    def test_overview_continuing_child_pull_is_bounded_and_local(self):
+        router = PedigreeRouter()
+        positions = {
+            "P1": (-10.0, 0.0),
+            "P2": (-8.0, 0.0),
+            "Child": (4.0, 3.6),
+            "Terminal": (-9.0, 3.6),
+            "Mate": (5.0, 3.6),
+            "Grandchild": (5.0, 7.2),
+        }
+        families = {
+            "birth": {"mother": "P1", "father": "P2", "children": ["Child", "Terminal"]},
+            "child_family": {"mother": "Child", "father": "Mate", "children": ["Grandchild"]},
+        }
+        before = positions["Child"][0]
+        changed = router._compact_overview_continuing_children(
+            positions,
+            families,
+            {node: node for node in positions},
+            False,
+        )
+        self.assertTrue(changed)
+        self.assertLess(abs(positions["Child"][0] - (-9.0)), abs(before - (-9.0)))
+        self.assertLessEqual(abs(positions["Child"][0] - before), 2.2)
 
 
 if __name__ == "__main__":

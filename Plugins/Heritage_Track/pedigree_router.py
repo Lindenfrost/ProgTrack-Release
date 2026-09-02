@@ -158,6 +158,12 @@ class RoutePlan:
     geometry_revision: int = 0
     gap_geometry_revision: int = -1
     pixel_gap_revision: int = 0
+    # The most recently used obstacle calibration is retained with the plan.
+    # A caller that recomputes an unchanged plan without supplying viewport
+    # rectangles must not silently switch from pixel-calibrated masks to the
+    # router's wider standalone defaults.
+    last_animal_gap_obstacles: Dict[str, Rect] = field(default_factory=dict, repr=False)
+    last_junction_gap_obstacles: Dict[str, Rect] = field(default_factory=dict, repr=False)
     # Internal diagnostics only: endpoint routes that had to accept an
     # obstacle overlap while preserving canonical topology.
     route_obstacle_hits: List[str] = field(default_factory=list)
@@ -445,15 +451,26 @@ class PedigreeRouter:
         _assert_finite_points(plan.animal_positions, kind="animal")
         _assert_finite_points(plan.family_positions, kind="family")
         owned_segments = self._owned_segments(plan.routes)
+        cached_obstacles_are_current = (
+            plan.gap_geometry_revision == plan.geometry_revision
+        )
+        if animal_gap_obstacles is None and cached_obstacles_are_current:
+            resolved_animal_obstacles = plan.last_animal_gap_obstacles or None
+        else:
+            resolved_animal_obstacles = animal_gap_obstacles
         animal_obstacles = dict(
-            animal_gap_obstacles
-            if animal_gap_obstacles is not None
+            resolved_animal_obstacles
+            if resolved_animal_obstacles is not None
             else self.marker_obstacles(plan.animal_positions)
         )
         _assert_finite_rects(animal_obstacles, kind="animal obstacle")
+        if junction_gap_obstacles is None and cached_obstacles_are_current:
+            resolved_junction_obstacles = plan.last_junction_gap_obstacles or None
+        else:
+            resolved_junction_obstacles = junction_gap_obstacles
         junction_obstacles = dict(
-            junction_gap_obstacles
-            if junction_gap_obstacles is not None
+            resolved_junction_obstacles
+            if resolved_junction_obstacles is not None
             else {
                 f"@{family_id}": Rect(
                     point[0] - self.junction_clearance,
@@ -465,6 +482,11 @@ class PedigreeRouter:
             }
         )
         _assert_finite_rects(junction_obstacles, kind="junction obstacle")
+        # Keep the exact calibration used for this pass so repeated calls on
+        # an unchanged plan remain idempotent.  A geometry revision mismatch
+        # intentionally falls back to freshly derived defaults above.
+        plan.last_animal_gap_obstacles = dict(animal_obstacles)
+        plan.last_junction_gap_obstacles = dict(junction_obstacles)
         if recompute_crossings or not plan.line_crossings_ready:
             crossing_gaps, crossing_problems = self._find_crossing_gaps(
                 owned_segments,
@@ -951,6 +973,13 @@ class PedigreeRouter:
                         families,
                         labels,
                         show_inbreeding,
+                    )
+                    self._compact_overview_continuing_children(
+                        adjusted,
+                        families,
+                        labels,
+                        show_inbreeding,
+                        chronological=preserve_y,
                     )
                 if prefer_descendant_order and focus_nodes:
                     for _compact_round in range(1):
@@ -2410,6 +2439,98 @@ class PedigreeRouter:
                 positions[node] = candidate[node]
             claimed.update(moved)
             changed = True
+        return changed
+
+    def _compact_overview_continuing_children(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        show_inbreeding: bool,
+        *,
+        chronological: bool = False,
+    ) -> bool:
+        """Apply a bounded local pull to continuing branches in Overview mode.
+
+        A multi-child family can acquire a long diagonal when one child also
+        owns a descendant family: the child is packed with its spouse branch,
+        while its birth family remains on the opposite shoulder. Pulling that
+        continuing child a small fraction toward its two-parent corridor keeps
+        the ancestry local without moving terminal siblings or surrounding
+        components. Candidates are accepted only when the existing local
+        node/marker collision checks remain clear.
+        """
+        if not positions or not families:
+            return False
+
+        parent_families: Dict[str, List[str]] = defaultdict(list)
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            parents = [parent for parent in self._parents(family) if parent in positions]
+            children = [child for child in self._children(family) if child in positions]
+            if len(parents) == 2 and children:
+                for child in children:
+                    parent_families[child].append(family_id)
+
+        # Use the same local label/marker footprints as the final renderer.
+        # A full route score is intentionally avoided here: Overview seed
+        # graphs can contain hundreds of nodes, and this small pull must not
+        # turn every render into a quadratic global optimization.
+        obstacles = self.node_obstacles(positions, labels, show_inbreeding)
+        markers = self.marker_obstacles(
+            positions,
+            half_width=0.32,
+            half_height=0.60 if chronological else 0.42,
+        )
+
+        def overlaps(first: Rect, second: Rect) -> bool:
+            return (
+                first.right > second.left
+                and second.right > first.left
+                and first.top > second.bottom
+                and second.top > first.bottom
+            )
+
+        changed = False
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            parents = [parent for parent in self._parents(family) if parent in positions]
+            children = [child for child in self._children(family) if child in positions]
+            if len(parents) != 2 or len(children) < 2:
+                continue
+            continuing = [child for child in children if parent_families.get(child)]
+            if not continuing:
+                continue
+            midpoint = sum(positions[parent][0] for parent in parents) / 2.0
+            for child in sorted(continuing, key=str.casefold):
+                current_x, current_y = positions[child]
+                delta = (midpoint - current_x) * 0.20
+                # This is deliberately a small local optimization. Avoid
+                # moving already-local branches and cap sparse jumps.
+                if abs(delta) < 0.50:
+                    continue
+                delta = max(-2.20, min(2.20, delta))
+                candidate_point = (current_x + delta, current_y)
+                child_obstacle = self.node_obstacles(
+                    {child: candidate_point}, labels, show_inbreeding
+                )[child]
+                child_marker = self.marker_obstacles(
+                    {child: candidate_point},
+                    half_width=0.32,
+                    half_height=0.60 if chronological else 0.42,
+                )[child]
+                if any(
+                    overlaps(child_obstacle, other_obstacle)
+                    or overlaps(child_obstacle, markers[other])
+                    or overlaps(other_obstacle, child_marker)
+                    for other, other_obstacle in obstacles.items()
+                    if other != child
+                ):
+                    continue
+                positions[child] = candidate_point
+                obstacles[child] = child_obstacle
+                markers[child] = child_marker
+                changed = True
         return changed
 
     def _layout_geometry_score(
