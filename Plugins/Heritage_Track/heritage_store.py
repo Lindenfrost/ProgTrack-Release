@@ -15,6 +15,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_roles import ROLE_VALUE_AMME, ROLE_VALUE_SAMENSP, ROLE_VALUE_SPENDER, canonical_role_value
 from Plugins.core.backend_store import BackendJsonStore
+from Plugins.core.backend.errors import ConflictError
 
 PARENT_KEYS = ("egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father")
 
@@ -34,6 +35,7 @@ class HeritageStore:
         self._pending_animal_save = False
         self._pending_settings_save = False
         self._genotype_colors_cache: Optional[Dict[str, str]] = None
+        self._backend_revision: int = 0
 
     def _default_settings(self) -> Dict[str, Any]:
         return {
@@ -181,6 +183,47 @@ class HeritageStore:
         """Load the combined Heritage record from the shared backend."""
         return self.backend_store.load(None)
 
+    def get_backend_revision(self) -> int:
+        """Return the current backend revision for the combined graph record."""
+        _raw, revision = self.backend_store.load_with_revision(None)
+        self._backend_revision = int(revision or 0)
+        return self._backend_revision
+
+    def atomic_update(self, mutator, *, expected_revision: int | None = None) -> Any:
+        """Apply one graph mutation and persist it in one backend write.
+
+        The callback receives a deep copy of the normalized graph.  If it
+        raises, the cached graph and backend remain unchanged.  Real backend
+        repositories perform the optimistic revision check in their write
+        transaction; tiny legacy test stores continue to work via the
+        BackendJsonStore fallback.
+        """
+        current = deepcopy(self.load())
+        current_revision = self.get_backend_revision()
+        if expected_revision is not None and int(expected_revision) != current_revision:
+            raise ConflictError(
+                f"Stale Heritage graph revision {expected_revision}; "
+                f"current revision is {current_revision}."
+            )
+        working = deepcopy(current)
+        result = mutator(working)
+        working["updated_at"] = self._utc_now_iso()
+        previous = self._data
+        try:
+            self.backend_store.save(
+                working,
+                expected_revision=current_revision if current_revision else None,
+            )
+        except Exception:
+            self._data = previous
+            raise
+        self._data = working
+        self._backend_revision = current_revision + 1
+        self._genotype_colors_cache = None
+        self._pending_animal_save = False
+        self._pending_settings_save = False
+        return result
+
     def _normalize_and_cache(self, raw: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize a raw combined dict, populate self._data, and trigger save."""
         original = deepcopy(raw) if isinstance(raw, dict) else None
@@ -275,6 +318,12 @@ class HeritageStore:
             normalized_entry["heritage_only"] = bool(entry.get("heritage_only", False))
             normalized_entry["source"] = self._normalize_text(entry.get("source", "plugin")) or "plugin"
             normalized_entry["updated_at"] = self._normalize_text(entry.get("updated_at", ""))
+            normalized_entry["parentage_revision"] = self._normalize_text(
+                entry.get("parentage_revision", entry.get("revision", ""))
+            )
+            normalized_entry["parentage_revision_display"] = self._normalize_text(
+                entry.get("parentage_revision_display", "")
+            )
             if entry.get("identity_review_required"):
                 normalized_entry["identity_review_required"] = True
                 normalized_entry["identity_review_reason"] = self._normalize_text(
@@ -388,6 +437,8 @@ class HeritageStore:
                 "source": "plugin",
                 "updated_at": self._utc_now_iso(),
                 "inbreeding_f": None,
+                "parentage_revision": "",
+                "parentage_revision_display": "",
             }
         return animals[key]
 

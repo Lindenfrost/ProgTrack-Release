@@ -13,8 +13,9 @@ import json
 import math
 import os
 import time
+from copy import deepcopy
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
@@ -62,6 +63,7 @@ from Plugins.core.animal_identity import (
     split_animal_identity_key,
 )
 from Plugins.core.animal_roles import ROLE_VALUE_AMME, ROLE_VALUE_SAMENSP, ROLE_VALUE_SPENDER, canonical_role_value
+from Plugins.core.backend.errors import ConflictError
 from Plugins.core.ui_icons import apply_icon
 from Plugins.core.resource_catalogs import (
     UNKNOWN_SPECIES_VALUE,
@@ -100,6 +102,15 @@ from .pedigree_router import (
     RoutePlan,
 )
 from .ui_parent_fields import ParentSelector, build_parent_group, extract_parent_values
+
+
+class ParentageCommandError(ValueError):
+    """Localized, user-facing validation error from the parentage boundary."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = str(code or "invalid_parentage")
+        self.message = str(message)
 
 
 class NodeEditDialog(QDialog):
@@ -1727,8 +1738,8 @@ class HeritageTrackWidget(QWidget):
         # graph labels or archived/dead animals.
         _ = engine
         return (
-            self.plugin.parent_candidate_options("female", target_species, exclude_node),
-            self.plugin.parent_candidate_options("male", target_species, exclude_node),
+            self.plugin.parent_candidate_options("female", target_species, exclude_node, with_status=True),
+            self.plugin.parent_candidate_options("male", target_species, exclude_node, with_status=True),
         )
 
     def _parent_map_has_cycle(self, parent_map: Dict[str, Tuple[Optional[str], Optional[str]]]) -> bool:
@@ -4129,6 +4140,7 @@ class HeritageTrackWidget(QWidget):
                 required,
                 species,
                 node,
+                with_status=True,
             ),
         )
         if dlg.exec() != QDialog.DialogCode.Accepted:
@@ -4211,13 +4223,26 @@ class HeritageTrackWidget(QWidget):
         updated_parentage["egg_donor"] = mother_value
         updated_parentage["sperm_donor"] = father_value
 
-        self.plugin.save_parentage(node, updated_parentage, source="plugin")
-
-        # Create heritage-only placeholders for new parents with correct sex and species
-        mother_name = mother_value
-        father_name = father_value
-        if mother_name or father_name:
-            self.plugin._ensure_parent_placeholders(mother_name, father_name, animal_species)
+        try:
+            self.plugin.set_parentage(
+                actor=None,
+                animal_id=node,
+                expected_revision=None,
+                values=updated_parentage,
+                source="plugin",
+                allow_custom=True,
+                explicit_custom_parents={
+                    values.get(field, "")
+                    for field, marker in (
+                        ("mother", "mother_allows_missing"),
+                        ("father", "father_allows_missing"),
+                    )
+                    if values.get(marker)
+                },
+            )
+        except ParentageCommandError as exc:
+            QMessageBox.warning(self, self.messages.get("error.title", "Error"), exc.message)
+            return
 
         if is_heritage_only:
             self.plugin.set_manual_sex(node, values.get("sex", ""))
@@ -4285,6 +4310,7 @@ class HeritageTrackWidget(QWidget):
             parent_options_provider=lambda required, selected_species: self.plugin.parent_candidate_options(
                 required,
                 selected_species,
+                with_status=True,
             ),
         )
         dlg.setWindowTitle(self.messages.get("heritage_track.node.edit.title_new", "Add Placeholder Animal"))
@@ -4511,6 +4537,409 @@ class HeritageTrackPlugin:
             return archived[key]
         return None
 
+    def _parentage_message(self, key: str, fallback: str) -> str:
+        return str(self.messages.get(key, fallback) or fallback)
+
+    def _parentage_actor(self, actor: Any = None) -> str:
+        value = str(actor or "").strip()
+        if value:
+            return value
+        master = getattr(self.app, "master_track", None)
+        return str(getattr(master, "current_username", "") or "guest").strip() or "guest"
+
+    def _parentage_authorized(self) -> bool:
+        """Check the write permission at the command boundary, not just in UI."""
+        checker = getattr(self.app, "_master_can", None)
+        if callable(checker):
+            return bool(checker("heritage.edit_links"))
+        authorization = getattr(self.app, "authorization", None)
+        # A missing Master Track is the documented trusted-local mode.  A
+        # configured managed authorization service without its UI boundary is
+        # fail-closed for this protected mutation.
+        if authorization is None:
+            return True
+        return bool(getattr(authorization, "trusted_local", False))
+
+    @staticmethod
+    def _parentage_token(actor: str, sequence: int) -> Tuple[str, str]:
+        now = datetime.now(timezone.utc)
+        token = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z|{actor}|{sequence}"
+        display = now.strftime("%Y-%m-%d %H.%M") + f" {actor}"
+        return token, display
+
+    def _parentage_records(self, core_record: Optional[Dict[str, Any]] = None,
+                           target_key: str = "") -> Dict[str, Dict[str, Any]]:
+        records = {
+            str(key): value
+            for key, value in self._all_identity_records().items()
+            if isinstance(value, dict)
+        }
+        if core_record is not None and target_key:
+            records[str(target_key).strip()] = core_record
+        return records
+
+    def _resolve_parentage_reference(
+        self,
+        value: Any,
+        records: Dict[str, Dict[str, Any]],
+        target_species: str = "",
+    ) -> Tuple[str, Dict[str, Any], str]:
+        """Resolve an IPID/display name without letting a legacy short key
+        suppress an otherwise ambiguous display name.
+
+        Canonical identity keys (``name | species | date | origin``) always
+        win as exact references.  Short names are resolved only when unique,
+        with the target-species narrowing rule applied before ambiguity is
+        reported.
+        """
+        text = self.store._normalize_text(value)
+        if not text:
+            return "", {}, "missing"
+        if split_animal_identity_key(text) is not None and text in records:
+            return text, records.get(text, {}), "resolved"
+        folded = text.casefold()
+        matches = [
+            (str(key), record)
+            for key, record in records.items()
+            if isinstance(record, dict) and animal_base_name(key, record).casefold() == folded
+        ]
+        if target_species:
+            species_matches = [
+                item for item in matches
+                if self.store._normalize_text(item[1].get("species", "")).casefold()
+                == self.store._normalize_text(target_species).casefold()
+            ]
+            if species_matches:
+                matches = species_matches
+        if len(matches) == 1:
+            return matches[0][0], matches[0][1], "resolved"
+        if len(matches) > 1:
+            return "", {}, "ambiguous"
+        if text in records:
+            return text, records.get(text, {}), "resolved"
+        return text, {}, "missing"
+
+    def _parentage_error(self, code: str, fallback: str) -> ParentageCommandError:
+        return ParentageCommandError(code, self._parentage_message(code, fallback))
+
+    def _parentage_default_entry(self, key: str, *, name: str = "",
+                                 species: str = "", sex: str = "",
+                                 birth_date: str = "", heritage_only: bool = True) -> Dict[str, Any]:
+        visible = str(name or animal_base_name(key)).strip()
+        return {
+            **{parent_key: "" for parent_key in ("egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father")},
+            "ipid": key,
+            "name": visible,
+            "_base_name": visible,
+            "display_name": visible,
+            "genotype": "",
+            "node_fill_color": "",
+            "sex": sex,
+            "species": species,
+            "birth_date": birth_date,
+            "heritage_only": heritage_only,
+            "source": "plugin",
+            "updated_at": "",
+            "inbreeding_f": None,
+            "parentage_revision": "",
+            "parentage_revision_display": "",
+        }
+
+    def _parentage_date(self, value: Any) -> Optional[datetime]:
+        text = str(value or "").strip()
+        if not text or text.casefold() in {"undated", "unknown"}:
+            return None
+        try:
+            return datetime.strptime(normalize_birth_date(text, required=True), "%d.%m.%Y")
+        except (TypeError, ValueError):
+            return None
+
+    def _parentage_lineage_map(self, records: Dict[str, Dict[str, Any]]) -> Dict[str, Tuple[str, str]]:
+        result: Dict[str, Tuple[str, str]] = {}
+        for key, record in records.items():
+            if not isinstance(record, dict):
+                continue
+            values = self.store._normalize_parents(record)
+            # Core records use the native German field names; Heritage-owned
+            # entries already use the canonical graph names.
+            if not values.get("egg_donor"):
+                values["egg_donor"] = self.store._normalize_text(record.get("eizellspenderin", ""))
+            if not values.get("sperm_donor"):
+                values["sperm_donor"] = self.store._normalize_text(record.get("samenspender", ""))
+            result[str(key)] = (
+                str(values.get("egg_donor", "") or "").strip(),
+                str(values.get("sperm_donor", "") or "").strip(),
+            )
+        return result
+
+    @staticmethod
+    def _parentage_has_cycle(parent_map: Dict[str, Tuple[str, str]]) -> bool:
+        states: Dict[str, int] = {}
+
+        def visit(node: str) -> bool:
+            state = states.get(node, 0)
+            if state == 1:
+                return True
+            if state == 2:
+                return False
+            states[node] = 1
+            for parent in parent_map.get(node, ("", "")):
+                if parent and visit(parent):
+                    return True
+            states[node] = 2
+            return False
+
+        return any(visit(node) for node in set(parent_map) | {
+            parent for values in parent_map.values() for parent in values if parent
+        })
+
+    @staticmethod
+    def _parentage_dependency_closure(parent_map: Dict[str, Tuple[str, str]], seeds: Set[str]) -> Set[str]:
+        reverse: Dict[str, Set[str]] = defaultdict(set)
+        for child, parents in parent_map.items():
+            for parent in parents:
+                if parent:
+                    reverse[parent].add(child)
+        result: Set[str] = set(str(seed).strip() for seed in seeds if str(seed).strip())
+        stack = list(result)
+        while stack:
+            node = stack.pop()
+            neighbours = set(parent_map.get(node, ("", ""))) | reverse.get(node, set())
+            for neighbour in neighbours:
+                if neighbour and neighbour not in result:
+                    result.add(neighbour)
+                    stack.append(neighbour)
+        return result
+
+    def set_parentage(
+        self,
+        actor: Any = None,
+        animal_id: Any = None,
+        expected_revision: Any = None,
+        values: Optional[Dict[str, Any]] = None,
+        *,
+        source: str = "plugin",
+        core_record: Optional[Dict[str, Any]] = None,
+        allow_custom: bool = False,
+        explicit_custom_parents: Optional[Set[str]] = None,
+        target_metadata: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Canonical, authorized and atomic parentage mutation command.
+
+        The command accepts display names but stores only canonical identity
+        keys.  Validation and custom-ancestor materialization happen against a
+        private snapshot; one backend write publishes the complete graph.  A
+        caller may pass a not-yet-committed Core record from a new-animal
+        dialog via ``core_record`` so invalid input cannot leak into either
+        side of the application state.
+        """
+        if not self._parentage_authorized():
+            raise self._parentage_error(
+                "heritage_track.error.permission_denied",
+                "You do not have permission to edit Heritage parentage.",
+            )
+        target_text = str(animal_id or "").strip()
+        if not target_text:
+            raise self._parentage_error("heritage_track.error.target_required", "An animal is required.")
+        raw_values = values if isinstance(values, dict) else {}
+        requested = {key: self.store._normalize_text(raw_values.get(key, "")) for key in (
+            "egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father"
+        )}
+        explicit = {
+            self.store._normalize_text(value)
+            for value in (explicit_custom_parents or set())
+            if self.store._normalize_text(value)
+        }
+
+        records = self._parentage_records(core_record, target_text)
+        target_key, target_record, target_status = self._resolve_parentage_reference(
+            target_text, records, target_species=""
+        )
+        if target_status != "resolved" or not isinstance(target_record, dict):
+            raise self._parentage_error(
+                "heritage_track.error.target_missing",
+                "The selected animal is no longer available.",
+            )
+        target_key = str(target_key).strip()
+        target_species = self.store._normalize_text(target_record.get("species", ""))
+        target_birth = self._parentage_date(target_record.get("birth_date", ""))
+        old_stored = self.store.get_all_entries().get(target_key, {})
+        old_revision_token = str((old_stored or {}).get("parentage_revision", "") or "").strip()
+        backend_revision = self.store.get_backend_revision()
+        if expected_revision is not None:
+            expected_text = str(expected_revision).strip()
+            if expected_text.isdigit() and int(expected_text) != backend_revision:
+                raise self._parentage_error("heritage_track.error.parentage_conflict", "The parentage data changed. Reload it and try again.")
+            if not expected_text.isdigit() and expected_text != old_revision_token:
+                raise self._parentage_error("heritage_track.error.parentage_conflict", "The parentage data changed. Reload it and try again.")
+
+        combined_records = dict(records)
+        canonical: Dict[str, str] = {}
+        custom_entries: Dict[str, Dict[str, Any]] = {}
+        slot_sex = {
+            "egg_donor": "female", "sperm_donor": "male",
+            "surrogate_mother": "female", "surrogate_father": "male",
+        }
+
+        for field, raw_value in requested.items():
+            if not raw_value:
+                canonical[field] = ""
+                continue
+            resolved, record, status = self._resolve_parentage_reference(
+                raw_value, combined_records, target_species=target_species
+            )
+            if status == "ambiguous":
+                raise self._parentage_error("heritage_track.error.parent_ambiguous", "Parent name is ambiguous. Please select the full animal identity.")
+            if status == "missing":
+                if not allow_custom and raw_value not in explicit:
+                    raise self._parentage_error("heritage_track.error.parent_not_selected", "Select an existing animal or explicitly add a Heritage-only ancestor.")
+                base = animal_base_name(raw_value)
+                custom_species = target_species or "Unknown species"
+                parts = split_animal_identity_key(raw_value)
+                if parts is not None:
+                    base, custom_species, custom_birth, custom_origin = parts
+                    birth_text = "" if str(custom_birth).casefold() == "undated" else custom_birth
+                    custom_key = raw_value
+                else:
+                    birth_text = ""
+                    custom_origin = "Heritage Track"
+                    custom_key = f"{base} | {custom_species} | undated | {custom_origin}"
+                if "|" in base:
+                    raise self._parentage_error("heritage_track.error.parent_invalid", "Parent identity is invalid.")
+                duplicate = any(
+                    animal_base_name(key, rec).casefold() == base.casefold()
+                    and self.store._normalize_text(rec.get("species", "")).casefold() == custom_species.casefold()
+                    for key, rec in combined_records.items()
+                    if isinstance(rec, dict)
+                )
+                if duplicate:
+                    raise self._parentage_error("heritage_track.error.parent_duplicate_identity", "A Heritage animal with this name and species already exists.")
+                custom_record = self._parentage_default_entry(
+                    custom_key, name=base, species=custom_species,
+                    sex=slot_sex[field], birth_date=birth_text,
+                )
+                custom_entries[custom_key] = custom_record
+                combined_records[custom_key] = custom_record
+                resolved = custom_key
+                record = custom_record
+            canonical[field] = str(resolved).strip()
+            parent_record = record if isinstance(record, dict) else combined_records.get(canonical[field], {})
+            if not isinstance(parent_record, dict):
+                raise self._parentage_error("heritage_track.error.parent_missing", "The selected parent is no longer available.")
+            parent_sex = self.get_effective_sex(canonical[field], parent_record)
+            if canonical[field] in custom_entries:
+                parent_sex = slot_sex[field]
+            if parent_sex == "unknown" or not parent_sex:
+                raise self._parentage_error("heritage_track.error.parent_unknown_sex", "A parent must have a known sex.")
+            if parent_sex != slot_sex[field]:
+                key = "heritage_track.error.mother_not_female" if slot_sex[field] == "female" else "heritage_track.error.father_not_male"
+                fallback = "Selected mother must be female." if slot_sex[field] == "female" else "Selected father must be male."
+                raise self._parentage_error(key, fallback)
+            parent_species = self.store._normalize_text(parent_record.get("species", ""))
+            if target_species and parent_species != target_species:
+                raise self._parentage_error("heritage_track.error.parent_wrong_species", "Selected parents must have the same species as the animal.")
+            parent_birth = self._parentage_date(parent_record.get("birth_date", ""))
+            if target_birth and parent_birth and parent_birth >= target_birth:
+                raise self._parentage_error("heritage_track.error.parent_too_young", "A parent must be older than the animal.")
+            if canonical[field] == target_key:
+                raise self._parentage_error("heritage_track.error.parent_self", "An animal cannot be set as its own parent.")
+
+        if canonical["egg_donor"] and canonical["egg_donor"] == canonical["sperm_donor"]:
+            raise self._parentage_error("heritage_track.error.parent_same", "Mother and father must be different animals.")
+        if canonical["surrogate_mother"] and canonical["surrogate_mother"] == canonical["surrogate_father"]:
+            raise self._parentage_error("heritage_track.error.parent_same", "Surrogate parents must be different animals.")
+
+        old_records = self._parentage_records(core_record, target_key)
+        old_map = self._parentage_lineage_map(old_records)
+        new_map = dict(old_map)
+        new_map[target_key] = (canonical["egg_donor"], canonical["sperm_donor"])
+        new_map.update({key: (str(record.get("egg_donor", "")), str(record.get("sperm_donor", ""))) for key, record in custom_entries.items()})
+        if self._parentage_has_cycle(new_map):
+            raise self._parentage_error("heritage_track.error.circular_parentage", "Invalid parent assignment: it would create a circular pedigree.")
+
+        sequence = 0
+        try:
+            sequence = int(self.store.load().get("parentage_sequence", 0) or 0) + 1
+        except (TypeError, ValueError):
+            sequence = 1
+        token, display_token = self._parentage_token(self._parentage_actor(actor), sequence)
+
+        def mutate(data: Dict[str, Any]) -> bool:
+            animals = data.setdefault("animals", {})
+            if not isinstance(animals, dict):
+                raise self._parentage_error("heritage_track.error.parent_invalid", "Heritage data is invalid.")
+            for key, custom_record in custom_entries.items():
+                animals[key] = deepcopy(custom_record)
+            entry = animals.get(target_key)
+            if not isinstance(entry, dict):
+                entry = self._parentage_default_entry(
+                    target_key, name=animal_base_name(target_key, target_record),
+                    species=target_species,
+                    sex=self.store._normalize_sex(target_record.get("sex", "")),
+                    birth_date=self.store._normalize_text(target_record.get("birth_date", "")),
+                    heritage_only=False,
+                )
+                animals[target_key] = entry
+            for field, value in canonical.items():
+                entry[field] = value
+            entry["source"] = self.store._normalize_text(source) or "plugin"
+            if isinstance(target_metadata, dict):
+                for metadata_key in (
+                    "name", "_base_name", "display_name", "genotype",
+                    "node_fill_color", "sex", "species", "birth_date",
+                    "heritage_only", "identity_review_required",
+                    "identity_review_reason",
+                ):
+                    if metadata_key in target_metadata:
+                        entry[metadata_key] = deepcopy(target_metadata[metadata_key])
+            entry["parentage_revision"] = token
+            entry["parentage_revision_display"] = display_token
+            entry["updated_at"] = self.store._utc_now_iso()
+            entry["inbreeding_f"] = None
+            data["parentage_sequence"] = sequence
+            return True
+
+        try:
+            self.store.atomic_update(mutate, expected_revision=backend_revision if backend_revision else None)
+        except ParentageCommandError:
+            raise
+        except Exception as exc:
+            if isinstance(exc, ConflictError):
+                raise self._parentage_error("heritage_track.error.parentage_conflict", "The parentage data changed. Reload it and try again.") from exc
+            raise
+
+        # Project the canonical values back to Core only after the graph write
+        # succeeds.  Dialogs pass an uncommitted record; direct Heritage edits
+        # update the live active/archived record and persist through ProgTrack.
+        core_parent_fields = {
+            "egg_donor": "eizellspenderin", "sperm_donor": "samenspender",
+            "surrogate_mother": "ziehmutter", "surrogate_father": "ziehvater",
+        }
+        destination = core_record if isinstance(core_record, dict) else self._core_record(target_key)
+        if isinstance(destination, dict):
+            for field, core_field in core_parent_fields.items():
+                destination[core_field] = canonical[field]
+            if core_record is None:
+                save_fn = getattr(self.app, "_save_persistence", None)
+                if callable(save_fn):
+                    try:
+                        save_fn(defer_post_save_work=True)
+                    except TypeError:
+                        save_fn()
+
+        dependencies = self._parentage_dependency_closure(old_map, {target_key, *canonical.values()})
+        dependencies |= self._parentage_dependency_closure(new_map, {target_key, *canonical.values()})
+        self._engine_cache.invalidate()
+        self.invalidate_render_dependencies(dependencies)
+        details = (
+            f"animal={target_key}; previous={json.dumps(self.store._normalize_parents(old_stored), ensure_ascii=False, sort_keys=True)}; "
+            f"new={json.dumps(canonical, ensure_ascii=False, sort_keys=True)}; revision={token}"
+        )
+        audit_fn = getattr(self.app, "_master_audit", None)
+        if callable(audit_fn):
+            audit_fn("heritage.parentage_update", target_key, details)
+        return True
+
     def _is_core_animal(self, animal_name: Optional[str]) -> bool:
         key = str(animal_name or "").strip()
         if not key:
@@ -4532,24 +4961,45 @@ class HeritageTrackPlugin:
         required_sex: str,
         target_species: str = "",
         exclude_animal: str = "",
-    ) -> List[str]:
-        """Return live, same-species candidates for a controlled parent picker."""
+        *,
+        with_status: bool = False,
+    ) -> List[Any]:
+        """Return canonical same-species candidates for a controlled parent picker.
+
+        Archived and deceased records remain valid historical parents.  They
+        are intentionally included here; the editor can still distinguish
+        their inactive state through the candidate tooltip/annotation.
+        """
         required = self.store._normalize_sex(required_sex)
         species = str(target_species or "").strip()
         excluded = str(exclude_animal or "").strip()
         candidates: List[str] = []
+        inactive: Set[str] = set()
 
         active = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
         for key, record in active.items():
-            if key == excluded or not isinstance(record, dict) or self._record_is_inactive(record):
+            if key == excluded or not isinstance(record, dict):
                 continue
             record_species = str(record.get("species", "") or "").strip()
             if species and record_species != species:
                 continue
             if self.get_effective_sex(key, record) == required:
                 candidates.append(key)
+                if self._record_is_inactive(record):
+                    inactive.add(key)
 
         archived = getattr(self.app, "archived", {}) or {}
+        if isinstance(archived, dict):
+            for key, record in archived.items():
+                if key == excluded or key in active or not isinstance(record, dict):
+                    continue
+                record_species = str(record.get("species", "") or "").strip()
+                if species and record_species != species:
+                    continue
+                if self.get_effective_sex(key, record) == required:
+                    candidates.append(key)
+                    if self._record_is_inactive(record):
+                        inactive.add(key)
         archived_keys = set(archived) if isinstance(archived, dict) else set()
         for key, record in self.store.get_all_entries().items():
             if (
@@ -4557,7 +5007,6 @@ class HeritageTrackPlugin:
                 or key in active
                 or key in archived_keys
                 or not isinstance(record, dict)
-                or self._record_is_inactive(record)
             ):
                 continue
             record_species = str(record.get("species", "") or "").strip()
@@ -4565,27 +5014,54 @@ class HeritageTrackPlugin:
                 continue
             if self.get_effective_sex(key, record) == required:
                 candidates.append(key)
+                if self._record_is_inactive(record):
+                    inactive.add(key)
 
-        return sorted(set(candidates), key=str.casefold)
+        ordered = sorted(set(candidates), key=str.casefold)
+        if not with_status:
+            return ordered
+        inactive_label = self._parentage_message(
+            "heritage_track.parent.inactive", "inactive"
+        )
+        return [
+            (key, f"{key} ({inactive_label})" if key in inactive else key)
+            for key in ordered
+        ]
 
     def create_parent_group(self, animal_name: Optional[str], record: Optional[Dict[str, Any]] = None):
         values = self.get_parentage(animal_name, record)
         source = record if isinstance(record, dict) else self._core_record(animal_name) or {}
         species = str(source.get("species", "") or "").strip()
         options = {
-            "egg_donor": self.parent_candidate_options("female", species, str(animal_name or "")),
-            "sperm_donor": self.parent_candidate_options("male", species, str(animal_name or "")),
-            "surrogate_mother": self.parent_candidate_options("female", species, str(animal_name or "")),
-            "surrogate_father": self.parent_candidate_options("male", species, str(animal_name or "")),
+            "egg_donor": self.parent_candidate_options("female", species, str(animal_name or ""), with_status=True),
+            "sperm_donor": self.parent_candidate_options("male", species, str(animal_name or ""), with_status=True),
+            "surrogate_mother": self.parent_candidate_options("female", species, str(animal_name or ""), with_status=True),
+            "surrogate_father": self.parent_candidate_options("male", species, str(animal_name or ""), with_status=True),
         }
         return build_parent_group(self.messages, values, options)
 
     def read_parent_group(self, parent_fields: Dict[str, Any]) -> Dict[str, str]:
         return extract_parent_values(parent_fields)
 
-    def save_parentage(self, animal_name: str, parent_values: Dict[str, Any], source: str = "plugin") -> None:
-        self.store.set_parentage(animal_name, parent_values, source=source)
-        self.invalidate_render_dependencies({animal_name})
+    def save_parentage(
+        self,
+        animal_name: str,
+        parent_values: Dict[str, Any],
+        source: str = "plugin",
+        *,
+        core_record: Optional[Dict[str, Any]] = None,
+        allow_custom: bool = True,
+    ) -> bool:
+        """Compatibility shim; all callers now execute the canonical command."""
+        return self.set_parentage(
+            actor=None,
+            animal_id=animal_name,
+            expected_revision=None,
+            values=parent_values,
+            source=source,
+            core_record=core_record,
+            allow_custom=allow_custom,
+        )
 
     def get_settings(self) -> Dict[str, Any]:
         return self.store.get_settings()
@@ -4616,6 +5092,58 @@ class HeritageTrackPlugin:
         if deleted:
             self.invalidate_render_dependencies({key})
         return deleted
+
+    def promote_core_to_former_dummy(
+        self,
+        animal_id: str,
+        record: Dict[str, Any],
+    ) -> bool:
+        """Retain a deleted Core parent as an editable Heritage dummy.
+
+        The promotion is executed through the same canonical parentage
+        command before the Core row is removed.  Identity and all existing
+        lineage fields therefore survive deletion, and a later Core record
+        with the same IPID is reconnected by ``sync_from_record``.
+        """
+        key = str(animal_id or "").strip()
+        if not key or not isinstance(record, dict):
+            return False
+        referenced = False
+        for child_key, child_record in self._all_identity_records().items():
+            if str(child_key).strip() == key or not isinstance(child_record, dict):
+                continue
+            values = self.get_parentage(child_key, child_record)
+            if key in {str(value or "").strip() for value in values.values()}:
+                referenced = True
+                break
+        if not referenced:
+            return True
+        parentage = self.get_parentage(key, record)
+        metadata = {
+            field: record.get(field, "")
+            for field in (
+                "name", "_base_name", "display_name", "genotype", "node_fill_color",
+                "sex", "species", "birth_date",
+            )
+        }
+        metadata.update({
+            "heritage_only": True,
+            "identity_review_required": False,
+            "identity_review_reason": "",
+        })
+        try:
+            return self.set_parentage(
+                actor=None,
+                animal_id=key,
+                expected_revision=None,
+                values=parentage,
+                source="former_core_dummy",
+                core_record=record,
+                allow_custom=True,
+                target_metadata=metadata,
+            )
+        except ParentageCommandError:
+            return False
 
     def set_manual_sex(self, animal_name: str, sex: Optional[str]) -> None:
         if self._is_core_animal(animal_name):
@@ -4698,9 +5226,7 @@ class HeritageTrackPlugin:
             if raw_birth_date:
                 try:
                     birth_date = normalize_birth_date(raw_birth_date, required=True)
-                    key = animal_identity_key(
-                        base_name, species_value, birth_date, origin
-                    )
+                    key = animal_identity_key(base_name, species_value, birth_date, origin)
                 except ValueError:
                     return False
             else:
@@ -4721,54 +5247,38 @@ class HeritageTrackPlugin:
                 except ValueError:
                     return False
 
-        if self._is_core_animal(key):
+        if self._is_core_animal(key) or key in self.store.get_all_entries():
             return False
-
-        existing_entries = self.store.get_all_entries()
-        if key in existing_entries:
-            return False
-
-        raw_mother = str(mother or "").strip()
-        raw_father = str(father or "").strip()
-        allowed_missing = {
-            str(value or "").strip()
-            for value in (explicit_custom_parents or set())
-            if str(value or "").strip()
-        }
-        resolved_mother, mother_status = self.resolve_parent_reference(raw_mother, species_value)
-        if mother_status == "ambiguous" or (
-            raw_mother and mother_status == "missing" and raw_mother not in allowed_missing
-        ):
-            return False
-        resolved_father, father_status = self.resolve_parent_reference(raw_father, species_value)
-        if father_status == "ambiguous" or (
-            raw_father and father_status == "missing" and raw_father not in allowed_missing
-        ):
-            return False
-
-        self.store.set_parentage(
-            key,
-            {
-                "egg_donor": resolved_mother,
-                "sperm_donor": resolved_father,
-                "surrogate_mother": "",
-                "surrogate_father": "",
-            },
-            source="plugin",
+        target_record = self._parentage_default_entry(
+            key, name=base_name, species=species_value,
+            sex=self.store._normalize_sex(sex), birth_date=birth_date,
+            heritage_only=True,
         )
-        self.store.set_node_visual(key, genotype, fill_color)
-        self.store.set_manual_sex(key, sex)
-        self.store.set_heritage_only(key, True)
-        self.store.set_identity_fields(
-            key,
-            display_name=base_name,
-            species=species_value,
-            birth_date=birth_date,
-            review_required=review_required,
-            review_reason=review_reason,
-        )
-        self.invalidate_render_dependencies({key, resolved_mother, resolved_father})
-        return True
+        target_record.update({
+            "genotype": self.store._normalize_text(genotype),
+            "node_fill_color": self.store._normalize_text(fill_color),
+            "identity_review_required": review_required,
+            "identity_review_reason": review_reason,
+        })
+        try:
+            return self.set_parentage(
+                actor=None,
+                animal_id=key,
+                expected_revision=None,
+                values={
+                    "egg_donor": mother,
+                    "sperm_donor": father,
+                    "surrogate_mother": "",
+                    "surrogate_father": "",
+                },
+                source="plugin",
+                core_record=target_record,
+                allow_custom=True,
+                explicit_custom_parents=explicit_custom_parents,
+                target_metadata=target_record,
+            )
+        except ParentageCommandError:
+            return False
 
     def _parent_exists_in_system(self, parent_name: str) -> bool:
         """Check if a parent exists in ProgTrack animals, archived, or heritage store."""

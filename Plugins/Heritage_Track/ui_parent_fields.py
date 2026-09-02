@@ -91,15 +91,25 @@ class ParentSelector(QComboBox):
         self._append_value(self._none_label, "", "none")
 
         seen = {""}
-        for raw_name in sorted(
-            {self._clean(value) for value in options if self._clean(value)},
-            key=str.casefold,
+        normalized_options = []
+        for option in options:
+            if isinstance(option, (tuple, list)) and len(option) >= 2:
+                value = self._clean(option[0])
+                label = self._clean(option[1]) or value
+            else:
+                value = self._clean(option)
+                label = value
+            if value:
+                normalized_options.append((value, label))
+        for raw_name, raw_label in sorted(
+            {(value, label) for value, label in normalized_options},
+            key=lambda item: item[0].casefold(),
         ):
             folded = raw_name.casefold()
             if folded in seen:
                 continue
             seen.add(folded)
-            self._append_value(raw_name, raw_name, "candidate")
+            self._append_value(raw_label, raw_name, "candidate")
 
         selected_index = self._find_value(clean_selected)
         if clean_selected and selected_index < 0:

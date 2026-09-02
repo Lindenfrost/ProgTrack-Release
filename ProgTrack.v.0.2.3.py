@@ -20548,7 +20548,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 try:
                     self._save_trace("partner.save.heritage_parent.before", new_name=new_name)
                     parent_values = self.heritage_plugin.read_parent_group(heritage_parent_fields)
-                    self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
+                    self.heritage_plugin.set_parentage(
+                        actor=None, animal_id=new_name, expected_revision=None,
+                        values=parent_values, source="plugin", core_record=rec_obj,
+                        allow_custom=True,
+                    )
                     # Create heritage-only placeholders for non-existing parents
                     mother = parent_values.get("egg_donor", "")
                     father = parent_values.get("sperm_donor", "")
@@ -20558,6 +20562,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception as e:
                     self._save_trace("partner.save.heritage_parent.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track parent save failed for {new_name}: {e}")
+                    self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
+                    return
 
             if (
                 getattr(self, 'has_cage_track_plugin', False)
@@ -21201,7 +21207,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 try:
                     self._save_trace("sperm_donor.save.heritage_parent.before", new_name=new_name)
                     parent_values = self.heritage_plugin.read_parent_group(heritage_parent_fields)
-                    self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
+                    self.heritage_plugin.set_parentage(
+                        actor=None, animal_id=new_name, expected_revision=None,
+                        values=parent_values, source="plugin", core_record=rec_obj,
+                        allow_custom=True,
+                    )
                     # Create heritage-only placeholders for non-existing parents
                     mother = parent_values.get("egg_donor", "")
                     father = parent_values.get("sperm_donor", "")
@@ -21211,6 +21221,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception as e:
                     self._save_trace("sperm_donor.save.heritage_parent.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track parent save failed for {new_name}: {e}")
+                    self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
+                    return
 
             if (
                 getattr(self, 'has_cage_track_plugin', False)
@@ -21815,14 +21827,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if self._heritage_parentage_ui_available() and offspring_parent_fields:
                 try:
                     self._save_trace("offspring.save.heritage.before", new_name=new_name)
-                    # Offspring is in main animals list, so in_main_animals=True
-                    self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
                     # Save parentage to heritage store
                     parent_values = {
                         key: widget.text().strip()
                         for key, widget in offspring_parent_fields.items()
                     }
-                    self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
+                    self.heritage_plugin.set_parentage(
+                        actor=None, animal_id=new_name, expected_revision=None,
+                        values=parent_values, source="plugin", core_record=rec_obj,
+                        allow_custom=True,
+                    )
                     # Create heritage-only placeholders for non-existing parents
                     mother = rec_obj.get('eizellspenderin', '')
                     father = rec_obj.get('samenspender', '')
@@ -21832,6 +21846,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception as e:
                     self._save_trace("offspring.save.heritage.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track sync failed for offspring {new_name}: {e}")
+                    self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
+                    return
 
             if (
                 getattr(self, 'has_cage_track_plugin', False)
@@ -21851,6 +21867,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # update mapping
             self._save_trace("offspring.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
+            if self._heritage_parentage_ui_available() and getattr(self, 'heritage_plugin', None):
+                try:
+                    self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
+                except Exception as exc:
+                    logging.warning("Heritage sync after offspring parentage commit failed: %s", exc)
             if editing and new_name != name:
                 self.animals.pop(name, None)
                 self._rewrite_animal_references_after_identity_change(name, new_name, _orig_name)
@@ -22516,14 +22537,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if self._heritage_parentage_ui_available() and zuchttier_parent_fields:
                 try:
                     self._save_trace("zuchttier.save.heritage.before", new_name=new_name)
-                    # Breeding animals are in the main animals list.
-                    self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
                     # Save parentage to heritage store
                     parent_values = {
                         key: widget.text().strip()
                         for key, widget in zuchttier_parent_fields.items()
                     }
-                    self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
+                    self.heritage_plugin.set_parentage(
+                        actor=None, animal_id=new_name, expected_revision=None,
+                        values=parent_values, source="plugin", core_record=rec_obj,
+                        allow_custom=True,
+                    )
                     # Create heritage-only placeholders for non-existing parents
                     mother = rec_obj.get('eizellspenderin', '')
                     father = rec_obj.get('samenspender', '')
@@ -22533,6 +22556,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception as e:
                     self._save_trace("zuchttier.save.heritage.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track sync failed for zuchttier {new_name}: {e}")
+                    self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
+                    return
 
             if (
                 getattr(self, 'has_cage_track_plugin', False)
@@ -22552,6 +22577,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Update mapping
             self._save_trace("zuchttier.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
+            if self._heritage_parentage_ui_available() and getattr(self, 'heritage_plugin', None):
+                try:
+                    self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
+                except Exception as exc:
+                    logging.warning("Heritage sync after breeding parentage commit failed: %s", exc)
             self._commit_relationship_updates(relationship_updates)
             if editing and new_name != name:
                 self.animals.pop(name, None)
@@ -23162,6 +23192,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             self._save_trace("versuchstier.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
+            if self._heritage_parentage_ui_available() and getattr(self, 'heritage_plugin', None):
+                try:
+                    self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
+                except Exception as exc:
+                    logging.warning("Heritage sync after experimental parentage commit failed: %s", exc)
             if editing and new_name != name:
                 self.animals.pop(name, None)
                 self._rewrite_animal_references_after_identity_change(name, new_name, _orig_name)
@@ -23181,13 +23216,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if self._heritage_parentage_ui_available() and vt_parent_fields:
                 try:
                     self._save_trace("versuchstier.save.heritage.before", new_name=new_name)
-                    self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
                     # Save parentage to heritage store
                     parent_values = {
                         key: widget.text().strip()
                         for key, widget in vt_parent_fields.items()
                     }
-                    self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
+                    self.heritage_plugin.set_parentage(
+                        actor=None, animal_id=new_name, expected_revision=None,
+                        values=parent_values, source="plugin", core_record=rec_obj,
+                        allow_custom=True,
+                    )
                     # Create heritage-only placeholders for non-existing parents
                     mother = rec_obj.get('eizellspenderin', '')
                     father = rec_obj.get('samenspender', '')
@@ -23197,6 +23235,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception as e:
                     self._save_trace("versuchstier.save.heritage.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track sync failed for versuchstier {new_name}: {e}")
+                    self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
+                    return
             # Force heritage visible to show newly created parent placeholders
             _heritage_fields_present = (
                 getattr(self, 'has_heritage_plugin', False)
@@ -23778,6 +23818,23 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             for field_name, widget in parent_fields.items():
                 rec_obj[field_name] = widget.text().strip()
 
+            # Validate and persist parentage before publishing the Core record.
+            # The command receives this uncommitted record so an invalid
+            # relationship cannot leak into the Core backend.
+            if self._heritage_parentage_ui_available() and parent_fields:
+                try:
+                    self.heritage_plugin.set_parentage(
+                        actor=None, animal_id=new_key, expected_revision=None,
+                        values={field: widget.text().strip() for field, widget in parent_fields.items()},
+                        source="plugin", core_record=rec_obj, allow_custom=True,
+                    )
+                except Exception as exc:
+                    logging.warning(f"Could not save basic-role parentage block: {exc}")
+                    self._show_message_raw(
+                        self.messages.get("error.title", "Error"), str(exc)
+                    )
+                    return
+
             if new_weight_le is not None and new_weight_le.text().strip():
                 try:
                     weight_value = float(new_weight_le.text().strip())
@@ -23814,15 +23871,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     )
                 except Exception as exc:
                     logging.warning(f"Could not save basic-role cage address block: {exc}")
-            if self._heritage_parentage_ui_available() and parent_fields:
-                try:
-                    self.heritage_plugin.save_parentage(
-                        new_key,
-                        {field: widget.text().strip() for field, widget in parent_fields.items()},
-                        source="plugin",
-                    )
-                except Exception as exc:
-                    logging.warning(f"Could not save basic-role parentage block: {exc}")
             self.selected_animals = [new_key]
             self._refresh_list(update_tab_visibility=True)
             self._on_select()
@@ -24689,7 +24737,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 try:
                     self._save_trace("female_like.save.heritage_parent.before", new_name=new_name)
                     parent_values = self.heritage_plugin.read_parent_group(heritage_parent_fields)
-                    self.heritage_plugin.save_parentage(new_name, parent_values, source="plugin")
+                    self.heritage_plugin.set_parentage(
+                        actor=None, animal_id=new_name, expected_revision=None,
+                        values=parent_values, source="plugin", core_record=rec,
+                        allow_custom=True,
+                    )
                     # Create heritage-only placeholders for non-existing parents
                     mother = parent_values.get("egg_donor", "")
                     father = parent_values.get("sperm_donor", "")
@@ -24699,6 +24751,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception as e:
                     self._save_trace("female_like.save.heritage_parent.exception", new_name=new_name, error=e)
                     logging.error(f"Heritage_Track parent save failed for {new_name}: {e}")
+                    self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
+                    return
 
             if (
                 getattr(self, 'has_cage_track_plugin', False)
@@ -25958,6 +26012,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not isinstance(old_record, dict):
             return
         old_record = copy.deepcopy(old_record)
+        # Preserve a deleted Core animal as a Heritage-owned dummy whenever
+        # it is still referenced by the pedigree.  The canonical Heritage
+        # command writes this transition before the Core row disappears;
+        # failure aborts deletion so no lineage can be lost.
+        heritage = getattr(self, "heritage_plugin", None)
+        if heritage is not None:
+            try:
+                if not heritage.promote_core_to_former_dummy(name, old_record):
+                    logging.warning("Could not preserve former-Core parent %s; deletion cancelled", name)
+                    return
+            except Exception as exc:
+                logging.warning("Could not preserve former-Core parent %s: %s", name, exc)
+                return
         data['archived_animals'].pop(name)
         self._write_json(data)
         self._load_persistence()
