@@ -7,12 +7,14 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, FrozenSet, Optional, Set, Tuple
 
 from .pedigree_engine import PedigreeEngine
+from .pedigree_router import is_finite_point
 
 if TYPE_CHECKING:
     from .display_strategies import DisplaySetStrategy
@@ -20,6 +22,54 @@ if TYPE_CHECKING:
 
 
 Point = Tuple[float, float]
+
+
+def _non_finite_geometry_diagnostics(
+    *,
+    route_plan: "FrozenRoutePlan",
+    positions: Mapping[str, Any],
+    locked_positions: Mapping[str, Any],
+    bounds: Any,
+    obstacles: Mapping[str, Any],
+) -> Tuple[str, ...]:
+    """Return deterministic diagnostics for invalid cache-boundary geometry."""
+    diagnostics: list[str] = []
+    for kind, mapping in (
+        ("node", positions),
+        ("locked node", locked_positions),
+        ("route animal", route_plan.animal_positions),
+        ("route family", route_plan.family_positions),
+    ):
+        for name, point in mapping.items():
+            if not is_finite_point(point):
+                diagnostics.append(
+                    f"{name}: non-finite {kind} geometry"
+                )
+    try:
+        bounds_points = tuple(bounds)
+    except TypeError:
+        bounds_points = ()
+    if len(bounds_points) != 2 or any(not is_finite_point(point) for point in bounds_points):
+        diagnostics.append("non-finite render bounds")
+
+    for name, obstacle in obstacles.items():
+        if not all(hasattr(obstacle, attr) for attr in ("left", "right", "bottom", "top")):
+            continue
+        try:
+            finite = all(
+                math.isfinite(float(getattr(obstacle, attr)))
+                for attr in ("left", "right", "bottom", "top")
+            )
+        except (TypeError, ValueError, OverflowError):
+            finite = False
+        if not finite:
+            diagnostics.append(f"{name}: non-finite obstacle geometry")
+
+    for point in route_plan.all_points():
+        if not is_finite_point(point):
+            diagnostics.append("non-finite route or gap geometry")
+            break
+    return tuple(sorted(set(diagnostics), key=str.casefold))
 
 
 def _freeze_value(value: Any) -> Any:
@@ -188,6 +238,9 @@ class FrozenRoutePlan:
         for endpoint_routes in self.routes.values():
             for path in endpoint_routes.values():
                 points.extend(path)
+        for gap_points in (self.crossing_gaps, self.line_crossing_gaps):
+            for values in gap_points.values():
+                points.extend(values)
         return points
 
     def to_mutable(self) -> Any:
@@ -272,6 +325,20 @@ class RenderCacheEntry:
         object.__setattr__(self, "schema_version", str(self.schema_version or self.CACHE_SCHEMA_VERSION))
         if not isinstance(self.route_plan, FrozenRoutePlan):
             object.__setattr__(self, "route_plan", FrozenRoutePlan.from_route_plan(self.route_plan))
+        geometry_diagnostics = _non_finite_geometry_diagnostics(
+            route_plan=self.route_plan,
+            positions=self.positions,
+            locked_positions=self.locked_positions,
+            bounds=self.bounds,
+            obstacles=self.obstacles,
+        )
+        if geometry_diagnostics:
+            existing = tuple(self.fatal_diagnostics)
+            object.__setattr__(
+                self,
+                "fatal_diagnostics",
+                tuple(dict.fromkeys(existing + geometry_diagnostics)),
+            )
 
     @property
     def revision_tuple(self) -> Tuple[str, str, str, str]:
@@ -358,6 +425,19 @@ class RenderCacheRegistry:
                     if not keys:
                         self._dependency_index.pop(dependency, None)
         return len(affected)
+
+    def remove(self, key: RenderCacheKey) -> bool:
+        """Remove exactly one cached selection frame."""
+        entry = self._entries.pop(key, None)
+        if entry is None:
+            return False
+        for dependency in entry.dependencies:
+            keys = self._dependency_index.get(dependency)
+            if keys is not None:
+                keys.discard(key)
+                if not keys:
+                    self._dependency_index.pop(dependency, None)
+        return True
 
     def clear(self) -> None:
         self._entries.clear()

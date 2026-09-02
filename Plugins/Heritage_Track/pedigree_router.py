@@ -22,6 +22,66 @@ LAYOUT_MODE_FOCUSED = "focused"
 LAYOUT_MODE_OVERVIEW = "overview"
 
 
+class GeometryValidationError(ValueError):
+    """Raised when a non-finite value reaches a layout/render boundary."""
+
+
+def is_finite_point(value: object) -> bool:
+    """Return whether *value* is a two-dimensional finite point."""
+    try:
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            return False
+        return all(math.isfinite(float(component)) for component in value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
+def _assert_finite_points(points: Mapping[str, Point], *, kind: str) -> None:
+    """Reject malformed/non-finite point mappings with a stable error."""
+    for name, point in points.items():
+        if not is_finite_point(point):
+            raise GeometryValidationError(
+                f"non-finite {kind} geometry for {str(name).strip() or '<unnamed>'}"
+            )
+
+
+def _assert_finite_route_plan(plan: "RoutePlan") -> None:
+    """Assert every coordinate produced by the router is finite."""
+    _assert_finite_points(plan.animal_positions, kind="animal")
+    _assert_finite_points(plan.family_positions, kind="family")
+    for family_id, endpoint_routes in plan.routes.items():
+        for endpoint, path in endpoint_routes.items():
+            for point in path:
+                if not is_finite_point(point):
+                    raise GeometryValidationError(
+                        f"non-finite route geometry for {family_id}:{endpoint}"
+                    )
+    for gap_name, gap_points in (
+        ("crossing gap", plan.crossing_gaps),
+        ("line-crossing gap", plan.line_crossing_gaps),
+    ):
+        for key, points in gap_points.items():
+            for point in points:
+                if not is_finite_point(point):
+                    raise GeometryValidationError(
+                        f"non-finite {gap_name} geometry for {key}"
+                    )
+
+
+def _assert_finite_rects(rects: Mapping[str, "Rect"], *, kind: str) -> None:
+    """Reject non-finite obstacle rectangles before routing or caching."""
+    for name, rect in rects.items():
+        try:
+            values = (rect.left, rect.right, rect.bottom, rect.top)
+            finite = all(math.isfinite(float(value)) for value in values)
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            finite = False
+        if not finite:
+            raise GeometryValidationError(
+                f"non-finite {kind} geometry for {str(name).strip() or '<unnamed>'}"
+            )
+
+
 @dataclass(frozen=True)
 class Rect:
     """Axis-aligned render obstacle in Heritage Track data coordinates."""
@@ -153,6 +213,9 @@ class RoutePlan:
         for endpoint_routes in self.routes.values():
             for path in endpoint_routes.values():
                 points.extend(path)
+        for gap_points in (self.crossing_gaps, self.line_crossing_gaps):
+            for values in gap_points.values():
+                points.extend(values)
         return points
 
 
@@ -201,6 +264,7 @@ class PedigreeRouter:
         vertical_layout_mode: str = "partner_normalized",
     ) -> RoutePlan:
         labels = labels or {}
+        _assert_finite_points(animal_positions, kind="animal input")
         protected = set(protected_nodes or set())
         focus = set(focus_nodes or set()) & set(animal_positions)
         chronological = str(vertical_layout_mode or "").strip().casefold() == "chronological"
@@ -228,6 +292,7 @@ class PedigreeRouter:
             prefer_descendant_order=layout_mode == LAYOUT_MODE_FOCUSED,
             focus_nodes=focus,
         )
+        _assert_finite_points(adjusted, kind="animal")
         animal_obstacles = self.node_obstacles(adjusted, labels, show_inbreeding)
         family_positions = self._place_junctions(
             adjusted,
@@ -235,6 +300,7 @@ class PedigreeRouter:
             animal_obstacles,
             chronological=chronological,
         )
+        _assert_finite_points(family_positions, kind="family")
         family_members = self._family_members(adjusted, families)
         cycle_nodes = self._parentage_cycle_nodes(adjusted, families)
 
@@ -330,6 +396,7 @@ class PedigreeRouter:
             labels=labels,
             show_inbreeding=show_inbreeding,
         )
+        _assert_finite_route_plan(plan)
         return plan
 
     def recompute_line_gaps(
@@ -357,12 +424,15 @@ class PedigreeRouter:
         calibrated marker rectangles after its final viewport is known.
         """
         labels = labels or {}
+        _assert_finite_points(plan.animal_positions, kind="animal")
+        _assert_finite_points(plan.family_positions, kind="family")
         owned_segments = self._owned_segments(plan.routes)
         animal_obstacles = dict(
             animal_gap_obstacles
             if animal_gap_obstacles is not None
             else self.marker_obstacles(plan.animal_positions)
         )
+        _assert_finite_rects(animal_obstacles, kind="animal obstacle")
         junction_obstacles = dict(
             junction_gap_obstacles
             if junction_gap_obstacles is not None
@@ -376,6 +446,7 @@ class PedigreeRouter:
                 for family_id, point in plan.family_positions.items()
             }
         )
+        _assert_finite_rects(junction_obstacles, kind="junction obstacle")
         if recompute_crossings or not plan.line_crossings_ready:
             crossing_gaps, crossing_problems = self._find_crossing_gaps(
                 owned_segments,
@@ -425,6 +496,7 @@ class PedigreeRouter:
         plan.unresolved = sorted(set(retained + crossing_problems))
         plan.gap_geometry_revision = plan.geometry_revision
         plan.pixel_gap_revision += 1
+        _assert_finite_route_plan(plan)
 
     @staticmethod
     def marker_obstacles(
@@ -439,8 +511,11 @@ class PedigreeRouter:
         Callers with a live canvas should convert the point-sized marker to
         data units and pass the resulting half sizes.
         """
+        _assert_finite_points(positions, kind="marker input")
         width = max(0.02, float(half_width))
         height = max(0.02, float(half_height))
+        if not math.isfinite(width) or not math.isfinite(height):
+            raise GeometryValidationError("non-finite marker dimensions")
         return {
             node: Rect(x - width, x + width, y - height, y + height)
             for node, (x, y) in positions.items()
@@ -452,6 +527,7 @@ class PedigreeRouter:
         labels: Mapping[str, str],
         show_inbreeding: bool,
     ) -> Dict[str, Rect]:
+        _assert_finite_points(positions, kind="node input")
         obstacles: Dict[str, Rect] = {}
         for node, (x, y) in positions.items():
             label = str(labels.get(node, node)).strip()

@@ -13,6 +13,7 @@ from statistics import median
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .pedigree_engine import PedigreeEngine
+from .pedigree_router import GeometryValidationError, is_finite_point
 
 # Layout constants
 DEFAULT_NODE_SPACING = 1.25
@@ -25,6 +26,17 @@ DEFAULT_PARTNER_LINE_NUDGE = 0.35
 
 VERTICAL_LAYOUT_PARTNER_NORMALIZED = "partner_normalized"
 VERTICAL_LAYOUT_CHRONOLOGICAL = "chronological"
+
+
+def _assert_finite_positions(
+    positions: Dict[str, Tuple[float, float]], *, kind: str
+) -> None:
+    """Reject malformed/non-finite points before they enter layout math."""
+    for name, point in positions.items():
+        if not is_finite_point(point):
+            raise GeometryValidationError(
+                f"non-finite {kind} geometry for {str(name).strip() or '<unnamed>'}"
+            )
 
 
 def family_node_id(mother: Any, father: Any) -> str:
@@ -149,6 +161,7 @@ def compute_chronological_positions(
         node: (float(point[0]), dated_y.get(node, fallback_y.get(node, global_center)))
         for node, point in base_positions.items()
     }
+    _assert_finite_positions(positions, kind="chronological")
     return positions, undated
 
 
@@ -945,6 +958,7 @@ class LayoutPipeline:
 
         families = families or {}
         locked_positions = locked_positions or {}
+        _assert_finite_positions(locked_positions, kind="locked input")
 
         # Extract locked X positions
         locked_x: Dict[str, float] = {
@@ -1123,6 +1137,7 @@ class LayoutPipeline:
                         x, y = positions[node]
                         positions[node] = (x + shift_x, y + shift_y)
 
+        _assert_finite_positions(positions, kind="generated")
         return positions
 
     def _compute_birthdate_y_offsets(

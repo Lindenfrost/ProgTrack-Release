@@ -98,6 +98,7 @@ from .layout_pipeline import (
 )
 from .pedigree_engine import PedigreeEngine
 from .pedigree_router import (
+    GeometryValidationError,
     LAYOUT_MODE_FOCUSED,
     LAYOUT_MODE_OVERVIEW,
     PedigreeRouter,
@@ -1033,7 +1034,12 @@ class HeritageTrackWidget(QWidget):
             chronological_mode,
             display_mode=display_mode,
         )
-        fatal = self._render_geometry_fatal_diagnostics(route_plan, positions)
+        fatal = self._render_geometry_fatal_diagnostics(
+            route_plan,
+            positions,
+            locked_positions=locked_positions,
+            bounds=bounds,
+        )
         # A topology diagnostic is deliberately fatal for cache publication:
         # an unresolved frame may be inspected locally, but must never replace
         # the last accepted complete pedigree as a valid render transaction.
@@ -1074,6 +1080,9 @@ class HeritageTrackWidget(QWidget):
     def _render_geometry_fatal_diagnostics(
         route_plan: RoutePlan,
         positions: Dict[str, Tuple[float, float]],
+        *,
+        locked_positions: Optional[Dict[str, Tuple[float, float]]] = None,
+        bounds: Optional[Tuple[Tuple[float, float], Tuple[float, float]]] = None,
     ) -> List[str]:
         """Reject non-finite geometry before a frame can replace the view."""
         fatal: List[str] = []
@@ -1092,6 +1101,24 @@ class HeritageTrackWidget(QWidget):
                 finite = False
             if not finite:
                 fatal.append(f"{node}: non-finite node position")
+        for node, point in (locked_positions or {}).items():
+            try:
+                finite = len(point) == 2 and all(math.isfinite(float(value)) for value in point)
+            except (TypeError, ValueError, OverflowError):
+                finite = False
+            if not finite:
+                fatal.append(f"{node}: non-finite locked position")
+        if bounds is not None:
+            try:
+                finite = len(bounds) == 2 and all(
+                    len(point) == 2
+                    and all(math.isfinite(float(value)) for value in point)
+                    for point in bounds
+                )
+            except (TypeError, ValueError, OverflowError):
+                finite = False
+            if not finite:
+                fatal.append("non-finite render bounds")
         return fatal
 
     def _replace_route_collections(self) -> None:
@@ -1714,6 +1741,34 @@ class HeritageTrackWidget(QWidget):
 
     def _on_refresh_clicked(self) -> None:
         """Handle refresh button click with confirmation to reset positions."""
+        invalid_positions = self.plugin.store.get_invalid_node_positions()
+        if invalid_positions:
+            try:
+                self.plugin.store.cleanup_invalid_node_positions()
+            except Exception as exc:
+                logging.getLogger(__name__).exception(
+                    "Could not clean invalid Heritage node positions"
+                )
+                confirm = QMessageBox.warning(
+                    self,
+                    self.messages.get(
+                        "heritage_track.error.geometry_cleanup_title",
+                        "Invalid saved geometry",
+                    ),
+                    self.messages.get(
+                        "heritage_track.error.geometry_cleanup_failed",
+                        "Invalid saved geometry could not be cleaned. Remove the cached frame for this selection?",
+                    )
+                    + f"\n\n{exc}",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if confirm != QMessageBox.StandardButton.Yes:
+                    return
+                if self._render_cache_entry is not None:
+                    self.plugin.remove_render_cache_entry(self._render_cache_entry.cache_key)
+                    self._render_cache_entry = None
+
         # Check if there are any saved positions
         saved_positions = self.plugin.store.get_node_positions()
         
@@ -1753,6 +1808,20 @@ class HeritageTrackWidget(QWidget):
         self.current_ylim = None
         self._show_coefficients_dialog()
         self.refresh_graph()
+
+    def _report_geometry_failure(self, error: object) -> None:
+        """Keep the last accepted frame and expose a localized geometry error."""
+        detail = str(error or "non-finite geometry")
+        logging.getLogger(__name__).error("Rejected Heritage geometry: %s", detail)
+        self.status_label.setToolTip(detail)
+        self.status_label.setText(
+            self.messages.get(
+                "heritage_track.status.geometry_invalid",
+                "Unable to render pedigree: invalid geometry",
+            )
+        )
+        self._render_store_animals = None
+        self._drag_background = None
     
     def _cleanup_stale_positions(self, current_nodes: Set[str]) -> None:
         """Identify stale positions without mutating storage during a redraw.
@@ -2933,6 +3002,14 @@ class HeritageTrackWidget(QWidget):
         if not points:
             return (-2.0, 2.0), (-2.0, 2.0)
 
+        for point in points:
+            try:
+                finite = len(point) == 2 and all(math.isfinite(float(value)) for value in point)
+            except (TypeError, ValueError, OverflowError):
+                finite = False
+            if not finite:
+                raise GeometryValidationError("non-finite render bounds input")
+
         xs = [p[0] for p in points]
         ys = [p[1] for p in points]
         # Keep small graphs from floating in excessive whitespace while still
@@ -3231,13 +3308,17 @@ class HeritageTrackWidget(QWidget):
             else {}
         )
 
-        auto_positions = self._compute_positions(
-            display_nodes,
-            levels,
-            engine,
-            families,
-            locked_positions=locked_positions,
-        )
+        try:
+            auto_positions = self._compute_positions(
+                display_nodes,
+                levels,
+                engine,
+                families,
+                locked_positions=locked_positions,
+            )
+        except GeometryValidationError as exc:
+            self._report_geometry_failure(exc)
+            return
         chronological_mode = (
             self.settings.get("vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED)
             == VERTICAL_LAYOUT_CHRONOLOGICAL
@@ -3340,18 +3421,22 @@ class HeritageTrackWidget(QWidget):
         # before routing, independent of the slightly wider chronological
         # aspect used to separate animals born close together.
         self._pedigree_router.label_height_scale = 3.0 if is_focused else 1.0
-        route_plan = self._pedigree_router.plan(
-            animal_positions,
-            families,
-            labels=obstacle_labels,
-            protected_nodes=protected_nodes,
-            focus_nodes=set(selected_animals),
-            display_mode=self.layout_mode,
-            show_inbreeding=has_secondary_label,
-            vertical_layout_mode=self.settings.get(
-                "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
-            ),
-        )
+        try:
+            route_plan = self._pedigree_router.plan(
+                animal_positions,
+                families,
+                labels=obstacle_labels,
+                protected_nodes=protected_nodes,
+                focus_nodes=set(selected_animals),
+                display_mode=self.layout_mode,
+                show_inbreeding=has_secondary_label,
+                vertical_layout_mode=self.settings.get(
+                    "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
+                ),
+            )
+        except GeometryValidationError as exc:
+            self._report_geometry_failure(exc)
+            return
         # The engine levels are the canonical hard generation assignment.
         # Validate the final visible scope after collapse filtering and carry
         # any cycle/order conflict into the plan and cache boundary.
@@ -3474,7 +3559,11 @@ class HeritageTrackWidget(QWidget):
 
         prev_xlim = self.current_xlim
         prev_ylim = self.current_ylim
-        fit_xlim, fit_ylim = self._compute_view_bounds(positions, route_plan.all_points())
+        try:
+            fit_xlim, fit_ylim = self._compute_view_bounds(positions, route_plan.all_points())
+        except GeometryValidationError as exc:
+            self._report_geometry_failure(exc)
+            return
 
         if keep_view and prev_xlim is not None and prev_ylim is not None:
             view_xlim = prev_xlim
@@ -3485,19 +3574,17 @@ class HeritageTrackWidget(QWidget):
 
         view_xlim, view_ylim = self._apply_aspect_fill(view_xlim, view_ylim)
 
-        fatal_geometry = self._render_geometry_fatal_diagnostics(route_plan, positions)
+        fatal_geometry = self._render_geometry_fatal_diagnostics(
+            route_plan,
+            positions,
+            locked_positions=locked_positions,
+            bounds=(view_xlim, view_ylim),
+        )
         if fatal_geometry:
             # Keep the last accepted artists/frame intact.  A malformed
             # transaction is reported, not painted as a plausible partial
             # pedigree.
-            self.status_label.setToolTip("\n".join(fatal_geometry))
-            self.status_label.setText(
-                self.messages.get(
-                    "heritage_track.status.geometry_invalid",
-                    "Unable to render pedigree: invalid geometry",
-                )
-            )
-            self._render_store_animals = None
+            self._report_geometry_failure("\n".join(fatal_geometry))
             return
 
         self.ax.clear()
@@ -3515,7 +3602,11 @@ class HeritageTrackWidget(QWidget):
         # Text stays readable through its white halo and never generates a
         # broken route. Only marker footprints and true line intersections are
         # calibrated to the final axes pixels.
-        self._recompute_route_visual_gaps(route_plan)
+        try:
+            self._recompute_route_visual_gaps(route_plan)
+        except GeometryValidationError as exc:
+            self._report_geometry_failure(exc)
+            return
 
         # Publish the complete frame atomically before any visible artists are
         # created.  Every later view operation can derive its pixel-only route
@@ -4773,6 +4864,10 @@ class HeritageTrackPlugin:
 
     def clear_render_cache(self) -> None:
         self._render_cache.clear()
+
+    def remove_render_cache_entry(self, key: RenderCacheKey) -> bool:
+        """Drop one malformed selection frame after explicit confirmation."""
+        return self._render_cache.remove(key)
 
     def update_language(self, messages: Dict[str, Any]) -> None:
         self.messages = messages or {}

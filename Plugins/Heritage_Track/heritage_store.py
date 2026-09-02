@@ -36,6 +36,11 @@ class HeritageStore:
         self._pending_settings_save = False
         self._genotype_colors_cache: Optional[Dict[str, str]] = None
         self._backend_revision: int = 0
+        # Invalid legacy coordinates are kept out of the normalized in-memory
+        # view, but remembered until an explicit refresh can clean them up.
+        # This prevents opening/resizing a graph (or an unrelated settings
+        # save) from silently rewriting backend data.
+        self._invalid_node_positions: Dict[str, Any] = {}
 
     def _default_settings(self) -> Dict[str, Any]:
         return {
@@ -194,8 +199,10 @@ class HeritageStore:
         except (TypeError, ValueError):
             return None
 
-        # Filter out NaN values (NaN != NaN).
-        if not (x == x and y == y):
+        # Persisted geometry must be finite.  ``float`` accepts textual
+        # Infinity values, so the explicit check is required in addition to
+        # conversion.  Comma-decimal input intentionally remains invalid.
+        if not math.isfinite(x) or not math.isfinite(y):
             return None
         return x, y
 
@@ -208,6 +215,7 @@ class HeritageStore:
             # Do not create a backend record merely because a read/render occurred.
             self._data = self._default_data()
             self._genotype_colors_cache = None
+            self._invalid_node_positions = {}
             return self._data
 
         # Reads (including render-time projection) must not rewrite the shared
@@ -231,6 +239,7 @@ class HeritageStore:
         """
         raw, revision = self.backend_store.load_with_revision(None)
         previous = self._data
+        previous_invalid = self._invalid_node_positions
         try:
             if raw is None:
                 snapshot = deepcopy(self._default_data())
@@ -238,6 +247,7 @@ class HeritageStore:
                 snapshot = deepcopy(self._normalize_and_cache(deepcopy(raw), persist=False))
         finally:
             self._data = previous
+            self._invalid_node_positions = previous_invalid
             self._genotype_colors_cache = None
         return snapshot, int(revision or 0)
 
@@ -294,7 +304,12 @@ class HeritageStore:
         if not isinstance(raw.get("animals"), dict):
             raw["animals"] = {}
         if not isinstance(raw.get("node_positions"), dict):
+            self._invalid_node_positions = {
+                "__node_positions__": deepcopy(raw.get("node_positions"))
+            }
             raw["node_positions"] = {}
+        else:
+            self._invalid_node_positions = {}
         if not isinstance(raw.get("genotype_colors"), dict):
             raw["genotype_colors"] = {}
         if not isinstance(raw.get("collapsed_families"), list):
@@ -333,6 +348,7 @@ class HeritageStore:
                 continue
             normalized = self._normalize_position(raw_position)
             if normalized is None:
+                self._invalid_node_positions[key] = deepcopy(raw_position)
                 continue
             x, y = normalized
             normalized_positions[key] = {"x": x, "y": y}
@@ -470,6 +486,19 @@ class HeritageStore:
             return
 
         data = self.load()
+        # Preserve malformed legacy coordinates until the caller explicitly
+        # requests cleanup.  Otherwise a normal settings/animal save would
+        # accidentally perform the destructive repair intended for Refresh.
+        if self._invalid_node_positions:
+            has_invalid_container = "__node_positions__" in self._invalid_node_positions
+            invalid_container = self._invalid_node_positions.get("__node_positions__")
+            if has_invalid_container:
+                data["node_positions"] = deepcopy(invalid_container)
+            node_positions = data.setdefault("node_positions", {})
+            if isinstance(node_positions, dict) and not has_invalid_container:
+                for key, raw_position in self._invalid_node_positions.items():
+                    if key != "__node_positions__":
+                        node_positions.setdefault(key, deepcopy(raw_position))
         data["updated_at"] = self._utc_now_iso()
         self.backend_store.save(data)
         if animals:
@@ -654,11 +683,54 @@ class HeritageStore:
             positions[key] = normalized
         return positions
 
+    def get_invalid_node_positions(self) -> Dict[str, Any]:
+        """Return invalid legacy coordinates awaiting explicit cleanup."""
+        return deepcopy(self._invalid_node_positions)
+
+    def cleanup_invalid_node_positions(self) -> int:
+        """Remove invalid persisted coordinates in one explicit backend write.
+
+        Reads and normalizes the latest record without persistence first, then
+        replaces it only when malformed coordinates were found.  A failed
+        write leaves both the backend and the in-memory view untouched so the
+        caller can retain or discard the affected render-cache entry.
+        """
+        raw, revision = self.backend_store.load_with_revision(None)
+        if raw is None or not isinstance(raw, dict):
+            self._invalid_node_positions = {}
+            return 0
+
+        previous_data = self._data
+        previous_invalid = self._invalid_node_positions
+        try:
+            normalized = deepcopy(self._normalize_and_cache(deepcopy(raw), persist=False))
+            invalid = dict(self._invalid_node_positions)
+            if not invalid:
+                return 0
+            self.backend_store.save(
+                normalized,
+                expected_revision=revision if revision else None,
+            )
+        except Exception:
+            self._data = previous_data
+            self._invalid_node_positions = previous_invalid
+            self._genotype_colors_cache = None
+            raise
+
+        self._data = normalized
+        self._invalid_node_positions = {}
+        self._backend_revision = int(revision or 0) + 1
+        self._genotype_colors_cache = None
+        self._pending_settings_save = False
+        return len(invalid)
+
     def set_node_position(self, animal_name: str, position: Tuple[float, float]) -> None:
         key = self._normalize_text(animal_name)
         normalized = self._normalize_position(position)
-        if not key or normalized is None:
+        if not key:
             return
+        if normalized is None:
+            raise ValueError(f"Invalid non-finite node position for {key}")
 
         data = self.load()
         node_positions = data.get("node_positions", {})
@@ -667,6 +739,8 @@ class HeritageStore:
             data["node_positions"] = node_positions
 
         node_positions[key] = {"x": normalized[0], "y": normalized[1]}
+        self._invalid_node_positions.pop("__node_positions__", None)
+        self._invalid_node_positions.pop(key, None)
         self._save_settings()
 
     def set_node_positions_batch(
@@ -679,16 +753,25 @@ class HeritageStore:
         """
         if not positions:
             return
+        normalized_batch: Dict[str, Tuple[float, float]] = {}
+        for animal_name, position in positions.items():
+            key = self._normalize_text(animal_name)
+            if not key:
+                continue
+            normalized = self._normalize_position(position)
+            if normalized is None:
+                raise ValueError(f"Invalid non-finite node position for {key}")
+            normalized_batch[key] = normalized
+
         data = self.load()
         node_positions = data.get("node_positions", {})
         if not isinstance(node_positions, dict):
             node_positions = {}
             data["node_positions"] = node_positions
-        for animal_name, position in positions.items():
-            key = self._normalize_text(animal_name)
-            normalized = self._normalize_position(position)
-            if key and normalized is not None:
-                node_positions[key] = {"x": normalized[0], "y": normalized[1]}
+        for key, normalized in normalized_batch.items():
+            node_positions[key] = {"x": normalized[0], "y": normalized[1]}
+            self._invalid_node_positions.pop("__node_positions__", None)
+            self._invalid_node_positions.pop(key, None)
         self._save_settings()
 
     def remove_node_position(self, animal_name: str) -> None:
@@ -699,11 +782,14 @@ class HeritageStore:
         data = self.load()
         node_positions = data.get("node_positions", {})
         if not isinstance(node_positions, dict):
-            return
-        if key not in node_positions:
+            node_positions = {}
+            data["node_positions"] = node_positions
+        if key not in node_positions and key not in self._invalid_node_positions:
             return
 
-        del node_positions[key]
+        node_positions.pop(key, None)
+        self._invalid_node_positions.pop("__node_positions__", None)
+        self._invalid_node_positions.pop(key, None)
         self._save_settings()
 
     def get_collapsed_families(self) -> Set[str]:

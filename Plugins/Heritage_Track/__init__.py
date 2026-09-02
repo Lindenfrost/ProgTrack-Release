@@ -29,7 +29,7 @@ from .ghost_strategies import (
 )
 from .heritage_track_widget import HeritageTrackPlugin
 from .layout_pipeline import LayoutPipeline, family_node_id
-from .pedigree_router import PedigreeRouter, RoutePlan
+from .pedigree_router import GeometryValidationError, PedigreeRouter, RoutePlan
 
 __all__ = [
     # Main plugin
@@ -55,6 +55,7 @@ __all__ = [
     "family_node_id",
     "PedigreeRouter",
     "RoutePlan",
+    "GeometryValidationError",
     # Performance & Layout Improvements
     "PedigreeEngineCache",
 ]
