@@ -96,6 +96,10 @@ class RoutePlan:
     # Internal diagnostics only: endpoint routes that had to accept an
     # obstacle overlap while preserving canonical topology.
     route_obstacle_hits: List[str] = field(default_factory=list)
+    # Generation/topology diagnostics supplied by the pedigree engine.  These
+    # make an unresolved level assignment visible and keep it out of the
+    # accepted render cache even when route geometry itself is finite.
+    layout_diagnostics: List[str] = field(default_factory=list)
     # Semantic display mode selected by the widget.  Keeping it on the plan
     # makes the decision observable and prevents downstream consumers from
     # inferring a second mode from a differently shaped focus set.
@@ -864,7 +868,8 @@ class PedigreeRouter:
                     # Re-form a split parentless-mate fan only for an
                     # indirectly focused hub. Directly selected hubs retain
                     # their established layout.
-                    self._compact_focused_parentless_multi_mate_fans(
+                    before_parentless_fan = dict(adjusted)
+                    parentless_fan_changed = self._compact_focused_parentless_multi_mate_fans(
                         adjusted,
                         families,
                         labels,
@@ -872,6 +877,34 @@ class PedigreeRouter:
                         show_inbreeding,
                         chronological=preserve_y,
                     )
+                    if parentless_fan_changed:
+                        parentless_moved = {
+                            node
+                            for node, point in adjusted.items()
+                            if node in before_parentless_fan
+                            and (
+                                abs(point[0] - before_parentless_fan[node][0]) > _EPSILON
+                                or abs(point[1] - before_parentless_fan[node][1]) > _EPSILON
+                            )
+                        }
+                        self._resolve_parentless_fan_collisions(
+                            adjusted,
+                            parentless_moved,
+                            families,
+                            labels,
+                            protected,
+                            set(focus_nodes),
+                            show_inbreeding,
+                            chronological=preserve_y,
+                        )
+                        # The preferred shoulder may initially pass through a
+                        # neighbouring ghost branch.  One ordinary row
+                        # de-overlap pass performs the smallest local shift
+                        # before canonical junctions/routes are built.
+                        for row in self._cluster_rows(adjusted):
+                            self._deoverlap_row(
+                                adjusted, row, labels, protected, show_inbreeding
+                            )
                 self._compact_disconnected_family_components(
                     adjusted,
                     families,
@@ -2404,10 +2437,28 @@ class PedigreeRouter:
                 positions[node][0] for node in moved | {hub}
             )
             hub_x = positions[hub][0]
+            current_sides = {
+                -1 if positions[mate][0] < hub_x else 1
+                for _family_id, mate, _child in records
+                if abs(positions[mate][0] - hub_x) > _EPSILON
+            }
+            mixed_sides = len(current_sides) > 1
+            preferred_side: Optional[float] = None
+            if mixed_sides:
+                # Keep the shoulder of the non-focused branch when possible;
+                # this makes a selected sibling join its existing family
+                # group instead of pulling that group across the hub.
+                for _family_id, mate, child in records:
+                    if child in focus_nodes:
+                        continue
+                    delta = positions[mate][0] - hub_x
+                    if abs(delta) > _EPSILON:
+                        preferred_side = 1.0 if delta > 0.0 else -1.0
+                        break
             hub_half = self._estimated_label_width(str(labels.get(hub, hub))) / 2.0
             candidates: List[
                 Tuple[
-                    Tuple[float, float, int, float, int, int, Tuple[str, ...]],
+                    Tuple[float, float, int, int, float, int, float, Tuple[str, ...]],
                     Dict[str, Point],
                 ]
             ] = []
@@ -2466,6 +2517,50 @@ class PedigreeRouter:
                                     candidate_junctions[candidate_family][0],
                                     candidate[child][1],
                                 )
+                    if mixed_sides and preferred_side is not None:
+                        # A preferred shoulder can be occupied by a nearby
+                        # ghost sibling at a slightly different normalized
+                        # row.  Try tiny local vertical offsets for the
+                        # parentless mate before considering a broader move;
+                        # this keeps the family together without allowing a
+                        # marker/name collision to survive the soft shift.
+                        for _family_id, mate, _child in ordered:
+                            best_geometry = self._layout_geometry_score(
+                                candidate,
+                                families,
+                                labels,
+                                show_inbreeding,
+                                chronological=chronological,
+                            )
+                            for delta in (
+                                -2.00,
+                                -1.60,
+                                -1.40,
+                                -1.20,
+                                -0.80,
+                                -0.50,
+                                0.50,
+                                0.80,
+                                1.20,
+                                1.40,
+                                1.60,
+                                2.00,
+                            ):
+                                trial = dict(candidate)
+                                trial[mate] = (
+                                    candidate[mate][0],
+                                    candidate[mate][1] + delta,
+                                )
+                                trial_geometry = self._layout_geometry_score(
+                                    trial,
+                                    families,
+                                    labels,
+                                    show_inbreeding,
+                                    chronological=chronological,
+                                )
+                                if trial_geometry < best_geometry:
+                                    candidate = trial
+                                    best_geometry = trial_geometry
                     geometry = self._layout_geometry_score(
                         candidate, families, labels, show_inbreeding,
                         chronological=chronological,
@@ -2485,11 +2580,14 @@ class PedigreeRouter:
                         (
                             (
                                 float(geometry[0]),
+                                geometry[1],
+                                geometry[2],
+                                0
+                                if preferred_side is None or side == preferred_side
+                                else 1,
                                 round(span, 9),
                                 focus_order_penalty,
                                 round(displacement, 9),
-                                geometry[1],
-                                geometry[2],
                                 tuple(
                                     f"{side:+.0f}:{mate.casefold()}"
                                     for _fid, mate, _child in ordered
@@ -2499,19 +2597,155 @@ class PedigreeRouter:
                         )
                     )
 
-            score, best = min(candidates, key=lambda item: item[0])
-            if int(score[0]) > baseline_geometry[0]:
+            candidate_pool = candidates
+            if mixed_sides and preferred_side is not None:
+                preferred = [item for item in candidates if item[0][3] == 0]
+                if preferred:
+                    candidate_pool = preferred
+            score, best = min(candidate_pool, key=lambda item: item[0])
+            preferred_side_candidate = (
+                mixed_sides and preferred_side is not None and int(score[3]) == 0
+            )
+            if int(score[0]) > baseline_geometry[0] and not (
+                preferred_side_candidate
+                and int(score[0]) <= baseline_geometry[0] + 2
+            ):
                 continue
-            if int(score[4]) > baseline_geometry[1]:
+            if int(score[1]) > baseline_geometry[1] and not (
+                preferred_side_candidate
+                and int(score[1]) <= baseline_geometry[1] + 1
+            ):
                 continue
-            if int(score[5]) > baseline_geometry[2] + 1:
+            if int(score[2]) > baseline_geometry[2] + 1 and not (
+                preferred_side_candidate
+                and int(score[2]) <= baseline_geometry[2] + 1
+            ):
                 continue
-            if float(score[1]) + 0.75 >= baseline_span:
+            if (
+                float(score[4]) + 0.75 >= baseline_span
+                and not (preferred_side_candidate and float(score[4]) <= baseline_span + 2.0)
+            ):
                 continue
-            for node in moved:
+            changed_nodes = {
+                node
+                for node in best
+                if node in positions
+                and (
+                    abs(best[node][0] - positions[node][0]) > _EPSILON
+                    or abs(best[node][1] - positions[node][1]) > _EPSILON
+                )
+            }
+            for node in moved | changed_nodes:
                 positions[node] = best[node]
             changed = True
         return changed
+
+    def _resolve_parentless_fan_collisions(
+        self,
+        positions: Dict[str, Point],
+        moved_nodes: Set[str],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        protected: Set[str],
+        focus_nodes: Set[str],
+        show_inbreeding: bool,
+        *,
+        chronological: bool = False,
+    ) -> None:
+        """Clear local ghost collisions introduced by a same-side fan.
+
+        Parentless-mate compaction is allowed to choose a shoulder that is
+        occupied by a terminal ghost from a neighbouring branch.  Shift only
+        that terminal branch, and only when a bounded vertical trial strictly
+        reduces marker/name overlaps.  This keeps the optimization local and
+        avoids a second global packing pass.
+        """
+        if not moved_nodes:
+            return
+        parent_nodes = {
+            parent
+            for family in families.values()
+            for parent in self._parents(family)
+        }
+        terminal_nodes = {
+            node
+            for node in positions
+            if node not in parent_nodes
+            and node not in moved_nodes
+            and node not in focus_nodes
+            and node not in protected
+        }
+        if not terminal_nodes:
+            return
+
+        def overlaps(first: Rect, second: Rect) -> bool:
+            return (
+                first.right > second.left
+                and second.right > first.left
+                and first.top > second.bottom
+                and second.top > first.bottom
+            )
+
+        for _pass in range(2):
+            obstacles = self.node_obstacles(positions, labels, show_inbreeding)
+            moved_rects = [
+                obstacles[node] for node in moved_nodes if node in obstacles
+            ]
+            blockers = [
+                node
+                for node in sorted(terminal_nodes, key=str.casefold)
+                if node in obstacles
+                and any(overlaps(obstacles[node], rect) for rect in moved_rects)
+            ]
+            if not blockers:
+                return
+
+            baseline = self._layout_geometry_score(
+                positions,
+                families,
+                labels,
+                show_inbreeding,
+                chronological=chronological,
+            )
+            changed = False
+            for blocker in blockers:
+                best_geometry = baseline
+                best_point = positions[blocker]
+                for delta in (
+                    -1.00,
+                    1.00,
+                    -1.50,
+                    1.50,
+                    -2.00,
+                    2.00,
+                    -2.50,
+                    2.50,
+                    -3.00,
+                    3.00,
+                    -3.50,
+                    3.50,
+                ):
+                    trial = dict(positions)
+                    trial[blocker] = (
+                        positions[blocker][0],
+                        positions[blocker][1] + delta,
+                    )
+                    geometry = self._layout_geometry_score(
+                        trial,
+                        families,
+                        labels,
+                        show_inbreeding,
+                        chronological=chronological,
+                    )
+                    if geometry < best_geometry:
+                        best_geometry = geometry
+                        best_point = trial[blocker]
+                if best_point != positions[blocker] and best_geometry[0] < baseline[0]:
+                    positions[blocker] = best_point
+                    baseline = best_geometry
+                    changed = True
+            if not changed:
+                return
 
     def _align_single_child_axes_conservatively(
         self,
@@ -2914,39 +3148,46 @@ class PedigreeRouter:
         for node in sorted(positions, key=str.casefold):
             level_of(node)
 
-        def is_ancestor(ancestor: str, descendant: str) -> bool:
-            pending = list(parent_map.get(descendant, set()))
-            seen: Set[str] = set()
-            while pending:
-                current = pending.pop()
-                if current == ancestor:
-                    return True
-                if current in seen:
-                    continue
-                seen.add(current)
-                pending.extend(parent_map.get(current, set()) - seen)
-            return False
-
-        max_passes = max(4, len(positions) * 3)
-        for _pass in range(max_passes):
+        # Generation order is a hard constraint.  Earlier versions repeatedly
+        # raised both partners to the same row and could therefore move an
+        # ancestor down onto a descendant through an indirect partner chain.
+        # Keep the deterministic ancestry levels and only propagate parent
+        # lower bounds; same-row partner alignment is intentionally a soft
+        # horizontal preference handled by the packing passes above.
+        for _pass in range(max(1, len(positions))):
             changed = False
-            for family in families.values():
-                parents = [parent for parent in self._parents(family) if parent in positions]
+            # Soft partner-row preference: raise only a lower partner whose
+            # direct children remain strictly below the proposed row.  This
+            # keeps ordinary family rows compact while preventing an
+            # ancestor/descendant pair from being collapsed into one row.
+            for family_id in sorted(families, key=str.casefold):
+                parents = [
+                    parent for parent in self._parents(families[family_id])
+                    if parent in levels
+                ]
                 if len(parents) != 2:
                     continue
-                first, second = parents
-                if is_ancestor(first, second) or is_ancestor(second, first):
-                    continue
-                partner_level = max(levels[first], levels[second])
-                for parent in parents:
-                    if levels[parent] < partner_level:
-                        levels[parent] = partner_level
+                target = max(levels[parents[0]], levels[parents[1]])
+                for partner in parents:
+                    if levels[partner] >= target:
+                        continue
+                    children = {
+                        child
+                        for child, child_parents in parent_map.items()
+                        if partner in child_parents
+                    }
+                    if all(
+                        child in cycle_nodes
+                        or levels[child] > target
+                        for child in children
+                    ):
+                        levels[partner] = target
                         changed = True
 
-            for child, parents in parent_map.items():
+            for child in sorted(parent_map, key=str.casefold):
                 usable = [
                     parent
-                    for parent in parents
+                    for parent in sorted(parent_map[child], key=str.casefold)
                     if not (child in cycle_nodes and parent in cycle_nodes)
                 ]
                 if not usable:

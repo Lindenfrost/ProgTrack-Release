@@ -28,7 +28,7 @@ from .ghost_strategies import (
     NoGhostStrategy,
 )
 from .heritage_track_widget import HeritageTrackPlugin
-from .layout_pipeline import LayoutPipeline
+from .layout_pipeline import LayoutPipeline, family_node_id
 from .pedigree_router import PedigreeRouter, RoutePlan
 
 __all__ = [
@@ -52,6 +52,7 @@ __all__ = [
     "NoGhostStrategy",
     # Layout
     "LayoutPipeline",
+    "family_node_id",
     "PedigreeRouter",
     "RoutePlan",
     # Performance & Layout Improvements

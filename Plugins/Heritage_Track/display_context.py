@@ -96,6 +96,7 @@ class FrozenRoutePlan:
     gap_geometry_revision: int = -1
     pixel_gap_revision: int = 0
     route_obstacle_hits: Tuple[str, ...] = ()
+    layout_diagnostics: Tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         # A frozen dataclass does not freeze nested dictionaries/lists.  The
@@ -109,7 +110,12 @@ class FrozenRoutePlan:
             "line_crossing_gaps",
         ):
             object.__setattr__(self, field_name, _freeze_value(getattr(self, field_name)))
-        for field_name in ("unresolved", "line_crossing_problems", "route_obstacle_hits"):
+        for field_name in (
+            "unresolved",
+            "line_crossing_problems",
+            "route_obstacle_hits",
+            "layout_diagnostics",
+        ):
             object.__setattr__(self, field_name, tuple(getattr(self, field_name)))
 
     @classmethod
@@ -141,6 +147,7 @@ class FrozenRoutePlan:
             gap_geometry_revision=int(plan.gap_geometry_revision),
             pixel_gap_revision=int(plan.pixel_gap_revision),
             route_obstacle_hits=tuple(plan.route_obstacle_hits),
+            layout_diagnostics=tuple(getattr(plan, "layout_diagnostics", ())),
         )
 
     def route_segments(self, family_id: str, endpoint: str) -> list[tuple[Point, Point]]:
@@ -207,6 +214,7 @@ class FrozenRoutePlan:
             gap_geometry_revision=self.gap_geometry_revision,
             pixel_gap_revision=self.pixel_gap_revision,
             route_obstacle_hits=list(self.route_obstacle_hits),
+            layout_diagnostics=list(self.layout_diagnostics),
         )
 
 
@@ -577,4 +585,18 @@ class DisplayContextBuilder:
             if not _pull_changed:
                 break
 
+        # Leaf promotion and pull-up are visual compaction passes.  Recheck
+        # the hard genetic ordering afterwards so a future adjustment cannot
+        # turn a compacted frame into an apparently valid but contradictory
+        # pedigree.
+        # Lightweight test/dummy engines used by the context layer predate
+        # topology diagnostics; keep that interface optional while the real
+        # PedigreeEngine records the post-compaction validation.
+        if hasattr(self.engine, "set_level_diagnostics") and hasattr(
+            self.engine, "generation_diagnostics"
+        ):
+            self.engine.set_level_diagnostics(
+                display_nodes,
+                self.engine.generation_diagnostics(display_nodes, pre_collapse_levels),
+            )
         return pre_collapse_levels

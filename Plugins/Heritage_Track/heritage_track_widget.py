@@ -93,6 +93,7 @@ from .layout_pipeline import (
     VERTICAL_LAYOUT_CHRONOLOGICAL,
     VERTICAL_LAYOUT_PARTNER_NORMALIZED,
     compute_chronological_positions,
+    family_node_id,
     parse_complete_birth_date_ordinal,
 )
 from .pedigree_engine import PedigreeEngine
@@ -1023,6 +1024,7 @@ class HeritageTrackWidget(QWidget):
         )
         diagnostics = tuple(
             list(route_plan.unresolved)
+            + list(getattr(route_plan, "layout_diagnostics", ()))
             + list(route_plan.line_crossing_problems)
             + list(route_plan.route_obstacle_hits)
         )
@@ -1032,6 +1034,14 @@ class HeritageTrackWidget(QWidget):
             display_mode=display_mode,
         )
         fatal = self._render_geometry_fatal_diagnostics(route_plan, positions)
+        # A topology diagnostic is deliberately fatal for cache publication:
+        # an unresolved frame may be inspected locally, but must never replace
+        # the last accepted complete pedigree as a valid render transaction.
+        fatal.extend(
+            item
+            for item in getattr(route_plan, "layout_diagnostics", ())
+            if item not in fatal
+        )
         return RenderCacheEntry(
             cache_key=cache_key,
             core_projection_revision=core_revision,
@@ -2481,7 +2491,7 @@ class HeritageTrackWidget(QWidget):
         return None
 
     def _family_node_id(self, mother: str, father: str) -> str:
-        return f"__family__::{mother}:::{father}"
+        return family_node_id(mother, father)
 
     def _is_family_node(self, node_id: Optional[str]) -> bool:
         return str(node_id or "").startswith("__family__::")
@@ -2567,6 +2577,11 @@ class HeritageTrackWidget(QWidget):
 
             child_levels = [levels.get(child, 0) for child in children]
             family_id = self._family_node_id(mother, father)
+            if not family_id:
+                # Incomplete or self-parented records remain visible as
+                # singleton nodes, but never acquire a family junction or
+                # parent route.
+                continue
             families[family_id] = {
                 "id": family_id,
                 "mother": mother,
@@ -3337,6 +3352,17 @@ class HeritageTrackWidget(QWidget):
                 "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
             ),
         )
+        # The engine levels are the canonical hard generation assignment.
+        # Validate the final visible scope after collapse filtering and carry
+        # any cycle/order conflict into the plan and cache boundary.
+        route_plan.layout_diagnostics = list(
+            engine.generation_diagnostics(display_nodes, levels)
+        )
+        if route_plan.layout_diagnostics:
+            route_plan.unresolved = sorted(
+                set(route_plan.unresolved) | set(route_plan.layout_diagnostics),
+                key=str.casefold,
+            )
         animal_positions = route_plan.animal_positions
         family_positions = route_plan.family_positions
         family_members = route_plan.family_members

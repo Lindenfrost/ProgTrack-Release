@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+import heapq
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 
@@ -44,6 +45,12 @@ class PedigreeEngine:
         self.all_nodes: Set[str] = set()
         self.father_like_nodes: Set[str] = set()
         self.mother_like_nodes: Set[str] = set()
+        # Diagnostics are scoped by the exact node set used for a layout.  A
+        # refresh computes levels for the full graph and for the current
+        # display set; keeping both prevents the latter from overwriting the
+        # former and makes unresolved topology explicit to callers.
+        self._level_diagnostics_by_scope: Dict[Tuple[str, ...], Tuple[str, ...]] = {}
+        self.level_diagnostics: Tuple[str, ...] = ()
 
     def build(self) -> None:
         """Build core lookup maps from available records."""
@@ -52,6 +59,8 @@ class PedigreeEngine:
         self.all_nodes.clear()
         self.father_like_nodes.clear()
         self.mother_like_nodes.clear()
+        self._level_diagnostics_by_scope.clear()
+        self.level_diagnostics = ()
 
         # Start with app animals.
         for animal_name, record in self.animals.items():
@@ -181,129 +190,226 @@ class PedigreeEngine:
         return display
 
     def compute_levels(self, nodes_subset: Set[str]) -> Dict[str, int]:
-        """Compute generation-like levels for layered plotting."""
-        memo: Dict[str, int] = {}
-        visiting: Set[str] = set()
+        """Compute deterministic hard generation levels for layered plotting.
 
-        def level_of(node: str) -> int:
-            if node in memo:
+        Genetic parent edges are the only hard vertical constraint.  A
+        topological pass therefore cannot be pushed backwards by an indirect
+        partner chain.  Partner alignment remains a responsibility of the
+        horizontal layout/router, where it can be relaxed without violating
+        ancestry.  Cyclic or contradictory records receive deterministic
+        fallback levels plus an explicit diagnostic instead of being treated
+        as a valid layout.
+        """
+        nodes = {
+            _norm_name(node)
+            for node in (nodes_subset or set())
+            if _norm_name(node)
+        }
+        scope = tuple(sorted(nodes, key=str.casefold))
+        if not nodes:
+            self._record_level_diagnostics(scope, ())
+            return {}
+
+        parents_by_child: Dict[str, Set[str]] = {}
+        children_by_parent: Dict[str, Set[str]] = defaultdict(set)
+        indegree: Dict[str, int] = {node: 0 for node in nodes}
+        for child in nodes:
+            parents = {
+                parent
+                for parent in _iter_genetic_parent_names(
+                    self.child_to_parents.get(child, {})
+                )
+                if parent and parent in nodes
+            }
+            parents_by_child[child] = parents
+            indegree[child] = len(parents)
+            for parent in parents:
+                children_by_parent[parent].add(child)
+
+        # A heap makes both the queue and every propagated level independent
+        # of dictionary/set insertion order.
+        ready = [node for node, degree in indegree.items() if degree == 0]
+        heapq.heapify(ready)
+        levels: Dict[str, int] = {node: 0 for node in nodes}
+        processed: Set[str] = set()
+        while ready:
+            parent = heapq.heappop(ready)
+            processed.add(parent)
+            for child in sorted(children_by_parent.get(parent, ()), key=str.casefold):
+                levels[child] = max(levels.get(child, 0), levels[parent] + 1)
+                indegree[child] -= 1
+                if indegree[child] == 0:
+                    heapq.heappush(ready, child)
+
+        # The remaining nodes are in (or downstream of) a cycle.  Calculate a
+        # bounded, stable fallback only so the renderer can still report the
+        # bad record; the diagnostic makes the result ineligible for caching.
+        remaining = nodes - processed
+        if remaining:
+            memo = {node: levels[node] for node in processed}
+            visiting: Set[str] = set()
+
+            def fallback_level(node: str) -> int:
+                if node in memo:
+                    return memo[node]
+                if node in visiting:
+                    return 0
+                visiting.add(node)
+                parent_levels = [
+                    fallback_level(parent)
+                    for parent in sorted(parents_by_child.get(node, ()), key=str.casefold)
+                ]
+                visiting.remove(node)
+                memo[node] = min(max(parent_levels, default=-1) + 1, len(nodes) - 1)
                 return memo[node]
-            if node in visiting:
-                # cycle guard
-                return 0
 
-            visiting.add(node)
-            parent_levels: List[int] = []
-            for parent in _iter_genetic_parent_names(self.child_to_parents.get(node, {})):
-                if not parent or parent not in nodes_subset:
-                    continue
-                parent_levels.append(level_of(parent))
-            visiting.remove(node)
+            for node in sorted(remaining, key=str.casefold):
+                levels[node] = fallback_level(node)
 
-            lvl = (max(parent_levels) + 1) if parent_levels else 0
-            memo[node] = lvl
-            return lvl
-
-        for node in nodes_subset:
-            level_of(node)
-
-        # Keep genetic mates on the same generation level where possible.
-        def _is_ancestor(candidate_ancestor: str, candidate_descendant: str) -> bool:
-            if not candidate_ancestor or not candidate_descendant:
-                return False
-            if candidate_ancestor == candidate_descendant:
-                return False
-
-            visited: Set[str] = set()
-            stack: List[str] = [candidate_ancestor]
-            while stack:
-                current = stack.pop()
-                if current in visited:
-                    continue
-                visited.add(current)
-
-                for child in self.parent_to_children.get(current, set()):
-                    if child not in nodes_subset:
-                        continue
-                    if child == candidate_descendant:
-                        return True
-                    if child not in visited:
-                        stack.append(child)
-            return False
-
-        partner_adj: Dict[str, Set[str]] = defaultdict(set)
-        for child in nodes_subset:
+        # Same-generation partner placement is useful for compact pedigree
+        # rows, but it is only a preference.  Raise a lower partner when all
+        # of that partner's direct children already remain strictly below the
+        # proposed row.  An ancestor/descendant pairing consequently stays
+        # separated, because its direct edge would fail this safety check.
+        partner_pairs: Set[Tuple[str, str]] = set()
+        for child in sorted(nodes, key=str.casefold):
             parent_values = self.child_to_parents.get(child, {})
             mother = _norm_name(parent_values.get("egg_donor", ""))
             father = _norm_name(parent_values.get("sperm_donor", ""))
-            if not mother or not father:
-                continue
-            if mother not in nodes_subset or father not in nodes_subset:
-                continue
-
-            # Do not enforce same-level alignment when one mate is an
-            # ancestor of the other (e.g., father-daughter pairings).
-            # That constraint is contradictory with parent->child layering.
-            if _is_ancestor(mother, father) or _is_ancestor(father, mother):
-                continue
-
-            partner_adj[mother].add(father)
-            partner_adj[father].add(mother)
-
-        def _align_partner_components(levels: Dict[str, int]) -> bool:
-            changed_local = False
-            visited: Set[str] = set()
-            for seed in list(partner_adj.keys()):
-                if seed in visited:
-                    continue
-
-                stack = [seed]
-                component: List[str] = []
-                while stack:
-                    cur = stack.pop()
-                    if cur in visited:
+            if (
+                mother
+                and father
+                and mother != father
+                and mother in nodes
+                and father in nodes
+            ):
+                partner_pairs.add(tuple(sorted((mother, father), key=str.casefold)))
+        if partner_pairs:
+            # Components are intentionally not forced as a whole.  A local
+            # safe raise preserves as many partner alignments as ancestry
+            # permits without reintroducing the old chain-wide push.
+            for first, second in sorted(
+                partner_pairs,
+                key=lambda pair: (pair[0].casefold(), pair[1].casefold()),
+            ):
+                target = max(levels[first], levels[second])
+                for partner in (first, second):
+                    if levels[partner] >= target:
                         continue
-                    visited.add(cur)
-                    component.append(cur)
-                    for nxt in partner_adj.get(cur, set()):
-                        if nxt not in visited:
-                            stack.append(nxt)
+                    children = children_by_parent.get(partner, set()) & nodes
+                    if all(levels.get(child, 0) > target for child in children):
+                        levels[partner] = target
 
-                if len(component) <= 1:
-                    continue
+        diagnostics = self.generation_diagnostics(nodes, levels)
+        self._record_level_diagnostics(scope, diagnostics)
+        return levels
 
-                target_level = max(levels.get(node, 0) for node in component)
-                for node in component:
-                    if levels.get(node, 0) != target_level:
-                        levels[node] = target_level
-                        changed_local = True
-            return changed_local
+    def generation_diagnostics(
+        self,
+        nodes_subset: Set[str],
+        levels: Optional[Dict[str, int]] = None,
+    ) -> Tuple[str, ...]:
+        """Return deterministic diagnostics for generation constraints."""
+        nodes = {
+            _norm_name(node)
+            for node in (nodes_subset or set())
+            if _norm_name(node)
+        }
+        if not nodes:
+            return ()
 
-        changed = _align_partner_components(memo)
-        safety = 0
-        max_passes = max(10, len(nodes_subset) * 4)
-        max_level = max(0, len(nodes_subset) - 1)
-        while changed and safety < max_passes:
-            safety += 1
-            changed = False
+        parents_by_child: Dict[str, Set[str]] = {}
+        children_by_parent: Dict[str, Set[str]] = defaultdict(set)
+        indegree: Dict[str, int] = {node: 0 for node in nodes}
+        edges: List[Tuple[str, str]] = []
+        for child in sorted(nodes, key=str.casefold):
+            parents = {
+                parent
+                for parent in _iter_genetic_parent_names(
+                    self.child_to_parents.get(child, {})
+                )
+                if parent and parent in nodes
+            }
+            parents_by_child[child] = parents
+            indegree[child] = len(parents)
+            for parent in sorted(parents, key=str.casefold):
+                children_by_parent[parent].add(child)
+                edges.append((parent, child))
 
-            for child in nodes_subset:
-                parent_levels: List[int] = []
-                for parent in _iter_genetic_parent_names(self.child_to_parents.get(child, {})):
-                    if parent and parent in nodes_subset:
-                        parent_levels.append(memo.get(parent, 0))
+        ready = [node for node, degree in indegree.items() if degree == 0]
+        heapq.heapify(ready)
+        processed: Set[str] = set()
+        while ready:
+            parent = heapq.heappop(ready)
+            processed.add(parent)
+            for child in sorted(children_by_parent.get(parent, ()), key=str.casefold):
+                indegree[child] -= 1
+                if indegree[child] == 0:
+                    heapq.heappush(ready, child)
 
-                if not parent_levels:
-                    continue
-                desired = min(max(parent_levels) + 1, max_level)
-                if memo.get(child, 0) < desired:
-                    memo[child] = desired
-                    changed = True
+        diagnostics: List[str] = []
+        remaining = nodes - processed
+        if remaining:
+            diagnostics.append(
+                "unresolved generation order: cyclic parentage involving "
+                + ", ".join(sorted(remaining, key=str.casefold))
+            )
 
-            if _align_partner_components(memo):
-                changed = True
+        if levels is not None:
+            violations = [
+                f"{parent}->{child}"
+                for parent, child in sorted(
+                    edges, key=lambda edge: (edge[0].casefold(), edge[1].casefold())
+                )
+                if levels.get(parent, 0) >= levels.get(child, 0)
+            ]
+            if violations:
+                diagnostics.append(
+                    "unresolved generation order: parent-before-child violated for "
+                    + ", ".join(violations)
+                )
+        return tuple(sorted(set(diagnostics), key=str.casefold))
 
-        return memo
+    def _record_level_diagnostics(
+        self,
+        scope: Tuple[str, ...],
+        diagnostics: Iterable[str],
+    ) -> None:
+        values = tuple(sorted({str(item) for item in diagnostics if str(item)}, key=str.casefold))
+        self._level_diagnostics_by_scope[scope] = values
+        self.level_diagnostics = values
+
+    def get_level_diagnostics(self, nodes_subset: Set[str]) -> Tuple[str, ...]:
+        """Return diagnostics for one exact node scope, if it was computed."""
+        scope = tuple(
+            sorted(
+                {
+                    _norm_name(node)
+                    for node in (nodes_subset or set())
+                    if _norm_name(node)
+                },
+                key=str.casefold,
+            )
+        )
+        return self._level_diagnostics_by_scope.get(scope, ())
+
+    def set_level_diagnostics(
+        self,
+        nodes_subset: Set[str],
+        diagnostics: Iterable[str],
+    ) -> None:
+        """Store diagnostics after a display builder modifies levels."""
+        scope = tuple(
+            sorted(
+                {
+                    _norm_name(node)
+                    for node in (nodes_subset or set())
+                    if _norm_name(node)
+                },
+                key=str.casefold,
+            )
+        )
+        self._record_level_diagnostics(scope, diagnostics)
 
 
     def get_genetic_parent_map(self) -> Dict[str, Tuple[Optional[str], Optional[str]]]:

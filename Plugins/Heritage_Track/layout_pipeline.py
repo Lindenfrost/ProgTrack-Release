@@ -27,6 +27,20 @@ VERTICAL_LAYOUT_PARTNER_NORMALIZED = "partner_normalized"
 VERTICAL_LAYOUT_CHRONOLOGICAL = "chronological"
 
 
+def family_node_id(mother: Any, father: Any) -> str:
+    """Return the canonical ID for a complete genetic parent pair.
+
+    Family junctions only exist when both genetic parents are known.  Keeping
+    this check and the serialization in one helper prevents collapse state,
+    grouping and widget routes from silently referring to different nodes.
+    """
+    mother_name = str(mother or "").strip()
+    father_name = str(father or "").strip()
+    if not mother_name or not father_name or mother_name == father_name:
+        return ""
+    return f"__family__::{mother_name}:::{father_name}"
+
+
 def birth_ordinal_to_month_y(ordinal: Optional[int]) -> Optional[float]:
     """Return an absolute, month-snapped calendar coordinate.
 
@@ -228,9 +242,7 @@ class GroupGrouper:
     @staticmethod
     def _family_node_id(mother: str, father: str) -> str:
         """Generate family node ID from parents."""
-        m = mother or ""
-        f = father or ""
-        return f"fam::{m}::{f}"
+        return family_node_id(mother, father)
 
 
 class ComponentAnalyzer:
