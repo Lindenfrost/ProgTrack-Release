@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
   <style>
     .blue{fill:#2f80ed;stroke:#000000;stroke-width:4;stroke-linejoin:round}
-    .silver{fill:#c0c0c0;stroke:#000000;stroke-width:3;stroke-linejoin:round}
+    .silver{fill:#c0c0c0;stroke:#000000;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   </style>
   <!-- ordinary user silhouette (Master is an account, not a crowned role) -->
   <circle class="blue" cx="32" cy="23" r="11"/>
