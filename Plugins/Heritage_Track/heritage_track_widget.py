@@ -840,8 +840,11 @@ class HeritageTrackWidget(QWidget):
             {node: record_index.get(node, {}) for node in sorted(record_index, key=str.casefold)}
         )
         pedigree_revision = self._render_revision(parent_map)
-        engine_revision = self._render_revision(
-            {"nodes": sorted(engine.all_nodes, key=str.casefold), "parents": parent_map}
+        engine_revision = str(
+            getattr(engine, "resolution_revision", "")
+            or self._render_revision(
+                {"nodes": sorted(engine.all_nodes, key=str.casefold), "parents": parent_map}
+            )
         )
         layout_revision = self._render_revision(
             {
@@ -3351,7 +3354,12 @@ class HeritageTrackWidget(QWidget):
             role = canonical_role_value(record.get("rolle", ""))
             sex = self.plugin.get_effective_sex(node, record)
 
-            visual = self.plugin.store.get_node_visual(node, fallback_genotype=str(record.get("genotype", "")))
+            visual = self.plugin.store.get_node_visual(
+                node,
+                fallback_genotype=str(record.get("genotype", "")),
+                fallback_record=record,
+                core_authoritative=self.plugin._is_core_animal(node),
+            )
             fill_color_raw = visual.get("node_fill_color", "")
             fill_color = self._valid_fill(fill_color_raw)
             # _resolve_shape now handles saving resolved sex for heritage-only animals
@@ -4523,7 +4531,13 @@ class HeritageTrackPlugin:
                 self.window = None
 
     def get_parentage(self, animal_name: Optional[str], record: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
-        return self.store.get_parentage(animal_name, record)
+        key = str(animal_name or "").strip()
+        core_record = record if isinstance(record, dict) else self._core_record(key)
+        return self.store.get_parentage(
+            key,
+            core_record,
+            core_authoritative=self._is_core_animal(key),
+        )
 
     def _core_record(self, animal_name: Optional[str]) -> Optional[Dict[str, Any]]:
         key = str(animal_name or "").strip()
@@ -5207,18 +5221,17 @@ class HeritageTrackPlugin:
         return self.store.get_manual_sex(animal_name)
 
     def get_effective_sex(self, animal_name: Optional[str], fallback_record: Optional[Dict[str, Any]] = None) -> str:
-        core_record = self._core_record(animal_name)
-        if core_record is not None:
-            explicit = self.store._normalize_sex(core_record.get("sex", ""))
-            if explicit:
-                return explicit
-            role = canonical_role_value(core_record.get("rolle", ""))
-            if role in (ROLE_VALUE_SPENDER, ROLE_VALUE_AMME):
-                return "female"
-            if role == ROLE_VALUE_SAMENSP:
-                return "male"
-            return ""
-        return self.store.get_effective_sex(animal_name, fallback_record)
+        key = str(animal_name or "").strip()
+        core_record = (
+            fallback_record
+            if isinstance(fallback_record, dict) and self._is_core_animal(key)
+            else self._core_record(key)
+        )
+        return self.store.get_effective_sex(
+            key,
+            core_record,
+            core_authoritative=self._is_core_animal(key),
+        )
 
     def _all_identity_records(self) -> Dict[str, Dict[str, Any]]:
         records: Dict[str, Dict[str, Any]] = {}
@@ -5407,7 +5420,15 @@ class HeritageTrackPlugin:
 
         # Build base-name → [(key, species)] map for resolving same-name animals by species.
         _base_to_variants: Dict[str, List[tuple]] = {}
-        _heritage_entries = self.store.get_all_entries()
+        all_store_entries = self.store.get_all_entries()
+        # Core records are supplied separately and resolved authoritatively;
+        # retaining their denormalized store copies would reintroduce stale
+        # identity variants into same-name/species disambiguation.
+        _heritage_entries = {
+            key: entry
+            for key, entry in all_store_entries.items()
+            if key not in animals
+        }
         _identity_records = dict(_heritage_entries)
         _identity_records.update(animals)
         for _k, _r in _identity_records.items():
@@ -5418,24 +5439,10 @@ class HeritageTrackPlugin:
             _birth = (_r.get("birth_date") or "").strip()
             _base_to_variants.setdefault(_base.lower(), []).append((_k, _sp, _birth))
 
-        _store_lookup = self.store.get_parentage
+        _store_lookup = self.get_parentage
 
         def _species_aware_lookup(animal_name: str, record) -> Dict[str, str]:
             base_parentage = _store_lookup(animal_name, record)
-            if not sync and isinstance(record, dict):
-                # Read-only render builds must still see the current Core
-                # parent fields without synchronizing/persisting the combined
-                # Heritage store.  Explicit Heritage-only values remain the
-                # fallback; a populated Core field is the live projection.
-                for field, core_key in (
-                    ("egg_donor", "eizellspenderin"),
-                    ("sperm_donor", "samenspender"),
-                    ("surrogate_mother", "ziehmutter"),
-                    ("surrogate_father", "ziehvater"),
-                ):
-                    core_value = self.store._normalize_text(record.get(core_key, ""))
-                    if core_value:
-                        base_parentage[field] = core_value
             if not _base_to_variants:
                 return base_parentage
             child_rec = _identity_records.get(animal_name, {})

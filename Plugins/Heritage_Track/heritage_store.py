@@ -177,7 +177,11 @@ class HeritageStore:
             self._genotype_colors_cache = None
             return self._data
 
-        return self._normalize_and_cache(raw)
+        # Reads (including render-time projection) must not rewrite the shared
+        # backend merely because an older payload needs normalization.  The
+        # normalized in-memory view is repaired by an explicit write path such
+        # as sync_from_animals(), an edit command, or flush_pending().
+        return self._normalize_and_cache(raw, persist=False)
 
     def _load_raw(self) -> Optional[Dict[str, Any]]:
         """Load the combined Heritage record from the shared backend."""
@@ -700,13 +704,27 @@ class HeritageStore:
 
         self.set_collapsed_families(collapsed_families)
 
-    def get_parentage(self, animal_name: Optional[str], fallback_record: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+    def get_parentage(
+        self,
+        animal_name: Optional[str],
+        fallback_record: Optional[Dict[str, Any]] = None,
+        *,
+        core_authoritative: bool = False,
+    ) -> Dict[str, str]:
         fallback = {
             "egg_donor": self._normalize_text((fallback_record or {}).get("eizellspenderin", "")),
             "sperm_donor": self._normalize_text((fallback_record or {}).get("samenspender", "")),
             "surrogate_mother": self._normalize_text((fallback_record or {}).get("ziehmutter", "")),
             "surrogate_father": self._normalize_text((fallback_record or {}).get("ziehvater", "")),
         }
+
+        # Core owns all four relationship fields for real application
+        # animals.  An explicit empty value is intentional and must clear a
+        # stale denormalized Heritage projection rather than falling back to
+        # it.  Heritage-only and former-Core dummy records continue to use
+        # the persisted canonical graph below.
+        if core_authoritative and isinstance(fallback_record, dict):
+            return fallback
 
         key = self._normalize_text(animal_name)
         if not key:
@@ -847,7 +865,15 @@ class HeritageStore:
         entry["updated_at"] = self._utc_now_iso()
         self._save_animals()
 
-    def get_species(self, animal_name: str) -> str:
+    def get_species(
+        self,
+        animal_name: str,
+        fallback_record: Optional[Dict[str, Any]] = None,
+        *,
+        core_authoritative: bool = False,
+    ) -> str:
+        if core_authoritative and isinstance(fallback_record, dict):
+            return self._normalize_text(fallback_record.get("species", ""))
         key = self._normalize_text(animal_name)
         if not key:
             return ""
@@ -893,10 +919,26 @@ class HeritageStore:
             return ""
         return self._normalize_sex(entry.get("sex", ""))
 
-    def get_effective_sex(self, animal_name: Optional[str], fallback_record: Optional[Dict[str, Any]] = None) -> str:
+    def get_effective_sex(
+        self,
+        animal_name: Optional[str],
+        fallback_record: Optional[Dict[str, Any]] = None,
+        *,
+        core_authoritative: bool = False,
+    ) -> str:
         fallback_sex = self._normalize_sex((fallback_record or {}).get("sex", ""))
         if fallback_sex:
             return fallback_sex
+        if core_authoritative and isinstance(fallback_record, dict):
+            # Empty/absent Core sex is a real lack of a value.  Role-derived
+            # sex remains the documented legacy inference for donor roles,
+            # but no stale manual Heritage value may win over Core.
+            role = canonical_role_value(fallback_record.get("rolle", ""))
+            if role in (ROLE_VALUE_SPENDER, ROLE_VALUE_AMME):
+                return "female"
+            if role == ROLE_VALUE_SAMENSP:
+                return "male"
+            return ""
         key = self._normalize_text(animal_name)
         if key:
             manual = self.get_manual_sex(key)
@@ -951,22 +993,35 @@ class HeritageStore:
             entry["updated_at"] = self._utc_now_iso()
             self._save_animals()
 
-    def get_node_visual(self, animal_name: str, fallback_genotype: str = "") -> Dict[str, str]:
+    def get_node_visual(
+        self,
+        animal_name: str,
+        fallback_genotype: str = "",
+        fallback_record: Optional[Dict[str, Any]] = None,
+        *,
+        core_authoritative: bool = False,
+    ) -> Dict[str, str]:
         key = self._normalize_text(animal_name)
         if not key:
             return {"genotype": self._normalize_text(fallback_genotype), "node_fill_color": ""}
 
         entry = self.load().get("animals", {}).get(key, {})
-        genotype = self._normalize_text(entry.get("genotype", ""))
-        if not genotype:
-            genotype = self._normalize_text(fallback_genotype)
+        if core_authoritative and isinstance(fallback_record, dict):
+            # Core genotype is authoritative, including an intentional clear.
+            genotype = self._normalize_text(fallback_record.get("genotype", ""))
+            fallback_color = self._normalize_text(fallback_record.get("node_fill_color", ""))
+        else:
+            genotype = self._normalize_text(entry.get("genotype", ""))
+            if not genotype:
+                genotype = self._normalize_text(fallback_genotype)
+            fallback_color = self._normalize_text(entry.get("node_fill_color", ""))
 
         genotype_key = self._normalize_genotype_key(genotype)
         genotype_colors = self.get_genotype_colors()
         if genotype_key and genotype_key in genotype_colors:
             fill_color = self._normalize_text(genotype_colors.get(genotype_key, ""))
         else:
-            fill_color = self._normalize_text(entry.get("node_fill_color", ""))
+            fill_color = fallback_color
         return {"genotype": genotype, "node_fill_color": fill_color}
 
     def sync_from_record(self, animal_name: str, record: Optional[Dict[str, Any]], persist: bool = True, in_main_animals: bool = True) -> bool:
@@ -981,9 +1036,6 @@ class HeritageStore:
             "surrogate_father": "ziehvater",
         }
 
-        data = self.load()
-        animals = data.get("animals", {}) if isinstance(data, dict) else {}
-        entry_exists = isinstance(animals, dict) and key in animals
         entry = self._entry(key)
         changed = False
 
@@ -1009,17 +1061,13 @@ class HeritageStore:
             entry["heritage_only"] = False
             changed = True
 
-        # Import from core only when creating a missing heritage entry.
-        # Existing entries in the backend graph are authoritative.
-        allow_core_backfill = not entry_exists
-
         for parent_key, core_key in core_parent_map.items():
-            if core_key not in record:
-                continue
             value = self._normalize_text(record.get(core_key, ""))
             current = self._normalize_text(entry.get(parent_key, ""))
-            # Only import from core for missing values; keep graph edits.
-            if allow_core_backfill and not current and value:
+            # Core owns relationship fields for every active/archived record.
+            # This also copies an intentional empty value so a cleared Core
+            # parent cannot be resurrected by a stale Heritage projection.
+            if in_main_animals and current != value:
                 entry[parent_key] = value
                 changed = True
 
@@ -1039,11 +1087,11 @@ class HeritageStore:
             entry["sex"] = authoritative_sex
             changed = True
 
-        if "genotype" in record:
+        if in_main_animals:
             genotype = self._normalize_text(record.get("genotype", ""))
             current_genotype = self._normalize_text(entry.get("genotype", ""))
-            # Only backfill missing genotype from core.
-            if allow_core_backfill and not current_genotype and genotype:
+            # Core genotype is authoritative, including an intentional clear.
+            if current_genotype != genotype:
                 entry["genotype"] = genotype
                 changed = True
 
@@ -1068,13 +1116,15 @@ class HeritageStore:
             "rolle": "rolle",
         }
         for core_key, entry_key in core_field_map.items():
-            if core_key in record:
-                value = self._normalize_text(record.get(core_key, ""))
-                current = self._normalize_text(entry.get(entry_key, ""))
-                # Backfill missing values from core
-                if allow_core_backfill and not current and value:
-                    entry[entry_key] = value
-                    changed = True
+            if not in_main_animals:
+                continue
+            value = self._normalize_text(record.get(core_key, ""))
+            current = self._normalize_text(entry.get(entry_key, ""))
+            # Core owns ordinary identity/status fields.  Missing and empty
+            # values both intentionally clear a stale projection.
+            if current != value:
+                entry[entry_key] = value
+                changed = True
 
         if changed:
             entry["updated_at"] = self._utc_now_iso()

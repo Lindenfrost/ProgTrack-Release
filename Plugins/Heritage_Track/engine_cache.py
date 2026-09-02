@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Any, Callable, Dict, Optional
 
 from .pedigree_engine import PedigreeEngine
@@ -16,10 +17,12 @@ from .pedigree_engine import PedigreeEngine
 class PedigreeEngineCache:
     """Caches PedigreeEngine instances with automatic invalidation.
     
-    The cache key is computed from a hash of the animals and heritage entries data.
-    When the underlying data changes, a new engine is built. Otherwise, the cached
-    engine is returned for 3-5x performance improvement.
+    The cache key is computed from the complete effective identity and parentage
+    inputs used by the resolver.  Rendering metadata and measurements are kept out
+    of the key so ordinary plot refreshes do not cause unnecessary engine rebuilds.
     """
+
+    RESOLUTION_POLICY_VERSION = "heritage-engine-resolution.v2"
     
     def __init__(self):
         self._cache: Optional[PedigreeEngine] = None
@@ -31,33 +34,74 @@ class PedigreeEngineCache:
         animals: Dict[str, Dict],
         heritage_entries: Dict[str, Dict[str, Any]]
     ) -> str:
-        """Compute a cache key from the data.
-        
-        Uses a fast hash of the animal names and their parentage data.
+        """Compute a deterministic revision for effective graph resolution.
+
+        The resolver distinguishes same-name animals by stable identity, normalized
+        display metadata, species and birth information.  Parent references are
+        included in both Core and Heritage records.  Deliberately excluding event
+        rows and visual/layout settings avoids rebuilding the pedigree engine for
+        changes that cannot affect graph topology or disambiguation.
         """
-        # Create a deterministic string representation
-        key_parts = []
-        
-        # Add animal names and their parent fields
-        for name in sorted(animals.keys()):
-            record = animals[name]
-            key_parts.append(name)
-            # Include parentage fields in hash
-            for field in ["eizellspenderin", "samenspender", "ziehmutter", "ziehvater", "species"]:
-                value = record.get(field, "")
-                key_parts.append(f"{field}={value}")
-        
-        # Include heritage entries
-        for name in sorted(heritage_entries.keys()):
-            entry = heritage_entries[name]
-            key_parts.append(f"h:{name}")
-            for field in ["egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father"]:
-                value = entry.get(field, "")
-                key_parts.append(f"{field}={value}")
-        
-        # Compute hash
-        key_string = "|".join(key_parts)
-        return hashlib.md5(key_string.encode()).hexdigest()
+        core_fields = (
+            "ipid",
+            "name",
+            "_base_name",
+            "display_name",
+            "species",
+            "sex",
+            "rolle",
+            "role_id",
+            "birth_date",
+            "origin",
+            "id",
+            "eizellspenderin",
+            "samenspender",
+            "ziehmutter",
+            "ziehvater",
+        )
+        heritage_fields = (
+            "ipid",
+            "name",
+            "_base_name",
+            "display_name",
+            "species",
+            "sex",
+            "birth_date",
+            "origin",
+            "heritage_only",
+            "egg_donor",
+            "sperm_donor",
+            "surrogate_mother",
+            "surrogate_father",
+        )
+
+        def selected(records: Dict[str, Dict[str, Any]], fields) -> list:
+            result = []
+            for key in sorted(records, key=lambda value: str(value).casefold()):
+                record = records.get(key)
+                if not isinstance(record, dict):
+                    record = {}
+                result.append(
+                    {
+                        "key": str(key),
+                        **{field: record.get(field, "") for field in fields},
+                    }
+                )
+            return result
+
+        payload = {
+            "policy": self.RESOLUTION_POLICY_VERSION,
+            "core": selected(animals, core_fields),
+            "heritage": selected(heritage_entries, heritage_fields),
+        }
+        encoded = json.dumps(
+            payload,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
     
     def get_engine(
         self,
@@ -86,6 +130,9 @@ class PedigreeEngineCache:
         # Build new engine
         engine = PedigreeEngine(animals, parent_lookup, heritage_entries)
         engine.build()
+        # Expose the exact resolver revision to the complete immutable render
+        # cache entry; genetic F revisions remain a separate concern.
+        engine.resolution_revision = key
         
         # Cache the engine
         self._cache = engine
