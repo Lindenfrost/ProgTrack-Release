@@ -3,7 +3,7 @@
 # Part of: ProgTrack 0.2.3
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: see release metadata.
-# Module: Heritage Track immutable display context.
+# Module: Heritage Track read-only display context.
 
 from __future__ import annotations
 
@@ -449,10 +449,12 @@ class RenderCacheRegistry:
 
 @dataclass(frozen=True)
 class DisplayContext:
-    """Immutable context containing all data needed for rendering a pedigree plot.
+    """Read-only context containing all data needed to render a pedigree plot.
 
-    This class encapsulates the complete state needed to render a pedigree graph,
-    making the rendering process side-effect free and enabling caching/reuse.
+    Published collections are recursively frozen at construction so rendering,
+    hit testing and export can share a stable view.  The engine reference is a
+    shared model object; callers request a detached context with ``copy_with``
+    instead of mutating a published context in place.
     """
 
     engine: PedigreeEngine

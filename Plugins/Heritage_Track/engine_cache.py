@@ -27,7 +27,6 @@ class PedigreeEngineCache:
     def __init__(self):
         self._cache: Optional[PedigreeEngine] = None
         self._cache_key: str = ""
-        self._parentage_hash: int = 0
     
     def _compute_cache_key(
         self,
