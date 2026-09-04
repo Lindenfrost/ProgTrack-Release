@@ -44,6 +44,7 @@ import numbers
 import importlib
 import functools
 import logging
+import hashlib
 import tempfile
 import errno
 import time
@@ -98,6 +99,7 @@ from Plugins.core.animal_identity import (
     animal_identity_label,
     identity_conflict,
     normalize_birth_date,
+    resolve_animal_reference_text,
     record_identity_tuple,
     split_animal_identity_key,
 )
@@ -7529,23 +7531,424 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         _set_field_visible("surrogate_mother", True)
         _set_field_visible("surrogate_father", True)
 
+    def _core_parentage_records(self) -> Dict[str, Dict[str, Any]]:
+        """Return the Core-owned animal identity view used by parent pickers.
+
+        Parentage is Core data.  This helper deliberately reads active and
+        archived Core animals only; Heritage-owned dummies are never silently
+        offered as Core parents.
+        """
+        records: Dict[str, Dict[str, Any]] = {}
+        active = getattr(self, "animals", {})
+        archived = getattr(self, "archived", {})
+        if isinstance(active, Mapping):
+            records.update({str(k): v for k, v in active.items() if isinstance(v, dict)})
+        if isinstance(archived, Mapping):
+            records.update({str(k): v for k, v in archived.items() if isinstance(v, dict)})
+        return records
+
+    def _core_parentage_revision(self) -> str:
+        """Return a stable snapshot token for the Core parentage projection."""
+        try:
+            snapshot = self.backend.load_core_data()
+        except Exception:
+            snapshot = {
+                "animals": getattr(self, "animals", {}),
+                "archived_animals": getattr(self, "archived", {}),
+            }
+        if not isinstance(snapshot, Mapping):
+            snapshot = {}
+        records: Dict[str, Any] = {}
+        for section in ("animals", "archived_animals", "archived"):
+            values = snapshot.get(section, {})
+            if isinstance(values, Mapping):
+                for key, record in values.items():
+                    if isinstance(record, Mapping):
+                        records[str(key)] = {
+                            field: record.get(field, "")
+                            for field in (
+                                "eizellspenderin", "samenspender",
+                                "ziehmutter", "ziehvater",
+                                "species", "sex", "birth_date",
+                            )
+                        }
+        payload = json.dumps(records, sort_keys=True, default=str, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _core_parentage_group(
+        self,
+        animal_name: Optional[str],
+        record: Optional[Mapping[str, Any]] = None,
+        *,
+        label_prefix: str = "dialog.offspring",
+        species_widget: Optional[QComboBox] = None,
+        strict_species: bool = False,
+        lock_committed: bool = False,
+    ) -> Tuple[QGroupBox, Dict[str, AnimalRelationshipCombo]]:
+        """Build Core-owned, searchable parent selectors independent of Heritage."""
+        source = record if isinstance(record, Mapping) else {}
+        records = self._core_parentage_records()
+        target_key = str(animal_name or "").strip()
+        normalize_species_value = getattr(self, "_normalize_species_value", None)
+        if not callable(normalize_species_value):
+            normalize_species_value = lambda value: str(value or "").strip()
+        values = {
+            "egg_donor": str(source.get("eizellspenderin", "") or "").strip(),
+            "sperm_donor": str(source.get("samenspender", "") or "").strip(),
+            "surrogate_mother": str(source.get("ziehmutter", "") or "").strip(),
+            "surrogate_father": str(source.get("ziehvater", "") or "").strip(),
+        }
+        species = normalize_species_value(source.get("species", ""))
+        specs = (
+            ("egg_donor", "Female", f"{label_prefix}.field.egg_donor", "Egg Donor:"),
+            ("sperm_donor", "Male", f"{label_prefix}.field.sperm_donor", "Sperm Donor:"),
+            ("surrogate_mother", "Female", f"{label_prefix}.field.surrogate_mother", "Surrogate Mother:"),
+            ("surrogate_father", "Male", f"{label_prefix}.field.surrogate_father", "Surrogate Father:"),
+        )
+        group = QGroupBox(self.messages.get("dialog.offspring.parents", "Parents"))
+        layout = QFormLayout(group)
+        fields: Dict[str, AnimalRelationshipCombo] = {}
+        inactive_label = self.messages.get("heritage_track.parent.inactive", "inactive")
+        species_warning = QLabel()
+        species_warning.setWordWrap(True)
+        species_warning.setStyleSheet("color: #a33; font-style: italic;")
+        layout.addRow(species_warning)
+        initial_refresh = True
+
+        def selected_species() -> str:
+            if species_widget is not None:
+                data = species_widget.currentData()
+                return normalize_species_value(
+                    data if data not in (None, "") else species_widget.currentText()
+                )
+            return species
+
+        def species_filter_value() -> Optional[str]:
+            current = selected_species()
+            if not strict_species:
+                return current.casefold() if current else ""
+            if not current:
+                return None
+            registered = {
+                normalize_species_value(value).casefold()
+                for value in self._load_species_options()
+                if normalize_species_value(value)
+            }
+            return current.casefold() if current.casefold() in registered else None
+
+        def relationship_label(key: str, candidate: Mapping[str, Any]) -> str:
+            label = relationship_display_label(key, candidate)
+            if (
+                candidate.get("archived")
+                or candidate.get("death_date")
+                or candidate.get("sterbedatum")
+            ):
+                label = f"{label} ({inactive_label})"
+            return label
+
+        def refresh_parent_options(*_args: Any) -> None:
+            nonlocal initial_refresh
+            allowed_species = species_filter_value()
+            if strict_species and allowed_species is None:
+                warning = self.messages.get(
+                    "dialog.parents.species_required",
+                    "Select a registered species before choosing parents.",
+                )
+            else:
+                warning = ""
+            species_warning.setText(warning)
+            species_warning.setVisible(bool(warning))
+            group.setToolTip(warning)
+
+            for field_key, required_sex, _label_key, _fallback in specs:
+                combo = fields[field_key]
+                current = (
+                    str(values[field_key] or "").strip()
+                    if initial_refresh
+                    else str(combo.currentData() or "").strip()
+                )
+                combo.blockSignals(True)
+                combo.clear()
+                combo.addItem("", "")
+                required = sex_token(required_sex)
+                if allowed_species is not None:
+                    for key, candidate in sorted(
+                        records.items(), key=lambda item: item[0].casefold()
+                    ):
+                        if key == target_key:
+                            continue
+                        candidate_species = normalize_species_value(
+                            candidate.get("species", "")
+                        )
+                        if (
+                            allowed_species
+                            and candidate_species.casefold() != allowed_species
+                        ):
+                            continue
+                        if sex_token(str(candidate.get("sex", "") or "")) != required:
+                            continue
+                        combo.addItem(relationship_label(key, candidate), key)
+
+                # Existing edit dialogs retain a legacy committed reference,
+                # even when it is no longer a current catalogue candidate.
+                # New dialogs have no committed value and therefore never
+                # receive an unfiltered fallback item.
+                if current and combo.findData(current) < 0 and not strict_species:
+                    candidate = records.get(current, {})
+                    combo.addItem(relationship_label(current, candidate), current)
+                index = combo.findData(current)
+                combo.setCurrentIndex(index if index >= 0 else 0)
+                combo.blockSignals(False)
+                if lock_committed:
+                    line_edit = combo.lineEdit()
+                    if line_edit is not None:
+                        line_edit.setReadOnly(bool(combo.currentData()))
+
+            if warning:
+                for combo in fields.values():
+                    combo.setToolTip(warning)
+            else:
+                for combo in fields.values():
+                    combo.setToolTip("")
+
+            initial_refresh = False
+
+        for field_key, _required_sex, label_key, fallback in specs:
+            combo = AnimalRelationshipCombo()
+            combo.setEditable(True)
+            combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+            completer = combo.completer()
+            if completer is not None:
+                completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+                completer.setFilterMode(Qt.MatchFlag.MatchContains)
+            self._std_widen(combo)
+            fields[field_key] = combo
+            layout.addRow(self.messages.get(label_key, fallback), combo)
+
+            if lock_committed:
+                combo.currentIndexChanged.connect(
+                    lambda _index, widget=combo: widget.lineEdit() is not None
+                    and widget.lineEdit().setReadOnly(bool(widget.currentData()))
+                )
+
+        refresh_parent_options()
+        if species_widget is not None:
+            species_widget.currentIndexChanged.connect(refresh_parent_options)
+        return group, fields
+
     @staticmethod
+    def _core_parentage_values(fields: Mapping[str, Any]) -> Dict[str, str]:
+        mapping = {
+            "egg_donor": "egg_donor", "eizellspenderin": "egg_donor",
+            "sperm_donor": "sperm_donor", "samenspender": "sperm_donor",
+            "surrogate_mother": "surrogate_mother", "ziehmutter": "surrogate_mother",
+            "surrogate_father": "surrogate_father", "ziehvater": "surrogate_father",
+        }
+        result = {key: "" for key in ("egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father")}
+        for raw_key, widget in (fields or {}).items():
+            canonical = mapping.get(str(raw_key))
+            if canonical is None:
+                continue
+            value = ""
+            # Preserve unresolved text from an editable relationship combo so
+            # the Core command can reject it explicitly.  Reading only the
+            # combo's stable itemData would silently turn an unknown/ambiguous
+            # entry into an empty parent and allow an unintended clear.
+            if (
+                widget is not None
+                and hasattr(widget, "currentData")
+                and hasattr(widget, "currentText")
+            ):
+                value = str(widget.currentData() or widget.currentText() or "").strip()
+            elif widget is not None and hasattr(widget, "text"):
+                value = str(widget.text() or "").strip()
+            elif widget is not None:
+                value = str(widget or "").strip()
+            result[canonical] = value
+        return result
+
+    def _apply_core_parentage(
+        self,
+        target_key: str,
+        target_record: Dict[str, Any],
+        parent_values: Mapping[str, Any],
+        *,
+        expected_revision: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """Validate and apply Core parent fields before the Core save.
+
+        The operation only mutates the caller's not-yet-published record.  A
+        fresh backend snapshot token is checked first, so a stale dialog cannot
+        overwrite a newer parentage change.
+        """
+        if not (
+            self._master_can("core.edit_animal_core")
+            and self._master_can("core.edit_animal_housing")
+        ):
+            raise ValueError(self.messages.get("heritage_track.error.permission_denied", "You do not have permission to edit parentage."))
+        expected = str(expected_revision or "").strip()
+        if expected and expected != self._core_parentage_revision():
+            raise ValueError(self.messages.get("heritage_track.error.parentage_conflict", "The parentage data changed. Reload it and try again."))
+
+        target_key = str(target_key or "").strip()
+        if not target_key:
+            raise ValueError(self.messages.get("heritage_track.error.target_required", "An animal is required."))
+        records = self._core_parentage_records()
+        records.pop(target_key, None)
+        records[target_key] = target_record
+        normalize_species_value = getattr(self, "_normalize_species_value", None)
+        if not callable(normalize_species_value):
+            normalize_species_value = lambda value: str(value or "").strip()
+        species = normalize_species_value(target_record.get("species", ""))
+        if not species:
+            raise ValueError(self.messages.get(
+                "dialog.parents.species_required",
+                "Select a registered species before choosing parents.",
+            ))
+        species_loader = getattr(self, "_load_species_options", None)
+        if callable(species_loader):
+            registered_species = {
+                normalize_species_value(value).casefold()
+                for value in species_loader()
+                if normalize_species_value(value)
+            }
+            if registered_species and species.casefold() not in registered_species:
+                raise ValueError(self.messages.get(
+                    "dialog.parents.species_required",
+                    "Select a registered species before choosing parents.",
+                ))
+        birth_text = str(target_record.get("birth_date", "") or "").strip()
+        try:
+            target_birth = datetime.strptime(birth_text, DATE_FORMAT).date() if birth_text else None
+        except ValueError as exc:
+            raise ValueError(self.messages.get("heritage_track.error.invalid_date", "The animal birth date is invalid.")) from exc
+        authorization = getattr(self, "authorization", None)
+        if authorization is not None and not bool(getattr(authorization, "trusted_local", False)):
+            target_owner = ""
+            for owner_field in (
+                "organization_unit_id", "organizational_unit_id", "workgroup_id"
+            ):
+                if target_record.get(owner_field):
+                    target_owner = str(target_record.get(owner_field)).strip()
+                    break
+            if target_owner and not self._master_can_for_unit(
+                "core.edit_animal_housing", target_owner
+            ):
+                raise ValueError(self.messages.get(
+                    "heritage_track.error.permission_denied",
+                    "The animal is outside your authorized Unit scope.",
+                ))
+        raw = self._core_parentage_values(parent_values)
+        canonical: Dict[str, str] = {}
+        required_slots = {
+            "egg_donor": ("eizellspenderin", "F"),
+            "sperm_donor": ("samenspender", "M"),
+            "surrogate_mother": ("ziehmutter", "F"),
+            "surrogate_father": ("ziehvater", "M"),
+        }
+        for slot, (storage_key, required_sex) in required_slots.items():
+            value = str(raw.get(slot, "") or "").strip()
+            if not value:
+                canonical[storage_key] = ""
+                continue
+            resolved, parent, status = resolve_animal_reference_text(value, records, target_species=species)
+            if status != "resolved" or not isinstance(parent, Mapping):
+                message_key = "heritage_track.error.parent_ambiguous" if status == "ambiguous" else "heritage_track.error.parent_not_selected"
+                fallback = "Parent name is ambiguous." if status == "ambiguous" else "Select an existing Core animal."
+                raise ValueError(self.messages.get(message_key, fallback))
+            resolved = str(resolved).strip()
+            if resolved == target_key:
+                raise ValueError(self.messages.get("heritage_track.error.parent_self", "An animal cannot be set as its own parent."))
+            parent_species = str(parent.get("species", "") or "").strip()
+            if species and parent_species.casefold() != species.casefold():
+                raise ValueError(self.messages.get("heritage_track.error.parent_wrong_species", "Selected parents must have the same species as the animal."))
+            parent_sex = sex_token(str(parent.get("sex", "") or ""))
+            if parent_sex == "U":
+                raise ValueError(self.messages.get("heritage_track.error.parent_unknown_sex", "A parent must have a known sex."))
+            if parent_sex != required_sex:
+                message_key = "heritage_track.error.mother_not_female" if required_sex == "F" else "heritage_track.error.father_not_male"
+                fallback = "Selected mother must be female." if required_sex == "F" else "Selected father must be male."
+                raise ValueError(self.messages.get(message_key, fallback))
+            authorization = getattr(self, "authorization", None)
+            if authorization is not None and not bool(getattr(authorization, "trusted_local", False)):
+                for scoped_record in (target_record, parent):
+                    owner = ""
+                    for owner_field in (
+                        "organization_unit_id", "organizational_unit_id", "workgroup_id"
+                    ):
+                        if scoped_record.get(owner_field):
+                            owner = str(scoped_record.get(owner_field)).strip()
+                            break
+                    if owner and not self._master_can_for_unit(
+                        "core.edit_animal_housing", owner
+                    ):
+                        raise ValueError(self.messages.get(
+                            "heritage_track.error.permission_denied",
+                            "The animal is outside your authorized Unit scope.",
+                        ))
+            parent_birth_text = str(parent.get("birth_date", "") or "").strip()
+            if target_birth and parent_birth_text:
+                try:
+                    parent_birth = datetime.strptime(parent_birth_text, DATE_FORMAT).date()
+                except ValueError as exc:
+                    raise ValueError(self.messages.get("heritage_track.error.invalid_date", "The parent birth date is invalid.")) from exc
+                if parent_birth >= target_birth:
+                    raise ValueError(self.messages.get("heritage_track.error.parent_too_young", "A parent must be older than the animal."))
+            canonical[storage_key] = resolved
+
+        if canonical["eizellspenderin"] and canonical["eizellspenderin"] == canonical["samenspender"]:
+            raise ValueError(self.messages.get("heritage_track.error.parent_same", "Mother and father must be different animals."))
+        if canonical["ziehmutter"] and canonical["ziehmutter"] == canonical["ziehvater"]:
+            raise ValueError(self.messages.get("heritage_track.error.parent_same", "Surrogate parents must be different animals."))
+
+        parent_map: Dict[str, Tuple[str, str]] = {}
+        for key, record in records.items():
+            parent_map[key] = (
+                str(record.get("eizellspenderin", "") or "").strip(),
+                str(record.get("samenspender", "") or "").strip(),
+            )
+        parent_map[target_key] = (canonical["eizellspenderin"], canonical["samenspender"])
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(key: str) -> bool:
+            if key in visiting:
+                return True
+            if key in visited:
+                return False
+            visiting.add(key)
+            for parent in parent_map.get(key, ("", "")):
+                if parent and visit(parent):
+                    return True
+            visiting.remove(key)
+            visited.add(key)
+            return False
+
+        if visit(target_key):
+            raise ValueError(self.messages.get("heritage_track.error.circular_parentage", "Invalid parent assignment: it would create a circular pedigree."))
+        target_record.update(canonical)
+        return canonical
+
     def _set_animal_dialog_context(
+        self,
         dlg: QDialog,
         *,
         role: str,
         editing: bool,
     ) -> None:
-        """Attach stable, localization-independent dialog identity metadata."""
+        """Attach identity and Core parentage snapshot metadata."""
         dlg.setProperty("animal_dialog_role", str(role or "").strip())
         dlg.setProperty("animal_dialog_mode", "edit" if editing else "new")
+        dlg.setProperty("core_parentage_revision", self._core_parentage_revision())
 
     def _heritage_parentage_ui_available(self) -> bool:
-        """Return whether editable pedigree controls may be shown."""
-        return bool(
-            getattr(self, "has_heritage_plugin", False)
-            and getattr(self, "heritage_plugin", None) is not None
-        )
+        """Return whether Core pedigree controls may be shown.
+
+        Parent fields belong to Core and therefore remain available even when
+        Heritage Track is disabled or not installed.  The historical method
+        name is retained only to avoid unrelated dialog-layout churn.
+        """
+        return True
 
     @staticmethod
     def _add_animal_identity_separator(form: QFormLayout) -> QFrame:
@@ -9491,6 +9894,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # (they should only be visible in Heritage Track context)
         _prev_tab_was_heritage = getattr(self, '_prev_tab_was_heritage', False)
         if _prev_tab_was_heritage and not heritage_selected:
+            heritage_plugin = getattr(self, 'heritage_plugin', None)
+            if heritage_plugin is not None and callable(getattr(heritage_plugin, 'on_tab_hidden', None)):
+                heritage_plugin.on_tab_hidden()
             # Unselect ALL animals when leaving Heritage Track (as if empty space was clicked)
             logging.info("Unselecting all animals when leaving Heritage Track")
             self._selected_heritage_only = []
@@ -13427,9 +13833,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Add the animal name label
             name_label = QLabel(display_name)
             name_label.setToolTip(identity_label)
-            h.addWidget(name_label)
-            
-            h.addStretch()
+            if show_all_animals_tab:
+                # The All tab can combine several status icons.  Let the name
+                # yield all spare width first so the fixed status area stays
+                # visible; the complete display name remains available via
+                # the tooltip.
+                name_label.setMinimumWidth(0)
+                name_label.setSizePolicy(
+                    QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+                )
+                h.addWidget(name_label, 1)
+            else:
+                h.addWidget(name_label)
+                h.addStretch()
+
             for semantic_id in self._status_icon_ids(status, data, name):
                 status_icon = ui_icon(semantic_id)
                 if status_icon.isNull():
@@ -19009,6 +19426,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Save session state before logout
         self._save_master_session()
         self._prepare_reports_for_user_context_change()
+        heritage_plugin = getattr(self, 'heritage_plugin', None)
+        if heritage_plugin is not None and callable(getattr(heritage_plugin, 'on_user_logout', None)):
+            heritage_plugin.on_user_logout()
         mt.logout()
         # Revert to global disabled_plugins (Guest defaults)
         self._disabled_plugins = self._load_disabled_plugins()
@@ -19053,6 +19473,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not mt:
             return
         if mt.login_interactive():
+            heritage_plugin = getattr(self, 'heritage_plugin', None)
+            if heritage_plugin is not None and callable(getattr(heritage_plugin, 'on_user_logout', None)):
+                # A successful user switch also ends the previous guest/user
+                # Heritage session so temporary dummies cannot cross actors.
+                heritage_plugin.on_user_logout()
             self._prepare_reports_for_user_context_change()
             session = mt.load_session()
             self._disabled_plugins = set(session.get("disabled_plugins", []))
@@ -20217,14 +20642,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             form, self.messages.get("dialog.experimental_limits.title", "Experimental limits"),
             [ref_w_le], after=_cage_addr_group)
 
-        _heritage_group = None
-        heritage_parent_fields = None
-        if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
-            _heritage_group, heritage_parent_fields = self.heritage_plugin.create_parent_group(name if editing else None, rec)
-            for parent_widget in heritage_parent_fields.values():
-                self._std_widen(parent_widget)
-            partner_parent_section = self._add_parent_mode_selector(
-                form, _heritage_group, heritage_parent_fields, default_mode="hide")
+        _heritage_group, heritage_parent_fields = self._core_parentage_group(
+            name if editing else None,
+            rec,
+            species_widget=species_cb,
+            strict_species=not editing,
+            lock_committed=not editing,
+        )
+        partner_parent_section = self._add_parent_mode_selector(
+            form, _heritage_group, heritage_parent_fields, default_mode="hide")
 
         _health_w_p = QWidget()
         _health_hl_p = QHBoxLayout(_health_w_p)
@@ -20540,28 +20966,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 old_severity=_old_severity,
             )
 
-            if (
-                getattr(self, 'has_heritage_plugin', False)
-                and getattr(self, 'heritage_plugin', None)
-                and heritage_parent_fields is not None
-            ):
+            if heritage_parent_fields is not None:
                 try:
-                    self._save_trace("partner.save.heritage_parent.before", new_name=new_name)
-                    parent_values = self.heritage_plugin.read_parent_group(heritage_parent_fields)
-                    self.heritage_plugin.set_parentage(
-                        actor=None, animal_id=new_name, expected_revision=None,
-                        values=parent_values, source="plugin", core_record=rec_obj,
-                        allow_custom=True,
+                    self._save_trace("partner.save.core_parentage.before", new_name=new_name)
+                    self._apply_core_parentage(
+                        new_name, rec_obj,
+                        self._core_parentage_values(heritage_parent_fields),
+                        expected_revision=dlg.property("core_parentage_revision"),
                     )
-                    # Create heritage-only placeholders for non-existing parents
-                    mother = parent_values.get("egg_donor", "")
-                    father = parent_values.get("sperm_donor", "")
-                    species = rec_obj.get("species", "")
-                    self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
-                    self._save_trace("partner.save.heritage_parent.after", new_name=new_name)
+                    self._save_trace("partner.save.core_parentage.after", new_name=new_name)
                 except Exception as e:
-                    self._save_trace("partner.save.heritage_parent.exception", new_name=new_name, error=e)
-                    logging.error(f"Heritage_Track parent save failed for {new_name}: {e}")
+                    self._save_trace("partner.save.core_parentage.exception", new_name=new_name, error=e)
+                    logging.error(f"Core parentage save failed for {new_name}: {e}")
                     self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
                     return
 
@@ -20587,15 +21003,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.animals.pop(name, None)
                 self._rewrite_animal_references_after_identity_change(name, new_name, _orig_name)
             self._save_trace("partner.save.commit.after", new_name=new_name, animal_count=len(self.animals))
-            # Sync to Heritage Track (including sex from dialog)
-            if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
-                try:
-                    self._save_trace("partner.save.heritage_sync.before", new_name=new_name)
-                    self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
-                    self._save_trace("partner.save.heritage_sync.after", new_name=new_name)
-                except Exception as e:
-                    self._save_trace("partner.save.heritage_sync.exception", new_name=new_name, error=e)
-                    logging.error(f"Heritage_Track sync failed for partner {new_name}: {e}")
             self._save_trace("partner.save.project_updates.schedule.before", new_name=new_name)
             self._schedule_post_animal_save_project_updates(
                 new_name, _old_project, rec_obj.get('project', ''),
@@ -20610,13 +21017,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("partner.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
             self._save_trace("partner.save.dialog_accept.after", new_name=new_name)
-            # Force heritage visible to show newly created parent placeholders
-            _heritage_fields_present = (
-                getattr(self, 'has_heritage_plugin', False)
-                and getattr(self, 'heritage_plugin', None)
-                and heritage_parent_fields is not None
-            )
-            self._refresh_list(update_tab_visibility=True, force_heritage_visible=_heritage_fields_present)
+            self._refresh_list(update_tab_visibility=True)
             # Select new/edited item
             items = self.lst.findItems(new_name, Qt.MatchFlag.MatchStartsWith)
             if items:
@@ -20849,15 +21250,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         form.addRow(self.messages.get("form.label.health_status", "Health Status:"), _health_w_s)
         self._wire_status_checkboxes(chk_sick, chk_abnormal, name, rec, dlg)
 
-        _heritage_group = None
-        heritage_parent_fields = None
-        if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
-            _heritage_group, heritage_parent_fields = self.heritage_plugin.create_parent_group(name if editing else None, rec)
-            for parent_widget in heritage_parent_fields.values():
-                self._std_widen(parent_widget)
-            sperm_parent_section = self._add_parent_mode_selector(
-                form, _heritage_group, heritage_parent_fields, default_mode="hide")
-            self._move_form_row_after(form, _health_w_s, sperm_parent_section)
+        _heritage_group, heritage_parent_fields = self._core_parentage_group(
+            name if editing else None,
+            rec,
+            species_widget=species_cb,
+            strict_species=not editing,
+            lock_committed=not editing,
+        )
+        sperm_parent_section = self._add_parent_mode_selector(
+            form, _heritage_group, heritage_parent_fields, default_mode="hide")
+        self._move_form_row_after(form, _health_w_s, sperm_parent_section)
 
         self._add_scrollable_animal_form(dlg, v, form)
 
@@ -21199,28 +21601,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 old_severity=_old_severity,
             )
 
-            if (
-                getattr(self, 'has_heritage_plugin', False)
-                and getattr(self, 'heritage_plugin', None)
-                and heritage_parent_fields is not None
-            ):
+            if heritage_parent_fields is not None:
                 try:
-                    self._save_trace("sperm_donor.save.heritage_parent.before", new_name=new_name)
-                    parent_values = self.heritage_plugin.read_parent_group(heritage_parent_fields)
-                    self.heritage_plugin.set_parentage(
-                        actor=None, animal_id=new_name, expected_revision=None,
-                        values=parent_values, source="plugin", core_record=rec_obj,
-                        allow_custom=True,
+                    self._save_trace("sperm_donor.save.core_parentage.before", new_name=new_name)
+                    self._apply_core_parentage(
+                        new_name, rec_obj,
+                        self._core_parentage_values(heritage_parent_fields),
+                        expected_revision=dlg.property("core_parentage_revision"),
                     )
-                    # Create heritage-only placeholders for non-existing parents
-                    mother = parent_values.get("egg_donor", "")
-                    father = parent_values.get("sperm_donor", "")
-                    species = rec_obj.get("species", "")
-                    self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
-                    self._save_trace("sperm_donor.save.heritage_parent.after", new_name=new_name)
+                    self._save_trace("sperm_donor.save.core_parentage.after", new_name=new_name)
                 except Exception as e:
-                    self._save_trace("sperm_donor.save.heritage_parent.exception", new_name=new_name, error=e)
-                    logging.error(f"Heritage_Track parent save failed for {new_name}: {e}")
+                    self._save_trace("sperm_donor.save.core_parentage.exception", new_name=new_name, error=e)
+                    logging.error(f"Core parentage save failed for {new_name}: {e}")
                     self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
                     return
 
@@ -21258,22 +21650,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("sperm_donor.save.persistence.after", new_name=new_name)
             if not editing:
                 self._audit_animal_created(new_name, rec_obj)
-            # Sync to Heritage Track (including role-determined sex)
-            if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
-                try:
-                    self._save_trace("sperm_donor.save.heritage_sync.before", new_name=new_name)
-                    self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
-                    self._save_trace("sperm_donor.save.heritage_sync.after", new_name=new_name)
-                except Exception as e:
-                    self._save_trace("sperm_donor.save.heritage_sync.exception", new_name=new_name, error=e)
-                    logging.error(f"Heritage_Track sync failed for samenspender {new_name}: {e}")
-            # Force heritage visible to show newly created parent placeholders
-            _heritage_fields_present = (
-                getattr(self, 'has_heritage_plugin', False)
-                and getattr(self, 'heritage_plugin', None)
-                and heritage_parent_fields is not None
-            )
-            self._refresh_list(update_tab_visibility=True, force_heritage_visible=_heritage_fields_present)
+            self._refresh_list(update_tab_visibility=True)
             dlg.accept()
             # Refresh report table if Reports tab is active
             if self.reports_enabled and hasattr(self, 'report_current_animal'):
@@ -21451,26 +21828,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 logging.error(f"Cage_Track address fields failed: {e}")
                 cage_address_fields = None
 
-        # Parentage is a HeritageTrack capability.  When the plugin is absent,
-        # omit the complete section and preserve any stored relationship data.
+        # Parentage is Core data.  Heritage Track consumes the committed
+        # fields as a read-only projection and is not required for this UI.
         parents_group = None
         offspring_parent_fields: Dict[str, QComboBox] = {}
         if self._heritage_parentage_ui_available():
-            parents_group = QGroupBox(self.messages.get("dialog.offspring.parents", "Parents"))
-            parents_layout = QFormLayout(parents_group)
-            parent_specs = (
-                ("egg_donor", "eizellspenderin", "Female", "dialog.offspring.field.egg_donor", "Egg Donor:"),
-                ("sperm_donor", "samenspender", "Male", "dialog.offspring.field.sperm_donor", "Sperm Donor:"),
-                ("surrogate_mother", "ziehmutter", "Female", "dialog.offspring.field.surrogate_mother", "Surrogate Mother:"),
-                ("surrogate_father", "ziehvater", "Male", "dialog.offspring.field.surrogate_father", "Surrogate Father:"),
+            parents_group, offspring_parent_fields = self._core_parentage_group(
+                name or "",
+                rec,
+                label_prefix="dialog.offspring",
+                species_widget=species_cb,
+                strict_species=not editing,
+                lock_committed=not editing,
             )
-            for field_key, record_key, sex, label_key, fallback in parent_specs:
-                combo = build_relationship_combo(
-                    self.animals, rec.get(record_key, ''), sex,
-                    species=initial_species, exclude_id=name or "")
-                self._std_widen(combo)
-                parents_layout.addRow(self.messages.get(label_key, fallback), combo)
-                offspring_parent_fields[field_key] = combo
             self._add_parent_mode_selector(
                 form, parents_group, offspring_parent_fields, default_mode="embryo"
             )
@@ -21761,10 +22131,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if generated_id_meta:
                 rec_obj.update(generated_id_meta)
             if offspring_parent_fields:
-                rec_obj['eizellspenderin'] = offspring_parent_fields['egg_donor'].text().strip()
-                rec_obj['samenspender'] = offspring_parent_fields['sperm_donor'].text().strip()
-                rec_obj['ziehmutter'] = offspring_parent_fields['surrogate_mother'].text().strip()
-                rec_obj['ziehvater'] = offspring_parent_fields['surrogate_father'].text().strip()
+                try:
+                    self._apply_core_parentage(
+                        new_name, rec_obj,
+                        self._core_parentage_values(offspring_parent_fields),
+                        expected_revision=dlg.property("core_parentage_revision"),
+                    )
+                except Exception as exc:
+                    self._show_message_raw(self.messages.get("error.title", "Error"), str(exc))
+                    return
             _was_sick_o     = bool(rec_obj.get('sick', False))
             _was_abnormal_o = bool(rec_obj.get('abnormal_current', False))
             is_sick = bool(sick_chk.isChecked())
@@ -21824,31 +22199,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 old_severity=_old_severity,
             )
 
-            if self._heritage_parentage_ui_available() and offspring_parent_fields:
-                try:
-                    self._save_trace("offspring.save.heritage.before", new_name=new_name)
-                    # Save parentage to heritage store
-                    parent_values = {
-                        key: widget.text().strip()
-                        for key, widget in offspring_parent_fields.items()
-                    }
-                    self.heritage_plugin.set_parentage(
-                        actor=None, animal_id=new_name, expected_revision=None,
-                        values=parent_values, source="plugin", core_record=rec_obj,
-                        allow_custom=True,
-                    )
-                    # Create heritage-only placeholders for non-existing parents
-                    mother = rec_obj.get('eizellspenderin', '')
-                    father = rec_obj.get('samenspender', '')
-                    species = rec_obj.get('species', '')
-                    self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
-                    self._save_trace("offspring.save.heritage.after", new_name=new_name)
-                except Exception as e:
-                    self._save_trace("offspring.save.heritage.exception", new_name=new_name, error=e)
-                    logging.error(f"Heritage_Track sync failed for offspring {new_name}: {e}")
-                    self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
-                    return
-
             if (
                 getattr(self, 'has_cage_track_plugin', False)
                 and getattr(self, 'cage_track_plugin', None)
@@ -21867,11 +22217,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # update mapping
             self._save_trace("offspring.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
-            if self._heritage_parentage_ui_available() and getattr(self, 'heritage_plugin', None):
-                try:
-                    self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
-                except Exception as exc:
-                    logging.warning("Heritage sync after offspring parentage commit failed: %s", exc)
             if editing and new_name != name:
                 self.animals.pop(name, None)
                 self._rewrite_animal_references_after_identity_change(name, new_name, _orig_name)
@@ -21887,13 +22232,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("offspring.save.persistence.after", new_name=new_name)
             if not editing:
                 self._audit_animal_created(new_name, rec_obj)
-            # Force heritage visible to show newly created parent placeholders
-            _heritage_fields_present = (
-                getattr(self, 'has_heritage_plugin', False)
-                and getattr(self, 'heritage_plugin', None)
-            )
             self._save_trace("offspring.save.refresh_list.before", new_name=new_name)
-            self._refresh_list(update_tab_visibility=True, force_heritage_visible=_heritage_fields_present)
+            self._refresh_list(update_tab_visibility=True)
             self._save_trace("offspring.save.refresh_list.after", new_name=new_name)
             self._save_trace("offspring.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
@@ -21950,16 +22290,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         rec.setdefault('pdg', [])
         synchronize_experimental_limits(rec, rec.get('rolle'))
 
-        if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
-            try:
-                parent_defaults = self.heritage_plugin.get_parentage(name if editing else None, rec)
-                rec['eizellspenderin'] = parent_defaults.get('egg_donor', rec.get('eizellspenderin', ''))
-                rec['samenspender'] = parent_defaults.get('sperm_donor', rec.get('samenspender', ''))
-                rec['ziehmutter'] = parent_defaults.get('surrogate_mother', rec.get('ziehmutter', ''))
-                rec['ziehvater'] = parent_defaults.get('surrogate_father', rec.get('ziehvater', ''))
-            except Exception as e:
-                logging.error(f"Heritage_Track parent preload failed for zuchttier {name}: {e}")
-        
         # Create dialog
         if not editing:
             dlg_title = self.messages.get("dialog.zuchttier.title_new", "New Zuchttier")
@@ -22156,21 +22486,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         parents_group = None
         zuchttier_parent_fields: Dict[str, QComboBox] = {}
         if self._heritage_parentage_ui_available():
-            parents_group = QGroupBox(self.messages.get("dialog.zuchttier.parents", "Parents"))
-            parents_layout = QFormLayout(parents_group)
-            parent_specs = (
-                ("egg_donor", "eizellspenderin", "Female", "dialog.zuchttier.field.egg_donor", "Egg Donor:"),
-                ("sperm_donor", "samenspender", "Male", "dialog.zuchttier.field.sperm_donor", "Sperm Donor:"),
-                ("surrogate_mother", "ziehmutter", "Female", "dialog.zuchttier.field.surrogate_mother", "Surrogate Mother:"),
-                ("surrogate_father", "ziehvater", "Male", "dialog.zuchttier.field.surrogate_father", "Surrogate Father:"),
+            parents_group, zuchttier_parent_fields = self._core_parentage_group(
+                name or "",
+                rec,
+                label_prefix="dialog.zuchttier",
+                species_widget=species_cb,
+                strict_species=not editing,
+                lock_committed=not editing,
             )
-            for field_key, record_key, sex, label_key, fallback in parent_specs:
-                combo = build_relationship_combo(
-                    self.animals, rec.get(record_key, ''), sex,
-                    species=initial_species, exclude_id=name or "")
-                self._std_widen(combo)
-                parents_layout.addRow(self.messages.get(label_key, fallback), combo)
-                zuchttier_parent_fields[field_key] = combo
         zuchttier_limits_section = self._wrap_form_rows_in_section(
             form, self.messages.get("dialog.experimental_limits.title", "Experimental limits"),
             [ref_w_le, lbl_maxpr, maxpr_sb, lbl_maxb, maxb_sb],
@@ -22492,10 +22815,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['max_pregnancies'] = maxpr_sb.value()
             rec_obj['max_geburten'] = maxb_sb.value()
             if zuchttier_parent_fields:
-                rec_obj['eizellspenderin'] = zuchttier_parent_fields['egg_donor'].text().strip()
-                rec_obj['samenspender'] = zuchttier_parent_fields['sperm_donor'].text().strip()
-                rec_obj['ziehmutter'] = zuchttier_parent_fields['surrogate_mother'].text().strip()
-                rec_obj['ziehvater'] = zuchttier_parent_fields['surrogate_father'].text().strip()
+                try:
+                    self._apply_core_parentage(
+                        new_name, rec_obj,
+                        self._core_parentage_values(zuchttier_parent_fields),
+                        expected_revision=dlg.property("core_parentage_revision"),
+                    )
+                except Exception as exc:
+                    self._show_message_raw(self.messages.get("error.title", "Error"), str(exc))
+                    return
             
             # Weights
             weights_list = []
@@ -22534,31 +22862,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 old_severity=_old_severity,
             )
 
-            if self._heritage_parentage_ui_available() and zuchttier_parent_fields:
-                try:
-                    self._save_trace("zuchttier.save.heritage.before", new_name=new_name)
-                    # Save parentage to heritage store
-                    parent_values = {
-                        key: widget.text().strip()
-                        for key, widget in zuchttier_parent_fields.items()
-                    }
-                    self.heritage_plugin.set_parentage(
-                        actor=None, animal_id=new_name, expected_revision=None,
-                        values=parent_values, source="plugin", core_record=rec_obj,
-                        allow_custom=True,
-                    )
-                    # Create heritage-only placeholders for non-existing parents
-                    mother = rec_obj.get('eizellspenderin', '')
-                    father = rec_obj.get('samenspender', '')
-                    species = rec_obj.get('species', '')
-                    self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
-                    self._save_trace("zuchttier.save.heritage.after", new_name=new_name)
-                except Exception as e:
-                    self._save_trace("zuchttier.save.heritage.exception", new_name=new_name, error=e)
-                    logging.error(f"Heritage_Track sync failed for zuchttier {new_name}: {e}")
-                    self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
-                    return
-
             if (
                 getattr(self, 'has_cage_track_plugin', False)
                 and getattr(self, 'cage_track_plugin', None)
@@ -22577,11 +22880,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Update mapping
             self._save_trace("zuchttier.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
-            if self._heritage_parentage_ui_available() and getattr(self, 'heritage_plugin', None):
-                try:
-                    self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
-                except Exception as exc:
-                    logging.warning("Heritage sync after breeding parentage commit failed: %s", exc)
             self._commit_relationship_updates(relationship_updates)
             if editing and new_name != name:
                 self.animals.pop(name, None)
@@ -22598,13 +22896,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("zuchttier.save.persistence.after", new_name=new_name)
             if not editing:
                 self._audit_animal_created(new_name, rec_obj)
-            # Force heritage visible to show newly created parent placeholders
-            _heritage_fields_present = (
-                getattr(self, 'has_heritage_plugin', False)
-                and getattr(self, 'heritage_plugin', None)
-            )
             self._save_trace("zuchttier.save.refresh_list.before", new_name=new_name)
-            self._refresh_list(update_tab_visibility=True, force_heritage_visible=_heritage_fields_present)
+            self._refresh_list(update_tab_visibility=True)
             self._save_trace("zuchttier.save.refresh_list.after", new_name=new_name)
             self._save_trace("zuchttier.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
@@ -22839,25 +23132,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Sex/Genotype in the experimental-offspring dialog.
         self._move_form_row_after(form, _cage_addr_group, genotype_le)
 
-        # ── Parents (HeritageTrack capability only) ──────────────────────────
+        # ── Parents (Core-owned fields) ───────────────────────────────────────
         parents_group = None
         vt_parent_fields: Dict[str, QComboBox] = {}
         if self._heritage_parentage_ui_available():
-            parents_group = QGroupBox(self.messages.get('dialog.offspring.parents', 'Parents'))
-            parents_layout = QFormLayout(parents_group)
-            parent_specs = (
-                ('egg_donor', 'eizellspenderin', 'Female', 'dialog.offspring.field.egg_donor', 'Egg Donor:'),
-                ('sperm_donor', 'samenspender', 'Male', 'dialog.offspring.field.sperm_donor', 'Sperm Donor:'),
-                ('surrogate_mother', 'ziehmutter', 'Female', 'dialog.offspring.field.surrogate_mother', 'Surrogate Mother:'),
-                ('surrogate_father', 'ziehvater', 'Male', 'dialog.offspring.field.surrogate_father', 'Surrogate Father:'),
+            parents_group, vt_parent_fields = self._core_parentage_group(
+                name or "",
+                rec,
+                label_prefix="dialog.offspring",
+                species_widget=species_cb,
+                strict_species=not editing,
+                lock_committed=not editing,
             )
-            for field_key, record_key, sex, label_key, fallback in parent_specs:
-                combo = build_relationship_combo(
-                    self.animals, rec.get(record_key, ''), sex,
-                    species=initial_species, exclude_id=name or "")
-                self._std_widen(combo)
-                parents_layout.addRow(self.messages.get(label_key, fallback), combo)
-                vt_parent_fields[field_key] = combo
         vt_limits_section = self._wrap_form_rows_in_section(
             form, self.messages.get("dialog.experimental_limits.title", "Experimental limits"),
             [ref_w_le, max_op_sb, max_meas_sb], after=_cage_addr_group)
@@ -23138,10 +23424,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['max_op']           = max_op_sb.value()
             rec_obj['max_measurements'] = max_meas_sb.value()
             if vt_parent_fields:
-                rec_obj['eizellspenderin'] = vt_parent_fields['egg_donor'].text().strip()
-                rec_obj['samenspender'] = vt_parent_fields['sperm_donor'].text().strip()
-                rec_obj['ziehmutter'] = vt_parent_fields['surrogate_mother'].text().strip()
-                rec_obj['ziehvater'] = vt_parent_fields['surrogate_father'].text().strip()
+                try:
+                    self._apply_core_parentage(
+                        new_name, rec_obj,
+                        self._core_parentage_values(vt_parent_fields),
+                        expected_revision=dlg.property("core_parentage_revision"),
+                    )
+                except Exception as exc:
+                    self._show_message_raw(self.messages.get("error.title", "Error"), str(exc))
+                    return
             rec_obj['gewicht']          = weights_list
             rec_obj['events']           = events_list
             rec_obj.setdefault('daten', [])
@@ -23192,11 +23483,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             self._save_trace("versuchstier.save.commit.before", new_name=new_name)
             self.animals[new_name] = rec_obj
-            if self._heritage_parentage_ui_available() and getattr(self, 'heritage_plugin', None):
-                try:
-                    self.heritage_plugin.sync_from_record(new_name, rec_obj, in_main_animals=True)
-                except Exception as exc:
-                    logging.warning("Heritage sync after experimental parentage commit failed: %s", exc)
             if editing and new_name != name:
                 self.animals.pop(name, None)
                 self._rewrite_animal_references_after_identity_change(name, new_name, _orig_name)
@@ -23212,38 +23498,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("versuchstier.save.persistence.after", new_name=new_name)
             if not editing:
                 self._audit_animal_created(new_name, rec_obj)
-            # Sync to Heritage Track (including sex from dialog)
-            if self._heritage_parentage_ui_available() and vt_parent_fields:
-                try:
-                    self._save_trace("versuchstier.save.heritage.before", new_name=new_name)
-                    # Save parentage to heritage store
-                    parent_values = {
-                        key: widget.text().strip()
-                        for key, widget in vt_parent_fields.items()
-                    }
-                    self.heritage_plugin.set_parentage(
-                        actor=None, animal_id=new_name, expected_revision=None,
-                        values=parent_values, source="plugin", core_record=rec_obj,
-                        allow_custom=True,
-                    )
-                    # Create heritage-only placeholders for non-existing parents
-                    mother = rec_obj.get('eizellspenderin', '')
-                    father = rec_obj.get('samenspender', '')
-                    species = rec_obj.get('species', '')
-                    self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
-                    self._save_trace("versuchstier.save.heritage.after", new_name=new_name)
-                except Exception as e:
-                    self._save_trace("versuchstier.save.heritage.exception", new_name=new_name, error=e)
-                    logging.error(f"Heritage_Track sync failed for versuchstier {new_name}: {e}")
-                    self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
-                    return
-            # Force heritage visible to show newly created parent placeholders
-            _heritage_fields_present = (
-                getattr(self, 'has_heritage_plugin', False)
-                and getattr(self, 'heritage_plugin', None)
-            )
             self._save_trace("versuchstier.save.refresh_list.before", new_name=new_name)
-            self._refresh_list(update_tab_visibility=True, force_heritage_visible=_heritage_fields_present)
+            self._refresh_list(update_tab_visibility=True)
             self._save_trace("versuchstier.save.refresh_list.after", new_name=new_name)
             self._save_trace("versuchstier.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
@@ -23412,29 +23668,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         parents_group = None
         basic_parent_section = None
         if self._heritage_parentage_ui_available():
-            parents_group = QGroupBox(self.messages.get("dialog.offspring.parents", "Parents"))
-            parents_layout = QFormLayout(parents_group)
-            parent_specs = [
-                ("eizellspenderin", "dialog.offspring.field.egg_donor", "Egg Donor:"),
-                ("samenspender", "dialog.offspring.field.sperm_donor", "Sperm Donor:"),
-                ("ziehmutter", "dialog.offspring.field.surrogate_mother", "Surrogate Mother:"),
-                ("ziehvater", "dialog.offspring.field.surrogate_father", "Surrogate Father:"),
-            ]
-            for field_name, label_key, default_label in parent_specs:
-                required_sex = (
-                    "Female" if field_name in {"eizellspenderin", "ziehmutter"}
-                    else "Male"
-                )
-                combo = build_relationship_combo(
-                    self.animals,
-                    str(rec.get(field_name, "")),
-                    required_sex,
-                    species=initial_species,
-                    exclude_id=name or "",
-                )
-                self._std_widen(combo)
-                parent_fields[field_name] = combo
-                parents_layout.addRow(self.messages.get(label_key, default_label), combo)
+            parents_group, parent_fields = self._core_parentage_group(
+                name or "",
+                rec,
+                label_prefix="dialog.offspring",
+                species_widget=species_cb,
+                strict_species=creating,
+                lock_committed=creating,
+            )
             basic_parent_section = self._add_parent_mode_selector(
                 form, parents_group, parent_fields, default_mode="hide")
 
@@ -23815,21 +24056,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         ).format(details="; ".join(violations)),
                     )
                     return
-            for field_name, widget in parent_fields.items():
-                rec_obj[field_name] = widget.text().strip()
-
-            # Validate and persist parentage before publishing the Core record.
-            # The command receives this uncommitted record so an invalid
-            # relationship cannot leak into the Core backend.
-            if self._heritage_parentage_ui_available() and parent_fields:
+            if parent_fields:
                 try:
-                    self.heritage_plugin.set_parentage(
-                        actor=None, animal_id=new_key, expected_revision=None,
-                        values={field: widget.text().strip() for field, widget in parent_fields.items()},
-                        source="plugin", core_record=rec_obj, allow_custom=True,
+                    self._apply_core_parentage(
+                        new_key, rec_obj,
+                        self._core_parentage_values(parent_fields),
+                        expected_revision=dlg.property("core_parentage_revision"),
                     )
                 except Exception as exc:
-                    logging.warning(f"Could not save basic-role parentage block: {exc}")
                     self._show_message_raw(
                         self.messages.get("error.title", "Error"), str(exc)
                     )
@@ -24169,15 +24403,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         form.addRow(self.messages.get('dialog.female_animal.health_status', 'Health Status:'), _health_w_f)
         self._wire_status_checkboxes(chk_plus, chk_abnormal_f, name, rec, dlg)
 
-        _heritage_group = None
-        heritage_parent_fields = None
-        if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
-            _heritage_group, heritage_parent_fields = self.heritage_plugin.create_parent_group(name if not creating else None, rec)
-            for parent_widget in heritage_parent_fields.values():
-                self._std_widen(parent_widget)
-            female_parent_section = self._add_parent_mode_selector(
-                form, _heritage_group, heritage_parent_fields, default_mode="hide")
-            self._move_form_row_after(form, _health_w_f, female_parent_section)
+        _heritage_group, heritage_parent_fields = self._core_parentage_group(
+            name if not creating else None,
+            rec,
+            species_widget=species_cb,
+            strict_species=creating,
+            lock_committed=creating,
+        )
+        female_parent_section = self._add_parent_mode_selector(
+            form, _heritage_group, heritage_parent_fields, default_mode="hide")
+        self._move_form_row_after(form, _health_w_f, female_parent_section)
 
         self._add_scrollable_animal_form(dlg, v, form)
 
@@ -24729,28 +24964,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 record=self._save_trace_record_summary(rec),
             )
 
-            if (
-                getattr(self, 'has_heritage_plugin', False)
-                and getattr(self, 'heritage_plugin', None)
-                and heritage_parent_fields is not None
-            ):
+            if heritage_parent_fields is not None:
                 try:
-                    self._save_trace("female_like.save.heritage_parent.before", new_name=new_name)
-                    parent_values = self.heritage_plugin.read_parent_group(heritage_parent_fields)
-                    self.heritage_plugin.set_parentage(
-                        actor=None, animal_id=new_name, expected_revision=None,
-                        values=parent_values, source="plugin", core_record=rec,
-                        allow_custom=True,
+                    self._save_trace("female_like.save.core_parentage.before", new_name=new_name)
+                    self._apply_core_parentage(
+                        new_name, rec,
+                        self._core_parentage_values(heritage_parent_fields),
+                        expected_revision=dlg.property("core_parentage_revision"),
                     )
-                    # Create heritage-only placeholders for non-existing parents
-                    mother = parent_values.get("egg_donor", "")
-                    father = parent_values.get("sperm_donor", "")
-                    species = rec.get("species", "")
-                    self.heritage_plugin._ensure_parent_placeholders(mother, father, species)
-                    self._save_trace("female_like.save.heritage_parent.after", new_name=new_name)
+                    self._save_trace("female_like.save.core_parentage.after", new_name=new_name)
                 except Exception as e:
-                    self._save_trace("female_like.save.heritage_parent.exception", new_name=new_name, error=e)
-                    logging.error(f"Heritage_Track parent save failed for {new_name}: {e}")
+                    self._save_trace("female_like.save.core_parentage.exception", new_name=new_name, error=e)
+                    logging.error(f"Core parentage save failed for {new_name}: {e}")
                     self._show_message_raw(self.messages.get("error.title", "Error"), str(e))
                     return
 
@@ -24791,15 +25016,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("female_like.save.persistence.after", key=key)
             if creating:
                 self._audit_animal_created(key, rec)
-            # Sync to Heritage Track (including role-determined sex)
-            if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
-                try:
-                    self._save_trace("female_like.save.heritage_sync.before", key=key)
-                    self.heritage_plugin.sync_from_record(key, rec, in_main_animals=True)
-                    self._save_trace("female_like.save.heritage_sync.after", key=key)
-                except Exception as e:
-                    self._save_trace("female_like.save.heritage_sync.exception", key=key, error=e)
-                    logging.error(f"Heritage_Track sync failed for female animal {key}: {e}")
             # Sample_Track: notify for newly added blood/urine measurements
             if getattr(self, 'has_sample_track_plugin', False) and self.sample_track_plugin:
                 _st_anim = key
@@ -24825,14 +25041,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         except Exception:
                             self._save_trace("female_like.save.sample_urine.exception", key=key, date=_d)
                             pass
-            # Force heritage visible to show newly created parent placeholders
-            _heritage_fields_present = (
-                getattr(self, 'has_heritage_plugin', False)
-                and getattr(self, 'heritage_plugin', None)
-                and heritage_parent_fields is not None
-            )
             self._save_trace("female_like.save.refresh_list.before", key=key)
-            self._refresh_list(update_tab_visibility=True, force_heritage_visible=_heritage_fields_present)
+            self._refresh_list(update_tab_visibility=True)
             self._save_trace("female_like.save.refresh_list.after", key=key)
             
             self.selected_animals = [key]
@@ -25802,7 +26012,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
             try:
                 self._save_trace("post_persistence_sync.heritage.before")
-                self.heritage_plugin.store.sync_from_animals(self.animals)
+                # Heritage projects Core records at read time.  Notify its
+                # read-model cache after Core persistence; never mirror Core
+                # identity/parent fields into the Heritage animal namespace.
+                self.heritage_plugin.notify_core_records_changed(set(self.animals))
                 self._save_trace("post_persistence_sync.heritage.after")
             except Exception as e:
                 self._save_trace("post_persistence_sync.heritage.exception", error=e)

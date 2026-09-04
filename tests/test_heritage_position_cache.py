@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import copy
 import unittest
+from types import SimpleNamespace
 
 from Plugins.Heritage_Track.heritage_store import HeritageStore
+from Plugins.Heritage_Track.heritage_track_widget import HeritageTrackWidget
 
 
 class _Records:
@@ -54,6 +56,80 @@ class HeritagePositionCacheTest(unittest.TestCase):
         self.assertIsNone(store.get_position_cache_entry("alice", "key", pedigree_revision="rev-2"))
         self.assertIsNone(store.get_position_cache_entry("alice", "key", dependency_ids=["A"]))
         self.assertEqual(backend.records.put_count, writes)
+
+    def test_dependency_revision_ignores_disjoint_component_changes(self):
+        backend = _Backend()
+        store = HeritageStore("", backend)
+        parent_map = {
+            "A": {"egg_donor": "P", "sperm_donor": ""},
+            "P": {"egg_donor": "", "sperm_donor": ""},
+        }
+        records = {
+            "A": {"name": "A", "species": "Callithrix jacchus"},
+            "P": {"name": "P", "species": "Callithrix jacchus"},
+        }
+        revision_a = store.build_position_dependency_revision(
+            ["A", "P"], parent_map, records
+        )
+        changed_disjoint = dict(records)
+        changed_disjoint["B"] = {"name": "B", "species": "Mus musculus"}
+        revision_a_after_disjoint_edit = store.build_position_dependency_revision(
+            ["A", "P"], parent_map, changed_disjoint
+        )
+        self.assertEqual(revision_a, revision_a_after_disjoint_edit)
+
+        changed_dependency = dict(records)
+        changed_dependency["P"] = {
+            "name": "P",
+            "species": "Callithrix jacchus",
+            "genotype": "WT/WT",
+        }
+        revision_after_dependency_edit = store.build_position_dependency_revision(
+            ["A", "P"], parent_map, changed_dependency
+        )
+        self.assertNotEqual(revision_a, revision_after_dependency_edit)
+
+    def test_position_entry_uses_dependency_revision_not_aggregate_revision(self):
+        backend = _Backend()
+        store = HeritageStore("", backend)
+        scoped_revision = store.build_position_dependency_revision(
+            ["A"], {"A": {"egg_donor": "", "sperm_donor": ""}}, {"A": {"name": "A"}}
+        )
+        store.set_position_cache_entry(
+            "alice", "key", {"A": (1, 2)}, scoped_revision, ["A"]
+        )
+        # The aggregate pedigree token may advance for an unrelated graph
+        # write; callers validate the scoped token instead.
+        latest = copy.deepcopy(backend.records.values[("heritage", "graph")])
+        latest["pedigree_revision"] = "aggregate-rev-2"
+        latest["animals"] = {"B": {"name": "B"}}
+        backend.records.put("heritage", "graph", latest)
+        self.assertIsNotNone(
+            store.get_position_cache_entry(
+                "alice", "key", pedigree_revision=scoped_revision, dependency_ids=["A"]
+            )
+        )
+
+    def test_selection_key_is_stable_across_backend_revisions(self):
+        widget = HeritageTrackWidget.__new__(HeritageTrackWidget)
+        widget._canonical_selection_ids = ()
+        widget._canonicalize_selection = lambda values: tuple(sorted(values))
+        widget.layout_mode = "focused"
+        widget.settings = {
+            "vertical_layout_mode": "partner_normalized",
+            "show_heritage_only": True,
+            "exclude_archived": False,
+        }
+        widget._max_generations = 4
+        widget.plugin = SimpleNamespace(
+            _active_backend_revision=1,
+            _active_core_projection_revision="core-a",
+        )
+        first = HeritageTrackWidget._position_cache_key(widget, ["B", "A"])
+        widget.plugin._active_backend_revision = 27
+        widget.plugin._active_core_projection_revision = "core-b"
+        second = HeritageTrackWidget._position_cache_key(widget, ["A", "B"])
+        self.assertEqual(first, second)
 
     def test_nonfinite_cache_position_is_rejected_before_backend_write(self):
         backend = _Backend()
@@ -111,6 +187,7 @@ class HeritagePositionCacheTest(unittest.TestCase):
         existing = {
             f"key-{index:04d}": {
                 "pedigree_revision": "rev",
+                "dependency_revision": "rev",
                 "dependency_ids": ["A"],
                 "positions": {"A": {"x": index, "y": index}},
                 "selection_type": "selected",

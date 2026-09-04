@@ -37,12 +37,6 @@ class _App:
         self.backend = _Backend(graph)
         self.messages = {}
         self.animals = {
-            'Child': {
-                'name': 'Child', 'species': 'Callithrix jacchus',
-                'sex': 'female', 'birth_date': '01.01.2020',
-                'eizellspenderin': '', 'samenspender': '',
-                'ziehmutter': '', 'ziehvater': '',
-            },
             'Mother': {
                 'name': 'Mother', 'species': 'Callithrix jacchus',
                 'sex': 'female', 'birth_date': '01.01.2010',
@@ -53,6 +47,17 @@ class _App:
             },
         }
         self.archived = {}
+        if graph is None:
+            self.backend.records.values[('heritage', 'graph')] = {
+                'version': '1.0.0',
+                'animals': {
+                    'Child': {
+                        'name': 'Child', 'species': 'Callithrix jacchus',
+                        'sex': 'female', 'birth_date': '01.01.2020',
+                        'heritage_only': True,
+                    }
+                },
+            }
 
     def _master_can(self, action):
         return action == 'heritage.edit_links'
@@ -204,6 +209,78 @@ class HeritageFRevisionTest(unittest.TestCase):
         )
         self.assertEqual(changed_status['A'], 'calculated')
         self.assertEqual(changed_status['C'], 'cached')
+
+    def test_core_f_cache_uses_stable_ipid_namespace_without_shadow_animal(self):
+        graph = {
+            'animals': {
+                'Dummy': _record('Dummy'),
+            }
+        }
+        app = _App(graph)
+        store = HeritageStore('', app.backend)
+        metadata = {
+            'value': 0.125,
+            'pedigree_revision': 'rev-1',
+            'lineage_fingerprint': 'fp-core',
+            'status': 'valid',
+        }
+        self.assertTrue(store.set_inbreeding_cache_batch(
+            {'Core Animal': metadata},
+            persist=False,
+            cache_keys={'Core Animal': 'core-ipid-1'},
+        ))
+        self.assertNotIn('Core Animal', store.load()['animals'])
+        self.assertEqual(
+            store.get_inbreeding_cache('Core Animal', cache_key='core-ipid-1'),
+            metadata,
+        )
+        store.flush_pending()
+        persisted = app.backend.records.values[('heritage', 'graph')]
+        self.assertNotIn('Core Animal', persisted['animals'])
+        self.assertEqual(
+            persisted['derived_inbreeding_cache']['core-ipid-1'], metadata
+        )
+
+    def test_unrelated_global_revision_does_not_rewrite_matching_cache_metadata(self):
+        graph = {
+            'pedigree_revision': 'rev-1',
+            'animals': {
+                'Child': _record('Child', parents=('Mother', 'Father')),
+                'Mother': _record('Mother'),
+                'Father': _record('Father', sex='male'),
+            },
+        }
+        app = _App(graph)
+        plugin = HeritageTrackPlugin(app)
+        plugin.schedule_store_flush = lambda: None
+        widget = HeritageTrackWidget.__new__(HeritageTrackWidget)
+        widget.plugin = plugin
+        widget._render_store_animals = plugin.store.get_all_entries()
+        widget._get_node_record = lambda _node: {}
+
+        def make_engine():
+            engine = PedigreeEngine(
+                graph['animals'],
+                lambda _name, record: {
+                    'egg_donor': record.get('eizellspenderin', ''),
+                    'sperm_donor': record.get('samenspender', ''),
+                },
+            )
+            engine.build()
+            return engine
+
+        widget._compute_inbreeding_state(make_engine(), {'Child'}, show_f=True)
+        plugin.store.flush_pending()
+        committed = copy.deepcopy(app.backend.records.values[('heritage', 'graph')])
+        committed['pedigree_revision'] = 'rev-2'
+        app.backend.records.values[('heritage', 'graph')] = committed
+        # A matching lineage remains a cache hit and does not create another
+        # derived write merely because the unrelated global token advanced.
+        _values, status = widget._compute_inbreeding_state(
+            make_engine(), {'Child'}, show_f=True
+        )
+        self.assertEqual(status['Child'], 'cached')
+        self.assertFalse(plugin.store.has_pending_changes())
 
 
 if __name__ == '__main__':

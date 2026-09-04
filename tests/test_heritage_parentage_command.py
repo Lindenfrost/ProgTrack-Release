@@ -33,11 +33,6 @@ class _App:
         self.backend = _Backend()
         self.messages = {}
         self.animals = {
-            "Child": {
-                "name": "Child", "species": "Callithrix jacchus",
-                "sex": "female", "birth_date": "01.01.2020",
-                "eizellspenderin": "Mother", "samenspender": "Father",
-            },
             "Mother": {
                 "name": "Mother", "species": "Callithrix jacchus",
                 "sex": "female", "birth_date": "01.01.2010",
@@ -56,6 +51,16 @@ class _App:
         }
         self.audit = []
         self.persist_count = 0
+        self.backend.records.values[("heritage", "graph")] = {
+            "version": "1.0.0",
+            "animals": {
+                "Child": {
+                    "name": "Child", "species": "Callithrix jacchus",
+                    "sex": "female", "birth_date": "01.01.2020",
+                    "heritage_only": True,
+                }
+            },
+        }
 
     def _master_can(self, action):
         return action == "heritage.edit_links"
@@ -81,13 +86,11 @@ class HeritageParentageCommandTest(unittest.TestCase):
         ))
         payload = self.app.backend.records.values[("heritage", "graph")]
         self.assertEqual(payload["animals"]["Child"]["egg_donor"], "Mother")
-        self.assertEqual(self.app.animals["Child"]["eizellspenderin"], "Mother")
-        self.assertEqual(self.app.animals["Child"]["samenspender"], "Father")
         self.assertEqual(self.app.backend.records.put_count, 1)
         self.assertEqual(self.app.audit[0][0], "heritage.parentage_update")
 
     def test_invalid_parent_is_rejected_without_a_write(self):
-        before = copy.deepcopy(self.app.animals["Child"])
+        before = copy.deepcopy(self.plugin.store.get_all_entries()["Child"])
         with self.assertRaises(ParentageCommandError):
             self.plugin.set_parentage(
                 actor="researcher", animal_id="Child", values={
@@ -95,7 +98,7 @@ class HeritageParentageCommandTest(unittest.TestCase):
                 },
             )
         self.assertEqual(self.app.backend.records.put_count, 0)
-        self.assertEqual(self.app.animals["Child"], before)
+        self.assertEqual(self.plugin.store.get_all_entries()["Child"], before)
 
     def test_permission_boundary_denies_before_mutation(self):
         self.app._master_can = lambda _action: False
@@ -189,7 +192,7 @@ class HeritageParentageCommandTest(unittest.TestCase):
         self.app.animals.pop("Mother")
         self.app.animals["Mother"] = mother
         self.plugin.sync_from_record("Mother", mother, in_main_animals=True)
-        self.assertFalse(self.plugin.store.get_all_entries()["Mother"]["heritage_only"])
+        self.assertTrue(self.plugin.store.get_all_entries()["Mother"]["heritage_only"])
         self.assertEqual(self.plugin.store.get_parentage("Child")["egg_donor"], "Mother")
 
     def test_sex_species_date_and_ambiguity_rules_are_centralized(self):

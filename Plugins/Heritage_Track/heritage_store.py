@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -18,6 +20,7 @@ from Plugins.core.backend_store import BackendJsonStore
 from Plugins.core.backend.errors import ConflictError
 
 PARENT_KEYS = ("egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father")
+_PATCH_DELETE = object()
 
 
 class HeritageStore:
@@ -36,6 +39,10 @@ class HeritageStore:
         self._data: Optional[Dict[str, Any]] = None
         self._pending_animal_save = False
         self._pending_settings_save = False
+        # The editable in-memory view is never used as a complete write
+        # payload.  This is the last backend snapshot from which the view was
+        # derived; writes below diff against it and apply field-level patches.
+        self._committed_snapshot: Optional[Dict[str, Any]] = None
         self._genotype_colors_cache: Optional[Dict[str, str]] = None
         self._backend_revision: int = 0
         # Invalid legacy coordinates are kept out of the normalized in-memory
@@ -100,6 +107,10 @@ class HeritageStore:
             "position_cache": {},
             "collapsed_families": [],
             "genotype_colors": {},
+            # Derived values for real Core animals live in their own
+            # Heritage-owned namespace.  Core animal records are never copied
+            # into ``animals`` merely to persist a rebuildable F value.
+            "derived_inbreeding_cache": {},
             "pedigree_revision": "",
             "pedigree_sequence": 0,
             "animals": {},
@@ -232,9 +243,14 @@ class HeritageStore:
                 return None
             x, y = normalized
             positions[name] = {"x": x, "y": y}
-        revision = self._normalize_text(value.get("pedigree_revision", ""))
-        if not revision:
+        # Position validity is scoped to the records which can affect this
+        # layout.  Older entries only contain the global pedigree token and
+        # are intentionally discarded: they cannot prove that an unrelated
+        # lineage edit left this selection's geometry unchanged.
+        dependency_revision = self._normalize_text(value.get("dependency_revision", ""))
+        if not dependency_revision:
             return None
+        revision = self._normalize_text(value.get("pedigree_revision", "")) or dependency_revision
         raw_dependencies = value.get("dependency_ids", ())
         if isinstance(raw_dependencies, (str, bytes)):
             raw_dependencies = (raw_dependencies,)
@@ -254,20 +270,64 @@ class HeritageStore:
         selection_type = self._normalize_text(value.get("selection_type", "selected")) or "selected"
         return {
             "pedigree_revision": revision,
+            "dependency_revision": dependency_revision,
             "dependency_ids": dependencies,
             "positions": positions,
             "selection_type": selection_type,
             "updated_at": updated_at,
         }
 
+    @classmethod
+    def build_position_dependency_revision(
+        cls,
+        dependency_ids: Iterable[str],
+        parent_map: Dict[str, Any],
+        records: Dict[str, Any],
+    ) -> str:
+        """Hash only the immutable inputs that can affect one layout.
+
+        The aggregate backend pedigree revision is deliberately not part of
+        this token.  A change in a disjoint pedigree component must not turn a
+        valid user/selection position map into a cache miss.  Callers provide
+        the exact display/dependency scope and snapshots captured for one
+        render transaction.
+        """
+        dependencies = sorted(
+            {str(item or "").strip() for item in dependency_ids if str(item or "").strip()},
+            key=lambda item: (item.casefold(), item),
+        )
+        normalized_parent_map: Dict[str, Dict[str, str]] = {}
+        for node in dependencies:
+            raw_values = parent_map.get(node, {}) if isinstance(parent_map, dict) else {}
+            if not isinstance(raw_values, dict):
+                raw_values = {}
+            normalized_parent_map[node] = {
+                str(key): str(raw_values.get(key, "") or "").strip()
+                for key in sorted(raw_values, key=str)
+            }
+        normalized_records: Dict[str, Any] = {}
+        for node in dependencies:
+            value = records.get(node, {}) if isinstance(records, dict) else {}
+            normalized_records[node] = deepcopy(value) if isinstance(value, dict) else {}
+        payload = {
+            "schema": "heritage-position-dependencies.v1",
+            "dependencies": dependencies,
+            "parent_map": normalized_parent_map,
+            "records": normalized_records,
+        }
+        encoded = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
     def load(self) -> Dict[str, Any]:
         if self._data is not None:
             return self._data
 
-        raw = self._load_raw()
+        raw, revision = self.backend_store.load_with_revision(None)
         if raw is None:
             # Do not create a backend record merely because a read/render occurred.
             self._data = self._default_data()
+            self._committed_snapshot = deepcopy(self._data)
+            self._backend_revision = int(revision or 0)
             self._genotype_colors_cache = None
             self._invalid_node_positions = {}
             return self._data
@@ -276,7 +336,10 @@ class HeritageStore:
         # backend merely because an older payload needs normalization.  The
         # normalized in-memory view is repaired by an explicit write path such
         # as sync_from_animals(), an edit command, or flush_pending().
-        return self._normalize_and_cache(raw, persist=False)
+        normalized = self._normalize_and_cache(raw, persist=False)
+        self._committed_snapshot = deepcopy(normalized)
+        self._backend_revision = int(revision or 0)
+        return normalized
 
     def _load_raw(self) -> Optional[Dict[str, Any]]:
         """Load the combined Heritage record from the shared backend."""
@@ -311,6 +374,21 @@ class HeritageStore:
         self._backend_revision = int(revision or 0)
         return self._backend_revision
 
+    def adopt_read_snapshot(self, snapshot: Dict[str, Any], revision: int) -> None:
+        """Adopt a freshly read backend snapshot without writing it.
+
+        This keeps non-render callers from continuing to observe an older
+        ``_data`` cache after another session commits.  Pending derived writes
+        are deliberately left untouched; their flush path still performs its
+        own optimistic read/merge.
+        """
+        if self.has_pending_changes() or not isinstance(snapshot, dict):
+            return
+        self._data = deepcopy(snapshot)
+        self._committed_snapshot = deepcopy(snapshot)
+        self._backend_revision = int(revision or 0)
+        self._genotype_colors_cache = None
+
     def atomic_update(self, mutator, *, expected_revision: int | None = None) -> Any:
         """Apply one graph mutation and persist it in one backend write.
 
@@ -331,15 +409,15 @@ class HeritageStore:
         working["updated_at"] = self._utc_now_iso()
         previous = self._data
         try:
-            self.backend_store.save(
-                working,
-                expected_revision=current_revision if current_revision else None,
+            next_revision = self.backend_store.save(
+                working, expected_revision=current_revision
             )
         except Exception:
             self._data = previous
             raise
         self._data = working
-        self._backend_revision = current_revision + 1
+        self._backend_revision = int(next_revision or (current_revision + 1))
+        self._committed_snapshot = deepcopy(working)
         self._genotype_colors_cache = None
         self._pending_animal_save = False
         self._pending_settings_save = False
@@ -477,6 +555,9 @@ class HeritageStore:
             normalized_entry["species"] = self._normalize_text(entry.get("species", ""))
             normalized_entry["birth_date"] = self._normalize_text(entry.get("birth_date", ""))
             normalized_entry["heritage_only"] = bool(entry.get("heritage_only", False))
+            normalized_entry["unit_id"] = self._normalize_text(entry.get("unit_id", ""))
+            normalized_entry["dummy_kind"] = self._normalize_text(entry.get("dummy_kind", ""))
+            normalized_entry["persistence_kind"] = self._normalize_text(entry.get("persistence_kind", ""))
             normalized_entry["source"] = self._normalize_text(entry.get("source", "plugin")) or "plugin"
             normalized_entry["updated_at"] = self._normalize_text(entry.get("updated_at", ""))
             normalized_entry["parentage_revision"] = self._normalize_text(
@@ -526,7 +607,18 @@ class HeritageStore:
             entry["node_fill_color"] = mapped_color
             entry["updated_at"] = self._utc_now_iso()
 
+        derived_cache = raw.get("derived_inbreeding_cache", {})
+        if not isinstance(derived_cache, dict):
+            derived_cache = {}
+        normalized_derived_cache: Dict[str, Dict[str, Any]] = {}
+        for raw_key, raw_meta in derived_cache.items():
+            cache_key = self._normalize_text(raw_key)
+            metadata = self._normalize_inbreeding_cache(raw_meta)
+            if cache_key and metadata is not None:
+                normalized_derived_cache[cache_key] = metadata
+
         raw["genotype_colors"] = genotype_colors
+        raw["derived_inbreeding_cache"] = normalized_derived_cache
         raw["animals"] = normalized_animals
         self._genotype_colors_cache = None
         self._data = raw
@@ -566,26 +658,335 @@ class HeritageStore:
             self._mark_pending_sections(animals=animals, settings=settings)
             return
 
-        data = self.load()
-        # Preserve malformed legacy coordinates until the caller explicitly
-        # requests cleanup.  Otherwise a normal settings/animal save would
-        # accidentally perform the destructive repair intended for Refresh.
+        local = self.load()
+        baseline = self._committed_snapshot
+        if not isinstance(baseline, dict):
+            # ``load`` establishes this in normal operation.  Keep a safe
+            # fallback for custom stores that construct a store by hand.
+            baseline = deepcopy(local)
+        patch = self._compute_persistence_patch(
+            local, baseline, animals=animals, settings=settings
+        )
+        if not patch["has_changes"]:
+            if animals:
+                self._pending_animal_save = False
+            if settings:
+                self._pending_settings_save = False
+            return
+
+        # Always read immediately before modifying the backend.  The payload
+        # is a fresh snapshot plus a field-level patch, never stale ``_data``.
+        latest, revision = self.load_latest_with_revision()
+        self._check_patch_conflicts(patch, baseline, latest)
+        merged = deepcopy(latest)
+        self._apply_persistence_patch(merged, patch)
+
+        # Preserve malformed legacy coordinates until the explicit cleanup
+        # command.  An unrelated save must not silently repair or discard
+        # them, but it also must not replace any valid coordinate from the
+        # newer backend snapshot.
         if self._invalid_node_positions:
             has_invalid_container = "__node_positions__" in self._invalid_node_positions
             invalid_container = self._invalid_node_positions.get("__node_positions__")
             if has_invalid_container:
-                data["node_positions"] = deepcopy(invalid_container)
-            node_positions = data.setdefault("node_positions", {})
+                merged["node_positions"] = deepcopy(invalid_container)
+            node_positions = merged.setdefault("node_positions", {})
             if isinstance(node_positions, dict) and not has_invalid_container:
                 for key, raw_position in self._invalid_node_positions.items():
                     if key != "__node_positions__":
                         node_positions.setdefault(key, deepcopy(raw_position))
-        data["updated_at"] = self._utc_now_iso()
-        self.backend_store.save(data)
+        merged["updated_at"] = self._utc_now_iso()
+        try:
+            next_revision = self.backend_store.save(
+                merged, expected_revision=revision
+            )
+        except Exception:
+            # Retain the pending flags and editable local view so the caller
+            # can retry after a revision conflict or transient backend error.
+            raise
+
+        # If another section is still dirty, preserve that local draft while
+        # marking only the requested patch as committed.
+        remaining = self._compute_persistence_patch(
+            local, baseline, animals=not animals, settings=not settings
+        )
+        visible = deepcopy(merged)
+        self._apply_persistence_patch(visible, remaining)
+        self._data = visible
+        self._committed_snapshot = deepcopy(merged)
+        self._backend_revision = int(next_revision or (int(revision or 0) + 1))
+        self._genotype_colors_cache = None
         if animals:
             self._pending_animal_save = False
         if settings:
             self._pending_settings_save = False
+
+    @staticmethod
+    def _mapping_value(mapping: Any, key: Any) -> Any:
+        if isinstance(mapping, dict) and key in mapping:
+            return mapping[key]
+        return _PATCH_DELETE
+
+    def _compute_persistence_patch(
+        self,
+        current: Dict[str, Any],
+        baseline: Dict[str, Any],
+        *,
+        animals: bool,
+        settings: bool,
+    ) -> Dict[str, Any]:
+        """Build explicit field-level changes from the last backend snapshot."""
+        patch: Dict[str, Any] = {
+            "animal_fields": {},
+            "animal_deletes": set(),
+            "genotype_colors": {},
+            "derived_inbreeding_cache": {},
+            "settings": {},
+            "node_positions": {},
+            "collapsed_added": set(),
+            "collapsed_removed": set(),
+            "has_changes": False,
+        }
+        if animals:
+            current_animals = current.get("animals", {}) if isinstance(current, dict) else {}
+            base_animals = baseline.get("animals", {}) if isinstance(baseline, dict) else {}
+            if not isinstance(current_animals, dict):
+                current_animals = {}
+            if not isinstance(base_animals, dict):
+                base_animals = {}
+            for key in sorted(set(current_animals) | set(base_animals), key=str):
+                current_entry = self._mapping_value(current_animals, key)
+                base_entry = self._mapping_value(base_animals, key)
+                if current_entry is _PATCH_DELETE:
+                    if base_entry is not _PATCH_DELETE:
+                        patch["animal_deletes"].add(key)
+                    continue
+                if base_entry is _PATCH_DELETE:
+                    patch["animal_fields"][key] = deepcopy(current_entry)
+                    continue
+                if not isinstance(current_entry, dict) or not isinstance(base_entry, dict):
+                    if current_entry != base_entry:
+                        patch["animal_fields"][key] = deepcopy(current_entry)
+                    continue
+                fields: Dict[str, Any] = {}
+                for field in sorted(set(current_entry) | set(base_entry), key=str):
+                    # ``updated_at`` is local provenance metadata.  It is
+                    # regenerated for the committed aggregate and must not
+                    # turn an unrelated concurrent edit into a field
+                    # conflict or overwrite its newer timestamp.
+                    if field == "updated_at":
+                        continue
+                    value = self._mapping_value(current_entry, field)
+                    old_value = self._mapping_value(base_entry, field)
+                    if value != old_value:
+                        fields[field] = value if value is _PATCH_DELETE else deepcopy(value)
+                if fields:
+                    patch["animal_fields"][key] = fields
+
+            current_colors = current.get("genotype_colors", {})
+            base_colors = baseline.get("genotype_colors", {})
+            if not isinstance(current_colors, dict):
+                current_colors = {}
+            if not isinstance(base_colors, dict):
+                base_colors = {}
+            for key in sorted(set(current_colors) | set(base_colors), key=str):
+                value = self._mapping_value(current_colors, key)
+                old_value = self._mapping_value(base_colors, key)
+                if value != old_value:
+                    patch["genotype_colors"][key] = (
+                        value if value is _PATCH_DELETE else deepcopy(value)
+                    )
+
+            current_derived = current.get("derived_inbreeding_cache", {})
+            base_derived = baseline.get("derived_inbreeding_cache", {})
+            if not isinstance(current_derived, dict):
+                current_derived = {}
+            if not isinstance(base_derived, dict):
+                base_derived = {}
+            for key in sorted(set(current_derived) | set(base_derived), key=str):
+                value = self._mapping_value(current_derived, key)
+                old_value = self._mapping_value(base_derived, key)
+                if value != old_value:
+                    patch["derived_inbreeding_cache"][key] = (
+                        value if value is _PATCH_DELETE else deepcopy(value)
+                    )
+
+        if settings:
+            current_settings = current.get("settings", {})
+            base_settings = baseline.get("settings", {})
+            if not isinstance(current_settings, dict):
+                current_settings = {}
+            if not isinstance(base_settings, dict):
+                base_settings = {}
+            for key in sorted(set(current_settings) | set(base_settings), key=str):
+                value = self._mapping_value(current_settings, key)
+                old_value = self._mapping_value(base_settings, key)
+                if value != old_value:
+                    patch["settings"][key] = value if value is _PATCH_DELETE else deepcopy(value)
+
+            current_positions = current.get("node_positions", {})
+            base_positions = baseline.get("node_positions", {})
+            if not isinstance(current_positions, dict):
+                current_positions = {}
+            if not isinstance(base_positions, dict):
+                base_positions = {}
+            for key in sorted(set(current_positions) | set(base_positions), key=str):
+                value = self._mapping_value(current_positions, key)
+                old_value = self._mapping_value(base_positions, key)
+                if value != old_value:
+                    patch["node_positions"][key] = value if value is _PATCH_DELETE else deepcopy(value)
+
+            current_collapsed = {
+                str(item) for item in current.get("collapsed_families", [])
+                if str(item).strip()
+            }
+            base_collapsed = {
+                str(item) for item in baseline.get("collapsed_families", [])
+                if str(item).strip()
+            }
+            patch["collapsed_added"] = current_collapsed - base_collapsed
+            patch["collapsed_removed"] = base_collapsed - current_collapsed
+
+        patch["has_changes"] = bool(
+            patch["animal_fields"]
+            or patch["animal_deletes"]
+            or patch["genotype_colors"]
+            or patch["derived_inbreeding_cache"]
+            or patch["settings"]
+            or patch["node_positions"]
+            or patch["collapsed_added"]
+            or patch["collapsed_removed"]
+        )
+        return patch
+
+    def _check_patch_conflicts(
+        self,
+        patch: Dict[str, Any],
+        baseline: Dict[str, Any],
+        latest: Dict[str, Any],
+    ) -> None:
+        """Reject an overlapping edit instead of silently losing either one."""
+        base_animals = baseline.get("animals", {}) if isinstance(baseline, dict) else {}
+        latest_animals = latest.get("animals", {}) if isinstance(latest, dict) else {}
+        if not isinstance(base_animals, dict):
+            base_animals = {}
+        if not isinstance(latest_animals, dict):
+            latest_animals = {}
+        for key in patch["animal_deletes"]:
+            if key in latest_animals and key not in base_animals:
+                raise ConflictError(f"Heritage animal {key!r} was created concurrently.")
+            if key in latest_animals and latest_animals.get(key) != base_animals.get(key):
+                raise ConflictError(f"Heritage animal {key!r} changed concurrently.")
+        for key, fields in patch["animal_fields"].items():
+            base_entry = base_animals.get(key, _PATCH_DELETE)
+            latest_entry = latest_animals.get(key, _PATCH_DELETE)
+            if not isinstance(fields, dict):
+                if latest_entry is not _PATCH_DELETE and latest_entry != base_entry and latest_entry != fields:
+                    raise ConflictError(f"Heritage animal {key!r} changed concurrently.")
+                continue
+            for field, intended in fields.items():
+                old = self._mapping_value(base_entry, field)
+                now = self._mapping_value(latest_entry, field)
+                if now != old and now != intended:
+                    raise ConflictError(
+                        f"Heritage field {key!r}/{field!r} changed concurrently."
+                    )
+
+        base_colors = baseline.get("genotype_colors", {}) if isinstance(baseline, dict) else {}
+        latest_colors = latest.get("genotype_colors", {}) if isinstance(latest, dict) else {}
+        for key, intended in patch["genotype_colors"].items():
+            old = self._mapping_value(base_colors, key)
+            now = self._mapping_value(latest_colors, key)
+            if now != old and now != intended:
+                raise ConflictError(f"Genotype colour {key!r} changed concurrently.")
+
+        base_derived = baseline.get("derived_inbreeding_cache", {}) if isinstance(baseline, dict) else {}
+        latest_derived = latest.get("derived_inbreeding_cache", {}) if isinstance(latest, dict) else {}
+        for key, intended in patch["derived_inbreeding_cache"].items():
+            old = self._mapping_value(base_derived, key)
+            now = self._mapping_value(latest_derived, key)
+            if now != old and now != intended:
+                raise ConflictError(f"Derived inbreeding cache {key!r} changed concurrently.")
+
+        base_settings = baseline.get("settings", {}) if isinstance(baseline, dict) else {}
+        latest_settings = latest.get("settings", {}) if isinstance(latest, dict) else {}
+        for key, intended in patch["settings"].items():
+            old = self._mapping_value(base_settings, key)
+            now = self._mapping_value(latest_settings, key)
+            if now != old and now != intended:
+                raise ConflictError(f"Heritage setting {key!r} changed concurrently.")
+
+        base_positions = baseline.get("node_positions", {}) if isinstance(baseline, dict) else {}
+        latest_positions = latest.get("node_positions", {}) if isinstance(latest, dict) else {}
+        for key, intended in patch["node_positions"].items():
+            old = self._mapping_value(base_positions, key)
+            now = self._mapping_value(latest_positions, key)
+            if now != old and now != intended:
+                raise ConflictError(f"Heritage position {key!r} changed concurrently.")
+
+        if patch["collapsed_added"] or patch["collapsed_removed"]:
+            base = {str(item) for item in baseline.get("collapsed_families", [])}
+            now = {str(item) for item in latest.get("collapsed_families", [])}
+            concurrent_added = now - base
+            concurrent_removed = base - now
+            if (
+                concurrent_added & patch["collapsed_removed"]
+                or concurrent_removed & patch["collapsed_added"]
+            ):
+                raise ConflictError("Collapsed Heritage families changed concurrently.")
+
+    @staticmethod
+    def _patch_mapping(target: Dict[str, Any], changes: Dict[str, Any]) -> None:
+        for key, value in changes.items():
+            if value is _PATCH_DELETE:
+                target.pop(key, None)
+            else:
+                target[key] = deepcopy(value)
+
+    def _apply_persistence_patch(self, target: Dict[str, Any], patch: Dict[str, Any]) -> None:
+        animals = target.setdefault("animals", {})
+        if not isinstance(animals, dict):
+            animals = {}
+            target["animals"] = animals
+        for key in patch["animal_deletes"]:
+            animals.pop(key, None)
+        for key, fields in patch["animal_fields"].items():
+            if isinstance(fields, dict):
+                entry = animals.setdefault(key, {})
+                if not isinstance(entry, dict):
+                    entry = {}
+                    animals[key] = entry
+                self._patch_mapping(entry, fields)
+            elif fields is _PATCH_DELETE:
+                animals.pop(key, None)
+            else:
+                animals[key] = deepcopy(fields)
+        colors = target.setdefault("genotype_colors", {})
+        if not isinstance(colors, dict):
+            colors = {}
+            target["genotype_colors"] = colors
+        self._patch_mapping(colors, patch["genotype_colors"])
+        derived = target.setdefault("derived_inbreeding_cache", {})
+        if not isinstance(derived, dict):
+            derived = {}
+            target["derived_inbreeding_cache"] = derived
+        self._patch_mapping(derived, patch["derived_inbreeding_cache"])
+
+        settings = target.setdefault("settings", {})
+        if not isinstance(settings, dict):
+            settings = {}
+            target["settings"] = settings
+        self._patch_mapping(settings, patch["settings"])
+        positions = target.setdefault("node_positions", {})
+        if not isinstance(positions, dict):
+            positions = {}
+            target["node_positions"] = positions
+        self._patch_mapping(positions, patch["node_positions"])
+
+        collapsed = {str(item) for item in target.get("collapsed_families", [])}
+        collapsed.update(patch["collapsed_added"])
+        collapsed.difference_update(patch["collapsed_removed"])
+        target["collapsed_families"] = sorted(collapsed, key=str.casefold)
 
     def _save_animals(self) -> None:
         """Persist only animal records and genotype colours."""
@@ -614,6 +1015,9 @@ class HeritageStore:
                 "sex": "",
                 "species": "",
                 "heritage_only": False,
+                "unit_id": "",
+                "dummy_kind": "",
+                "persistence_kind": "",
                 "source": "plugin",
                 "updated_at": self._utc_now_iso(),
                 "inbreeding_f": None,
@@ -670,17 +1074,18 @@ class HeritageStore:
         data["settings"] = current
         self._save_settings()
 
-    def get_all_entries(self) -> Dict[str, Dict[str, Any]]:
-        data = self.load()
+    def get_all_entries(self, snapshot: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, Any]]:
+        data = snapshot if isinstance(snapshot, dict) else self.load()
         return data.get("animals", {})
 
-    def get_genotype_colors(self) -> Dict[str, str]:
-        if self._genotype_colors_cache is not None:
+    def get_genotype_colors(self, snapshot: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+        if snapshot is None and self._genotype_colors_cache is not None:
             return dict(self._genotype_colors_cache)
-        data = self.load()
+        data = snapshot if isinstance(snapshot, dict) else self.load()
         colors = data.get("genotype_colors", {}) if isinstance(data, dict) else {}
         if not isinstance(colors, dict):
-            self._genotype_colors_cache = {}
+            if snapshot is None:
+                self._genotype_colors_cache = {}
             return {}
         normalized: Dict[str, str] = {}
         for genotype, color in colors.items():
@@ -688,14 +1093,15 @@ class HeritageStore:
             if not key:
                 continue
             normalized[key] = self._normalize_text(color)
-        self._genotype_colors_cache = normalized
+        if snapshot is None:
+            self._genotype_colors_cache = normalized
         return dict(normalized)
 
-    def get_genotype_color(self, genotype: str) -> str:
+    def get_genotype_color(self, genotype: str, snapshot: Optional[Dict[str, Any]] = None) -> str:
         key = self._normalize_genotype_key(genotype)
         if not key:
             return ""
-        return self.get_genotype_colors().get(key, "")
+        return self.get_genotype_colors(snapshot=snapshot).get(key, "")
 
     def _apply_genotype_color_to_entries(self, genotype_key: str, fill_color: str) -> bool:
         data = self.load()
@@ -719,7 +1125,14 @@ class HeritageStore:
             changed = True
         return changed
 
-    def set_genotype_color(self, genotype: str, fill_color: Optional[str], persist: bool = True) -> bool:
+    def set_genotype_color(
+        self,
+        genotype: str,
+        fill_color: Optional[str],
+        persist: bool = True,
+        *,
+        update_entries: bool = True,
+    ) -> bool:
         genotype_key = self._normalize_genotype_key(genotype)
         if not genotype_key:
             return False
@@ -736,7 +1149,7 @@ class HeritageStore:
             colors[genotype_key] = color_value
             changed = True
 
-        if self._apply_genotype_color_to_entries(genotype_key, color_value):
+        if update_entries and self._apply_genotype_color_to_entries(genotype_key, color_value):
             changed = True
 
         if changed:
@@ -799,7 +1212,7 @@ class HeritageStore:
         if entry is None:
             return None
         expected_revision = self._normalize_text(pedigree_revision)
-        if expected_revision and entry["pedigree_revision"] != expected_revision:
+        if expected_revision and entry["dependency_revision"] != expected_revision:
             return None
         if dependency_ids is not None:
             expected_dependencies = sorted(
@@ -825,6 +1238,10 @@ class HeritageStore:
         selection_type: str = "selected",
     ) -> Dict[str, Any]:
         """Atomically replace one user's complete selection position map.
+
+        ``pedigree_revision`` is the dependency-scoped token produced by
+        :meth:`build_position_dependency_revision`; the historical parameter
+        name is retained for the widget/store call boundary only.
 
         Returns deterministic eviction metadata for a localized UI notice.
         Validation happens before the backend mutation, and the mutation is
@@ -856,14 +1273,33 @@ class HeritageStore:
         )
         normalized_type = self._normalize_text(selection_type) or "selected"
 
-        # A render may have queued derived F metadata immediately before the
-        # position write.  ``atomic_update`` intentionally refreshes from the
-        # backend, so flush those queued changes first rather than replacing
-        # them with a cache-only snapshot.
+        # A render may have queued derived metadata immediately before the
+        # position write.  Do not pre-flush it: that would create two writes
+        # and leave a race between the derived update and this replacement.
+        # Instead, carry the field-level pending patch into the same atomic
+        # transaction below and validate it against that transaction's fresh
+        # backend snapshot.
+        pending_patch: Optional[Dict[str, Any]] = None
+        pending_baseline: Optional[Dict[str, Any]] = None
         if self.has_pending_changes():
-            self.flush_pending()
+            local = self.load()
+            baseline = self._committed_snapshot
+            if isinstance(local, dict) and isinstance(baseline, dict):
+                pending_patch = self._compute_persistence_patch(
+                    local, baseline,
+                    animals=self._pending_animal_save,
+                    settings=self._pending_settings_save,
+                )
+                pending_baseline = deepcopy(baseline)
 
         def mutate(data: Dict[str, Any]) -> Dict[str, Any]:
+            if pending_patch and pending_patch.get("has_changes"):
+                self._check_patch_conflicts(
+                    pending_patch,
+                    pending_baseline or {},
+                    data,
+                )
+                self._apply_persistence_patch(data, pending_patch)
             cache = data.setdefault("position_cache", {})
             if not isinstance(cache, dict):
                 cache = {}
@@ -875,6 +1311,7 @@ class HeritageStore:
             replaced = key in entries
             entries[key] = {
                 "pedigree_revision": revision,
+                "dependency_revision": revision,
                 "dependency_ids": list(dependencies),
                 "positions": deepcopy(normalized_positions),
                 "selection_type": normalized_type,
@@ -1008,9 +1445,9 @@ class HeritageStore:
             invalid = dict(self._invalid_node_positions)
             if not invalid:
                 return 0
-            self.backend_store.save(
+            next_revision = self.backend_store.save(
                 normalized,
-                expected_revision=revision if revision else None,
+                expected_revision=revision,
             )
         except Exception:
             self._data = previous_data
@@ -1020,7 +1457,8 @@ class HeritageStore:
 
         self._data = normalized
         self._invalid_node_positions = {}
-        self._backend_revision = int(revision or 0) + 1
+        self._backend_revision = int(next_revision or (int(revision or 0) + 1))
+        self._committed_snapshot = deepcopy(normalized)
         self._genotype_colors_cache = None
         self._pending_settings_save = False
         return len(invalid)
@@ -1143,6 +1581,7 @@ class HeritageStore:
         fallback_record: Optional[Dict[str, Any]] = None,
         *,
         core_authoritative: bool = False,
+        snapshot: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         fallback = {
             "egg_donor": self._normalize_text((fallback_record or {}).get("eizellspenderin", "")),
@@ -1163,7 +1602,9 @@ class HeritageStore:
         if not key:
             return fallback
 
-        entry = self.load().get("animals", {}).get(key, {})
+        source = snapshot if isinstance(snapshot, dict) else self.load()
+        entries = source.get("animals", {}) if isinstance(source, dict) else {}
+        entry = entries.get(key, {}) if isinstance(entries, dict) else {}
         if not isinstance(entry, dict):
             return fallback
 
@@ -1304,13 +1745,16 @@ class HeritageStore:
         fallback_record: Optional[Dict[str, Any]] = None,
         *,
         core_authoritative: bool = False,
+        snapshot: Optional[Dict[str, Any]] = None,
     ) -> str:
         if core_authoritative and isinstance(fallback_record, dict):
             return self._normalize_text(fallback_record.get("species", ""))
         key = self._normalize_text(animal_name)
         if not key:
             return ""
-        entry = self.load().get("animals", {}).get(key, {})
+        source = snapshot if isinstance(snapshot, dict) else self.load()
+        entries = source.get("animals", {}) if isinstance(source, dict) else {}
+        entry = entries.get(key, {}) if isinstance(entries, dict) else {}
         if not isinstance(entry, dict):
             return ""
         return self._normalize_text(entry.get("species", ""))
@@ -1358,6 +1802,7 @@ class HeritageStore:
         fallback_record: Optional[Dict[str, Any]] = None,
         *,
         core_authoritative: bool = False,
+        snapshot: Optional[Dict[str, Any]] = None,
     ) -> str:
         fallback_sex = self._normalize_sex((fallback_record or {}).get("sex", ""))
         if fallback_sex:
@@ -1374,7 +1819,10 @@ class HeritageStore:
             return ""
         key = self._normalize_text(animal_name)
         if key:
-            manual = self.get_manual_sex(key)
+            source = snapshot if isinstance(snapshot, dict) else self.load()
+            entries = source.get("animals", {}) if isinstance(source, dict) else {}
+            entry = entries.get(key, {}) if isinstance(entries, dict) else {}
+            manual = self._normalize_sex(entry.get("sex", "")) if isinstance(entry, dict) else ""
             if manual:
                 return manual
         return ""
@@ -1433,12 +1881,15 @@ class HeritageStore:
         fallback_record: Optional[Dict[str, Any]] = None,
         *,
         core_authoritative: bool = False,
+        snapshot: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         key = self._normalize_text(animal_name)
         if not key:
             return {"genotype": self._normalize_text(fallback_genotype), "node_fill_color": ""}
 
-        entry = self.load().get("animals", {}).get(key, {})
+        source = snapshot if isinstance(snapshot, dict) else self.load()
+        entries = source.get("animals", {}) if isinstance(source, dict) else {}
+        entry = entries.get(key, {}) if isinstance(entries, dict) else {}
         if core_authoritative and isinstance(fallback_record, dict):
             # Core genotype is authoritative, including an intentional clear.
             genotype = self._normalize_text(fallback_record.get("genotype", ""))
@@ -1450,7 +1901,7 @@ class HeritageStore:
             fallback_color = self._normalize_text(entry.get("node_fill_color", ""))
 
         genotype_key = self._normalize_genotype_key(genotype)
-        genotype_colors = self.get_genotype_colors()
+        genotype_colors = self.get_genotype_colors(snapshot=snapshot)
         if genotype_key and genotype_key in genotype_colors:
             fill_color = self._normalize_text(genotype_colors.get(genotype_key, ""))
         else:
@@ -1458,113 +1909,15 @@ class HeritageStore:
         return {"genotype": genotype, "node_fill_color": fill_color}
 
     def sync_from_record(self, animal_name: str, record: Optional[Dict[str, Any]], persist: bool = True, in_main_animals: bool = True) -> bool:
-        key = self._normalize_text(animal_name)
-        if not key or not isinstance(record, dict):
-            return False
+        """Compatibility hook that never mirrors a Core record.
 
-        core_parent_map = {
-            "egg_donor": "eizellspenderin",
-            "sperm_donor": "samenspender",
-            "surrogate_mother": "ziehmutter",
-            "surrogate_father": "ziehvater",
-        }
-
-        entry = self._entry(key)
-        changed = False
-
-        visible_name = animal_base_name(key, record)
-        for field, value in (
-            ("ipid", key),
-            ("name", visible_name),
-            ("_base_name", visible_name),
-            ("display_name", visible_name),
-        ):
-            if self._normalize_text(entry.get(field, "")) != value:
-                entry[field] = value
-                changed = True
-
-        if in_main_animals and self._normalize_text(entry.get("source", "")).lower() != "core":
-            entry["source"] = "core"
-            changed = True
-
-        # Main/archived application membership is authoritative.  A stale
-        # Heritage flag must never turn a real animal into an editable
-        # Heritage-only placeholder.
-        if in_main_animals and bool(entry.get("heritage_only", False)):
-            entry["heritage_only"] = False
-            changed = True
-
-        for parent_key, core_key in core_parent_map.items():
-            value = self._normalize_text(record.get(core_key, ""))
-            current = self._normalize_text(entry.get(parent_key, ""))
-            # Core owns relationship fields for every active/archived record.
-            # This also copies an intentional empty value so a cleared Core
-            # parent cannot be resurrected by a stale Heritage projection.
-            if in_main_animals and current != value:
-                entry[parent_key] = value
-                changed = True
-
-        # Sex on a real application animal is owned by its core record.  An
-        # explicit Unknown is a real value and wins over role inference.  A
-        # role is used only for legacy records that have no explicit value.
-        role = canonical_role_value(record.get("rolle", ""))
-        role_determined_sex = ""
-        if role in (ROLE_VALUE_SPENDER, ROLE_VALUE_AMME):
-            role_determined_sex = "female"
-        elif role == ROLE_VALUE_SAMENSP:
-            role_determined_sex = "male"
-        explicit_sex = self._normalize_sex(record.get("sex", ""))
-        authoritative_sex = explicit_sex or role_determined_sex
-        current_sex = self._normalize_sex(entry.get("sex", ""))
-        if in_main_animals and current_sex != authoritative_sex:
-            entry["sex"] = authoritative_sex
-            changed = True
-
-        if in_main_animals:
-            genotype = self._normalize_text(record.get("genotype", ""))
-            current_genotype = self._normalize_text(entry.get("genotype", ""))
-            # Core genotype is authoritative, including an intentional clear.
-            if current_genotype != genotype:
-                entry["genotype"] = genotype
-                changed = True
-
-        genotype_key = self._normalize_genotype_key(entry.get("genotype", ""))
-        genotype_colors = self.get_genotype_colors()
-        if genotype_key and genotype_key in genotype_colors:
-            mapped_color = self._normalize_text(genotype_colors.get(genotype_key, ""))
-            if entry.get("node_fill_color", "") != mapped_color:
-                entry["node_fill_color"] = mapped_color
-                changed = True
-
-        # Sync additional core fields from ProgTrack record
-        core_field_map = {
-            "species": "species",
-            "birth_date": "birth_date",
-            "death_date": "death_date",
-            "id": "id",
-            "chip_nr": "chip_nr",
-            "origin": "origin",
-            "ref_weight": "ref_weight",
-            "special_status": "special_status",
-            "rolle": "rolle",
-        }
-        for core_key, entry_key in core_field_map.items():
-            if not in_main_animals:
-                continue
-            value = self._normalize_text(record.get(core_key, ""))
-            current = self._normalize_text(entry.get(entry_key, ""))
-            # Core owns ordinary identity/status fields.  Missing and empty
-            # values both intentionally clear a stale projection.
-            if current != value:
-                entry[entry_key] = value
-                changed = True
-
-        if changed:
-            entry["updated_at"] = self._utc_now_iso()
-            if persist:
-                self._save_animals()
-
-        return changed
+        Core identity and relationships are projected directly at read time.
+        Durable dummies, including former-Core snapshots, are created by their
+        explicit commands so this broad synchronizer cannot create a second
+        persisted copy of a real animal.
+        """
+        _ = (animal_name, record, persist, in_main_animals)
+        return False
 
     def get_inbreeding_f(self, animal_name: str) -> Optional[float]:
         key = self._normalize_text(animal_name)
@@ -1585,12 +1938,28 @@ class HeritageStore:
         """Return the latest committed genetic-pedigree revision token."""
         return self._normalize_text(self.load().get("pedigree_revision", ""))
 
-    def get_inbreeding_cache(self, animal_name: str) -> Optional[Dict[str, Any]]:
+    def get_inbreeding_cache(
+        self,
+        animal_name: str,
+        snapshot: Optional[Dict[str, Any]] = None,
+        *,
+        cache_key: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Return validated lineage-bound F metadata, never a legacy scalar."""
         key = self._normalize_text(animal_name)
         if not key:
             return None
-        entry = self.load().get("animals", {}).get(key, {})
+        source = snapshot if isinstance(snapshot, dict) else self.load()
+        derived = source.get("derived_inbreeding_cache", {}) if isinstance(source, dict) else {}
+        if not isinstance(derived, dict):
+            derived = {}
+        derived_key = self._normalize_text(cache_key)
+        if derived_key:
+            cached = self._normalize_inbreeding_cache(derived.get(derived_key))
+            if cached is not None:
+                return deepcopy(cached)
+        entries = source.get("animals", {}) if isinstance(source, dict) else {}
+        entry = entries.get(key, {}) if isinstance(entries, dict) else {}
         if not isinstance(entry, dict):
             return None
         cached = self._normalize_inbreeding_cache(entry.get("inbreeding_f_cache"))
@@ -1601,6 +1970,7 @@ class HeritageStore:
         updates: Dict[str, Dict[str, Any]],
         *,
         persist: bool = True,
+        cache_keys: Optional[Dict[str, str]] = None,
     ) -> bool:
         """Store validated derived F metadata in one optional deferred write.
 
@@ -1613,15 +1983,33 @@ class HeritageStore:
         data = self.load()
         animals = data.get("animals", {}) if isinstance(data, dict) else {}
         if not isinstance(animals, dict):
-            return False
+            animals = {}
+            data["animals"] = animals
+        derived = data.setdefault("derived_inbreeding_cache", {})
+        if not isinstance(derived, dict):
+            derived = {}
+            data["derived_inbreeding_cache"] = derived
+        cache_keys = cache_keys if isinstance(cache_keys, dict) else {}
         changed = False
         now_iso = self._utc_now_iso()
         for animal_name, raw_meta in updates.items():
             key = self._normalize_text(animal_name)
-            if not key or key not in animals or not isinstance(raw_meta, dict):
+            derived_key = self._normalize_text(cache_keys.get(key, ""))
+            if not key or not isinstance(raw_meta, dict):
                 continue
             metadata = self._normalize_inbreeding_cache(raw_meta)
             if metadata is None:
+                continue
+            # Real Core animals are addressed by their stable IPID in the
+            # dedicated derived namespace.  Only Heritage-owned dummies use
+            # the per-animal cache field; never create a Core shadow record.
+            if derived_key:
+                if self._normalize_inbreeding_cache(derived.get(derived_key)) != metadata:
+                    derived[derived_key] = metadata
+                    changed = True
+                continue
+            if key not in animals:
+                # An unresolved reference must not materialize a cache record.
                 continue
             entry = animals[key]
             if self._normalize_inbreeding_cache(entry.get("inbreeding_f_cache")) != metadata:
@@ -1676,44 +2064,6 @@ class HeritageStore:
         return True
 
     def sync_from_animals(self, animals: Any, *, persist: bool = True) -> bool:
-        if not isinstance(animals, dict):
-            return
-
-        changed = False
-        data = self.load()
-        store_animals = data.get("animals", {}) if isinstance(data, dict) else {}
-        core_keys = {
-            self._normalize_text(name)
-            for name in animals
-            if self._normalize_text(name)
-        }
-        for name, record in animals.items():
-            key = self._normalize_text(name)
-            if not key or not isinstance(record, dict):
-                continue
-
-            if self.sync_from_record(key, record, persist=False, in_main_animals=True):
-                changed = True
-
-        # Reconcile both directions in one pass.  Records present in the app
-        # (active or archived, as supplied by the plugin) are real; records
-        # present only in this store are Heritage-only regardless of a stale
-        # serialized flag.
-        if isinstance(store_animals, dict):
-            timestamp = self._utc_now_iso()
-            for key, entry in store_animals.items():
-                if not isinstance(entry, dict):
-                    continue
-                expected = key not in core_keys
-                if bool(entry.get("heritage_only", False)) == expected:
-                    continue
-                entry["heritage_only"] = expected
-                entry["updated_at"] = timestamp
-                changed = True
-
-        if changed:
-            if persist:
-                self._save_animals()
-            else:
-                self._mark_pending_sections(animals=True)
-        return changed
+        """Compatibility hook; Core records are never mirrored into storage."""
+        _ = (animals, persist)
+        return False

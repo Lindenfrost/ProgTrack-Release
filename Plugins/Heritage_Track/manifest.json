@@ -42,7 +42,8 @@
   ],
   "permissions": [
     "heritage.view",
-    "heritage.edit_links"
+    "heritage.edit_links",
+    "heritage.edit_genotype_colors"
   ],
   "backend_namespaces": [
     "heritage"

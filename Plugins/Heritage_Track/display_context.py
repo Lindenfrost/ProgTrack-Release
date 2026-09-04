@@ -311,6 +311,20 @@ class RenderCacheEntry:
     diagnostics: Tuple[str, ...] = ()
     fatal_diagnostics: Tuple[str, ...] = ()
     schema_version: str = CACHE_SCHEMA_VERSION
+    # Backend record revision used for this complete frame.  It is retained
+    # separately for diagnostics while the four-component compatibility tuple
+    # binds the revision into ``core_projection_revision``.
+    backend_revision: int = 0
+    # Hash of every immutable input that can affect the frame before layout.
+    # Unlike the four component diagnostic tuple this token is used to decide
+    # whether a cached entry can be painted without rebuilding the engine.
+    source_revision: str = ""
+    # Per-node paint metadata.  Keeping this with the frozen frame prevents a
+    # cache hit from rereading mutable Core/Heritage records while artists are
+    # being created.
+    node_metadata: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    artist_scale: float = 1.0
+    chronological_undated_nodes: FrozenSet[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "canonical_selection", tuple(self.canonical_selection))
@@ -331,6 +345,11 @@ class RenderCacheEntry:
         object.__setattr__(self, "diagnostics", tuple(self.diagnostics))
         object.__setattr__(self, "fatal_diagnostics", tuple(self.fatal_diagnostics))
         object.__setattr__(self, "schema_version", str(self.schema_version or self.CACHE_SCHEMA_VERSION))
+        object.__setattr__(self, "backend_revision", int(self.backend_revision or 0))
+        object.__setattr__(self, "source_revision", str(self.source_revision or ""))
+        object.__setattr__(self, "node_metadata", _freeze_value(self.node_metadata))
+        object.__setattr__(self, "artist_scale", float(self.artist_scale or 1.0))
+        object.__setattr__(self, "chronological_undated_nodes", frozenset(self.chronological_undated_nodes))
         if not isinstance(self.route_plan, FrozenRoutePlan):
             object.__setattr__(self, "route_plan", FrozenRoutePlan.from_route_plan(self.route_plan))
         geometry_diagnostics = _non_finite_geometry_diagnostics(

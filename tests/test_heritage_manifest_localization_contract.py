@@ -34,7 +34,10 @@ class HeritageManifestLocalizationContractTest(unittest.TestCase):
         manifest = json.loads((HERITAGE / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["version"], "0.2.3")
         self.assertEqual(manifest["min_progtrack_version"], "0.2.3")
-        self.assertEqual(set(manifest["permissions"]), {"heritage.view", "heritage.edit_links"})
+        self.assertEqual(
+            set(manifest["permissions"]),
+            {"heritage.view", "heritage.edit_links", "heritage.edit_genotype_colors"},
+        )
         self.assertEqual(manifest["backend_namespaces"], ["heritage"])
         self.assertNotIn("species_filtering", manifest["features"])
         self.assertIn("draggable_nodes", manifest["capabilities"])
@@ -62,6 +65,16 @@ class HeritageManifestLocalizationContractTest(unittest.TestCase):
             self.assertIn('id="plugins"', text, path.name)
             self.assertIn("Heritage Track", text, path.name)
             self.assertIn("IPID", text, path.name)
+
+        self.assertIn("Core animal records are read-only in Heritage Track", readme)
+        scoped_editing_markers = {
+            "en": "Core animal identity, genotype and parentage are read-only here",
+            "de": "Kern-Tieridentität, Genotyp und Elternschaft sind hier schreibgeschützt",
+            "it": "Identità, genotipo e genitori degli animali Core sono in sola lettura",
+            "ru": "Идентичность, генотип и родительство Core-животных здесь доступны только для чтения",
+        }
+        for path, marker in zip(MANUALS, scoped_editing_markers.values()):
+            self.assertIn(marker, path.read_text(encoding="utf-8"), path.name)
 
 
 if __name__ == "__main__":

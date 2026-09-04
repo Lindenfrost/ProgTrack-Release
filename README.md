@@ -390,6 +390,12 @@ deliberately resets that saved layout after confirmation. The vertical layout
 offers the compact partner-normalized view and an optional chronological
 birth-date axis.
 
+Core animal records are read-only in Heritage Track: edit an animal's identity,
+genotype or Core parentage in the regular animal editor. Heritage-owned dummy
+records have separate lifecycle and parent-link controls; `heritage.edit_links`
+applies only to those dummy links and never writes a Core animal shadow. The
+genotype control in Heritage is a display-colour setting, not a genotype edit.
+
 Terminology: the **Reports** tab and File-menu report actions are the user-facing surface provided by the **Animal Reports** plugin; they are not separate report databases. In Cage Track, a **Unit** is a physical housing level between a building and room. An organizational unit or workgroup is a user/project membership scope managed in Master Track and is unrelated to cage placement.
 
 ## Users, account roles, and job bundles

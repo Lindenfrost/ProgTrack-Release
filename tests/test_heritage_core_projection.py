@@ -31,6 +31,30 @@ class _Backend:
         )
 
 
+class _RevisionRecords(_MemoryRecords):
+    """Tiny shared repository with the optimistic revision API."""
+
+    def __init__(self, initial=None):
+        super().__init__(initial)
+        self.revision = 1 if self.values else 0
+
+    def get_with_revision(self, namespace, record_id, default=None):
+        return copy.deepcopy(self.values.get((namespace, record_id), default)), self.revision
+
+    def put(self, namespace, record_id, payload, expected_revision=None, **_kwargs):
+        if expected_revision is not None and int(expected_revision) != self.revision:
+            raise RuntimeError("stale revision")
+        self.put_count += 1
+        self.revision += 1
+        self.values[(namespace, record_id)] = copy.deepcopy(payload)
+        return self.revision
+
+
+class _RevisionBackend:
+    def __init__(self, graph):
+        self.records = _RevisionRecords({("heritage", "graph"): graph})
+
+
 class _App:
     def __init__(self, graph=None):
         self.backend = _Backend(graph)
@@ -103,20 +127,16 @@ class HeritageCoreProjectionTest(unittest.TestCase):
             {"genotype": "", "node_fill_color": ""},
         )
 
-    def test_sync_from_record_replaces_stale_projection_without_writing_when_requested(self):
+    def test_core_sync_hook_never_materializes_or_rewrites_a_shadow(self):
         app = _App(_stale_graph())
         store = HeritageStore(".", app.backend)
         store.load()
         before_writes = app.backend.records.put_count
         changed = store.sync_from_record("Child", app.animals["Child"], persist=False)
 
-        self.assertTrue(changed)
-        projected = store.get_all_entries()["Child"]
-        self.assertEqual(projected["species"], "Callithrix jacchus")
-        self.assertEqual(projected["sex"], "female")
-        self.assertEqual(projected["genotype"], "")
-        self.assertEqual(projected["egg_donor"], "")
-        self.assertEqual(projected["surrogate_mother"], "")
+        self.assertFalse(changed)
+        self.assertEqual(store.get_all_entries()["Child"]["species"], "Macaca mulatta")
+        self.assertEqual(store.get_all_entries()["Child"]["egg_donor"], "OldMother")
         self.assertEqual(app.backend.records.put_count, before_writes)
 
     def test_read_only_engine_build_excludes_stale_core_store_copy_and_writes_nothing(self):
@@ -129,6 +149,58 @@ class HeritageCoreProjectionTest(unittest.TestCase):
         self.assertEqual(app.backend.records.put_count, 0)
         self.assertEqual(engine.child_to_parents["Child"]["egg_donor"], "")
         self.assertEqual(engine.child_to_parents["Child"]["surrogate_mother"], "")
+
+    def test_second_session_revision_rebuilds_first_session_without_reopen(self):
+        graph = {
+            "version": "1.0.0",
+            "animals": {
+                "Dummy": {
+                    "ipid": "dummy-ipid",
+                    "name": "Dummy",
+                    "species": "Callithrix jacchus",
+                    "heritage_only": True,
+                    "egg_donor": "",
+                }
+            },
+        }
+        app = _App(graph)
+        app.backend = _RevisionBackend(graph)
+        app.animals["Child"]["eizellspenderin"] = "Dummy"
+        first = HeritageTrackPlugin(app)
+        first_engine = first.build_engine()
+        self.assertEqual(first_engine.heritage_entries["Dummy"]["species"], "Callithrix jacchus")
+
+        second = HeritageTrackPlugin(app)
+        def mutate(data):
+            data["animals"]["Dummy"].update(
+                species="Macaca mulatta", egg_donor="NewGrand"
+            )
+            data["animals"]["NewGrand"] = {
+                "name": "NewGrand",
+                "species": "Macaca mulatta",
+                "heritage_only": True,
+            }
+
+        second.store.atomic_update(mutate)
+
+        rebuilt = first.build_engine()
+        self.assertIsNot(first_engine, rebuilt)
+        self.assertEqual(rebuilt.heritage_entries["Dummy"]["species"], "Macaca mulatta")
+        self.assertEqual(rebuilt.child_to_parents["Dummy"]["egg_donor"], "NewGrand")
+        self.assertEqual(first.get_parentage("Dummy")["egg_donor"], "NewGrand")
+        self.assertIn("NewGrand", first.store.get_all_entries())
+
+    def test_backend_revision_invalidates_engine_even_when_effective_graph_is_unchanged(self):
+        graph = {"version": "1.0.0", "animals": {}}
+        app = _App(graph)
+        app.backend = _RevisionBackend(graph)
+        plugin = HeritageTrackPlugin(app)
+        first = plugin.build_engine()
+        second = HeritageTrackPlugin(app)
+        second.store.atomic_update(lambda data: data.setdefault("settings", {}).update(show_grid=True))
+        rebuilt = plugin.build_engine()
+        self.assertIsNot(first, rebuilt)
+        self.assertEqual(first.resolution_revision, rebuilt.resolution_revision)
 
 
 class PedigreeEngineResolutionCacheTest(unittest.TestCase):
