@@ -142,8 +142,10 @@ from Plugins.core.role_block_presets import (
 )
 from Plugins.core.project_species import assignment_allowed, project_species_for, project_species_values_for
 from Plugins.core.animal_relationships import (
+    RELATIONSHIP_FIELDS,
     RelationshipConflict,
     plan_symmetric_relationship,
+    resolve_animal_reference,
     relationship_status_icon,
 )
 from Plugins.core.resource_catalogs import (
@@ -282,6 +284,7 @@ LOCK_FILE = str(RUNTIME_PATHS.runtime / "standalone.lock")
 DATE_FORMAT = "%d.%m.%Y"
 PHASESCHWELLE = 10.0
 MAX_SELECTED_ANIMALS = 5
+ARCHIVED_SELECTION_PREFIX = "__archived__"
 DEFAULT_MAX_MESS = 100
 DEFAULT_MAX_PGF = 12
 DEFAULT_MAX_EMBRYO = 12
@@ -8838,7 +8841,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not self._master_can('core.edit_animal_role'):
             self._show_permission_denied()
             return
-        selected = self.selected_animals[:1]
+        # Archived rows are selectable for Heritage Track but cannot be edited
+        # from the core animal dialog.  Keep the All-tab edit action scoped to
+        # active backend animals.
+        selected = [
+            name for name in self.selected_animals if name in self.animals
+        ][:1]
         if not selected:
             return
         self._dlg_change_sort(selected[0])
@@ -10030,6 +10038,89 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
         return str(self.messages.get(key, fallback))
 
+    def _in_experiment_icon_tooltip(self, record: Mapping[str, Any]) -> str:
+        """Return the localized experiment tooltip with a safe project name.
+
+        The animal's ``project`` value is a canonical Project Track key.  It is
+        only included when that key still exists in the project catalogue and
+        is visible to the current user.  Invalid, stale, hidden or missing
+        assignments deliberately fall back to the generic localized tooltip.
+        """
+        generic = self._status_icon_tooltip("status.in_experiment")
+        if not isinstance(record, Mapping) or not record.get("in_experiment"):
+            return generic
+        project = re.sub(r"\s+", " ", str(record.get("project") or "").strip())
+        if not project:
+            return generic
+        try:
+            project_records = self._load_project_records_for_visibility()
+            if project not in project_records:
+                return generic
+            unrestricted, visible_projects = self._project_visibility_scope()
+            if not unrestricted and project not in visible_projects:
+                return generic
+        except Exception:
+            # Tooltip enrichment is presentation-only; a transient catalogue
+            # or visibility failure must not break list rendering.
+            return generic
+        template = str(
+            self.messages.get(
+                "status.in_experiment_project",
+                "In experiment, in the {project} Project",
+            )
+        )
+        if "{project}" not in template:
+            return generic
+        return template.replace("{project}", project)
+
+    def _relationship_icon_tooltip(
+        self,
+        subject_key: str,
+        record: Mapping[str, Any],
+        semantic_id: str,
+    ) -> str:
+        """Return safe ``Name (ID)`` labels for a relationship status icon.
+
+        Relationship fields contain canonical IPID references, although older
+        example records can still contain a generated ID or a unique short
+        name.  Resolve each field against the combined active/archived record
+        view and expose only the partner's display name and public ID.  The
+        field order is stable and duplicate references are shown once.  A
+        missing/ambiguous reference or a record without a public ID simply
+        leaves the icon's normal localized tooltip in place.
+        """
+        if semantic_id not in {"status.partner", "role.breeding"}:
+            return ""
+        if not isinstance(record, Mapping):
+            return ""
+        records = self._relationship_records()
+        if not records:
+            return ""
+        subject = str(subject_key or "").strip()
+        labels: List[str] = []
+        seen_targets: set[str] = set()
+        for field in RELATIONSHIP_FIELDS:
+            raw_reference = str(record.get(field) or "").strip()
+            if not raw_reference:
+                continue
+            target = resolve_animal_reference(records, raw_reference)
+            if not target or target == subject or target in seen_targets:
+                continue
+            target_record = records.get(target)
+            if not isinstance(target_record, Mapping):
+                continue
+            display_name = animal_base_name(target, target_record).strip()
+            public_id = str(target_record.get("id") or "").strip()
+            if not display_name or not public_id:
+                continue
+            # Keep tooltip entries single-line even if malformed data contains
+            # a line break; never expose the immutable IPID reference.
+            display_name = re.sub(r"\s+", " ", display_name)
+            public_id = re.sub(r"\s+", " ", public_id)
+            labels.append(f"{display_name} ({public_id})")
+            seen_targets.add(target)
+        return "\n".join(labels)
+
     @staticmethod
     def _status_text_without_icon_tokens(status: str) -> str:
         text = str(status or "")
@@ -10039,46 +10130,29 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         return text
     
     def _partner_generated_id(self, record: Mapping[str, Any]) -> str:
-        """Return the generated public ID for a relationship reference.
+        """Return the first resolved public ID for a relationship reference.
 
-        Relationship fields store an immutable IPID (or, in older seed data,
-        a short name). The row displays only the short partner name, while
-        hovering it should identify the partner with its generated facility
-        ID. Never expose an unresolved IPID suffix as a tooltip fallback.
+        This compatibility helper is intentionally ID-only; the row renderer
+        uses :meth:`_relationship_icon_tooltip` for the user-facing
+        ``Name (ID)`` tooltip.  Unresolved references never fall back to raw
+        IPID or short-name text.
         """
         if not isinstance(record, Mapping):
             return ""
-        for field in ("partner_von", "verpaart_mit"):
+        resolver = getattr(self, "_relationship_records", None)
+        records = resolver() if callable(resolver) else getattr(self, "animals", {})
+        if not isinstance(records, Mapping):
+            return ""
+        for field in RELATIONSHIP_FIELDS:
             raw = str(record.get(field) or "").strip()
             if not raw:
                 continue
-            partner = self.animals.get(raw)
-            if not isinstance(partner, Mapping):
-                raw_folded = raw.casefold()
-                for key, candidate in self.animals.items():
-                    if not isinstance(candidate, Mapping):
-                        continue
-                    if str(candidate.get("id") or "").strip().casefold() == raw_folded:
-                        partner = candidate
-                        break
-                if not isinstance(partner, Mapping):
-                    base = animal_base_name(raw).casefold()
-                    matches = [
-                        candidate
-                        for key, candidate in self.animals.items()
-                        if isinstance(candidate, Mapping)
-                        and animal_base_name(key, candidate).casefold() == base
-                    ]
-                    if len(matches) == 1:
-                        partner = matches[0]
+            target = resolve_animal_reference(records, raw)
+            partner = records.get(target) if target else None
             if isinstance(partner, Mapping):
                 generated_id = str(partner.get("id") or "").strip()
                 if generated_id:
                     return generated_id
-            # A legacy short-name reference has no generated ID to display;
-            # keep the tooltip safe and readable instead of leaking an IPID.
-            if split_animal_identity_key(raw) is None:
-                return raw
         return ""
 
     def _relationship_records(self) -> Dict[str, Dict[str, Any]]:
@@ -13677,6 +13751,26 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # 7.16 Refresh Animal List
     #     Update the sidebar list based on current animal selection and filters.
     # ------------------------
+    def _normalize_sidebar_selection_value(self, value: Any) -> str:
+        """Return the canonical animal key represented by a sidebar item.
+
+        Archived rows carry a UI-only prefix so restore/delete actions can
+        distinguish them from active rows.  That prefix must never leak into
+        plot selection, plugin callbacks, or cache keys.
+        """
+        if not isinstance(value, str):
+            return ""
+        raw = value.strip()
+        if not raw:
+            return ""
+        if raw.startswith(ARCHIVED_SELECTION_PREFIX):
+            key = raw[len(ARCHIVED_SELECTION_PREFIX):].strip()
+            archived = getattr(self, "archived", {})
+            if isinstance(archived, dict) and key in archived:
+                return key
+            return ""
+        return raw
+
     def _refresh_list(self, update_tab_visibility: bool = False, force_heritage_visible: bool = False) -> None:
         """Refresh the animal list based on current filter and selections.
         
@@ -13702,17 +13796,52 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if self.category_tab.currentIndex() != before_idx:
                     return
         
-        # remember what was selected (use stored key, not display text)
+        # Remember what was selected (use canonical keys, not display text).
+        # Archived rows use a UI-only sentinel; normalize it before handing
+        # selection to plots/plugins so the sentinel cannot become an animal
+        # identity or be lost during a list refresh.
         sel = [item.data(Qt.ItemDataRole.UserRole) for item in self.lst.selectedItems()]
-        if sel:
-            self.selected_animals = [n for n in sel if n and n in self.animals]
+        normalized_pairs = [
+            (raw, self._normalize_sidebar_selection_value(raw)) for raw in sel
+        ]
+        normalized_sel = [value for _raw, value in normalized_pairs if value]
+        if not sel:
+            # Preserve the existing selection when a refresh is caused by a
+            # filter/settings change rather than a user deselection.  This
+            # mirrors the pre-existing active-row behavior while still
+            # normalizing any legacy archived sentinel that may be present.
+            normalized_sel = [
+                self._normalize_sidebar_selection_value(value)
+                for value in (getattr(self, "selected_animals", []) or [])
+            ]
+            normalized_sel = [value for value in normalized_sel if value]
+        preserved_selection = list(dict.fromkeys(normalized_sel))
+        preserved_archived_selection = list(dict.fromkeys(
+            value for raw, value in normalized_pairs
+            if isinstance(raw, str)
+            and raw.startswith(ARCHIVED_SELECTION_PREFIX)
+            and value
+        ))
+        if not sel:
+            preserved_archived_selection = list(dict.fromkeys(
+                value for value in (getattr(self, "_selected_archived", []) or [])
+                if self._normalize_sidebar_selection_value(value)
+            ))
+        self._selected_archived = preserved_archived_selection
+        self.selected_animals = [
+            value for value in preserved_selection
+            if value in self.animals or value in getattr(self, "archived", {})
+        ]
         # Track selected heritage-only animals separately
         self._selected_heritage_only = []
         if getattr(self, 'has_heritage_plugin', False):
             heritage_plugin = getattr(self, 'heritage_plugin', None)
             if heritage_plugin is not None:
                 self._selected_heritage_only = [
-                    n for n in sel if n and n not in self.animals and heritage_plugin.store.is_heritage_only(n)
+                    n for n in normalized_sel
+                    if n not in self.animals
+                    and n not in getattr(self, "archived", {})
+                    and heritage_plugin.store.is_heritage_only(n)
                 ]
 
         # rebuild list based on the current tab index
@@ -13854,8 +13983,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 icon_label = QLabel()
                 icon_label.setPixmap(status_icon.pixmap(27, 27))
                 icon_tooltip = self._status_icon_tooltip(semantic_id)
+                if semantic_id == "status.in_experiment":
+                    icon_tooltip = self._in_experiment_icon_tooltip(data)
+                relationship_tooltip = self._relationship_icon_tooltip(
+                    name, data, semantic_id
+                )
+                if relationship_tooltip:
+                    icon_tooltip = relationship_tooltip
                 icon_label.setToolTip(icon_tooltip)
                 icon_label.setAccessibleName(icon_tooltip)
+                icon_label.setAccessibleDescription(icon_tooltip)
                 h.addWidget(icon_label)
             remaining_status = self._status_text_without_icon_tokens(status)
             if remaining_status:
@@ -13864,10 +14001,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
                 )
                 status_tooltip = self._get_status_description(status)
-                if "\u2665" in status:
-                    partner_id = self._partner_generated_id(data)
-                    if partner_id:
-                        status_tooltip = partner_id
                 status_lbl.setToolTip(status_tooltip)
                 h.addWidget(status_lbl)
             h.setContentsMargins(4, 2, 4, 2)
@@ -13892,7 +14025,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.lst.setItemWidget(item, row_widget)
             
             # Selection match must use the base name (without appended status)
-            if name in self.selected_animals:
+            if name in preserved_selection:
                 item.setSelected(True)
             visible_count += 1
 
@@ -13950,7 +14083,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                 h_item.setFont(h_font)
                                 self.lst.addItem(h_item)
                                 # Select if previously selected (check both current sel and tracked heritage selections)
-                                if h_name in sel or h_name in getattr(self, '_selected_heritage_only', []):
+                                if h_name in preserved_selection or h_name in getattr(self, '_selected_heritage_only', []):
                                     h_item.setSelected(True)
 
         # --- Update hidden cmb_arch for backward compat ---
@@ -13961,6 +14094,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.cmb_arch.addItems(sorted(self.archived.keys()))
 
         # --- Show archived animals below separator when checkbox is checked ---
+        arch_to_show: Dict[str, dict] = {}
         if getattr(self, 'chk_show_archived', None) and self.chk_show_archived.isChecked() and self.archived:
             def _arch_filter(name: str, data: dict) -> bool:
                 if not _visible_in_animal_sidebar(data):
@@ -14013,25 +14147,58 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     arch_name_lbl = QLabel(self._display_name(arch_name))
                     arch_name_lbl.setToolTip(arch_identity_label)
                     arch_name_lbl.setStyleSheet('color: black;')
-                    arch_h.addWidget(arch_name_lbl)
-                    arch_h.addStretch()
+                    if show_all_animals_tab:
+                        # Archived rows share the All-tab row geometry with
+                        # active animals.  Keep long archived names from
+                        # expanding the row's size hint and consuming the
+                        # fixed status area reserved by active rows.
+                        arch_name_lbl.setMinimumWidth(0)
+                        arch_name_lbl.setSizePolicy(
+                            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+                        )
+                        arch_h.addWidget(arch_name_lbl, 1)
+                    else:
+                        arch_h.addWidget(arch_name_lbl)
+                        arch_h.addStretch()
                     arch_h.setContentsMargins(4, 2, 4, 2)
                     arch_row.setLayout(arch_h)
                     arch_item.setSizeHint(arch_row.sizeHint())
-                    arch_item.setData(Qt.ItemDataRole.UserRole, '__archived__' + arch_name)
+                    arch_item.setData(
+                        Qt.ItemDataRole.UserRole,
+                        ARCHIVED_SELECTION_PREFIX + arch_name,
+                    )
                     arch_item.setToolTip(arch_identity_label)
                     self.lst.addItem(arch_item)
                     self.lst.setItemWidget(arch_item, arch_row)
+                    if arch_name in preserved_archived_selection:
+                        arch_item.setSelected(True)
+
+        # Reassert the saved archive metadata after the list has been rebuilt.
+        # Some Qt versions emit a transient empty selection while ``clear()``
+        # runs; that signal must not make the archive actions forget the rows
+        # that are about to be reselected.
+        self._selected_archived = [
+            name for name in preserved_archived_selection
+            if name in getattr(self, "archived", {})
+        ]
+        # Reassert the canonical selection for the same reason: a transient
+        # selectionChanged signal emitted by ``clear()`` must not erase it
+        # before the rebuilt rows are selected again.
+        self.selected_animals = [
+            value for value in preserved_selection
+            if value in self.animals or value in getattr(self, "archived", {})
+        ]
 
         can_archive = self._master_can('core.archive_animals')
         can_delete  = self._master_can('core.delete_animals')
         can_edit    = self._can_use_primary_edit_button()
         selected_arch = getattr(self, '_selected_archived', [])
+        active_selected = any(name in self.animals for name in self.selected_animals)
         self.btn_restore.setEnabled(bool(selected_arch) and can_archive)
         self.btn_delete.setEnabled(bool(selected_arch) and can_delete)
-        self.btn_edit.setEnabled(bool(self.selected_animals) and can_edit)
+        self.btn_edit.setEnabled(active_selected and can_edit)
         if hasattr(self, 'btn_edit_animal'):
-            self.btn_edit_animal.setEnabled(bool(self.selected_animals) and can_edit)
+            self.btn_edit_animal.setEnabled(active_selected and can_edit)
 
         logging.info(f"Refreshed list with {visible_count} visible animals")
 
@@ -14113,8 +14280,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         selected_names = []
         selected_heritage_only = []
         for item in self.lst.selectedItems():
-            key = item.data(Qt.ItemDataRole.UserRole)
-            if key and key in self.animals:
+            raw_key = item.data(Qt.ItemDataRole.UserRole)
+            key = self._normalize_sidebar_selection_value(raw_key)
+            if key and (key in self.animals or key in getattr(self, "archived", {})):
                 selected_names.append(key)
             elif key:
                 # Check if this is a heritage-only animal
@@ -14219,9 +14387,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         archived_selected = []
         for item in self.lst.selectedItems():
             user_data = item.data(Qt.ItemDataRole.UserRole)
-            if isinstance(user_data, str) and user_data.startswith('__archived__'):
-                archived_selected.append(user_data[len('__archived__'):])
-        self._selected_archived = archived_selected
+            if isinstance(user_data, str) and user_data.startswith(ARCHIVED_SELECTION_PREFIX):
+                key = self._normalize_sidebar_selection_value(user_data)
+                if key:
+                    archived_selected.append(key)
+        self._selected_archived = list(dict.fromkeys(archived_selected))
         if hasattr(self, 'btn_restore') and hasattr(self, 'btn_delete'):
             can_arch = self._master_can('core.archive_animals')
             can_del  = self._master_can('core.delete_animals')
@@ -14229,12 +14399,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.btn_delete.setEnabled(bool(archived_selected) and can_del)
 
         # Enable/disable Edit button based on selection AND permissions
+        active_selected = any(name in self.animals for name in self.selected_animals)
         if hasattr(self, "btn_edit"):
             can_edit = self._can_use_primary_edit_button()
-            self.btn_edit.setEnabled(bool(self.selected_animals) and can_edit)
+            self.btn_edit.setEnabled(active_selected and can_edit)
         if hasattr(self, 'btn_edit_animal'):
             can_edit = self._master_can('core.edit_animal_core')
-            self.btn_edit_animal.setEnabled(bool(self.selected_animals) and can_edit)
+            self.btn_edit_animal.setEnabled(active_selected and can_edit)
 
         # Determine which tab is currently active
         current_tab_index = self.main_tabs.currentIndex() if hasattr(self, 'main_tabs') else 0
@@ -14449,12 +14620,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Genotype is excluded from status - it's shown in a separate field in the UI
             markers = ('!' if abnormal else '') + ('+' if sick else '')
             return markers
-        # Partners: build status with reproduction field and partner name
+        # Partners: build status with reproduction field and a semantic
+        # relationship marker; partner identity lives on the SVG tooltip.
         if role == Role.PARTNER.value:
             # Relationship fields retain the immutable partner IPID for
-            # unambiguous resolution; compact sidebar status shows only the
-            # partner's base name.
-            partner_name = animal_base_name(a.get('partner_von') or '')
+            # unambiguous resolution.  The compact sidebar renders the
+            # relationship identity on the SVG tooltip, not beside the icon.
+            has_partner = bool(str(a.get('partner_von') or '').strip())
             repro_field = self._localized_reproduction_status(
                 a.get('reproduktionsfeld'))
             parts = []
@@ -14464,8 +14636,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 parts.append("+")
             if repro_field:
                 parts.append(repro_field)
-            if partner_name:
-                parts.append(f"♥ {partner_name}")
+            if has_partner:
+                parts.append("♥")
             status = " ".join(parts).strip()
         else:
             # Donor logic (including Samenspender): recovery after OP or Spermaprobe
@@ -14590,12 +14762,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 
                 # Genotype is excluded from status - it's shown in a separate field in the UI
                 
-                # Append partner name (like partnertiere)
-                # Keep the full IPID in the relationship field, but do not
-                # expose its species/date/origin suffix in the animal list.
-                partner = animal_base_name(a.get('verpaart_mit', ''))
-                if partner:
-                    status = f"{status} | ♥ {partner}" if status else f"♥ {partner}"
+                # Keep the relationship marker in the semantic status so the
+                # row can render the breeding SVG.  The partner identity is
+                # attached to that SVG's ``Name (ID)`` tooltip instead of
+                # widening the inline status label.
+                if str(a.get('verpaart_mit') or '').strip():
+                    status = f"{status} | ♥" if status else "♥"
             else:
                 # Unknown or unspecified roles: no status
                 status = ''

@@ -60,7 +60,7 @@ class SelectedAnimalsStrategy(DisplaySetStrategy):
     """Display strategy when specific animals are selected.
 
     Includes:
-    - All selected animals (always shown, even if disconnected)
+    - All selected animals (unless archived exclusion is enabled)
     - All ancestors up to max_generations (solid nodes)
     - Note: Offspring, partners, and siblings are shown as GHOSTS (handled by ghost strategy)
     """
@@ -73,15 +73,23 @@ class SelectedAnimalsStrategy(DisplaySetStrategy):
         exclude_archived: bool = False,
         archived_set: Optional[Set[str]] = None,
     ) -> Set[str]:
-        selected_names = [_norm_name(name) for name in selected if _norm_name(name)]
+        archived = archived_set or set()
+        selected_names = [
+            _norm_name(name)
+            for name in selected
+            if _norm_name(name)
+            and not (exclude_archived and _norm_name(name) in archived)
+        ]
 
         if not selected_names:
             # Empty selection is the splash/empty state; never substitute a
             # hidden all-animals scope here.
             return set()
 
-        archived = archived_set or set()
-        # Start with selected animals - these are ALWAYS shown even if disconnected
+        # Start with selected animals.  Explicit archived selections remain in
+        # the canonical selection so toggling the filter back off can restore
+        # them, but they are omitted from this display set while exclusion is
+        # enabled.
         display: Set[str] = set(selected_names)
 
         # Phase: Collect ancestors of selected animals only (not descendants)

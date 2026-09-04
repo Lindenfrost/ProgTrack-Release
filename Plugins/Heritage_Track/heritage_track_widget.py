@@ -141,6 +141,7 @@ class NodeEditDialog(QDialog):
         sex_editable: bool = True,
         genotype_editable: bool = True,
         parents_editable: bool = True,
+        parents_read_only_core: bool = True,
         genotype_options: Optional[List[str]] = None,
         color_editable: bool = True,
         genotype_options_provider: Optional[Callable[[str], List[str]]] = None,
@@ -153,10 +154,16 @@ class NodeEditDialog(QDialog):
         self._allow_name_edit = bool(allow_name_edit)
         self._none_label = messages.get("heritage_track.value.none", "none")
         self._sex = self._normalize_sex(sex)
+        # Keep the editability decision with the dialog instance.  The
+        # enabled state is only a UI affordance; ``values()`` also uses this
+        # flag so a disabled Core field cannot be changed by programmatic
+        # selection in a test or by a future caller.
+        self._sex_editable = bool(sex_editable)
         self._remove_requested = False
         self._species_options = species_options or []
         self._parent_options_provider = parent_options_provider
         self._parents_editable = bool(parents_editable)
+        self._parents_read_only_core = bool(parents_read_only_core)
         self._has_genotype_catalog = genotype_options is not None
         self._genotype_options = [str(value).strip() for value in (genotype_options or []) if str(value).strip()]
         self._color_editable = bool(color_editable)
@@ -224,13 +231,23 @@ class NodeEditDialog(QDialog):
         form.addRow(messages.get("heritage_track.node.edit.father", "Father:"), self.father_combo)
 
         if not self._parents_editable:
+            readonly_parent_key = (
+                "heritage_track.parents.read_only_core"
+                if self._parents_read_only_core
+                else "heritage_track.parents.permission_required"
+            )
             readonly_parent_tip = messages.get(
-                "heritage_track.parents.read_only_core",
-                "Parents are maintained by the main animal record.",
+                readonly_parent_key,
+                (
+                    "Parents are maintained by the main animal record."
+                    if self._parents_read_only_core
+                    else "Heritage parent editing requires the edit-links permission."
+                ),
             )
             for parent_widget in (self.mother_combo, self.father_combo):
                 parent_widget.setEnabled(False)
                 parent_widget.setToolTip(readonly_parent_tip)
+                parent_widget.setAccessibleDescription(readonly_parent_tip)
                 parent_widget.setStyleSheet("QComboBox { background: #f0f0f0; color: #666; }")
         if _sp_hint:
             sp_lbl = QLabel(_sp_hint)
@@ -245,13 +262,20 @@ class NodeEditDialog(QDialog):
         if sex_idx < 0:
             sex_idx = self.sex_combo.findData("unknown")
         self.sex_combo.setCurrentIndex(sex_idx)
-        self.sex_combo.setEnabled(bool(sex_editable))
-        if not sex_editable:
-            self.sex_combo.setToolTip(
-                messages.get(
-                    "heritage_track.sex.read_only_core",
-                    "Sex is maintained by the main animal record.",
-                )
+        self.sex_combo.setEnabled(self._sex_editable)
+        if not self._sex_editable:
+            readonly_sex_tip = messages.get(
+                "heritage_track.sex.read_only_core",
+                "Sex is maintained by the main animal record.",
+            )
+            # Match the greyed-out parent controls and expose the same reason
+            # to screen readers and keyboard users.  A disabled combo cannot
+            # receive focus or open its popup, while the canonical value stays
+            # visible for copying/inspection.
+            self.sex_combo.setToolTip(readonly_sex_tip)
+            self.sex_combo.setAccessibleDescription(readonly_sex_tip)
+            self.sex_combo.setStyleSheet(
+                "QComboBox { background: #f0f0f0; color: #666; }"
             )
         form.addRow(messages.get("heritage_track.node.edit.sex", "Sex:"), self.sex_combo)
 
@@ -398,7 +422,13 @@ class NodeEditDialog(QDialog):
             "father": self._normalize_parent_value(self.father_combo.selected_value()),
             "mother_allows_missing": self.mother_combo.allows_missing_value(),
             "father_allows_missing": self.father_combo.allows_missing_value(),
-            "sex": self._normalize_sex(self.sex_combo.currentData()),
+            # Core sex is authoritative.  Preserve the value read from Core
+            # even if code changes the disabled combo programmatically.
+            "sex": (
+                self._normalize_sex(self.sex_combo.currentData())
+                if self._sex_editable
+                else self._sex
+            ),
         }
         if self.species_combo is not None:
             result["species"] = self.species_combo.currentData() or ""
@@ -2344,8 +2374,11 @@ class HeritageTrackWidget(QWidget):
             mother="",
             father="",
             sex="",
+            # New Heritage-only dummies keep the normal editable sex control.
+            sex_editable=True,
             allow_name_edit=True,
             parents_editable=self._can("heritage.edit_links"),
+            parents_read_only_core=False,
             genotype_options=[],
             genotype_options_provider=self._genotype_options_for_species,
             color_editable=self._can("heritage.edit_genotype_colors"),
@@ -5443,6 +5476,7 @@ class HeritageTrackWidget(QWidget):
             sex_editable=is_heritage_only,
             genotype_editable=is_heritage_only,
             parents_editable=is_heritage_only and can_edit_links,
+            parents_read_only_core=not is_heritage_only,
             genotype_options=(self._genotype_options_for_species(animal_species) if is_heritage_only else None),
             color_editable=can_edit_colors,
             genotype_options_provider=self._genotype_options_for_species,
@@ -5633,11 +5667,14 @@ class HeritageTrackWidget(QWidget):
             mother="",
             father="",
             sex="",
+            # New Heritage-only dummies keep the normal editable sex control.
+            sex_editable=True,
             allow_name_edit=True,  # allow entering name for new animal
             allow_remove=False,    # can't remove an animal that doesn't exist yet
             animal_species="",
             species_options=species_options,
             parents_editable=self._can("heritage.edit_links"),
+            parents_read_only_core=False,
             genotype_options=[],
             color_editable=self._can("heritage.edit_genotype_colors"),
             genotype_options_provider=self._genotype_options_for_species,
