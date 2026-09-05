@@ -10158,10 +10158,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             result.append("status.abnormal")
         if "+" in status:
             result.append("status.sick")
-        all_records = {
-            **(getattr(self, "archived_animals", {}) or {}),
-            **(getattr(self, "animals", {}) or {}),
-        }
+        # Use the same authoritative active/archived mapping as the
+        # relationship tooltip resolver.  ``archived_animals`` is a legacy
+        # list during application startup, whereas ``archived`` is the
+        # persisted record mapping; expanding the list with ``**`` could
+        # abort list construction before any status icon was rendered.
+        all_records = self._relationship_records()
         relationship_icon = relationship_status_icon(
             all_records, animal_key, animal
         )
