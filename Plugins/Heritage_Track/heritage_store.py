@@ -389,7 +389,13 @@ class HeritageStore:
         self._backend_revision = int(revision or 0)
         self._genotype_colors_cache = None
 
-    def atomic_update(self, mutator, *, expected_revision: int | None = None) -> Any:
+    def atomic_update(
+        self,
+        mutator,
+        *,
+        expected_revision: int | None = None,
+        preserve_pending: bool = True,
+    ) -> Any:
         """Apply one graph mutation and persist it in one backend write.
 
         The callback receives a deep copy of the normalized graph.  If it
@@ -398,6 +404,24 @@ class HeritageStore:
         transaction; tiny legacy test stores continue to work via the
         BackendJsonStore fallback.
         """
+        # A render or another command may have queued a derived patch in the
+        # same client while this atomic operation was prepared.  Capture that
+        # patch before reading the latest backend snapshot so an unrelated
+        # atomic mutation cannot clear or discard it.
+        pending_patch: Optional[Dict[str, Any]] = None
+        pending_baseline: Optional[Dict[str, Any]] = None
+        if preserve_pending and self.has_pending_changes():
+            local = self.load()
+            baseline = self._committed_snapshot
+            if isinstance(local, dict) and isinstance(baseline, dict):
+                pending_patch = self._compute_persistence_patch(
+                    local,
+                    baseline,
+                    animals=self._pending_animal_save,
+                    settings=self._pending_settings_save,
+                )
+                pending_baseline = deepcopy(baseline)
+
         current, current_revision = self.load_latest_with_revision()
         if expected_revision is not None and int(expected_revision) != current_revision:
             raise ConflictError(
@@ -405,6 +429,13 @@ class HeritageStore:
                 f"current revision is {current_revision}."
             )
         working = deepcopy(current)
+        if pending_patch and pending_patch.get("has_changes"):
+            self._check_patch_conflicts(
+                pending_patch,
+                pending_baseline or {},
+                working,
+            )
+            self._apply_persistence_patch(working, pending_patch)
         result = mutator(working)
         working["updated_at"] = self._utc_now_iso()
         previous = self._data
@@ -419,6 +450,10 @@ class HeritageStore:
         self._backend_revision = int(next_revision or (current_revision + 1))
         self._committed_snapshot = deepcopy(working)
         self._genotype_colors_cache = None
+        # ``preserve_pending=False`` is used only by the position-cache
+        # mutator, which already merges its pending patch explicitly.  All
+        # other callers commit the captured pending patch in this same
+        # transaction, so clearing the flags is now safe and lossless.
         self._pending_animal_save = False
         self._pending_settings_save = False
         return result
@@ -1349,7 +1384,10 @@ class HeritageStore:
                 "count": len(entries),
             }
 
-        result = self.atomic_update(mutate)
+        # This mutator merges the pending field-level patch itself so it can
+        # validate it before replacing the position map.  Disable the generic
+        # merge to avoid applying that patch twice.
+        result = self.atomic_update(mutate, preserve_pending=False)
         return dict(result or {})
 
     def remove_position_cache_entry(self, user_id: Any, cache_key: Any) -> bool:

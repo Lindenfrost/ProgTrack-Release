@@ -36,7 +36,12 @@ class HeritageManifestLocalizationContractTest(unittest.TestCase):
         self.assertEqual(manifest["min_progtrack_version"], "0.2.3")
         self.assertEqual(
             set(manifest["permissions"]),
-            {"heritage.view", "heritage.edit_links", "heritage.edit_genotype_colors"},
+            {
+                "heritage.view",
+                "heritage.edit_links",
+                "heritage.edit_genotype_colors",
+                "heritage.delete_durable_dummy",
+            },
         )
         self.assertEqual(manifest["backend_namespaces"], ["heritage"])
         self.assertNotIn("species_filtering", manifest["features"])

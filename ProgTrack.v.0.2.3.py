@@ -4850,6 +4850,47 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
         return allowed
 
+    def _record_in_unit_scope(self, record: Mapping[str, Any]) -> bool:
+        """Apply organizational-Unit visibility to Core records.
+
+        Animal ``unit_id`` values are commonly CageTrack housing identifiers,
+        so only the explicit organizational/workgroup fields participate in
+        this check.  An unassigned record remains visible; a record with an
+        explicit owner is fail-closed when a managed Unit service cannot
+        confirm that the current actor belongs to it.
+        """
+        if not isinstance(record, Mapping):
+            return False
+        owner = ""
+        for field in (
+            "organization_unit_id",
+            "organizational_unit_id",
+            "workgroup_id",
+        ):
+            value = str(record.get(field, "") or "").strip()
+            if value:
+                owner = value
+                break
+        if not owner:
+            return True
+        authorization = getattr(self, "authorization", None)
+        if authorization is None or bool(getattr(authorization, "trusted_local", False)):
+            return True
+        checker = getattr(authorization, "can_read_unit", None)
+        if callable(checker):
+            try:
+                return bool(checker(owner))
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "Could not evaluate Core parent Unit visibility", exc_info=True
+                )
+                return False
+        current = ""
+        master = getattr(self, "master_track", None)
+        if master is not None:
+            current = str(getattr(master, "current_unit_id", "") or "").strip()
+        return bool(current and current.casefold() == owner.casefold())
+
     # Audit records are emitted by explicit mutation handlers.  The former
     # stack-inspection based inference was intentionally removed: permission
     # checks also run during UI refresh/filter updates and are not mutations.
@@ -6745,8 +6786,37 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 count=len(out.get(section, {})),
             )
 
-        # Atomic write: temp file → fsync → replace
-        self.backend.save_core_data(out)
+        # Atomic write: temp file → fsync → replace.  Parentage edits carry
+        # the exact Core projection token that was validated in the dialog;
+        # the backend compares it inside the same transaction as the write so
+        # a second session cannot commit between validation and persistence.
+        expected_parentage_revision = getattr(
+            self, "_pending_core_parentage_revision", None
+        )
+        try:
+            self.backend.save_core_data(
+                out,
+                expected_parentage_revision=expected_parentage_revision,
+            )
+        except TypeError:
+            if expected_parentage_revision:
+                # A backend that cannot provide the optimistic parentage
+                # contract must fail closed instead of silently falling back
+                # to a stale full-snapshot write.
+                self._pending_core_parentage_revision = None
+                raise
+            try:
+                self.backend.save_core_data(out)
+            except Exception:
+                self._pending_core_parentage_revision = None
+                raise
+        except Exception:
+            # A rejected optimistic write must not poison the next unrelated
+            # dialog save with the stale token that caused this failure.
+            self._pending_core_parentage_revision = None
+            raise
+        else:
+            self._pending_core_parentage_revision = None
         logging.info(
             "Successfully saved core data through %s",
             RUNTIME_PATHS.profile.value,
@@ -7534,6 +7604,77 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         _set_field_visible("surrogate_mother", True)
         _set_field_visible("surrogate_father", True)
 
+    def _load_core_parentage_records(
+        self,
+        *,
+        required: bool = False,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Read one authoritative Core snapshot for parentage operations.
+
+        Mutation validation must never silently fall back to the session
+        cache.  A candidate list may be empty while the backend is
+        unavailable; a mutation requests ``required=True`` and fails closed.
+        """
+        loader = getattr(getattr(self, "backend", None), "load_core_data", None)
+        unavailable = self.messages.get(
+            "heritage_track.error.parentage_backend_unavailable",
+            "Core parentage data is unavailable. Reload and try again.",
+        )
+        if not callable(loader):
+            if required:
+                raise ValueError(unavailable)
+            return {}
+        try:
+            snapshot = loader()
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "Could not load authoritative Core parentage snapshot",
+                exc_info=True,
+            )
+            if required:
+                raise ValueError(unavailable) from exc
+            return {}
+        if not isinstance(snapshot, Mapping):
+            if required:
+                raise ValueError(unavailable)
+            return {}
+        records: Dict[str, Dict[str, Any]] = {}
+        for section in ("animals", "archived_animals", "archived"):
+            values = snapshot.get(section, {})
+            if not isinstance(values, Mapping):
+                continue
+            for key, record in values.items():
+                normalized_key = str(key or "").strip()
+                if normalized_key and isinstance(record, Mapping):
+                    records[normalized_key] = dict(record)
+        return records
+
+    def _core_parent_candidate_visible(self, record: Mapping[str, Any]) -> bool:
+        """Apply project and organizational-Unit visibility to one candidate."""
+        project_checker = getattr(self, "_animal_visible_to_current_user", None)
+        if callable(project_checker):
+            try:
+                if not bool(project_checker(record)):
+                    return False
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "Could not evaluate project visibility for parent candidate",
+                    exc_info=True,
+                )
+                return False
+        unit_checker = getattr(self, "_record_in_unit_scope", None)
+        if callable(unit_checker):
+            try:
+                if not bool(unit_checker(record)):
+                    return False
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "Could not evaluate Unit visibility for parent candidate",
+                    exc_info=True,
+                )
+                return False
+        return True
+
     def _core_parentage_records(self) -> Dict[str, Dict[str, Any]]:
         """Return the Core-owned animal identity view used by parent pickers.
 
@@ -7541,40 +7682,31 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         archived Core animals only; Heritage-owned dummies are never silently
         offered as Core parents.
         """
-        records: Dict[str, Dict[str, Any]] = {}
-        active = getattr(self, "animals", {})
-        archived = getattr(self, "archived", {})
-        if isinstance(active, Mapping):
-            records.update({str(k): v for k, v in active.items() if isinstance(v, dict)})
-        if isinstance(archived, Mapping):
-            records.update({str(k): v for k, v in archived.items() if isinstance(v, dict)})
+        records = self._load_core_parentage_records()
+
+        # Parent candidates must obey the same project and organizational-Unit
+        # visibility policy as the rest of the Core UI.  Filtering here (at
+        # query time) prevents a forbidden identity from being disclosed in a
+        # searchable combo before the commit-time validator rejects it.
+        visible: Dict[str, Dict[str, Any]] = {}
+        for key, value in records.items():
+            if self._core_parent_candidate_visible(value):
+                visible[key] = value
+        records = visible
         return records
 
     def _core_parentage_revision(self) -> str:
         """Return a stable snapshot token for the Core parentage projection."""
-        try:
-            snapshot = self.backend.load_core_data()
-        except Exception:
-            snapshot = {
-                "animals": getattr(self, "animals", {}),
-                "archived_animals": getattr(self, "archived", {}),
-            }
-        if not isinstance(snapshot, Mapping):
-            snapshot = {}
+        snapshot_records = self._load_core_parentage_records(required=True)
         records: Dict[str, Any] = {}
-        for section in ("animals", "archived_animals", "archived"):
-            values = snapshot.get(section, {})
-            if isinstance(values, Mapping):
-                for key, record in values.items():
-                    if isinstance(record, Mapping):
-                        records[str(key)] = {
-                            field: record.get(field, "")
-                            for field in (
-                                "eizellspenderin", "samenspender",
-                                "ziehmutter", "ziehvater",
-                                "species", "sex", "birth_date",
-                            )
-                        }
+        for key, record in snapshot_records.items():
+            records[str(key)] = {
+                field: record.get(field, "")
+                for field in (
+                    "eizellspenderin", "samenspender",
+                    "ziehmutter", "ziehvater", "species", "sex", "birth_date",
+                )
+            }
         payload = json.dumps(records, sort_keys=True, default=str, separators=(",", ":"))
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -7611,7 +7743,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         group = QGroupBox(self.messages.get("dialog.offspring.parents", "Parents"))
         layout = QFormLayout(group)
         fields: Dict[str, AnimalRelationshipCombo] = {}
-        inactive_label = self.messages.get("heritage_track.parent.inactive", "inactive")
         species_warning = QLabel()
         species_warning.setWordWrap(True)
         species_warning.setStyleSheet("color: #a33; font-style: italic;")
@@ -7646,7 +7777,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 or candidate.get("death_date")
                 or candidate.get("sterbedatum")
             ):
-                label = f"{label} ({inactive_label})"
+                # A deceased identity is distinct from an archived/lifecycle
+                # state.  Use the unambiguous, language-neutral marker in
+                # every locale; archive status remains available separately
+                # in the record and tooltip.
+                label = f"{label} {DECEASED_STATUS_SYMBOL}"
             return label
 
         def refresh_parent_options(*_args: Any) -> None:
@@ -7790,13 +7925,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ):
             raise ValueError(self.messages.get("heritage_track.error.permission_denied", "You do not have permission to edit parentage."))
         expected = str(expected_revision or "").strip()
-        if expected and expected != self._core_parentage_revision():
+        validated_parentage_revision = self._core_parentage_revision()
+        if expected and expected != validated_parentage_revision:
             raise ValueError(self.messages.get("heritage_track.error.parentage_conflict", "The parentage data changed. Reload it and try again."))
 
         target_key = str(target_key or "").strip()
         if not target_key:
             raise ValueError(self.messages.get("heritage_track.error.target_required", "An animal is required."))
-        records = self._core_parentage_records()
+        # Resolve against the same authoritative snapshot used for the
+        # revision token.  Never mix the dialog's session-local animal map
+        # into mutation validation.
+        records = self._load_core_parentage_records(required=True)
         records.pop(target_key, None)
         records[target_key] = target_record
         normalize_species_value = getattr(self, "_normalize_species_value", None)
@@ -7841,6 +7980,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     "heritage_track.error.permission_denied",
                     "The animal is outside your authorized Unit scope.",
                 ))
+        if not self._core_parent_candidate_visible(target_record):
+            raise ValueError(self.messages.get(
+                "heritage_track.error.permission_denied",
+                "The animal is outside your authorized project or Unit scope.",
+            ))
         raw = self._core_parentage_values(parent_values)
         canonical: Dict[str, str] = {}
         required_slots = {
@@ -7860,6 +8004,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 fallback = "Parent name is ambiguous." if status == "ambiguous" else "Select an existing Core animal."
                 raise ValueError(self.messages.get(message_key, fallback))
             resolved = str(resolved).strip()
+            if not self._core_parent_candidate_visible(parent):
+                raise ValueError(self.messages.get(
+                    "heritage_track.error.permission_denied",
+                    "The selected parent is outside your authorized project or Unit scope.",
+                ))
             if resolved == target_key:
                 raise ValueError(self.messages.get("heritage_track.error.parent_self", "An animal cannot be set as its own parent."))
             parent_species = str(parent.get("species", "") or "").strip()
@@ -7929,6 +8078,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         if visit(target_key):
             raise ValueError(self.messages.get("heritage_track.error.circular_parentage", "Invalid parent assignment: it would create a circular pedigree."))
+        # Carry the fully validated token through the eventual Core snapshot
+        # write.  The backend rechecks it while holding its transaction,
+        # closing the validation-to-save race.
+        self._pending_core_parentage_revision = validated_parentage_revision
         target_record.update(canonical)
         return canonical
 
@@ -10156,9 +10309,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         return ""
 
     def _relationship_records(self) -> Dict[str, Dict[str, Any]]:
+        # ``archived_animals`` is the historical list widget attribute; the
+        # authoritative persisted archive is ``self.archived``.  Prefer the
+        # latter so relationship/status tooltips resolve archived partners
+        # after a normal persistence load, while retaining the legacy
+        # attribute for small in-memory callers that still provide it.
+        archived = getattr(self, "archived", {}) or {}
+        legacy_archived = getattr(self, "archived_animals", {}) or {}
+        active = getattr(self, "animals", {}) or {}
         return {
-            **(getattr(self, "archived_animals", {}) or {}),
-            **(getattr(self, "animals", {}) or {}),
+            # Keep the persisted ``archived`` mapping authoritative while
+            # retaining the legacy list-widget mapping for older in-memory
+            # callers.  An empty authoritative archive must not hide valid
+            # legacy entries during a session transition.
+            **(dict(legacy_archived) if isinstance(legacy_archived, Mapping) else {}),
+            **(dict(archived) if isinstance(archived, Mapping) else {}),
+            **(dict(active) if isinstance(active, Mapping) else {}),
         }
 
     def _plan_relationship_change(
@@ -10204,9 +10370,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _commit_relationship_updates(
         self, updates: Mapping[str, Mapping[str, Any]]
     ) -> None:
+        archived = getattr(self, "archived", None)
+        legacy_archived = getattr(self, "archived_animals", None)
         for animal_key, record in updates.items():
-            if animal_key in (getattr(self, "archived_animals", {}) or {}):
-                self.archived_animals[animal_key] = dict(record)
+            if isinstance(archived, Mapping) and animal_key in archived:
+                archived[animal_key] = dict(record)
+            elif isinstance(legacy_archived, Mapping) and animal_key in legacy_archived:
+                legacy_archived[animal_key] = dict(record)
             else:
                 self.animals[animal_key] = dict(record)
 
@@ -26397,21 +26567,48 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not isinstance(old_record, dict):
             return
         old_record = copy.deepcopy(old_record)
-        # Preserve a deleted Core animal as a Heritage-owned dummy whenever
-        # it is still referenced by the pedigree.  The canonical Heritage
-        # command writes this transition before the Core row disappears;
-        # failure aborts deletion so no lineage can be lost.
-        heritage = getattr(self, "heritage_plugin", None)
-        if heritage is not None:
+        # The backend owns the Core/Heritage deletion transaction.  This path
+        # is available even when the optional Heritage UI/plugin is disabled,
+        # and a failed delete rolls back any staged former-Core snapshot.
+        backend_delete = getattr(self.backend, "delete_archived_animal_atomically", None)
+        if callable(backend_delete):
+            master = getattr(self, "master_track", None)
+            owner_unit = str(getattr(master, "current_unit_id", "") or "").strip()
+            if not owner_unit:
+                for unit_field in ("organization_unit_id", "organizational_unit_id", "workgroup_id"):
+                    owner_unit = str(old_record.get(unit_field, "") or "").strip()
+                    if owner_unit:
+                        break
             try:
-                if not heritage.promote_core_to_former_dummy(name, old_record):
-                    logging.warning("Could not preserve former-Core parent %s; deletion cancelled", name)
-                    return
+                deleted = bool(backend_delete(
+                    str(old_record.get("ipid", "") or name).strip(),
+                    old_record,
+                    owner_unit_id=owner_unit,
+                ))
             except Exception as exc:
-                logging.warning("Could not preserve former-Core parent %s: %s", name, exc)
+                logging.warning("Could not atomically delete archived animal %s: %s", name, exc)
                 return
-        data['archived_animals'].pop(name)
-        self._write_json(data)
+            if not deleted:
+                logging.warning("Archived animal %s was not deleted; transaction rolled back", name)
+                return
+            data['archived_animals'].pop(name, None)
+        else:
+            # Legacy/test backends without the coordinated operation retain
+            # the guarded fallback.  Production backends always implement the
+            # atomic method above.
+            heritage = getattr(self, "heritage_plugin", None)
+            if heritage is not None:
+                try:
+                    if not heritage.promote_core_to_former_dummy(
+                        name, old_record, authorized=True
+                    ):
+                        logging.warning("Could not preserve former-Core parent %s; deletion cancelled", name)
+                        return
+                except Exception as exc:
+                    logging.warning("Could not preserve former-Core parent %s: %s", name, exc)
+                    return
+            data['archived_animals'].pop(name)
+            self._write_json(data)
         self._load_persistence()
         self._on_select()
         details = (

@@ -28,10 +28,16 @@ class _Backend:
         self.records = _MemoryRecords()
 
 
+class _Master:
+    current_unit_id = "unit-a"
+    current_username = "researcher"
+
+
 class _App:
     def __init__(self):
         self.backend = _Backend()
         self.messages = {}
+        self.master_track = _Master()
         self.animals = {
             "Mother": {
                 "name": "Mother", "species": "Callithrix jacchus",
@@ -51,6 +57,7 @@ class _App:
         }
         self.audit = []
         self.persist_count = 0
+        self.core_delete = True
         self.backend.records.values[("heritage", "graph")] = {
             "version": "1.0.0",
             "animals": {
@@ -58,12 +65,17 @@ class _App:
                     "name": "Child", "species": "Callithrix jacchus",
                     "sex": "female", "birth_date": "01.01.2020",
                     "heritage_only": True,
+                    "dummy_kind": "direct",
+                    "persistence_kind": "direct_dummy",
+                    "unit_id": "unit-a",
                 }
             },
         }
 
     def _master_can(self, action):
-        return action == "heritage.edit_links"
+        if action == "core.delete_animals":
+            return self.core_delete
+        return action in {"heritage.view", "heritage.edit_links"}
 
     def _master_audit(self, *event):
         self.audit.append(event)
@@ -184,7 +196,9 @@ class HeritageParentageCommandTest(unittest.TestCase):
             },
         )
         mother = copy.deepcopy(self.app.animals["Mother"])
-        self.assertTrue(self.plugin.promote_core_to_former_dummy("Mother", mother))
+        self.assertTrue(self.plugin.promote_core_to_former_dummy(
+            "Mother", mother, authorized=True
+        ))
         dummy = self.plugin.store.get_all_entries()["Mother"]
         self.assertTrue(dummy["heritage_only"])
         self.assertEqual(self.plugin.store.get_parentage("Child")["egg_donor"], "Mother")

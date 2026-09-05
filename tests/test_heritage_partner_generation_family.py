@@ -13,6 +13,7 @@ import unittest
 from Plugins.Heritage_Track.layout_pipeline import GroupGrouper, family_node_id
 from Plugins.Heritage_Track.heritage_track_widget import HeritageTrackWidget
 from Plugins.Heritage_Track.pedigree_engine import PedigreeEngine
+from Plugins.Heritage_Track.pedigree_router import PedigreeRouter
 
 
 def _engine(parent_map: dict[str, dict[str, str]]) -> PedigreeEngine:
@@ -104,6 +105,48 @@ class HeritagePartnerGenerationFamilyTest(unittest.TestCase):
             engine_a.get_level_diagnostics(nodes),
             engine_b.get_level_diagnostics(set(engine_b.all_nodes)),
         )
+
+    def test_chronological_parentless_fan_compaction_preserves_all_date_lanes(self):
+        router = PedigreeRouter()
+        positions = {
+            "Hub": (0.0, 8.0),
+            "Mate A": (-1.0, 8.0),
+            "Mate B": (1.0, 8.0),
+            "Child A": (0.0, 4.0),
+            "Child B": (0.0, 4.0),
+        }
+        families = {
+            "family-a": {"mother": "Hub", "father": "Mate A", "children": ["Child A"]},
+            "family-b": {"mother": "Hub", "father": "Mate B", "children": ["Child B"]},
+        }
+        before = {node: point[1] for node, point in positions.items()}
+        changed = router._compact_focused_parentless_multi_mate_fans(
+            positions,
+            families,
+            {node: node for node in positions},
+            {"Child A"},
+            True,
+            chronological=True,
+        )
+        self.assertIn(changed, (True, False))
+        self.assertEqual({node: point[1] for node, point in positions.items()}, before)
+
+    def test_chronological_fan_collision_resolution_moves_horizontally_only(self):
+        router = PedigreeRouter()
+        positions = {"moved": (0.0, 6.0), "blocker": (0.0, 6.0)}
+        router._resolve_parentless_fan_collisions(
+            positions,
+            {"moved"},
+            {},
+            {"moved": "moved", "blocker": "blocker"},
+            set(),
+            set(),
+            True,
+            chronological=True,
+        )
+        self.assertEqual(positions["moved"][1], 6.0)
+        self.assertEqual(positions["blocker"][1], 6.0)
+        self.assertNotEqual(positions["blocker"][0], 0.0)
 
 
 if __name__ == "__main__":

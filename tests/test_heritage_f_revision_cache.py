@@ -36,6 +36,11 @@ class _App:
     def __init__(self, graph=None):
         self.backend = _Backend(graph)
         self.messages = {}
+        self.master_track = type(
+            "_Master",
+            (),
+            {"current_unit_id": "unit-a", "current_username": "researcher"},
+        )()
         self.animals = {
             'Mother': {
                 'name': 'Mother', 'species': 'Callithrix jacchus',
@@ -54,13 +59,14 @@ class _App:
                     'Child': {
                         'name': 'Child', 'species': 'Callithrix jacchus',
                         'sex': 'female', 'birth_date': '01.01.2020',
-                        'heritage_only': True,
+                        'heritage_only': True, 'dummy_kind': 'direct',
+                        'persistence_kind': 'direct_dummy', 'unit_id': 'unit-a',
                     }
                 },
             }
 
     def _master_can(self, action):
-        return action == 'heritage.edit_links'
+        return action in {'heritage.view', 'heritage.edit_links'}
 
 
 def _record(name, *, sex='female', parents=()):
@@ -281,6 +287,34 @@ class HeritageFRevisionTest(unittest.TestCase):
         )
         self.assertEqual(status['Child'], 'cached')
         self.assertFalse(plugin.store.has_pending_changes())
+
+    def test_malformed_diagnostic_is_conditional_and_preserves_selected_detail(self):
+        widget = HeritageTrackWidget.__new__(HeritageTrackWidget)
+        widget.messages = {}
+        widget._malformed_f_nodes = {'Child'}
+        widget._get_node_birth_date_text = lambda _node: '01.01.2020'
+        widget._get_node_public_id = lambda _node, _record=None: 'CJ-0001'
+
+        for mode, expected in (
+            ('nothing', 'F: unavailable (cyclic pedigree)'),
+            ('birth_date', '01.01.2020\nF: unavailable (cyclic pedigree)'),
+            ('animal_id', 'CJ-0001\nF: unavailable (cyclic pedigree)'),
+            ('inbreeding_f', 'F: unavailable (cyclic pedigree)'),
+        ):
+            with self.subTest(mode=mode):
+                widget.settings = {'animal_label_detail': mode}
+                self.assertEqual(
+                    widget._get_node_detail_text(
+                        'Child', {}, 0.25, inbreeding_unavailable=True
+                    ),
+                    expected,
+                )
+
+        widget._malformed_f_nodes = set()
+        widget.settings = {'animal_label_detail': 'nothing'}
+        self.assertEqual(widget._get_node_detail_text('Child', {}, 0.25), '')
+        widget.settings = {'animal_label_detail': 'birth_date'}
+        self.assertEqual(widget._get_node_detail_text('Child', {}, 0.25), '01.01.2020')
 
 
 if __name__ == '__main__':

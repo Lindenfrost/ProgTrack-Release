@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from datetime import datetime
 from typing import Any, Mapping
 
@@ -11,7 +12,7 @@ from ..animal_identity import (
     normalize_birth_date,
     split_animal_identity_key,
 )
-from .errors import ImmutableIdentityError, ValidationError
+from .errors import ConflictError, ImmutableIdentityError, ValidationError
 from .json_codec import dumps, loads
 from .repositories import (
     _execute,
@@ -32,6 +33,16 @@ MEASUREMENT_FIELDS = {
     "urine": "pdg",
     "sperm": "sperm",
 }
+
+PARENTAGE_REVISION_FIELDS = (
+    "eizellspenderin",
+    "samenspender",
+    "ziehmutter",
+    "ziehvater",
+    "species",
+    "sex",
+    "birth_date",
+)
 
 
 def _identity(ipid: str, record: Mapping[str, Any]) -> dict[str, str]:
@@ -137,7 +148,54 @@ class AnimalService:
             "settings": settings,
         }
 
-    def replace_snapshot(self, snapshot: Mapping[str, Any]) -> None:
+    @staticmethod
+    def parentage_revision_for_snapshot(snapshot: Mapping[str, Any]) -> str:
+        """Return the Core parentage token shared with the UI validator.
+
+        Only fields that affect parent candidate validation and cycle checks
+        are included.  Keeping this canonical helper in the backend lets the
+        commit transaction compare the exact live snapshot instead of relying
+        on a session-local pre-check.
+        """
+        import hashlib
+
+        records: dict[str, Any] = {}
+        for section in ("animals", "archived_animals", "archived"):
+            values = snapshot.get(section, {}) if isinstance(snapshot, Mapping) else {}
+            if not isinstance(values, Mapping):
+                continue
+            for key, record in values.items():
+                if isinstance(record, Mapping):
+                    records[str(key)] = {
+                        field: record.get(field, "")
+                        for field in PARENTAGE_REVISION_FIELDS
+                    }
+        payload = json.dumps(records, sort_keys=True, default=str, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _parentage_revision_in_connection(self, connection: Any) -> str:
+        rows = _fetchall(
+            connection,
+            "SELECT ipid,record_json FROM animals ORDER BY ipid",
+        )
+        records: dict[str, Any] = {}
+        for row in rows:
+            data = self.adapter.row_to_dict(row)
+            raw = data.get("record_json")
+            record = raw if isinstance(raw, Mapping) else loads(raw or "{}", {})
+            if isinstance(record, Mapping):
+                records[str(data.get("ipid", ""))] = {
+                    field: record.get(field, "")
+                    for field in PARENTAGE_REVISION_FIELDS
+                }
+        return self.parentage_revision_for_snapshot({"animals": records})
+
+    def replace_snapshot(
+        self,
+        snapshot: Mapping[str, Any],
+        *,
+        expected_parentage_revision: str | None = None,
+    ) -> None:
         active = snapshot.get("animals", {})
         archived = snapshot.get("archived_animals", snapshot.get("archived", {}))
         if not isinstance(active, Mapping) or not isinstance(archived, Mapping):
@@ -154,6 +212,13 @@ class AnimalService:
         json_mark = _json_placeholder(self.adapter)
         timestamp = now_text()
         with self.adapter.transaction(write=True) as connection:
+            if expected_parentage_revision:
+                current_parentage_revision = self._parentage_revision_in_connection(connection)
+                if str(expected_parentage_revision).strip() != current_parentage_revision:
+                    raise ConflictError(
+                        "Core parentage changed while the animal dialog was open. "
+                        "Reload the animal and try again."
+                    )
             existing_rows = _fetchall(
                 connection,
                 "SELECT ipid,name,species,birth_date,origin,revision FROM animals",

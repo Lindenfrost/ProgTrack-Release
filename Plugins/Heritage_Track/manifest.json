@@ -43,7 +43,8 @@
   "permissions": [
     "heritage.view",
     "heritage.edit_links",
-    "heritage.edit_genotype_colors"
+    "heritage.edit_genotype_colors",
+    "heritage.delete_durable_dummy"
   ],
   "backend_namespaces": [
     "heritage"

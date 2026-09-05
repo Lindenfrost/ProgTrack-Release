@@ -88,7 +88,7 @@ from .ghost_strategies import (
     VisibleFamilyCompletenessGhostStrategy,
 )
 from .engine_cache import PedigreeEngineCache
-from .heritage_store import HeritageStore
+from .heritage_store import HeritageStore, PARENT_KEYS
 from .inbreeding import InbreedingCalculator
 from .layout_pipeline import (
     LayoutPipeline,
@@ -1003,6 +1003,13 @@ class HeritageTrackWidget(QWidget):
         known_nodes = set(engine.animals) | set(engine.heritage_entries)
         self._malformed_f_nodes = self._find_malformed_f_nodes(parent_map, known_nodes)
         if not show_f:
+            # Topology validity is independent of the selected numeric label.
+            # Keep the per-node status available so a malformed lineage can be
+            # shown below an ID/birth-date/empty label as a diagnostic without
+            # inventing an F value.
+            for node in display_nodes:
+                if node in self._malformed_f_nodes:
+                    f_status[node] = "unavailable"
             return f_values, f_status
 
         required_nodes = set(parent_map)
@@ -1481,6 +1488,23 @@ class HeritageTrackWidget(QWidget):
             locked_positions=locked_positions,
             bounds=bounds,
         )
+        # Singleton parking and other widget-level post-routing adjustments
+        # happen after the router's own placement pass.  Reuse the router's
+        # obstacle model as the final hard collision boundary so no render
+        # cache entry can certify overlapping labels or markers.
+        fatal.extend(
+            item
+            for item in self._render_node_collision_diagnostics(
+                route_plan.animal_positions,
+                obstacle_labels,
+                show_inbreeding=bool(
+                    self.settings.get("animal_label_detail", "inbreeding_f")
+                    != "nothing"
+                    or self._malformed_f_nodes & set(route_plan.animal_positions)
+                ),
+            )
+            if item not in fatal
+        )
         # A topology diagnostic is deliberately fatal for cache publication:
         # an unresolved frame may be inspected locally, but must never replace
         # the last accepted complete pedigree as a valid render transaction.
@@ -1521,6 +1545,12 @@ class HeritageTrackWidget(QWidget):
             artist_scale=float(artist_scale or 1.0),
             chronological_undated_nodes=frozenset(
                 chronological_undated_nodes or set()
+            ),
+            position_cache_key=str(getattr(self, "_active_position_cache_key", "") or ""),
+            position_cache_user=str(getattr(self, "_active_position_cache_user", "") or ""),
+            position_cache_revision=str(getattr(self, "_active_position_cache_revision", "") or ""),
+            position_cache_dependencies=frozenset(
+                getattr(self, "_active_position_cache_dependencies", set()) or set()
             ),
         )
 
@@ -1568,6 +1598,43 @@ class HeritageTrackWidget(QWidget):
             if not finite:
                 fatal.append("non-finite render bounds")
         return fatal
+
+    def _render_node_collision_diagnostics(
+        self,
+        positions: Mapping[str, Tuple[float, float]],
+        labels: Mapping[str, str],
+        *,
+        show_inbreeding: bool,
+    ) -> List[str]:
+        """Return final label/marker collisions before a frame is published.
+
+        The router performs collision avoidance during placement, but the
+        widget can still add detached/singleton coordinates afterwards.  A
+        final sweep over the same obstacle rectangles used by the router is a
+        cheap publication boundary and prevents an accidentally overlapping
+        frame from replacing the last accepted one.
+        """
+        obstacles = self._pedigree_router.node_obstacles(
+            positions,
+            labels,
+            show_inbreeding,
+        )
+        problems: List[str] = []
+        ordered = sorted(obstacles.items(), key=lambda item: item[1].left)
+        for index, (first_node, first_rect) in enumerate(ordered):
+            for second_node, second_rect in ordered[index + 1 :]:
+                if second_rect.left >= first_rect.right:
+                    break
+                if (
+                    first_rect.right > second_rect.left
+                    and second_rect.right > first_rect.left
+                    and first_rect.top > second_rect.bottom
+                    and second_rect.top > first_rect.bottom
+                ):
+                    problems.append(
+                        f"{first_node}/{second_node}: animal markers or labels overlap"
+                    )
+        return problems
 
     def _replace_route_collections(self) -> None:
         """Redraw only genealogy lines after masks or zoom scale change."""
@@ -3028,17 +3095,24 @@ class HeritageTrackWidget(QWidget):
         inbreeding_unavailable: bool = False,
     ) -> str:
         mode = str(self.settings.get("animal_label_detail", "inbreeding_f"))
-        if mode == "nothing":
-            return ""
-        if mode == "birth_date":
-            return self._get_node_birth_date_text(node)
-        if mode == "animal_id":
-            return self._get_node_public_id(node, record)
-        if inbreeding_unavailable:
-            return self.messages.get(
+        diagnostic = (
+            self.messages.get(
                 "heritage_track.node.inbreeding_unavailable",
                 "F: unavailable (cyclic pedigree)",
             )
+            if inbreeding_unavailable
+            else ""
+        )
+        if mode == "nothing":
+            return diagnostic
+        if mode == "birth_date":
+            detail = self._get_node_birth_date_text(node)
+            return f"{detail}\n{diagnostic}" if diagnostic else detail
+        if mode == "animal_id":
+            detail = self._get_node_public_id(node, record)
+            return f"{detail}\n{diagnostic}" if diagnostic else detail
+        if diagnostic:
+            return diagnostic
         if f_value is None:
             return ""
         rounded = round(float(f_value), 4)
@@ -3057,19 +3131,16 @@ class HeritageTrackWidget(QWidget):
         mode = str(self.settings.get("animal_label_detail", "inbreeding_f"))
         if mode == "nothing":
             return primary
-        if mode == "birth_date":
-            detail = self._get_node_birth_date_text(node)
-        elif mode == "animal_id":
-            detail = self._get_node_public_id(node, source)
-        else:
-            detail = (
-                self.messages.get(
-                    "heritage_track.node.inbreeding_unavailable",
-                    "F: unavailable (cyclic pedigree)",
-                )
-                if node in self._malformed_f_nodes
-                else "F: ~0.0000"
-            )
+        detail = self._get_node_detail_text(
+            node,
+            source,
+            None,
+            inbreeding_unavailable=node in self._malformed_f_nodes,
+        )
+        if not detail:
+            # The selected label mode may intentionally omit all secondary
+            # text; keep the marker label itself as the routing obstacle.
+            detail = ""
         return max((primary, detail), key=len)
 
     def _get_node_birth_year(self, node: str) -> Optional[int]:
@@ -3761,6 +3832,22 @@ class HeritageTrackWidget(QWidget):
         self._rendered_artist_scale = float(entry.artist_scale or 1.0)
         self._chronological_undated_nodes = set(entry.chronological_undated_nodes)
         self._position_cache_hit = True
+        # Restore the complete write context belonging to this frame.  Warm
+        # painting can follow a different selection; deriving only the
+        # display positions would otherwise leave drag persistence pointed at
+        # the previous selection/user/revision.
+        self._active_position_cache_key = str(entry.position_cache_key or "")
+        self._active_position_cache_user = str(entry.position_cache_user or "") or "guest"
+        self._active_position_cache_revision = str(entry.position_cache_revision or "")
+        self._active_position_cache_dependencies = set(entry.position_cache_dependencies)
+        if not self._active_position_cache_key:
+            self._active_position_cache_key = self._position_cache_key(
+                list(entry.canonical_selection),
+                display_mode=self.layout_mode,
+                chronological_mode=chronological_mode,
+            )
+        if not self._active_position_cache_dependencies:
+            self._active_position_cache_dependencies = set(entry.dependencies)
 
         self.stack.setCurrentWidget(self.canvas)
         self._configure_subplot_geometry(chronological_mode)
@@ -3961,17 +4048,27 @@ class HeritageTrackWidget(QWidget):
         chronological_mode: bool,
     ) -> str:
         """Hash all semantic inputs that can invalidate a complete frame."""
+        # Position-cache writes are a persistence concern, not a semantic
+        # change to the pedigree that has already been laid out.  Excluding
+        # those maps (and their bookkeeping timestamp) lets a frame remain a
+        # valid warm hit after its own complete position map is saved, while
+        # real Core/Heritage edits still change the content hash below.
+        source_store = deepcopy(raw_store) if isinstance(raw_store, dict) else {}
+        if isinstance(source_store, dict):
+            source_store.pop("position_cache", None)
+            source_store.pop("node_positions", None)
+            source_store.pop("updated_at", None)
         return self._render_revision(
             {
                 "schema": "heritage-render-input.v1",
-                "backend_revision": int(backend_revision or 0),
                 "core": core_snapshot,
-                "store": raw_store,
+                "store": source_store,
                 "temporary_dummies": getattr(self.plugin, "_temporary_dummies", {}),
                 "selection": selected_animals,
                 "graph_selected_nodes": sorted(self.selected_nodes, key=str.casefold),
                 "display_mode": self.layout_mode,
                 "chronological": chronological_mode,
+                "max_generations": int(self._max_generations),
                 "collapsed_families": sorted(self.collapsed_families, key=str.casefold),
                 "settings": {
                     key: self.settings.get(key)
@@ -4260,7 +4357,13 @@ class HeritageTrackWidget(QWidget):
             node: self._get_node_obstacle_label(node, self._get_node_record(node))
             for node in animal_positions
         }
-        has_secondary_label = self.settings.get("animal_label_detail", "inbreeding_f") != "nothing"
+        # A diagnostic line is a real secondary label even when the user has
+        # selected ``Nothing`` for ordinary details.  Reserve its footprint so
+        # conditional warnings cannot create a fresh collision.
+        has_secondary_label = (
+            self.settings.get("animal_label_detail", "inbreeding_f") != "nothing"
+            or bool(self._malformed_f_nodes & set(animal_positions))
+        )
         # The legend is an in-axes overlay and does not narrow the geometry.
         # Keep the label estimate independent of whether the overlay is shown.
         focused_aspect = self._view_data_aspect()
@@ -4375,7 +4478,22 @@ class HeritageTrackWidget(QWidget):
                     # Keep the birth-date Y coordinate, but reserve columns
                     # clearly outside the family-tree envelope.
                     y = animal_positions[node][1]
-                    band = (float(y) - 0.80, float(y) + 0.36)
+                    # Use the same vertical footprint as ``node_obstacles``.
+                    # The focused renderer reserves a larger data-space band
+                    # for the primary label, marker and optional detail/F
+                    # line; a fixed 1.16-unit band let labels from nearby
+                    # dates overlap in the outer singleton columns.
+                    label_height_scale = max(
+                        1.0, float(getattr(self._pedigree_router, "label_height_scale", 1.0))
+                    )
+                    bottom_offset = (
+                        0.78 if has_secondary_label else 0.56
+                    ) * label_height_scale
+                    top_offset = 0.34 * label_height_scale
+                    band = (
+                        float(y) - bottom_offset,
+                        float(y) + top_offset,
+                    )
                     x_column = 0
                     while any(
                         min(band[1], occupied[1])
@@ -4461,6 +4579,14 @@ class HeritageTrackWidget(QWidget):
         previous_rendered_engine = self._rendered_engine
         previous_rendered_families = self._rendered_families
         previous_artist_scale = self._rendered_artist_scale
+        previous_render_cache_entry = self._render_cache_entry
+        previous_position_context = (
+            self._active_position_cache_key,
+            self._active_position_cache_user,
+            self._active_position_cache_revision,
+            set(self._active_position_cache_dependencies),
+            bool(self._position_cache_hit),
+        )
         self._rendered_artist_scale = focused_artist_scale
         # Marker/crossing gaps are measured in data units derived from the
         # final pixel scale.  At this point the axes still carry the previous
@@ -4490,6 +4616,7 @@ class HeritageTrackWidget(QWidget):
         # Publish the complete frame atomically before any visible artists are
         # created.  Every later view operation can derive its pixel-only route
         # copy from this accepted entry without rereading mutable backend data.
+        render_entry: Optional[RenderCacheEntry] = None
         try:
             render_entry = self._build_render_cache_entry(
                 engine=engine,
@@ -4524,23 +4651,43 @@ class HeritageTrackWidget(QWidget):
                 self._report_geometry_failure("; ".join(render_entry.fatal_diagnostics))
                 self._render_store_animals = None
                 return
+            # Publish exactly once, before any durable position write.  If
+            # publication fails, no persistent coordinates have changed and
+            # the previously accepted frame remains authoritative.
+            self.plugin.cache_render_entry(render_entry)
         except Exception:
             # A failed cache publication must never paint a plausible partial
             # frame.  Keep the previous accepted entry and report the failure
             # through the normal status/diagnostic channel.
+            if render_entry is not None:
+                try:
+                    self.plugin.remove_render_cache_entry(render_entry.cache_key)
+                except Exception:
+                    logging.getLogger(__name__).exception(
+                        "Could not remove rejected Heritage render cache entry"
+                    )
             self._route_plan = previous_route_plan
             self.family_routes = previous_family_routes
             self._rendered_engine = previous_rendered_engine
             self._rendered_families = previous_rendered_families
             self._rendered_artist_scale = previous_artist_scale
+            self._render_cache_entry = previous_render_cache_entry
+            (
+                self._active_position_cache_key,
+                self._active_position_cache_user,
+                self._active_position_cache_revision,
+                previous_dependencies,
+                self._position_cache_hit,
+            ) = previous_position_context
+            self._active_position_cache_dependencies = set(previous_dependencies)
             logging.getLogger(__name__).exception("Could not publish Heritage render cache entry")
             self._render_store_animals = None
             return
 
         # A cache miss (or explicit Refresh) stores the complete final map,
-        # including nodes that were not moved.  Persist it before publishing
-        # the new render entry: a failed position write must leave both the
-        # durable cache and the last accepted visible/internal frame intact.
+        # including nodes that were not moved.  Publication was staged above;
+        # a failed position write removes that staged entry so neither the
+        # durable cache nor the last accepted frame is replaced.
         if not getattr(self, "_position_cache_hit", False):
             saved_position_cache = self._save_position_cache(
                 animal_positions,
@@ -4548,40 +4695,26 @@ class HeritageTrackWidget(QWidget):
             )
             if saved_position_cache:
                 self._force_relayout = False
-                # Position-cache persistence advances the Heritage revision.
-                # Rebind the already accepted frame to that exact post-save
-                # snapshot so the next identical refresh is a real warm hit.
-                try:
-                    post_store, post_revision = self.plugin.store.load_latest_with_revision()
-                    post_source = self._render_source_revision(
-                        core_snapshot=core_snapshot,
-                        raw_store=post_store,
-                        backend_revision=post_revision,
-                        selected_animals=selected_animals,
-                        chronological_mode=chronological_mode,
-                    )
-                    render_entry = replace(
-                        render_entry,
-                        backend_revision=int(post_revision or 0),
-                        source_revision=post_source,
-                    )
-                    self._render_cache_entry = render_entry
-                    self.plugin.cache_render_entry(render_entry)
-                except Exception:
-                    logging.getLogger(__name__).exception(
-                        "Could not rebind Heritage render cache after position save"
-                    )
             else:
+                self.plugin.remove_render_cache_entry(render_entry.cache_key)
                 self._route_plan = previous_route_plan
                 self.family_routes = previous_family_routes
                 self._rendered_engine = previous_rendered_engine
                 self._rendered_families = previous_rendered_families
                 self._rendered_artist_scale = previous_artist_scale
+                self._render_cache_entry = previous_render_cache_entry
+                (
+                    self._active_position_cache_key,
+                    self._active_position_cache_user,
+                    self._active_position_cache_revision,
+                    previous_dependencies,
+                    self._position_cache_hit,
+                ) = previous_position_context
+                self._active_position_cache_dependencies = set(previous_dependencies)
                 self._render_store_animals = None
                 return
 
         self._render_cache_entry = render_entry
-        self.plugin.cache_render_entry(render_entry)
 
         # Paint through the same immutable-entry consumer used by warm
         # renders.  The legacy inline painter below is retained temporarily as
@@ -5471,10 +5604,10 @@ class HeritageTrackWidget(QWidget):
             father=father,
             sex=sex,
             allow_name_edit=False,
-            allow_remove=is_heritage_only,
+            allow_remove=is_heritage_only and self.plugin.can_remove_heritage_only(node),
             animal_species=animal_species,
-            sex_editable=is_heritage_only,
-            genotype_editable=is_heritage_only,
+            sex_editable=is_heritage_only and can_edit_links,
+            genotype_editable=is_heritage_only and can_edit_links,
             parents_editable=is_heritage_only and can_edit_links,
             parents_read_only_core=not is_heritage_only,
             genotype_options=(self._genotype_options_for_species(animal_species) if is_heritage_only else None),
@@ -5576,27 +5709,31 @@ class HeritageTrackWidget(QWidget):
         updated_parentage["egg_donor"] = mother_value
         updated_parentage["sperm_donor"] = father_value
 
-        if self._can("heritage.edit_links"):
-            try:
-                self.plugin.set_dummy_parentage(
-                    actor=None,
-                    animal_id=node,
-                    expected_revision=getattr(self.plugin, "_active_backend_revision", None),
-                    values=updated_parentage,
-                    source="plugin",
-                    allow_custom=False,
-                )
-            except ParentageCommandError as exc:
-                QMessageBox.warning(self, self.messages.get("error.title", "Error"), exc.message)
-                return
-
-        if is_heritage_only:
-            self.plugin.set_manual_sex(node, values.get("sex", ""))
-        self.plugin.set_node_visual(
-            node,
-            values.get("genotype", ""),
-            values.get("fill_color", "") if can_edit_colors else None,
-        )
+        # One command validates the complete dummy edit and commits parentage,
+        # sex, genotype and optional colour together.  If the actor only has
+        # the colour permission, omit protected metadata rather than allowing
+        # a forged disabled-widget value to reach the mutation boundary.
+        metadata: Dict[str, Any] = {}
+        if can_edit_links:
+            metadata.update({
+                "sex": values.get("sex", ""),
+                "genotype": values.get("genotype", ""),
+            })
+        if can_edit_colors:
+            metadata["node_fill_color"] = values.get("fill_color", "")
+        try:
+            self.plugin.set_dummy_parentage(
+                actor=None,
+                animal_id=node,
+                expected_revision=getattr(self.plugin, "_active_backend_revision", None),
+                values=updated_parentage if can_edit_links else None,
+                source="plugin",
+                allow_custom=False,
+                target_metadata=metadata,
+            )
+        except ParentageCommandError as exc:
+            QMessageBox.warning(self, self.messages.get("error.title", "Error"), exc.message)
+            return
         self.refresh_graph(keep_view=True)
         refresh_list = getattr(self.app, "_refresh_list", None)
         if callable(refresh_list):
@@ -6015,9 +6152,26 @@ class HeritageTrackPlugin:
         )
         if key in animals and isinstance(animals[key], dict):
             return animals[key]
+        # Core dictionaries normally use the IPID as their key, but callers
+        # may pass a stable IPID while an integration keeps a display name as
+        # the mapping key.  Resolve that alias before consulting Heritage
+        # data so a forged Heritage mutation cannot target a real Core row.
+        for candidate_key, candidate in animals.items():
+            if (
+                isinstance(candidate, dict)
+                and str(candidate.get("ipid", "") or "").strip() == key
+            ):
+                return candidate
         archived = {} if isinstance(self._active_core_snapshot, dict) else (getattr(self.app, "archived", {}) or {})
         if isinstance(archived, dict) and key in archived and isinstance(archived[key], dict):
             return archived[key]
+        if isinstance(archived, dict):
+            for candidate in archived.values():
+                if (
+                    isinstance(candidate, dict)
+                    and str(candidate.get("ipid", "") or "").strip() == key
+                ):
+                    return candidate
         return None
 
     def _parentage_message(self, key: str, fallback: str) -> str:
@@ -6032,22 +6186,167 @@ class HeritageTrackPlugin:
 
     def _parentage_authorized(self) -> bool:
         """Check the write permission at the command boundary, not just in UI."""
+        return self._action_authorized("heritage.edit_links")
+
+    def _action_authorized(self, action: str) -> bool:
+        """Resolve one permission at the mutation boundary.
+
+        Heritage commands are callable independently of their Qt controls, so
+        the command must not trust a disabled/enabled widget as authorization.
+        A missing Master Track is the documented trusted-local mode; a
+        configured managed service without its UI boundary fails closed.
+        """
         checker = getattr(self.app, "_master_can", None)
         if callable(checker):
             try:
-                return bool(checker("heritage.edit_links"))
+                return bool(checker(str(action or "").strip()))
             except Exception:
                 logging.getLogger(__name__).warning(
-                    "Heritage parentage authorization check failed", exc_info=True
+                    "Heritage authorization check failed for %s", action,
+                    exc_info=True,
                 )
                 return False
         authorization = getattr(self.app, "authorization", None)
-        # A missing Master Track is the documented trusted-local mode.  A
-        # configured managed authorization service without its UI boundary is
-        # fail-closed for this protected mutation.
         if authorization is None:
             return True
-        return bool(getattr(authorization, "trusted_local", False))
+        try:
+            return bool(authorization.can(str(action or "").strip()))
+        except Exception:
+            return bool(getattr(authorization, "trusted_local", False))
+
+    @staticmethod
+    def _dummy_kind(record: Optional[Dict[str, Any]]) -> str:
+        """Return the explicit Heritage-owned dummy kind.
+
+        ``heritage_only`` alone is deliberately insufficient: it does not
+        identify whether a record is session-only, a directly persisted dummy
+        or a former-Core snapshot.
+        """
+        if not isinstance(record, dict) or not bool(record.get("heritage_only", False)):
+            return ""
+        persistence = str(record.get("persistence_kind", "") or "").strip().casefold()
+        if persistence == "temporary_dummy":
+            return "temporary"
+        if persistence == "direct_dummy":
+            return "direct"
+        if persistence == "former_core_dummy":
+            return "former_core"
+        kind = str(record.get("dummy_kind", "") or "").strip().casefold()
+        if kind in {"direct", "former_core"}:
+            return kind
+        return ""
+
+    def _dummy_owner_in_scope(self, record: Optional[Dict[str, Any]]) -> bool:
+        """Require an explicit durable owner and the current Unit."""
+        kind = self._dummy_kind(record)
+        if kind == "temporary":
+            return True
+        if kind not in {"direct", "former_core"}:
+            return False
+        owner = str((record or {}).get("unit_id", "") or "").strip().casefold()
+        current = self._current_unit_id().casefold()
+        return bool(owner and current and owner == current)
+
+    def _durable_dummy_delete_authorized(self, record: Dict[str, Any]) -> bool:
+        """Authorize deletion of a persisted dummy, including Unit scope."""
+        return (
+            self._dummy_owner_in_scope(record)
+            and self._action_authorized("heritage.delete_durable_dummy")
+        )
+
+    def _genotype_catalogue(self, species: str) -> List[str]:
+        species_text = self.store._normalize_text(species)
+        if not species_text:
+            return []
+        try:
+            catalogue = read_genotypes(Path(__file__).resolve().parents[2])
+        except Exception:
+            return []
+        for key, values in catalogue.items():
+            if str(key).strip().casefold() == species_text.casefold():
+                return [self.store._normalize_text(value) for value in values if self.store._normalize_text(value)]
+        return []
+
+    def _validate_dummy_metadata(
+        self,
+        target_record: Dict[str, Any],
+        target_metadata: Optional[Dict[str, Any]],
+        *,
+        creating: bool = False,
+        source: str = "plugin",
+    ) -> Dict[str, Any]:
+        """Validate and normalize mutable dummy metadata before one commit."""
+        metadata = dict(target_metadata or {})
+        if not metadata:
+            return {}
+        current_kind = self._dummy_kind(target_record)
+        if creating:
+            requested_kind = self._dummy_kind(metadata)
+            if requested_kind != "temporary" and requested_kind != "direct":
+                raise self._parentage_error(
+                    "heritage_track.error.dummy_kind_required",
+                    "A new Heritage dummy must declare a valid persistence kind.",
+                )
+            if not bool(metadata.get("heritage_only", False)):
+                raise self._parentage_error(
+                    "heritage_track.error.dummy_kind_required",
+                    "A new Heritage dummy must be Heritage-owned.",
+                )
+        elif source != "former_core_dummy" and current_kind not in {"temporary", "direct", "former_core"}:
+            raise self._parentage_error(
+                "heritage_track.error.dummy_kind_required",
+                "The selected record is not an identified Heritage dummy.",
+            )
+
+        normalized: Dict[str, Any] = {}
+        if "sex" in metadata:
+            raw_sex = self.store._normalize_text(metadata.get("sex", ""))
+            normalized_sex = self.store._normalize_sex(raw_sex)
+            if raw_sex and not normalized_sex:
+                raise self._parentage_error(
+                    "heritage_track.error.invalid_sex",
+                    "Select a valid sex value.",
+                )
+            normalized["sex"] = normalized_sex
+        if "genotype" in metadata:
+            genotype = self.store._normalize_text(metadata.get("genotype", ""))
+            if genotype:
+                options = self._genotype_catalogue(
+                    metadata.get("species", target_record.get("species", ""))
+                )
+                if not any(genotype.casefold() == option.casefold() for option in options):
+                    raise self._parentage_error(
+                        "heritage_track.error.invalid_genotype",
+                        "Select a genotype registered for this species.",
+                    )
+            normalized["genotype"] = genotype
+        if "node_fill_color" in metadata:
+            color = self.store._normalize_text(metadata.get("node_fill_color", ""))
+            if color and not QColor(color).isValid():
+                raise self._parentage_error(
+                    "heritage_track.error.invalid_color",
+                    "Select a valid display colour.",
+                )
+            normalized["node_fill_color"] = color
+
+        # Identity, ownership and lifecycle markers are immutable after a
+        # dummy has been created.  A caller may provide them only for a new
+        # record (or for the internal former-Core snapshot command).
+        if not creating and source != "former_core_dummy":
+            for field in (
+                "name", "_base_name", "display_name", "species", "birth_date",
+                "heritage_only", "identity_review_required", "identity_review_reason",
+                "unit_id", "dummy_kind", "persistence_kind",
+            ):
+                if field in metadata and metadata[field] != target_record.get(field):
+                    raise self._parentage_error(
+                        "heritage_track.error.permission_denied",
+                        "Heritage dummy identity and ownership fields are immutable.",
+                    )
+        for field in ("name", "_base_name", "display_name", "species", "birth_date", "heritage_only", "identity_review_required", "identity_review_reason", "unit_id", "dummy_kind", "persistence_kind"):
+            if field in metadata and field not in normalized:
+                normalized[field] = deepcopy(metadata[field])
+        return normalized
 
     def _heritage_view_authorized(self) -> bool:
         checker = getattr(self.app, "_master_can", None)
@@ -6057,7 +6356,22 @@ class HeritageTrackPlugin:
             except Exception:
                 return False
         authorization = getattr(self.app, "authorization", None)
-        return authorization is None or bool(getattr(authorization, "trusted_local", False))
+        if authorization is None:
+            return True
+        # Managed installations may expose only the authorization service,
+        # without the Master Track UI helper.  Resolve the same action there
+        # instead of accidentally denying every Heritage viewer (or treating
+        # a service exception as trusted-local access).
+        can = getattr(authorization, "can", None)
+        if callable(can):
+            try:
+                return bool(can("heritage.view"))
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "Heritage view authorization check failed", exc_info=True
+                )
+                return False
+        return bool(getattr(authorization, "trusted_local", False))
 
     def _current_unit_id(self) -> str:
         master = getattr(self.app, "master_track", None)
@@ -6310,6 +6624,7 @@ class HeritageTrackPlugin:
         allow_custom: bool = False,
         explicit_custom_parents: Optional[Set[str]] = None,
         target_metadata: Optional[Dict[str, Any]] = None,
+        create: bool = False,
     ) -> bool:
         """Canonical mutation command for Heritage-owned dummy records.
 
@@ -6321,38 +6636,45 @@ class HeritageTrackPlugin:
         target_text = str(animal_id or "").strip()
         if not target_text:
             raise self._parentage_error("heritage_track.error.target_required", "An animal is required.")
+        # Former-Core snapshots are an internal side effect of the Core
+        # deletion transaction.  They must never be creatable or editable by
+        # forging the public command's ``source`` argument; the guarded Core
+        # deletion/facade path is the sole producer.
+        if str(source or "").strip() == "former_core_dummy":
+            raise self._parentage_error(
+                "heritage_track.error.permission_denied",
+                "Former-Core snapshots can only be created by the Core deletion workflow.",
+            )
         # Core records are never writable through this command.  Former-Core
-        # snapshots are already Heritage-owned dummies and remain the only
-        # exception used by the deletion preservation path.
+        # snapshots are produced by the backend's coordinated Core-deletion
+        # transaction, never by this public Heritage mutation command.
         if core_record is not None and source != "former_core_dummy":
             raise self._parentage_error(
                 "heritage_track.error.core_read_only",
                 "Core animals are read-only in Heritage Track.",
             )
+        if not self._heritage_view_authorized() and source != "former_core_dummy":
+            raise self._parentage_error(
+                "heritage_track.error.permission_denied",
+                "You do not have permission to use Heritage Track.",
+            )
         raw_values = values if isinstance(values, dict) else {}
+        # ``values=None`` and an empty mapping are metadata-only commands.
+        # A mapping that explicitly contains the parent slots (even when all
+        # are empty, to clear existing links) is a parentage request and must
+        # pass the edit-links permission check.
+        parentage_requested = isinstance(values, dict) and any(
+            key in values for key in PARENT_KEYS
+        )
         requested_values = {
             self.store._normalize_text(raw_values.get(key, ""))
             for key in ("egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father")
         }
-        creating_dummy = (
-            isinstance(target_metadata, dict)
-            and bool(target_metadata.get("heritage_only", False))
-            and target_text not in self._temporary_dummies
-            and target_text not in self._store_snapshot_entries()
-        )
-        if not self._parentage_authorized() and not (creating_dummy and not any(requested_values)):
-            raise self._parentage_error(
-                "heritage_track.error.permission_denied",
-                "You do not have permission to edit Heritage parentage.",
-            )
         if self._is_core_animal(target_text) and source != "former_core_dummy":
             raise self._parentage_error(
                 "heritage_track.error.core_read_only",
                 "Core animals are read-only in Heritage Track.",
             )
-        requested = {key: self.store._normalize_text(raw_values.get(key, "")) for key in (
-            "egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father"
-        )}
         explicit = {
             self.store._normalize_text(value)
             for value in (explicit_custom_parents or set())
@@ -6365,7 +6687,26 @@ class HeritageTrackPlugin:
             target_text,
             store_snapshot=latest_snapshot,
         )
-        if (
+        if create:
+            # Creation is an explicit command, not an inferred update.  The
+            # identity-absent check is repeated inside ``mutate`` below so a
+            # stale client cannot overwrite a concurrently created dummy.
+            if target_text in records or any(
+                isinstance(record, dict)
+                and str(record.get("ipid", "") or "").strip() == target_text
+                for record in records.values()
+            ):
+                raise self._parentage_error(
+                    "heritage_track.error.name_exists_heritage",
+                    "This animal already exists in Heritage data.",
+                )
+            if not isinstance(target_metadata, dict):
+                raise self._parentage_error(
+                    "heritage_track.error.dummy_kind_required",
+                    "A new Heritage dummy must declare a valid persistence kind.",
+                )
+            records[target_text] = deepcopy(target_metadata)
+        elif (
             isinstance(target_metadata, dict)
             and target_text not in records
             and source != "former_core_dummy"
@@ -6392,6 +6733,70 @@ class HeritageTrackPlugin:
                 "heritage_track.error.permission_denied",
                 "The selected Heritage dummy is outside your authorized Unit scope.",
             )
+        creating_dummy = bool(create)
+        target_kind = self._dummy_kind(target_metadata if creating_dummy else target_record)
+        if source != "former_core_dummy":
+            if creating_dummy:
+                if target_kind not in {"temporary", "direct"}:
+                    raise self._parentage_error(
+                        "heritage_track.error.dummy_kind_required",
+                        "A new Heritage dummy must declare a valid persistence kind.",
+                    )
+                if target_kind == "direct":
+                    unit_id = str((target_metadata or {}).get("unit_id", "") or "").strip()
+                    if not unit_id or not self._durable_dummy_allowed(unit_id):
+                        raise self._parentage_error(
+                            "heritage_track.error.dummy_owner_scope",
+                            "A persistent Heritage dummy requires a valid authorized Unit.",
+                        )
+                if any(requested_values) and not self._parentage_authorized():
+                    raise self._parentage_error(
+                        "heritage_track.error.permission_denied",
+                        "You do not have permission to edit Heritage parentage.",
+                    )
+            else:
+                if target_kind not in {"temporary", "direct", "former_core"}:
+                    raise self._parentage_error(
+                        "heritage_track.error.dummy_kind_required",
+                        "The selected record is not an identified Heritage dummy.",
+                    )
+                if target_kind in {"direct", "former_core"} and not self._dummy_owner_in_scope(target_record):
+                    raise self._parentage_error(
+                        "heritage_track.error.dummy_owner_scope",
+                        "This persistent Heritage dummy is outside your Unit scope.",
+                    )
+                if parentage_requested and not self._parentage_authorized():
+                    raise self._parentage_error(
+                        "heritage_track.error.permission_denied",
+                        "You do not have permission to edit Heritage parentage.",
+                    )
+        normalized_metadata = self._validate_dummy_metadata(
+            target_record,
+            target_metadata,
+            creating=creating_dummy,
+            source=source,
+        )
+        if (
+            any(field in normalized_metadata for field in ("sex", "genotype"))
+            and not creating_dummy
+            and source != "former_core_dummy"
+            and not self._parentage_authorized()
+        ):
+            raise self._parentage_error(
+                "heritage_track.error.permission_denied",
+                "You do not have permission to edit Heritage dummy metadata.",
+            )
+        if (
+            "node_fill_color" in normalized_metadata
+            and source != "former_core_dummy"
+            and normalized_metadata.get("node_fill_color")
+            != self.store._normalize_text(target_record.get("node_fill_color", ""))
+            and not self._action_authorized("heritage.edit_genotype_colors")
+        ):
+            raise self._parentage_error(
+                "heritage_track.error.permission_denied",
+                "You do not have permission to edit Heritage genotype display colours.",
+            )
         target_species = self.store._normalize_text(target_record.get("species", ""))
         target_birth_text = self.store._normalize_text(target_record.get("birth_date", ""))
         target_birth = self._parentage_date(target_birth_text)
@@ -6409,6 +6814,14 @@ class HeritageTrackPlugin:
                 raise self._parentage_error("heritage_track.error.parentage_conflict", "The parentage data changed. Reload it and try again.")
             if not expected_text.isdigit() and expected_text != old_revision_token:
                 raise self._parentage_error("heritage_track.error.parentage_conflict", "The parentage data changed. Reload it and try again.")
+
+        requested = (
+            {key: self.store._normalize_text(raw_values.get(key, "")) for key in (
+                "egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father"
+            )}
+            if parentage_requested
+            else self.store._normalize_parents(target_record)
+        )
 
         combined_records = dict(records)
         canonical: Dict[str, str] = {}
@@ -6541,7 +6954,29 @@ class HeritageTrackPlugin:
             animals = data.setdefault("animals", {})
             if not isinstance(animals, dict):
                 raise self._parentage_error("heritage_track.error.parent_invalid", "Heritage data is invalid.")
+            if creating_dummy and target_key in animals:
+                raise self._parentage_error(
+                    "heritage_track.error.name_exists_heritage",
+                    "This animal already exists in Heritage data.",
+                )
             for key, custom_record in custom_entries.items():
+                if key in animals:
+                    raise self._parentage_error(
+                        "heritage_track.error.parent_duplicate_identity",
+                        "A Heritage animal with this name and species already exists.",
+                    )
+                if not target_is_temporary:
+                    # Custom ancestors materialized as part of a durable
+                    # command inherit the owning Unit and explicit durable
+                    # kind; they must not become unowned legacy records.
+                    custom_record = deepcopy(custom_record)
+                    custom_record["dummy_kind"] = "direct"
+                    custom_record["persistence_kind"] = "direct_dummy"
+                    custom_record["unit_id"] = str(
+                        (target_metadata or {}).get("unit_id", "")
+                        or target_record.get("unit_id", "")
+                        or self._current_unit_id()
+                    ).strip()
                 animals[key] = deepcopy(custom_record)
             entry = animals.get(target_key)
             if not isinstance(entry, dict):
@@ -6556,16 +6991,8 @@ class HeritageTrackPlugin:
             for field, value in canonical.items():
                 entry[field] = value
             entry["source"] = self.store._normalize_text(source) or "plugin"
-            if isinstance(target_metadata, dict):
-                for metadata_key in (
-                    "name", "_base_name", "display_name", "genotype",
-                    "node_fill_color", "sex", "species", "birth_date",
-                    "heritage_only", "identity_review_required",
-                    "identity_review_reason", "unit_id", "dummy_kind",
-                    "persistence_kind",
-                ):
-                    if metadata_key in target_metadata:
-                        entry[metadata_key] = deepcopy(target_metadata[metadata_key])
+            for metadata_key, metadata_value in normalized_metadata.items():
+                entry[metadata_key] = deepcopy(metadata_value)
             entry["parentage_revision"] = token
             entry["parentage_revision_display"] = display_token
             if genetic_changed:
@@ -6583,19 +7010,15 @@ class HeritageTrackPlugin:
             # Temporary direct dummies never reach the backend or audit log.
             working = deepcopy(self._temporary_dummies.get(target_key, target_record))
             for key, custom_record in custom_entries.items():
-                self._temporary_dummies[key] = deepcopy(custom_record)
+                temporary_record = deepcopy(custom_record)
+                temporary_record["dummy_kind"] = "direct"
+                temporary_record["persistence_kind"] = "temporary_dummy"
+                temporary_record["unit_id"] = self._current_unit_id()
+                self._temporary_dummies[key] = temporary_record
             for field, value in canonical.items():
                 working[field] = value
-            if isinstance(target_metadata, dict):
-                for metadata_key in (
-                    "name", "_base_name", "display_name", "genotype",
-                    "node_fill_color", "sex", "species", "birth_date",
-                    "heritage_only", "identity_review_required",
-                    "identity_review_reason", "unit_id", "dummy_kind",
-                    "persistence_kind",
-                ):
-                    if metadata_key in target_metadata:
-                        working[metadata_key] = deepcopy(target_metadata[metadata_key])
+            for metadata_key, metadata_value in normalized_metadata.items():
+                working[metadata_key] = deepcopy(metadata_value)
             working["parentage_revision"] = token
             working["parentage_revision_display"] = display_token
             working["updated_at"] = self.store._utc_now_iso()
@@ -6648,7 +7071,16 @@ class HeritageTrackPlugin:
             else (self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {})
         )
         archived = {} if isinstance(self._active_core_snapshot, dict) else (getattr(self.app, "archived", {}) or {})
-        return key in animals or (isinstance(archived, dict) and key in archived)
+        if key in animals or (isinstance(archived, dict) and key in archived):
+            return True
+        for records in (animals, archived if isinstance(archived, dict) else {}):
+            for record in records.values():
+                if (
+                    isinstance(record, dict)
+                    and str(record.get("ipid", "") or "").strip() == key
+                ):
+                    return True
+        return False
 
     @staticmethod
     def _record_is_inactive(record: Dict[str, Any]) -> bool:
@@ -6812,11 +7244,21 @@ class HeritageTrackPlugin:
             return False
         return key in self._temporary_dummies or key in self._store_snapshot_entries()
 
+    def can_remove_heritage_only(self, animal_name: str) -> bool:
+        """Return the same removal decision used by the command boundary."""
+        key = str(animal_name or "").strip()
+        if not key or not self._heritage_view_authorized() or self._is_core_animal(key):
+            return False
+        if key in self._temporary_dummies:
+            return True
+        snapshot, _revision = self.store.load_latest_with_revision()
+        animals = snapshot.get("animals", {}) if isinstance(snapshot, dict) else {}
+        entry = animals.get(key) if isinstance(animals, dict) else None
+        return isinstance(entry, dict) and self._durable_dummy_delete_authorized(entry)
+
     def delete_heritage_only_animal(self, animal_name: str) -> bool:
         key = str(animal_name or "").strip()
         if not key or not self._heritage_view_authorized():
-            return False
-        if not self.is_heritage_only(key):
             return False
         if key in self._temporary_dummies:
             self._temporary_dummies.pop(key, None)
@@ -6826,11 +7268,26 @@ class HeritageTrackPlugin:
         # Durable dummy removal uses one optimistic backend transaction so a
         # concurrent session cannot delete a newly-updated lineage snapshot.
         try:
-            _snapshot, revision = self.store.load_latest_with_revision()
+            snapshot, revision = self.store.load_latest_with_revision()
+            stored_animals = snapshot.get("animals", {}) if isinstance(snapshot, dict) else {}
+            stored_entry = stored_animals.get(key) if isinstance(stored_animals, dict) else None
+            if not isinstance(stored_entry, dict):
+                return False
+            if self._dummy_kind(stored_entry) not in {"direct", "former_core"}:
+                return False
+            if not self._durable_dummy_delete_authorized(stored_entry):
+                return False
 
             def mutate(data: Dict[str, Any]) -> bool:
                 animals = data.get("animals", {})
                 if not isinstance(animals, dict) or key not in animals:
+                    return False
+                entry = animals.get(key)
+                if (
+                    not isinstance(entry, dict)
+                    or self._dummy_kind(entry) not in {"direct", "former_core"}
+                    or not self._durable_dummy_delete_authorized(entry)
+                ):
                     return False
                 animals.pop(key, None)
                 positions = data.get("node_positions", {})
@@ -6864,6 +7321,8 @@ class HeritageTrackPlugin:
         self,
         animal_id: str,
         record: Dict[str, Any],
+        *,
+        authorized: bool = False,
     ) -> bool:
         """Retain a deleted Core parent as an editable Heritage dummy.
 
@@ -6873,7 +7332,16 @@ class HeritageTrackPlugin:
         with the same IPID is reconnected by ``sync_from_record``.
         """
         key = str(animal_id or "").strip()
-        if not key or not isinstance(record, dict):
+        # This compatibility adapter is a write path and must never be
+        # callable as a free-standing Heritage mutation.  Production uses the
+        # backend-owned atomic Core-delete operation; the guarded fallback is
+        # passed an explicit authorization token by the Core command caller.
+        if (
+            not authorized
+            or not self._action_authorized("core.delete_animals")
+            or not key
+            or not isinstance(record, dict)
+        ):
             return False
         referenced = False
         for child_key, child_record in self._all_identity_records().items():
@@ -6898,6 +7366,13 @@ class HeritageTrackPlugin:
             "identity_review_required": False,
             "identity_review_reason": "",
         })
+        owner_unit = ""
+        for field in ("organization_unit_id", "organizational_unit_id", "workgroup_id"):
+            candidate = str(record.get(field, "") or "").strip()
+            if candidate:
+                owner_unit = candidate
+                break
+        metadata["unit_id"] = owner_unit or self._current_unit_id()
         # The Core delete command has already performed its authorization.
         # Publish the read-only deletion snapshot directly to the Heritage
         # store; it must remain durable even though the Core row is removed.
@@ -6944,18 +7419,23 @@ class HeritageTrackPlugin:
         self.invalidate_render_dependencies({key})
         return True
 
-    def set_manual_sex(self, animal_name: str, sex: Optional[str]) -> None:
+    def set_manual_sex(self, animal_name: str, sex: Optional[str]) -> bool:
+        """Change dummy sex through the same validated atomic command."""
         if self._is_core_animal(animal_name):
-            return
+            return False
         key = str(animal_name or "").strip()
-        if key in self._temporary_dummies:
-            self._temporary_dummies[key]["sex"] = self.store._normalize_sex(sex)
-            self._temporary_dummies[key]["updated_at"] = self.store._utc_now_iso()
-            self._engine_cache.invalidate()
-            self.invalidate_render_dependencies({key})
-            return
-        self.store.set_manual_sex(animal_name, sex)
-        self.invalidate_render_dependencies({animal_name})
+        if not key:
+            return False
+        try:
+            return bool(self.set_dummy_parentage(
+                actor=None,
+                animal_id=key,
+                expected_revision=self._active_backend_revision,
+                values=None,
+                target_metadata={"sex": sex},
+            ))
+        except ParentageCommandError:
+            return False
 
     def get_manual_sex(self, animal_name: str) -> str:
         if self._is_core_animal(animal_name):
@@ -6970,17 +7450,24 @@ class HeritageTrackPlugin:
         animal_name: str,
         genotype: Optional[str],
         fill_color: Optional[str],
-    ) -> None:
+    ) -> bool:
         """Store Heritage visual metadata without mutating a Core record."""
         key = str(animal_name or "").strip()
         if not key:
-            return
+            return False
         if self._is_core_animal(key):
             # Core genotype is immutable here.  A permitted colour change is
             # a global Heritage visual overlay keyed by the authoritative
             # genotype, never a per-animal shadow record.
             record = self._core_record(key) or {}
             core_genotype = self.store._normalize_text(record.get("genotype", ""))
+            if genotype is not None and self.store._normalize_text(genotype) != core_genotype:
+                # A caller must not smuggle a genotype mutation through the
+                # appearance command.  The node editor intentionally passes
+                # ``None`` for this argument when the Core record is real.
+                return False
+            if fill_color is not None and not self._action_authorized("heritage.edit_genotype_colors"):
+                return False
             if fill_color is not None and core_genotype:
                 self.store.set_genotype_color(
                     core_genotype,
@@ -6988,21 +7475,43 @@ class HeritageTrackPlugin:
                     update_entries=False,
                 )
             self.invalidate_render_dependencies({key})
-            return
+            return True
         if key in self._temporary_dummies:
-            entry = self._temporary_dummies[key]
+            metadata: Dict[str, Any] = {}
             if genotype is not None:
-                entry["genotype"] = self.store._normalize_text(genotype)
+                metadata["genotype"] = genotype
             if fill_color is not None:
-                entry["node_fill_color"] = self.store._normalize_text(fill_color)
-            entry["updated_at"] = self.store._utc_now_iso()
-            self._engine_cache.invalidate()
-            self.invalidate_render_dependencies({key})
-            return
+                metadata["node_fill_color"] = fill_color
+            try:
+                return bool(self.set_dummy_parentage(
+                    actor=None,
+                    animal_id=key,
+                    expected_revision=None,
+                    values=None,
+                    target_metadata=metadata,
+                ))
+            except ParentageCommandError:
+                return False
         # This is a plugin-owned visual overlay.  It deliberately does not
         # touch ``app.animals`` or call the Core persistence service.
-        self.store.set_node_visual(key, genotype, fill_color)
-        self.invalidate_render_dependencies({key})
+        entry = self._store_snapshot_entries().get(key, {})
+        if not isinstance(entry, dict) or self._dummy_kind(entry) not in {"direct", "former_core"}:
+            return False
+        metadata: Dict[str, Any] = {}
+        if genotype is not None:
+            metadata["genotype"] = genotype
+        if fill_color is not None:
+            metadata["node_fill_color"] = fill_color
+        try:
+            return bool(self.set_dummy_parentage(
+                actor=None,
+                animal_id=key,
+                expected_revision=self._active_backend_revision,
+                values=None,
+                target_metadata=metadata,
+            ))
+        except ParentageCommandError:
+            return False
 
     def get_effective_sex(self, animal_name: Optional[str], fallback_record: Optional[Dict[str, Any]] = None) -> str:
         key = str(animal_name or "").strip()
@@ -7140,7 +7649,9 @@ class HeritageTrackPlugin:
         ):
             return False
         unit_id = self._current_unit_id()
-        durable = self._durable_dummy_allowed(unit_id)
+        # A durable dummy must have an explicit canonical organizational Unit;
+        # without one the safe fallback is the documented session-only kind.
+        durable = bool(unit_id and self._durable_dummy_allowed(unit_id))
         persistence_kind = "direct_dummy" if durable else "temporary_dummy"
         target_record = self._parentage_default_entry(
             key, name=base_name, species=species_value,
@@ -7171,6 +7682,7 @@ class HeritageTrackPlugin:
                 allow_custom=False,
                 explicit_custom_parents=explicit_custom_parents,
                 target_metadata=target_record,
+                create=True,
             )
         except ParentageCommandError:
             return False

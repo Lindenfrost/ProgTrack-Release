@@ -834,6 +834,23 @@ class PedigreeRouter:
                     self._deoverlap_row(
                         adjusted, row, labels, protected, show_inbreeding
                     )
+                # Row clustering is only a candidate-discovery shortcut; it
+                # is not proof that nearby date/detail rectangles are clear.
+                # Run the sparse horizontal constraint pass as the final
+                # clearance boundary so the 257-node path has the same hard
+                # collision invariant as smaller graphs while retaining the
+                # spatial index used by the solver.
+                self._solve_horizontal_constraints(
+                    adjusted,
+                    families,
+                    labels,
+                    show_inbreeding,
+                    chronological=preserve_y,
+                )
+                for row in self._cluster_rows(adjusted):
+                    self._deoverlap_row(
+                        adjusted, row, labels, protected, show_inbreeding
+                    )
                 return adjusted
             if not preserve_y:
                 self._assign_generation_rows(adjusted, families)
@@ -2759,7 +2776,7 @@ class PedigreeRouter:
                                     candidate_junctions[candidate_family][0],
                                     candidate[child][1],
                                 )
-                    if mixed_sides and preferred_side is not None:
+                    if mixed_sides and preferred_side is not None and not chronological:
                         # A preferred shoulder can be occupied by a nearby
                         # ghost sibling at a slightly different normalized
                         # row.  Try tiny local vertical offsets for the
@@ -2968,10 +2985,20 @@ class PedigreeRouter:
                     3.50,
                 ):
                     trial = dict(positions)
-                    trial[blocker] = (
-                        positions[blocker][0],
-                        positions[blocker][1] + delta,
-                    )
+                    if chronological:
+                        # A chronological Y coordinate is a birth-date lane,
+                        # not free packing space.  Resolve this local fan
+                        # collision horizontally instead; moving the blocker
+                        # to a different date row would falsify the plot.
+                        trial[blocker] = (
+                            positions[blocker][0] + delta,
+                            positions[blocker][1],
+                        )
+                    else:
+                        trial[blocker] = (
+                            positions[blocker][0],
+                            positions[blocker][1] + delta,
+                        )
                     geometry = self._layout_geometry_score(
                         trial,
                         families,

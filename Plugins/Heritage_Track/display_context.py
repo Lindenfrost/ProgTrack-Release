@@ -325,6 +325,14 @@ class RenderCacheEntry:
     node_metadata: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     artist_scale: float = 1.0
     chronological_undated_nodes: FrozenSet[str] = field(default_factory=frozenset)
+    # Complete position-write context for a warm frame.  A cached frame may
+    # be restored after another selection was painted; retaining this context
+    # prevents a subsequent drag from writing coordinates into the other
+    # selection's map.
+    position_cache_key: str = ""
+    position_cache_user: str = ""
+    position_cache_revision: str = ""
+    position_cache_dependencies: FrozenSet[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "canonical_selection", tuple(self.canonical_selection))
@@ -350,6 +358,10 @@ class RenderCacheEntry:
         object.__setattr__(self, "node_metadata", _freeze_value(self.node_metadata))
         object.__setattr__(self, "artist_scale", float(self.artist_scale or 1.0))
         object.__setattr__(self, "chronological_undated_nodes", frozenset(self.chronological_undated_nodes))
+        object.__setattr__(self, "position_cache_key", str(self.position_cache_key or ""))
+        object.__setattr__(self, "position_cache_user", str(self.position_cache_user or ""))
+        object.__setattr__(self, "position_cache_revision", str(self.position_cache_revision or ""))
+        object.__setattr__(self, "position_cache_dependencies", frozenset(self.position_cache_dependencies))
         if not isinstance(self.route_plan, FrozenRoutePlan):
             object.__setattr__(self, "route_plan", FrozenRoutePlan.from_route_plan(self.route_plan))
         geometry_diagnostics = _non_finite_geometry_diagnostics(
