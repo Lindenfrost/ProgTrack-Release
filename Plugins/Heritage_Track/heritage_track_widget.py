@@ -6458,8 +6458,13 @@ class HeritageTrackPlugin:
         return False
 
     def _record_in_unit_scope(self, record: Dict[str, Any]) -> bool:
-        """Hide explicit cross-Unit Heritage records from candidate queries."""
-        current = self._current_unit_id().casefold()
+        """Hide explicit cross-Unit records from candidate queries.
+
+        In managed mode the authorization service is the canonical Unit
+        boundary.  Falling back to a cached ``current_unit_id`` is only safe
+        when that service does not expose a read check; an empty/stale UI
+        value must never make an explicitly owned record visible.
+        """
         # ``unit_id`` on a Core animal is commonly a CageTrack housing unit,
         # not the Master organizational Unit.  Only Heritage-owned dummies
         # may use that field for ownership; Core records can opt into an
@@ -6476,7 +6481,32 @@ class HeritageTrackPlugin:
                     owner_value = record.get(field)
                     break
         owner = str(owner_value or "").strip().casefold()
-        return not owner or not current or owner == current
+        if not owner:
+            # Unassigned Core records remain visible; durable Heritage dummies
+            # are rejected later by their explicit owner check.
+            return True
+
+        authorization = getattr(self.app, "authorization", None)
+        if authorization is not None and not bool(
+            getattr(authorization, "trusted_local", False)
+        ):
+            checker = getattr(authorization, "can_read_unit", None)
+            if callable(checker):
+                try:
+                    return bool(checker(owner))
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        "Could not evaluate Heritage Unit visibility",
+                        exc_info=True,
+                    )
+                    return False
+            current = self._current_unit_id().casefold()
+            return bool(current and current == owner)
+
+        # No managed service means trusted-local operation.  Retain the
+        # historical permissive behaviour there, including an unset UI Unit.
+        current = self._current_unit_id().casefold()
+        return not current or owner == current
 
     @staticmethod
     def _parentage_token(actor: str, sequence: int) -> Tuple[str, str]:
@@ -7629,9 +7659,18 @@ class HeritageTrackPlugin:
         if not text:
             return "", "resolved"
 
+        # The resolver is also used by the transient text-search path before
+        # the atomic command runs.  Filter the same authorized Unit scope here
+        # so typing an otherwise valid cross-Unit name cannot disclose or
+        # resolve a record that the candidate picker correctly hides.
+        records = {
+            key: record
+            for key, record in self._all_identity_records().items()
+            if isinstance(record, dict) and self._record_in_unit_scope(record)
+        }
         key, _record, status = resolve_animal_reference_text(
             text,
-            self._all_identity_records(),
+            records,
             target_species=target_species,
         )
         return key, status
