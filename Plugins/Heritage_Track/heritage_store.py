@@ -1499,16 +1499,27 @@ class HeritageStore:
         caller can retain or discard the affected render-cache entry.
         """
         raw, revision = self.backend_store.load_with_revision(None)
-        if raw is None or not isinstance(raw, dict):
-            self._invalid_node_positions = {}
-            return 0
-
         previous_data = self._data
         previous_invalid = self._invalid_node_positions
+        previous_genotype_colors_cache = self._genotype_colors_cache
+        if raw is None or not isinstance(raw, dict):
+            # A cleanup request against an empty/malformed backend record has
+            # nothing to repair.  Keep the caller's in-memory view and any
+            # pending invalid-coordinate marker untouched; this method is an
+            # explicit write operation, not an implicit reload.
+            return 0
+
         try:
             normalized = deepcopy(self._normalize_and_cache(deepcopy(raw), persist=False))
             invalid = dict(self._invalid_node_positions)
             if not invalid:
+                # Normalization is intentionally non-persistent here.  When
+                # there is no malformed coordinate, it must also be
+                # side-effect-free for a caller that has a local draft or a
+                # cached view newer than the backend snapshot.
+                self._data = previous_data
+                self._invalid_node_positions = previous_invalid
+                self._genotype_colors_cache = previous_genotype_colors_cache
                 return 0
             next_revision = self.backend_store.save(
                 normalized,
@@ -1517,7 +1528,7 @@ class HeritageStore:
         except Exception:
             self._data = previous_data
             self._invalid_node_positions = previous_invalid
-            self._genotype_colors_cache = None
+            self._genotype_colors_cache = previous_genotype_colors_cache
             raise
 
         self._data = normalized

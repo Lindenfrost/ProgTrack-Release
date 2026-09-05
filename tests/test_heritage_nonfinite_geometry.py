@@ -118,6 +118,22 @@ class HeritageNonFiniteStoreTest(unittest.TestCase):
         self.assertEqual(set(store.get_invalid_node_positions()), {"bad"})
         self.assertEqual(backend.records.put_count, 0)
 
+    def test_cleanup_without_invalid_coordinates_preserves_local_view(self):
+        backend = _Backend({"node_positions": {"good": [1.0, 2.0]}})
+        store = HeritageStore("", backend)
+        view = store.load()
+        # Simulate an unsaved local draft held by an active widget.  A no-op
+        # cleanup must not replace that object with a normalized backend copy.
+        view["settings"]["show_grid"] = True
+        before_cache = store._genotype_colors_cache
+
+        self.assertEqual(store.cleanup_invalid_node_positions(), 0)
+        self.assertIs(store._data, view)
+        self.assertTrue(store._data["settings"]["show_grid"])
+        self.assertEqual(store.get_invalid_node_positions(), {})
+        self.assertIs(store._genotype_colors_cache, before_cache)
+        self.assertEqual(backend.records.put_count, 0)
+
     def test_position_batch_rejects_atomically(self):
         backend = _Backend()
         store = HeritageStore("", backend)
