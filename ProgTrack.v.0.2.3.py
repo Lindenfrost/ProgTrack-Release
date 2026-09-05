@@ -7639,14 +7639,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 raise ValueError(unavailable)
             return {}
         records: Dict[str, Dict[str, Any]] = {}
+        recognized_section = False
+        valid_section = False
         for section in ("animals", "archived_animals", "archived"):
-            values = snapshot.get(section, {})
+            if section not in snapshot:
+                continue
+            recognized_section = True
+            values = snapshot.get(section)
             if not isinstance(values, Mapping):
                 continue
+            valid_section = True
             for key, record in values.items():
                 normalized_key = str(key or "").strip()
                 if normalized_key and isinstance(record, Mapping):
                     records[normalized_key] = dict(record)
+        if required and (not recognized_section or not valid_section):
+            raise ValueError(unavailable)
         return records
 
     def _core_parent_candidate_visible(self, record: Mapping[str, Any]) -> bool:
@@ -7699,13 +7707,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Return a stable snapshot token for the Core parentage projection."""
         snapshot_records = self._load_core_parentage_records(required=True)
         records: Dict[str, Any] = {}
+        # The token protects both parentage and the candidate/visibility
+        # catalogue used to validate it.  Include identity, lifecycle,
+        # project and organizational-unit fields as well as all four parent
+        # references; otherwise a concurrent rename, archive/death or Unit
+        # change could leave an already-open dialog with a falsely valid token.
+        revision_fields = (
+            "name", "_base_name", "id", "ipid", "species", "sex",
+            "birth_date", "death_date", "sterbedatum", "archived",
+            "project", "project_id", "organization_unit_id",
+            "organizational_unit_id", "workgroup_id",
+            "eizellspenderin", "samenspender", "ziehmutter", "ziehvater",
+        )
         for key, record in snapshot_records.items():
             records[str(key)] = {
                 field: record.get(field, "")
-                for field in (
-                    "eizellspenderin", "samenspender",
-                    "ziehmutter", "ziehvater", "species", "sex", "birth_date",
-                )
+                for field in revision_fields
             }
         payload = json.dumps(records, sort_keys=True, default=str, separators=(",", ":"))
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -7772,11 +7789,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         def relationship_label(key: str, candidate: Mapping[str, Any]) -> str:
             label = relationship_display_label(key, candidate)
-            if (
-                candidate.get("archived")
-                or candidate.get("death_date")
-                or candidate.get("sterbedatum")
-            ):
+            if candidate.get("death_date") or candidate.get("sterbedatum"):
                 # A deceased identity is distinct from an archived/lifecycle
                 # state.  Use the unambiguous, language-neutral marker in
                 # every locale; archive status remains available separately
