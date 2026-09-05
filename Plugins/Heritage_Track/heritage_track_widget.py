@@ -2305,7 +2305,7 @@ class HeritageTrackWidget(QWidget):
         # Read all inputs from one current snapshot.  The aggregate backend
         # revision is intentionally not used for position validity: unrelated
         # pedigree edits must not evict this selection's coordinates.
-        current_core = self.plugin._copy_core_records(self.app)
+        current_core = self.plugin._current_core_records()
         current_store, current_backend_revision = self.plugin.store.load_latest_with_revision()
         current_engine = self.plugin.build_engine(
             sync=False,
@@ -4087,7 +4087,7 @@ class HeritageTrackWidget(QWidget):
         # Rendering is one read-only transaction.  Capture Core and the latest
         # Heritage backend record/revision before building the engine so every
         # projection, resolver and position lookup uses the same snapshot.
-        core_snapshot = self.plugin._copy_core_records(self.app)
+        core_snapshot = self.plugin._current_core_records()
         raw_store, backend_revision = self.plugin.store.load_latest_with_revision()
         store_animals = raw_store.get("animals", {}) if isinstance(raw_store, dict) else {}
         self._render_core_animals = core_snapshot
@@ -6101,6 +6101,52 @@ class HeritageTrackPlugin:
             records.update({str(key).strip(): deepcopy(value) for key, value in archived.items() if str(key).strip() and isinstance(value, dict)})
         return records
 
+    def _current_core_records(
+        self,
+        *,
+        fresh: bool = True,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Read the newest Core projection for command-boundary decisions.
+
+        A render keeps an immutable snapshot for painting, but mutation and
+        ownership checks must not continue using that snapshot after another
+        session has committed a Core animal.  The configured backend is the
+        authoritative source when it exposes ``load_core_data``; lightweight
+        test/local adapters and an unavailable backend safely fall back to the
+        application's already loaded Core maps.
+        """
+        # A render already owns a single immutable Core snapshot.  Reusing it
+        # keeps per-node paint/tooltip lookups O(1); command callers pass
+        # ``fresh=True`` (the default) to avoid using a stale warm frame.
+        if not fresh and isinstance(self._active_core_snapshot, dict):
+            return self._active_core_snapshot
+
+        backend = getattr(self.app, "backend", None)
+        loader = getattr(backend, "load_core_data", None)
+        if callable(loader):
+            try:
+                snapshot = loader()
+                if isinstance(snapshot, dict):
+                    records: Dict[str, Dict[str, Any]] = {}
+                    for section in ("animals", "archived_animals", "archived"):
+                        values = snapshot.get(section, {})
+                        if not isinstance(values, dict):
+                            continue
+                        records.update(
+                            {
+                                str(key).strip(): deepcopy(value)
+                                for key, value in values.items()
+                                if str(key).strip() and isinstance(value, dict)
+                            }
+                        )
+                    return records
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "Could not read current Core projection for Heritage command",
+                    exc_info=True,
+                )
+        return self._copy_core_records(self.app)
+
     def _store_snapshot_entries(self) -> Dict[str, Dict[str, Any]]:
         snapshot = self._active_store_snapshot
         if isinstance(snapshot, dict):
@@ -6145,33 +6191,22 @@ class HeritageTrackPlugin:
         key = str(animal_name or "").strip()
         if not key:
             return None
-        animals = (
-            self._active_core_snapshot
-            if isinstance(self._active_core_snapshot, dict)
-            else (self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {})
-        )
+        # Commands must not use an older render snapshot for ownership checks.
+        # A second session may have committed a new Core row since the frame
+        # was painted; the backend read above is authoritative for this call.
+        animals = self._current_core_records(fresh=True)
         if key in animals and isinstance(animals[key], dict):
             return animals[key]
         # Core dictionaries normally use the IPID as their key, but callers
         # may pass a stable IPID while an integration keeps a display name as
         # the mapping key.  Resolve that alias before consulting Heritage
         # data so a forged Heritage mutation cannot target a real Core row.
-        for candidate_key, candidate in animals.items():
+        for candidate in animals.values():
             if (
                 isinstance(candidate, dict)
                 and str(candidate.get("ipid", "") or "").strip() == key
             ):
                 return candidate
-        archived = {} if isinstance(self._active_core_snapshot, dict) else (getattr(self.app, "archived", {}) or {})
-        if isinstance(archived, dict) and key in archived and isinstance(archived[key], dict):
-            return archived[key]
-        if isinstance(archived, dict):
-            for candidate in archived.values():
-                if (
-                    isinstance(candidate, dict)
-                    and str(candidate.get("ipid", "") or "").strip() == key
-                ):
-                    return candidate
         return None
 
     def _parentage_message(self, key: str, fallback: str) -> str:
@@ -6670,7 +6705,7 @@ class HeritageTrackPlugin:
             self.store._normalize_text(raw_values.get(key, ""))
             for key in ("egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father")
         }
-        if self._is_core_animal(target_text) and source != "former_core_dummy":
+        if self._is_core_animal(target_text, fresh=True) and source != "former_core_dummy":
             raise self._parentage_error(
                 "heritage_track.error.core_read_only",
                 "Core animals are read-only in Heritage Track.",
@@ -6723,7 +6758,7 @@ class HeritageTrackPlugin:
                 "The selected animal is no longer available.",
             )
         target_key = str(target_key).strip()
-        if self._is_core_animal(target_key) and source != "former_core_dummy":
+        if self._is_core_animal(target_key, fresh=True) and source != "former_core_dummy":
             raise self._parentage_error(
                 "heritage_track.error.core_read_only",
                 "Core animals are read-only in Heritage Track.",
@@ -7061,25 +7096,24 @@ class HeritageTrackPlugin:
             )
         return self.set_dummy_parentage(*args, **kwargs)
 
-    def _is_core_animal(self, animal_name: Optional[str]) -> bool:
+    def _is_core_animal(
+        self,
+        animal_name: Optional[str],
+        *,
+        fresh: bool = False,
+    ) -> bool:
         key = str(animal_name or "").strip()
         if not key:
             return False
-        animals = (
-            self._active_core_snapshot
-            if isinstance(self._active_core_snapshot, dict)
-            else (self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {})
-        )
-        archived = {} if isinstance(self._active_core_snapshot, dict) else (getattr(self.app, "archived", {}) or {})
-        if key in animals or (isinstance(archived, dict) and key in archived):
+        records = self._current_core_records(fresh=fresh)
+        if key in records:
             return True
-        for records in (animals, archived if isinstance(archived, dict) else {}):
-            for record in records.values():
-                if (
-                    isinstance(record, dict)
-                    and str(record.get("ipid", "") or "").strip() == key
-                ):
-                    return True
+        for record in records.values():
+            if (
+                isinstance(record, dict)
+                and str(record.get("ipid", "") or "").strip() == key
+            ):
+                return True
         return False
 
     @staticmethod
@@ -7110,7 +7144,9 @@ class HeritageTrackPlugin:
         candidates: List[str] = []
         inactive: Set[str] = set()
 
-        active = self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {}
+        # Candidate dialogs are command-facing, so read the latest Core
+        # projection once instead of using a potentially stale render frame.
+        active = self._current_core_records(fresh=True)
         for key, record in active.items():
             if key == excluded or not isinstance(record, dict):
                 continue
@@ -7124,21 +7160,10 @@ class HeritageTrackPlugin:
                 if self._record_is_inactive(record):
                     inactive.add(key)
 
-        archived = getattr(self.app, "archived", {}) or {}
-        if isinstance(archived, dict):
-            for key, record in archived.items():
-                if key == excluded or key in active or not isinstance(record, dict):
-                    continue
-                if not self._record_in_unit_scope(record):
-                    continue
-                record_species = str(record.get("species", "") or "").strip()
-                if species and record_species != species:
-                    continue
-                if self.get_effective_sex(key, record) == required:
-                    candidates.append(key)
-                    if self._record_is_inactive(record):
-                        inactive.add(key)
-        archived_keys = set(archived) if isinstance(archived, dict) else set()
+        # ``active`` above includes archived rows from the backend snapshot;
+        # their persisted death/lifecycle fields still drive the inactive
+        # marker, while the key set prevents duplicate candidates.
+        archived_keys: Set[str] = set()
         store_entries = self._store_snapshot_entries()
         for key, record in store_entries.items():
             if (
@@ -7240,14 +7265,14 @@ class HeritageTrackPlugin:
 
     def is_heritage_only(self, animal_name: str) -> bool:
         key = str(animal_name or "").strip()
-        if not key or self._is_core_animal(key):
+        if not key or self._is_core_animal(key, fresh=True):
             return False
         return key in self._temporary_dummies or key in self._store_snapshot_entries()
 
     def can_remove_heritage_only(self, animal_name: str) -> bool:
         """Return the same removal decision used by the command boundary."""
         key = str(animal_name or "").strip()
-        if not key or not self._heritage_view_authorized() or self._is_core_animal(key):
+        if not key or not self._heritage_view_authorized() or self._is_core_animal(key, fresh=True):
             return False
         if key in self._temporary_dummies:
             return True
@@ -7421,7 +7446,7 @@ class HeritageTrackPlugin:
 
     def set_manual_sex(self, animal_name: str, sex: Optional[str]) -> bool:
         """Change dummy sex through the same validated atomic command."""
-        if self._is_core_animal(animal_name):
+        if self._is_core_animal(animal_name, fresh=True):
             return False
         key = str(animal_name or "").strip()
         if not key:
@@ -7438,7 +7463,7 @@ class HeritageTrackPlugin:
             return False
 
     def get_manual_sex(self, animal_name: str) -> str:
-        if self._is_core_animal(animal_name):
+        if self._is_core_animal(animal_name, fresh=True):
             return ""
         key = str(animal_name or "").strip()
         if key in self._temporary_dummies:
@@ -7455,7 +7480,7 @@ class HeritageTrackPlugin:
         key = str(animal_name or "").strip()
         if not key:
             return False
-        if self._is_core_animal(key):
+        if self._is_core_animal(key, fresh=True):
             # Core genotype is immutable here.  A permitted colour change is
             # a global Heritage visual overlay keyed by the authoritative
             # genotype, never a per-animal shadow record.
@@ -7550,15 +7575,10 @@ class HeritageTrackPlugin:
 
     def _all_identity_records(self) -> Dict[str, Dict[str, Any]]:
         records: Dict[str, Dict[str, Any]] = {}
-        animals = (
-            self._active_core_snapshot
-            if isinstance(self._active_core_snapshot, dict)
-            else (self.app.animals if isinstance(getattr(self.app, "animals", {}), dict) else {})
-        )
-        archived = {} if isinstance(self._active_core_snapshot, dict) else (getattr(self.app, "archived", {}) or {})
+        animals = self._current_core_records()
+        archived: Dict[str, Dict[str, Any]] = {}
         records.update(animals)
-        if isinstance(archived, dict):
-            records.update(archived)
+        records.update(archived)
         core_keys = {str(key).strip() for key in records}
         core_ipids = {
             str(entry.get("ipid", "")).strip()
@@ -7643,7 +7663,7 @@ class HeritageTrackPlugin:
                     return False
 
         if (
-            self._is_core_animal(key)
+            self._is_core_animal(key, fresh=True)
             or key in self._store_snapshot_entries()
             or key in self._temporary_dummies
         ):
@@ -7736,7 +7756,7 @@ class HeritageTrackPlugin:
         self.store.adopt_read_snapshot(store_snapshot, backend_revision)
 
         if core_snapshot is None:
-            core_snapshot = self._copy_core_records(self.app)
+            core_snapshot = self._current_core_records()
         else:
             core_snapshot = {
                 str(key).strip(): deepcopy(value)

@@ -139,6 +139,22 @@ class HeritageCoreProjectionTest(unittest.TestCase):
         self.assertEqual(store.get_all_entries()["Child"]["egg_donor"], "OldMother")
         self.assertEqual(app.backend.records.put_count, before_writes)
 
+    def test_legacy_store_mutators_cannot_materialize_core_shadow(self):
+        app = _App({"version": "1.0.0", "animals": {}})
+        store = HeritageStore(".", app.backend)
+        store.load()
+
+        store.set_parentage("core-ipid-1", {"egg_donor": "Mother"})
+        store.set_heritage_only("core-ipid-1", True)
+        store.set_species("core-ipid-1", "Callithrix jacchus")
+        store.set_identity_fields("core-ipid-1", display_name="Core")
+        store.set_manual_sex("core-ipid-1", "female")
+        store.set_node_visual("core-ipid-1", "WT/WT", "#ffeeaa")
+        store.set_inbreeding_f_batch({"core-ipid-1": 0.25})
+
+        self.assertEqual(app.backend.records.put_count, 0)
+        self.assertNotIn("core-ipid-1", store.get_all_entries())
+
     def test_read_only_engine_build_excludes_stale_core_store_copy_and_writes_nothing(self):
         app = _App(_stale_graph())
         plugin = HeritageTrackPlugin(app)

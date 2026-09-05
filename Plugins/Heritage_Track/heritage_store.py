@@ -1063,6 +1063,51 @@ class HeritageStore:
             }
         return animals[key]
 
+    @staticmethod
+    def _is_owned_dummy_entry(entry: Any) -> bool:
+        """Return whether a stored animal is an explicit Heritage dummy.
+
+        The store must never create a record merely because a compatibility
+        setter was called with a Core IPID.  Explicit lifecycle markers are
+        required; a bare ``heritage_only`` flag is not enough to establish
+        ownership after the one-way Core projection change.
+        """
+        if not isinstance(entry, dict) or not bool(entry.get("heritage_only", False)):
+            return False
+        persistence = str(entry.get("persistence_kind", "") or "").strip().casefold()
+        if persistence in {"temporary_dummy", "direct_dummy", "former_core_dummy"}:
+            return True
+        return str(entry.get("dummy_kind", "") or "").strip().casefold() in {
+            "direct", "former_core",
+        }
+
+    def _existing_owned_dummy_entry(self, animal_name: str) -> Optional[Dict[str, Any]]:
+        key = self._normalize_text(animal_name)
+        if not key:
+            return None
+        data = self.load()
+        animals = data.get("animals", {}) if isinstance(data, dict) else {}
+        entry = animals.get(key) if isinstance(animals, dict) else None
+        return entry if self._is_owned_dummy_entry(entry) else None
+
+    def _existing_entry(self, animal_name: str) -> Optional[Dict[str, Any]]:
+        """Return an already stored entry without creating a new one.
+
+        A few callers still use the historical low-level setters for updates
+        to an entry that has already been materialized by the canonical
+        Heritage command.  Looking up an existing key keeps those updates
+        working while ensuring an arbitrary Core IPID can never create a
+        persisted shadow record.  User-facing ownership and Core read-only
+        decisions remain enforced by the plugin command boundary.
+        """
+        key = self._normalize_text(animal_name)
+        if not key:
+            return None
+        data = self.load()
+        animals = data.get("animals", {}) if isinstance(data, dict) else {}
+        entry = animals.get(key) if isinstance(animals, dict) else None
+        return entry if isinstance(entry, dict) else None
+
     def get_settings(self) -> Dict[str, Any]:
         data = self.load()
         settings = data.get("settings", {}) if isinstance(data, dict) else {}
@@ -1147,7 +1192,7 @@ class HeritageStore:
         changed = False
         now_iso = self._utc_now_iso()
         for entry in animals.values():
-            if not isinstance(entry, dict):
+            if not self._is_owned_dummy_entry(entry):
                 continue
             entry_genotype_key = self._normalize_genotype_key(entry.get("genotype", ""))
             if entry_genotype_key != genotype_key:
@@ -1661,7 +1706,11 @@ class HeritageStore:
         if not key:
             return
 
-        entry = self._entry(key)
+        entry = self._existing_entry(key)
+        if entry is None:
+            # Core records are a read-only projection; do not materialize a
+            # shadow when an obsolete setter is called directly.
+            return
         normalized = self._normalize_parents(parent_values)
         for parent_key, value in normalized.items():
             entry[parent_key] = value
@@ -1674,9 +1723,13 @@ class HeritageStore:
         key = self._normalize_text(animal_name)
         if not key:
             return
-
-        entry = self._entry(key)
-        entry["heritage_only"] = bool(heritage_only)
+        entry = self._existing_entry(key)
+        if entry is None:
+            return
+        target = bool(heritage_only)
+        if bool(entry.get("heritage_only", False)) == target:
+            return
+        entry["heritage_only"] = target
         entry["updated_at"] = self._utc_now_iso()
         self._save_animals()
 
@@ -1688,8 +1741,8 @@ class HeritageStore:
             key = self._normalize_text(animal_name)
             if not key:
                 continue
-            entry = self._entry(key)
-            if bool(entry.get("heritage_only", False)) == target:
+            entry = self._existing_entry(key)
+            if entry is None or bool(entry.get("heritage_only", False)) == target:
                 continue
             entry["heritage_only"] = target
             entry["updated_at"] = timestamp
@@ -1740,7 +1793,12 @@ class HeritageStore:
         key = self._normalize_text(animal_name)
         if not key:
             return
-        entry = self._entry(key)
+        # Identity/species changes belong to the canonical dummy command in
+        # the UI.  Keep this low-level update usable for an already materialized
+        # entry, but never create a Core shadow for an unknown key.
+        entry = self._existing_entry(key)
+        if entry is None:
+            return
         entry["species"] = self._normalize_text(species)
         entry["updated_at"] = self._utc_now_iso()
         self._save_animals()
@@ -1759,7 +1817,12 @@ class HeritageStore:
         if not key:
             return
         visible = self._normalize_text(display_name) or animal_base_name(key)
-        entry = self._entry(key)
+        # Immutable identity is established by the canonical dummy command in
+        # the UI.  This historical API may update an existing entry only; it
+        # must not materialize a Core shadow for an unknown key.
+        entry = self._existing_entry(key)
+        if entry is None:
+            return
         entry["ipid"] = key
         entry["name"] = visible
         entry["_base_name"] = visible
@@ -1802,7 +1865,9 @@ class HeritageStore:
         if not key:
             return
 
-        entry = self._entry(key)
+        entry = self._existing_entry(key)
+        if entry is None:
+            return
         entry["sex"] = self._normalize_sex(sex)
         entry["updated_at"] = self._utc_now_iso()
         self._save_animals()
@@ -1815,7 +1880,9 @@ class HeritageStore:
             if not key:
                 continue
             normalized = self._normalize_sex(sex)
-            entry = self._entry(key)
+            entry = self._existing_entry(key)
+            if entry is None:
+                continue
             if self._normalize_sex(entry.get("sex", "")) == normalized:
                 continue
             entry["sex"] = normalized
@@ -1870,7 +1937,11 @@ class HeritageStore:
         if not key:
             return
 
-        entry = self._entry(key)
+        entry = self._existing_entry(key)
+        if entry is None:
+            # Unknown keys are never materialized through this compatibility
+            # surface; the plugin command separately rejects real Core IPIDs.
+            return
         changed = False
         old_genotype_text = self._normalize_text(entry.get("genotype", ""))
         old_genotype_key = self._normalize_genotype_key(old_genotype_text)
@@ -2048,6 +2119,12 @@ class HeritageStore:
                 continue
             if key not in animals:
                 # An unresolved reference must not materialize a cache record.
+                # Updating an already materialized entry is safe here: the
+                # derived F cache is owned by Heritage Track, while the
+                # canonical animal identity/relationships remain read-only
+                # through the guarded mutators above.  Some integrations
+                # provide pre-existing graph entries without lifecycle
+                # markers, and those must still receive their derived cache.
                 continue
             entry = animals[key]
             if self._normalize_inbreeding_cache(entry.get("inbreeding_f_cache")) != metadata:
@@ -2082,7 +2159,9 @@ class HeritageStore:
             key = self._normalize_text(name)
             if not key:
                 continue
-            entry = self._entry(key)
+            entry = self._existing_entry(key)
+            if entry is None:
+                continue
             value = float(f_value)
             try:
                 current = float(entry.get("inbreeding_f"))
