@@ -1395,7 +1395,10 @@ class HeritageTrackWidget(QWidget):
         node_metadata: Dict[str, Dict[str, Any]] = {}
         for node in sorted(display_nodes, key=str.casefold):
             record = record_index.get(node, {})
-            is_heritage_only = self.plugin.is_heritage_only(node)
+            # Render classification must use the same immutable Core/Heritage
+            # snapshot captured by ``build_engine``.  Command/UI paths pass
+            # ``fresh=True`` explicitly when they need a new ownership read.
+            is_heritage_only = self.plugin.is_heritage_only(node, fresh=False)
             role = canonical_role_value(record.get("rolle", ""))
             sex = self.plugin.get_effective_sex(node, record)
             visual = self.plugin.get_node_visual(
@@ -3785,7 +3788,10 @@ class HeritageTrackWidget(QWidget):
 
         # Handle heritage-only filtering (needs plugin access)
         if not self.settings.get("show_heritage_only", True):
-            display_nodes = {n for n in context.display_nodes if not self.plugin.is_heritage_only(n)}
+            display_nodes = {
+                n for n in context.display_nodes
+                if not self.plugin.is_heritage_only(n, fresh=False)
+            }
             context = context.copy_with(display_nodes=display_nodes)
 
         return context
@@ -4782,7 +4788,7 @@ class HeritageTrackWidget(QWidget):
         for node in sorted(display_nodes, key=str.lower):
             x, y = animal_positions.get(node, (0.0, 0.0))
             is_ghost = node in ghost_nodes
-            is_heritage_only = self.plugin.is_heritage_only(node)
+            is_heritage_only = self.plugin.is_heritage_only(node, fresh=False)
             # Get record from main app data (active or archived) for proper sex/shape
             record = self._get_node_record(node)
             display_label = self._get_node_display_label(node, record)
@@ -7272,9 +7278,17 @@ class HeritageTrackPlugin:
         _ = (record, in_main_animals)
         self.notify_core_records_changed({str(animal_name or "").strip()})
 
-    def is_heritage_only(self, animal_name: str) -> bool:
+    def is_heritage_only(self, animal_name: str, *, fresh: bool = True) -> bool:
+        """Return ownership classification from the requested read scope.
+
+        Render construction supplies ``fresh=False`` so every classification
+        is bound to the frame's captured Core/Heritage snapshot.  Interactive
+        command paths retain the conservative ``fresh=True`` default and may
+        explicitly refresh the backend before deciding whether a node is
+        writable.
+        """
         key = str(animal_name or "").strip()
-        if not key or self._is_core_animal(key, fresh=True):
+        if not key or self._is_core_animal(key, fresh=fresh):
             return False
         return key in self._temporary_dummies or key in self._store_snapshot_entries()
 
