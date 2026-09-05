@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import unittest
+from types import SimpleNamespace
 
 from Plugins.Heritage_Track.engine_cache import PedigreeEngineCache
 from Plugins.Heritage_Track.heritage_track_widget import HeritageTrackPlugin
@@ -250,6 +251,36 @@ class HeritageCoreProjectionTest(unittest.TestCase):
         rebuilt = plugin.build_engine()
         self.assertIsNot(first, rebuilt)
         self.assertEqual(first.resolution_revision, rebuilt.resolution_revision)
+
+    def test_render_ownership_classification_uses_captured_snapshot(self):
+        calls = []
+
+        class Backend:
+            def load_core_data(self):
+                calls.append("backend")
+                return {"animals": {"Core": {"name": "Core"}}}
+
+        plugin = HeritageTrackPlugin.__new__(HeritageTrackPlugin)
+        plugin.app = SimpleNamespace(backend=Backend(), animals={}, archived={})
+        plugin._active_core_snapshot = {"Core": {"name": "Core"}}
+        plugin._active_store_snapshot = {
+            "animals": {
+                "Dummy": {
+                    "name": "Dummy",
+                    "heritage_only": True,
+                    "dummy_kind": "direct",
+                    "persistence_kind": "direct_dummy",
+                }
+            }
+        }
+        plugin._temporary_dummies = {}
+        plugin._store_snapshot_entries = HeritageTrackPlugin._store_snapshot_entries.__get__(plugin)
+        plugin._current_core_records = HeritageTrackPlugin._current_core_records.__get__(plugin)
+        self.assertTrue(plugin.is_heritage_only("Dummy", fresh=False))
+        self.assertFalse(plugin.is_heritage_only("Core", fresh=False))
+        self.assertEqual(calls, [])
+        self.assertFalse(plugin.is_heritage_only("Core", fresh=True))
+        self.assertEqual(calls, ["backend"])
 
 
 class PedigreeEngineResolutionCacheTest(unittest.TestCase):
