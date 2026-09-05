@@ -77,6 +77,10 @@ def _record(name, *, sex='female', parents=()):
         'ipid': name,
         'species': 'Callithrix jacchus',
         'sex': sex,
+        'heritage_only': True,
+        'dummy_kind': 'direct',
+        'persistence_kind': 'direct_dummy',
+        'unit_id': 'unit-a',
         'eizellspenderin': mother,
         'samenspender': father,
     }
@@ -102,6 +106,8 @@ class HeritageFRevisionTest(unittest.TestCase):
                 name: {
                     'name': name, 'ipid': name, 'species': 'Callithrix jacchus',
                     'sex': 'female', 'inbreeding_f': 0.9,
+                    'heritage_only': True, 'dummy_kind': 'direct',
+                    'persistence_kind': 'direct_dummy', 'unit_id': 'unit-a',
                 }
                 for name in ('Child', 'Mother', 'Father')
             }
@@ -175,7 +181,11 @@ class HeritageFRevisionTest(unittest.TestCase):
     def test_unrelated_lineage_keeps_matching_cache_after_other_line_changes(self):
         graph = {
             'animals': {
-                name: {'name': name, 'ipid': name, 'species': 'Callithrix jacchus'}
+                name: {
+                    'name': name, 'ipid': name, 'species': 'Callithrix jacchus',
+                    'heritage_only': True, 'dummy_kind': 'direct',
+                    'persistence_kind': 'direct_dummy', 'unit_id': 'unit-a',
+                }
                 for name in ('A', 'B', 'C', 'D')
             }
         }

@@ -152,7 +152,12 @@ class HeritagePositionCacheTest(unittest.TestCase):
         )
 
     def test_cache_write_preserves_queued_derived_changes(self):
-        backend = _Backend({"animals": {"A": {}}})
+        backend = _Backend({"animals": {"A": {
+            "heritage_only": True,
+            "dummy_kind": "direct",
+            "persistence_kind": "direct_dummy",
+            "unit_id": "unit-a",
+        }}})
         store = HeritageStore("", backend)
         store.set_node_position("A", (1, 2))
         store.set_inbreeding_cache_batch(
