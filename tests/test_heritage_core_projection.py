@@ -180,6 +180,14 @@ class HeritageCoreProjectionTest(unittest.TestCase):
         self.assertEqual(store.get_all_entries()["Child"], before)
         self.assertEqual(app.backend.records.put_count, 0)
 
+    def test_malformed_core_loader_falls_back_without_opening_ownership_boundary(self):
+        app = _App(_stale_graph())
+        app.backend.load_core_data = lambda: {"animals": "not-a-map"}
+        plugin = HeritageTrackPlugin(app)
+
+        self.assertTrue(plugin._is_core_animal("Child", fresh=True))
+        self.assertEqual(plugin._core_record("Child")["name"], "Child")
+
     def test_read_only_engine_build_excludes_stale_core_store_copy_and_writes_nothing(self):
         app = _App(_stale_graph())
         plugin = HeritageTrackPlugin(app)

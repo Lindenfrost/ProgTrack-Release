@@ -6128,10 +6128,18 @@ class HeritageTrackPlugin:
                 snapshot = loader()
                 if isinstance(snapshot, dict):
                     records: Dict[str, Dict[str, Any]] = {}
+                    found_section = False
                     for section in ("animals", "archived_animals", "archived"):
+                        if section not in snapshot:
+                            continue
+                        found_section = True
                         values = snapshot.get(section, {})
                         if not isinstance(values, dict):
-                            continue
+                            # A malformed authoritative payload must not be
+                            # interpreted as an empty Core and thereby make a
+                            # currently loaded real animal look like a dummy.
+                            found_section = False
+                            break
                         records.update(
                             {
                                 str(key).strip(): deepcopy(value)
@@ -6139,7 +6147,8 @@ class HeritageTrackPlugin:
                                 if str(key).strip() and isinstance(value, dict)
                             }
                         )
-                    return records
+                    if found_section:
+                        return records
             except Exception:
                 logging.getLogger(__name__).warning(
                     "Could not read current Core projection for Heritage command",
