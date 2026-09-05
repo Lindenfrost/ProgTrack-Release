@@ -151,6 +151,21 @@ class HeritagePositionCacheTest(unittest.TestCase):
             {"x": 1.0, "y": 2.0},
         )
 
+    def test_concurrent_remove_noop_does_not_advance_backend_revision(self):
+        backend = _Backend()
+        first = HeritageStore("", backend)
+        first.set_position_cache_entry("alice", "key", {"A": (1, 2)}, "rev-1", ["A"])
+        second = HeritageStore("", backend)
+        # Load the entry into the first session, then remove it from the
+        # second session.  The first removal is now a stale no-op and must not
+        # produce an extra backend write or revision bump.
+        self.assertIsNotNone(first.get_position_cache_entry("alice", "key"))
+        self.assertTrue(second.remove_position_cache_entry("alice", "key"))
+        writes_after_second = backend.records.put_count
+        self.assertFalse(first.remove_position_cache_entry("alice", "key"))
+        self.assertEqual(backend.records.put_count, writes_after_second)
+        self.assertIsNone(first.get_position_cache_entry("alice", "key"))
+
     def test_cache_write_preserves_queued_derived_changes(self):
         backend = _Backend({"animals": {"A": {
             "heritage_only": True,

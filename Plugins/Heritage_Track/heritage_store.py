@@ -437,6 +437,19 @@ class HeritageStore:
             )
             self._apply_persistence_patch(working, pending_patch)
         result = mutator(working)
+        # A concurrent no-op (for example, removing a cache entry that a
+        # second session already removed) must not advance the shared
+        # revision merely by refreshing ``updated_at``.  Compare before
+        # adding that provenance field; a pending field-level patch makes the
+        # working copy differ and therefore still commits normally.
+        if working == current:
+            self._data = working
+            self._backend_revision = int(current_revision or 0)
+            self._committed_snapshot = deepcopy(current)
+            self._genotype_colors_cache = None
+            self._pending_animal_save = False
+            self._pending_settings_save = False
+            return result
         working["updated_at"] = self._utc_now_iso()
         previous = self._data
         try:
