@@ -48,14 +48,21 @@ class BackendJsonStore:
 
     def save(self, value: Any, *, expected_revision: int | None = None) -> int:
         payload = copy.deepcopy(value)
-        try:
+        # Most plugin stores still perform an unconditional write.  Avoid
+        # passing the optional keyword in that case so deliberately small
+        # legacy test/adaptor repositories remain callable.  A caller that
+        # supplies a revision is explicitly asking for optimistic locking;
+        # never catch a backend TypeError and retry without the guard, since
+        # that would turn a safe compare-and-swap into an unguarded write.
+        if expected_revision is None:
             return self.backend.records.put(
                 self.namespace,
                 self.record_id,
                 payload,
-                expected_revision=expected_revision,
             )
-        except TypeError:
-            # Compatibility with the deliberately tiny in-memory stores used
-            # by legacy plugin tests.
-            return self.backend.records.put(self.namespace, self.record_id, payload)
+        return self.backend.records.put(
+            self.namespace,
+            self.record_id,
+            payload,
+            expected_revision=expected_revision,
+        )
