@@ -4886,11 +4886,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     "Could not evaluate Core parent Unit visibility", exc_info=True
                 )
                 return False
-        current = ""
-        master = getattr(self, "master_track", None)
-        if master is not None:
-            current = str(getattr(master, "current_unit_id", "") or "").strip()
-        return bool(current and current.casefold() == owner.casefold())
+        # A managed authorization object without a service-level Unit
+        # predicate cannot prove visibility.  Do not fall back to the UI's
+        # possibly stale/current Unit selection, which could disclose an
+        # explicitly owned record across Units.
+        return False
 
     # Audit records are emitted by explicit mutation handlers.  The former
     # stack-inspection based inference was intentionally removed: permission
