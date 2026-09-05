@@ -7904,7 +7904,31 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and hasattr(widget, "currentData")
                 and hasattr(widget, "currentText")
             ):
-                value = str(widget.currentData() or widget.currentText() or "").strip()
+                current_text = str(widget.currentText() or "").strip()
+                # QComboBox keeps the previous item's UserRole data while an
+                # editable line edit is being changed.  Only use that stable
+                # identity when the visible text still matches the selected
+                # item; otherwise forward the actual text so the central
+                # command can resolve it (or reject it) instead of silently
+                # retaining the old parent.
+                current_index = -1
+                item_text = None
+                index_getter = getattr(widget, "currentIndex", None)
+                item_getter = getattr(widget, "itemText", None)
+                if callable(index_getter):
+                    try:
+                        current_index = int(index_getter())
+                    except (TypeError, ValueError):
+                        current_index = -1
+                if current_index >= 0 and callable(item_getter):
+                    try:
+                        item_text = str(item_getter(current_index) or "").strip()
+                    except (TypeError, ValueError):
+                        item_text = None
+                if item_text is not None and item_text != current_text:
+                    value = current_text
+                else:
+                    value = str(widget.currentData() or current_text or "").strip()
             elif widget is not None and hasattr(widget, "text"):
                 value = str(widget.text() or "").strip()
             elif widget is not None:
