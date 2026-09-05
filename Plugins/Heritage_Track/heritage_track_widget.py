@@ -3809,6 +3809,90 @@ class HeritageTrackWidget(QWidget):
         the painter.  A detached route-plan copy is used only for pixel-scale
         gap recalculation; the published entry is never mutated.
         """
+        # Warm painting must not make an unvalidated entry authoritative.  In
+        # particular, ``_recompute_route_visual_gaps`` can reject a frame after
+        # the state below has been populated.  Keep the complete accepted
+        # frame/context so a late rejection leaves hit-testing, drag writes,
+        # selection scope and the visible canvas on the previous frame.
+        previous_frame_state = {
+            "render_cache_entry": self._render_cache_entry,
+            "route_plan": self._route_plan,
+            "family_routes": self.family_routes,
+            "ghost_nodes": self._ghost_nodes,
+            "canonical_selection_ids": self._canonical_selection_ids,
+            "layout_mode": self.layout_mode,
+            "no_selection_mode": self.no_selection_mode,
+            "family_positions": self.family_positions,
+            "family_members": self.family_members,
+            "node_positions": self.node_positions,
+            "rendered_families": self._rendered_families,
+            "rendered_engine": self._rendered_engine,
+            "rendered_artist_scale": self._rendered_artist_scale,
+            "chronological_undated_nodes": self._chronological_undated_nodes,
+            "position_cache_hit": self._position_cache_hit,
+            "active_position_cache_key": self._active_position_cache_key,
+            "active_position_cache_user": self._active_position_cache_user,
+            "active_position_cache_revision": self._active_position_cache_revision,
+            "active_position_cache_dependencies": self._active_position_cache_dependencies,
+            "route_gap_pixel_scale": self._route_gap_pixel_scale,
+            "current_xlim": self.current_xlim,
+            "current_ylim": self.current_ylim,
+        }
+        previous_stack_widget = None
+        try:
+            previous_stack_widget = self.stack.currentWidget()
+        except (AttributeError, RuntimeError):
+            pass
+        previous_subplot = None
+        try:
+            subplot = self.figure.subplotpars
+            previous_subplot = (
+                float(subplot.left), float(subplot.right),
+                float(subplot.bottom), float(subplot.top),
+            )
+        except (AttributeError, TypeError, ValueError):
+            pass
+
+        def restore_previous_frame() -> None:
+            """Restore all state changed before a warm-frame rejection."""
+            self._render_cache_entry = previous_frame_state["render_cache_entry"]
+            self._route_plan = previous_frame_state["route_plan"]
+            self.family_routes = previous_frame_state["family_routes"]
+            self._ghost_nodes = previous_frame_state["ghost_nodes"]
+            self._canonical_selection_ids = previous_frame_state["canonical_selection_ids"]
+            self.layout_mode = previous_frame_state["layout_mode"]
+            self.no_selection_mode = previous_frame_state["no_selection_mode"]
+            self.family_positions = previous_frame_state["family_positions"]
+            self.family_members = previous_frame_state["family_members"]
+            self.node_positions = previous_frame_state["node_positions"]
+            self._rendered_families = previous_frame_state["rendered_families"]
+            self._rendered_engine = previous_frame_state["rendered_engine"]
+            self._rendered_artist_scale = previous_frame_state["rendered_artist_scale"]
+            self._chronological_undated_nodes = previous_frame_state["chronological_undated_nodes"]
+            self._position_cache_hit = previous_frame_state["position_cache_hit"]
+            self._active_position_cache_key = previous_frame_state["active_position_cache_key"]
+            self._active_position_cache_user = previous_frame_state["active_position_cache_user"]
+            self._active_position_cache_revision = previous_frame_state["active_position_cache_revision"]
+            self._active_position_cache_dependencies = previous_frame_state[
+                "active_position_cache_dependencies"
+            ]
+            self._route_gap_pixel_scale = previous_frame_state["route_gap_pixel_scale"]
+            self.current_xlim = previous_frame_state["current_xlim"]
+            self.current_ylim = previous_frame_state["current_ylim"]
+            if previous_subplot is not None:
+                try:
+                    self.figure.subplots_adjust(
+                        left=previous_subplot[0], right=previous_subplot[1],
+                        bottom=previous_subplot[2], top=previous_subplot[3],
+                    )
+                except (AttributeError, RuntimeError, TypeError, ValueError):
+                    pass
+            if previous_stack_widget is not None:
+                try:
+                    self.stack.setCurrentWidget(previous_stack_widget)
+                except (AttributeError, RuntimeError):
+                    pass
+
         display_nodes = set(entry.display_nodes)
         ghost_nodes = set(entry.ghost_nodes)
         positions = dict(entry.positions)
@@ -3868,6 +3952,7 @@ class HeritageTrackWidget(QWidget):
             try:
                 self._recompute_route_visual_gaps(route_plan)
             except GeometryValidationError as exc:
+                restore_previous_frame()
                 self._report_geometry_failure(exc)
                 return
 
