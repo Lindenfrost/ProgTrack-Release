@@ -76,6 +76,7 @@ from Plugins.core.backend import (
     ProgTrackBackend,
     StandaloneLockError,
 )
+from Plugins.core.backend.animal_service import PARENTAGE_REVISION_FIELDS
 from Plugins.core.backend_configuration import (
     BackendConfigurationPermissionError,
     BackendConfigurationService,
@@ -7712,17 +7713,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # project and organizational-unit fields as well as all four parent
         # references; otherwise a concurrent rename, archive/death or Unit
         # change could leave an already-open dialog with a falsely valid token.
-        revision_fields = (
-            "name", "_base_name", "id", "ipid", "species", "sex",
-            "birth_date", "death_date", "sterbedatum", "archived",
-            "project", "project_id", "organization_unit_id",
-            "organizational_unit_id", "workgroup_id",
-            "eizellspenderin", "samenspender", "ziehmutter", "ziehvater",
-        )
         for key, record in snapshot_records.items():
             records[str(key)] = {
                 field: record.get(field, "")
-                for field in revision_fields
+                for field in PARENTAGE_REVISION_FIELDS
             }
         payload = json.dumps(records, sort_keys=True, default=str, separators=(",", ":"))
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()

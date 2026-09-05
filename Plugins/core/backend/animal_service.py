@@ -35,6 +35,16 @@ MEASUREMENT_FIELDS = {
 }
 
 PARENTAGE_REVISION_FIELDS = (
+    # Keep this list identical to the UI-side parentage snapshot digest.  The
+    # token protects not only the four parent links but also every identity,
+    # lifecycle, project and organizational-visibility input used to build
+    # the candidate catalogue.  A narrower backend token would reject every
+    # guarded UI save (or miss a concurrent visibility change).
+    "name",
+    "_base_name",
+    "id",
+    "ipid",
+    "display_name",
     "eizellspenderin",
     "samenspender",
     "ziehmutter",
@@ -42,6 +52,14 @@ PARENTAGE_REVISION_FIELDS = (
     "species",
     "sex",
     "birth_date",
+    "death_date",
+    "sterbedatum",
+    "archived",
+    "project",
+    "project_id",
+    "organization_unit_id",
+    "organizational_unit_id",
+    "workgroup_id",
 )
 
 
