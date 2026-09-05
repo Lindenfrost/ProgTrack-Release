@@ -1294,24 +1294,77 @@ def complete_housing(
     return result
 
 
-def complete_heritage(core: dict[str, Any]) -> dict[str, Any]:
-    animals = {}
-    for ipid, animal in {**core["animals"], **core["archived_animals"]}.items():
-        animals[ipid] = {
-            "ipid": ipid,
-            "name": animal["name"],
-            "species": animal["species"],
-            "birth_date": animal["birth_date"],
-            "sex": str(animal.get("sex", "")).lower(),
-            "genotype": animal.get("genotype", ""),
-            "egg_donor": animal.get("eizellspenderin", ""),
-            "sperm_donor": animal.get("samenspender", ""),
-            "surrogate_mother": animal.get("ziehmutter", ""),
-            "surrogate_father": animal.get("ziehvater", ""),
-            "heritage_only": False,
-            "source": "seed",
-            "updated_at": SEED_CREATED,
-        }
+def complete_heritage(
+    core: dict[str, Any],
+    legacy: Any = None,
+) -> dict[str, Any]:
+    """Build the seed's Heritage-owned records without Core shadows.
+
+    Core animals are projected directly at runtime and must never be copied
+    into ``heritage/graph.animals``.  Keep only explicit Heritage-only
+    authoring records from the archived fixture.  Older fixtures do not carry
+    the typed dummy markers introduced by the ownership boundary, so assign a
+    deterministic kind while rebuilding the disposable example package.
+    """
+    core_records = {
+        str(ipid).strip(): animal
+        for ipid, animal in {
+            **(core.get("animals", {}) or {}),
+            **(core.get("archived_animals", {}) or {}),
+        }.items()
+        if str(ipid).strip() and isinstance(animal, dict)
+    }
+    core_keys = set(core_records)
+    core_ipids = {
+        str(animal.get("ipid", "") or "").strip()
+        for animal in core_records.values()
+        if str(animal.get("ipid", "") or "").strip()
+    }
+    legacy_animals = (
+        legacy.get("animals", {})
+        if isinstance(legacy, dict)
+        else {}
+    )
+    animals: dict[str, dict[str, Any]] = {}
+    if not isinstance(legacy_animals, dict):
+        legacy_animals = {}
+
+    for legacy_key, raw_entry in legacy_animals.items():
+        if not isinstance(raw_entry, dict) or not bool(raw_entry.get("heritage_only")):
+            # Real Core rows from the old fixture are intentionally omitted;
+            # they are reconstructed as a read-only projection by the plugin.
+            continue
+        key = str(raw_entry.get("ipid") or legacy_key or "").strip()
+        if not key or key in core_keys or key in core_ipids:
+            continue
+        entry = copy.deepcopy(raw_entry)
+        entry["ipid"] = key
+        entry["heritage_only"] = True
+        source = str(entry.get("source", "") or "").strip().casefold()
+        existing_kind = str(entry.get("dummy_kind", "") or "").strip().casefold()
+        existing_persistence = str(
+            entry.get("persistence_kind", "") or ""
+        ).strip().casefold()
+        if existing_kind not in {"direct", "former_core"}:
+            existing_kind = "former_core" if source == "core" else "direct"
+        if existing_persistence not in {
+            "direct_dummy",
+            "former_core_dummy",
+        }:
+            existing_persistence = (
+                "former_core_dummy"
+                if existing_kind == "former_core"
+                else "direct_dummy"
+            )
+        entry["dummy_kind"] = existing_kind
+        entry["persistence_kind"] = existing_persistence
+        entry["source"] = (
+            "former_core_dummy"
+            if existing_kind == "former_core"
+            else str(entry.get("source", "") or "plugin").strip() or "plugin"
+        )
+        entry["updated_at"] = SEED_CREATED
+        animals[key] = entry
     return {
         "version": "2.0.0",
         "updated_at": SEED_CREATED,
@@ -1829,7 +1882,10 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
     records[("housing", "cage")] = complete_housing(
         records[("housing", "cage")], core["animals"]
     )
-    records[("heritage", "graph")] = complete_heritage(core)
+    records[("heritage", "graph")] = complete_heritage(
+        core,
+        records.get(("heritage", "graph"), {}),
+    )
     medical = _remove_obsolete_project_medical_entries(
         records[("medical", "history")]
     )
@@ -1868,10 +1924,11 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
         **core.get("animals", {}),
         **core.get("archived_animals", {}),
     }
-    for domain_key, container_key in (
-        (("medical", "history"), "animals"),
-        (("heritage", "graph"), "animals"),
-    ):
+    # Medical records are Core-owned and must remain keyed only by real
+    # animals.  Heritage additionally owns its explicitly marked dummies;
+    # retaining those records is intentional and does not reintroduce Core
+    # shadows.
+    for domain_key, container_key in ((("medical", "history"), "animals"),):
         payload = records.get(domain_key, {})
         container = payload.get(container_key, {}) if isinstance(payload, dict) else {}
         if isinstance(container, dict):
@@ -1880,6 +1937,21 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
                 for ipid, value in container.items()
                 if ipid in known_animals
             }
+    heritage_payload = records.get(("heritage", "graph"), {})
+    if isinstance(heritage_payload, dict):
+        heritage_animals = heritage_payload.get("animals", {})
+        heritage_keys = {
+            str(ipid).strip()
+            for ipid, value in heritage_animals.items()
+            if str(ipid).strip()
+            and isinstance(value, dict)
+            and bool(value.get("heritage_only"))
+        } if isinstance(heritage_animals, dict) else set()
+        heritage_payload["animals"] = {
+            ipid: value
+            for ipid, value in heritage_animals.items()
+            if ipid in known_animals or ipid in heritage_keys
+        } if isinstance(heritage_animals, dict) else {}
     report_payload = records.get(("reports", "animal-reports"), {})
     if isinstance(report_payload, dict):
         records[("reports", "animal-reports")] = {
@@ -1893,7 +1965,38 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
 def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
              scenario: dict[str, Any]) -> dict[str, Any]:
     all_animals = {**core["animals"], **core["archived_animals"]}
+    heritage_payload = records.get(("heritage", "graph"), {})
+    heritage_animals = (
+        heritage_payload.get("animals", {})
+        if isinstance(heritage_payload, dict)
+        else {}
+    )
+    heritage_animals = heritage_animals if isinstance(heritage_animals, dict) else {}
+    heritage_only = {
+        str(ipid).strip(): value
+        for ipid, value in heritage_animals.items()
+        if str(ipid).strip()
+        and isinstance(value, dict)
+        and bool(value.get("heritage_only"))
+    }
+    all_identity_keys = set(all_animals) | set(heritage_only)
     errors = []
+    core_ipids = {
+        str(record.get("ipid", "") or "").strip()
+        for record in all_animals.values()
+        if isinstance(record, dict) and str(record.get("ipid", "") or "").strip()
+    }
+    for key, entry in heritage_only.items():
+        if key in all_animals or str(entry.get("ipid", "") or "").strip() in core_ipids:
+            errors.append(f"Heritage Core shadow remains in seed: {key}")
+        if str(entry.get("dummy_kind", "") or "").strip().casefold() not in {
+            "direct", "former_core"
+        }:
+            errors.append(f"Heritage dummy kind missing: {key}")
+        if str(entry.get("persistence_kind", "") or "").strip().casefold() not in {
+            "direct_dummy", "former_core_dummy"
+        }:
+            errors.append(f"Heritage dummy persistence kind missing: {key}")
     # The Ringbearer fixture is used to exercise experimental procedure plots.
     # Validate its canonical lifecycle explicitly so a seed cannot silently
     # lose the surgery events or reintroduce mouse birth rows.
@@ -2159,7 +2262,8 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
     ):
         payload = records.get((namespace, record_id), {})
         references = set((payload.get(container_key) or {}).keys())
-        for reference in sorted(references - set(all_animals)):
+        valid_references = all_identity_keys if namespace == "heritage" else set(all_animals)
+        for reference in sorted(references - valid_references):
             errors.append(
                 f"dangling {namespace} animal: {reference}"
             )
