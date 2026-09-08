@@ -1386,7 +1386,10 @@ def complete_housing(
     return result
 
 
-def complete_heritage() -> dict[str, Any]:
+def complete_heritage(
+    core: dict[str, Any] | None = None,
+    legacy: Any = None,
+) -> dict[str, Any]:
     """Return the clean shipped Heritage graph.
 
     Heritage Track still supports direct and former-Core dummy records when a
@@ -1395,7 +1398,12 @@ def complete_heritage() -> dict[str, Any]:
     JSON contains stale dummy animals and is therefore deliberately not
     projected into the package at all.  Core animals are projected read-only
     by Heritage Track from the backend's canonical Core records.
+
+    ``core`` and ``legacy`` remain accepted for callers of the seed helper,
+    but are intentionally ignored so an archived dummy cannot re-enter the
+    shipped package through an alternate invocation.
     """
+    _ = core, legacy
     return {
         "version": "2.0.0",
         "updated_at": SEED_CREATED,
