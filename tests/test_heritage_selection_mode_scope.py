@@ -59,6 +59,7 @@ class HeritageSelectionModeScopeTest(unittest.TestCase):
         widget.app = app
         widget.plugin = SimpleNamespace(_all_identity_records=lambda: records)
         widget.layout_mode = LAYOUT_MODE_FOCUSED
+        widget._max_generations = 999
         widget._canonical_selection_ids = ()
         return widget, app
 

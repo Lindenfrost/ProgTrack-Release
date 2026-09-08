@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import math
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from collections.abc import Mapping
@@ -97,6 +98,7 @@ class RenderCacheKey:
     canonical_selection: Tuple[str, ...]
     selection_type: str
     display_mode: str
+    max_generations: int = 999
 
     @classmethod
     def create(
@@ -105,6 +107,7 @@ class RenderCacheKey:
         selection: Any,
         selection_type: Any,
         display_mode: Any,
+        max_generations: int = 999,
     ) -> "RenderCacheKey":
         if isinstance(selection, (str, bytes)):
             selection_values = (selection,)
@@ -121,6 +124,7 @@ class RenderCacheKey:
             canonical_selection=values,
             selection_type=str(selection_type or "selected").strip() or "selected",
             display_mode=str(display_mode or "partner_normalized").strip() or "partner_normalized",
+            max_generations=int(max_generations),
         )
 
 
@@ -415,6 +419,9 @@ class RenderCacheRegistry:
         self._dependency_index: Dict[str, Set[RenderCacheKey]] = {}
 
     def put(self, entry: "RenderCacheEntry") -> None:
+        self._install(entry)
+
+    def _install(self, entry: "RenderCacheEntry") -> None:
         old = self._entries.get(entry.cache_key)
         if old is not None:
             for dependency in old.dependencies:
@@ -426,6 +433,22 @@ class RenderCacheRegistry:
         self._entries[entry.cache_key] = entry
         for dependency in entry.dependencies:
             self._dependency_index.setdefault(dependency, set()).add(entry.cache_key)
+
+    @contextmanager
+    def preserve_on_failure(self, key: RenderCacheKey):
+        """Rollback one publication, including a put that raises after install.
+
+        Restoration bypasses the public publication hook, which may itself
+        be the failing operation. Unrelated cached contexts remain untouched.
+        """
+        previous = self.get(key)
+        try:
+            yield
+        except Exception:
+            self.remove(key)
+            if previous is not None:
+                self._install(previous)
+            raise
 
     def get(self, key: RenderCacheKey) -> Optional["RenderCacheEntry"]:
         return self._entries.get(key)

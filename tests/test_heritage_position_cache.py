@@ -4,10 +4,17 @@ from __future__ import annotations
 
 import copy
 import unittest
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
+
+from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox
 
 from Plugins.Heritage_Track.heritage_store import HeritageStore
-from Plugins.Heritage_Track.heritage_track_widget import HeritageTrackWidget
+from Plugins.Heritage_Track.heritage_track_widget import HeritageTrackPlugin, HeritageTrackWidget
+from Plugins.Heritage_Track.pedigree_router import GeometryValidationError
+from Plugins.core.backend.errors import ConflictError
 
 
 class _Records:
@@ -15,16 +22,23 @@ class _Records:
         self.values = {("heritage", "graph"): copy.deepcopy(graph)} if graph is not None else {}
         self.put_count = 0
         self.fail_put = False
+        self.revision = 1 if graph is not None else 0
 
     def get(self, namespace, record_id, default=None):
         return copy.deepcopy(self.values.get((namespace, record_id), default))
 
-    def put(self, namespace, record_id, payload, **_kwargs):
+    def get_with_revision(self, namespace, record_id, default=None):
+        return self.get(namespace, record_id, default), self.revision
+
+    def put(self, namespace, record_id, payload, *, expected_revision=None):
         if self.fail_put:
             raise OSError("simulated backend failure")
+        if expected_revision is not None and expected_revision != self.revision:
+            raise ConflictError("stale graph revision")
         self.put_count += 1
+        self.revision += 1
         self.values[(namespace, record_id)] = copy.deepcopy(payload)
-        return self.put_count
+        return self.revision
 
 
 class _Backend:
@@ -222,6 +236,408 @@ class HeritagePositionCacheTest(unittest.TestCase):
         self.assertEqual(len(entries), store.POSITION_CACHE_LIMIT)
         self.assertNotIn("key-0000", entries)
         self.assertIn("key-1000", entries)
+
+
+class HeritagePositionWidgetTest(unittest.TestCase):
+    """Exercise real release/render/store integration, not a fake painter."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.qt = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        self.app = QMainWindow()
+        self.app.backend = _Backend()
+        self.app.messages = {}
+        self.app.master_track = None
+        self.app.projects_plugin = None
+        self.app.archived = {}
+        self.app._selected_heritage_only = []
+        self.app.selected_animals = ["C"]
+        self.app.animals = {
+            name: {"name": name, "birth_date": birth, "sex": sex,
+                   "species": "Callithrix jacchus"}
+            for name, birth, sex in (
+                ("M", "2000-01-01", "female"),
+                ("F", "2001-01-01", "male"),
+                ("C", "2020-01-01", "female"),
+                ("Other", "2010-01-01", "male"),
+            )
+        }
+        self.app.animals["C"].update(eizellspenderin="M", samenspender="F")
+        self.plugin = HeritageTrackPlugin(self.app)
+        self.widget = HeritageTrackWidget(self.plugin)
+        self.widget.settings.update(animal_label_detail="nothing", show_legend=False)
+        self.widget.refresh_graph()
+        self.assertIsNotNone(self.widget._render_cache_entry)
+
+    def tearDown(self):
+        self.widget.close()
+        self.app.close()
+
+    def saved(self, key=None):
+        return self.plugin.store.get_position_cache_entry(
+            "guest", key or self.widget._active_position_cache_key)
+
+    def drag(self, node="C", dx=5.0, dy=0.0):
+        w = self.widget
+        before = w.node_positions[node]
+        w.drag_active = w.is_dragging = True
+        w.drag_node = node
+        w.drag_group_nodes = set()
+        w.temp_positions = {node: (before[0] + dx, before[1] + dy)}
+        w._on_mouse_release(SimpleNamespace(button=1))
+        return w._snap_to_grid(before[0] + dx, before[1] + dy)
+
+    def refresh_button(self):
+        with patch.object(QMessageBox, "exec", return_value=QMessageBox.StandardButton.Yes), \
+                patch.object(self.widget, "_show_coefficients_dialog"):
+            self.widget._on_refresh_clicked()
+
+    def test_drag_replaces_render_entry_and_survives_ordinary_update(self):
+        expected = self.drag()
+        self.assertEqual(self.widget.node_positions["C"], expected)
+        self.assertEqual(self.widget._render_cache_entry.positions["C"], expected)
+        self.widget.refresh_graph()
+        self.assertEqual(self.widget.node_positions["C"], expected)
+
+    def test_failed_refresh_keeps_registry_map_axes_and_does_not_arm_next_update(self):
+        old_entry = self.widget._render_cache_entry
+        old_map = self.saved()
+        old_axes = self.widget.ax
+        old_limits = (old_axes.get_xlim(), old_axes.get_ylim())
+        self.app.backend.records.fail_put = True
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
+            self.refresh_button()
+        self.app.backend.records.fail_put = False
+        self.assertEqual(self.saved(), old_map)
+        self.assertIs(self.plugin.get_render_entry(old_entry.cache_key), old_entry)
+        self.assertIs(self.widget.ax, old_axes)
+        self.assertEqual((old_axes.get_xlim(), old_axes.get_ylim()), old_limits)
+        self.assertFalse(self.widget._force_relayout)
+        self.widget.refresh_graph()
+        self.assertEqual(self.saved(), old_map)
+
+    def test_paint_failure_does_not_replace_durable_positions(self):
+        old_map = self.saved()
+        old_entry = self.widget._render_cache_entry
+        with patch.object(self.widget, "_paint_cached_render_entry", side_effect=RuntimeError("paint failed")):
+            self.refresh_button()
+        self.assertEqual(self.saved(), old_map)
+        self.assertIs(self.widget._render_cache_entry, old_entry)
+
+    def test_selection_returns_restore_complete_context_for_overlapping_and_disjoint_maps(self):
+        for other_selection in (["Other"], ["C", "M"]):
+            with self.subTest(selection=other_selection):
+                self.app.selected_animals = ["C"]
+                self.widget.refresh_graph()
+                a_key = self.widget._active_position_cache_key
+                a_point = self.drag()
+                self.app.selected_animals = other_selection
+                self.assertTrue(self.widget.refresh_graph())
+                b_key = self.widget._active_position_cache_key
+                b_saved = self.saved()
+                self.app.selected_animals = ["C"]
+                self.assertTrue(self.widget.refresh_graph())
+                self.assertEqual(self.widget._active_position_cache_key, a_key)
+                self.assertEqual(self.widget.node_positions["C"], a_point)
+                self.drag(dx=2)
+                self.assertEqual(self.saved(b_key), b_saved)
+
+    def test_depth_and_mode_returns_restore_their_own_maps(self):
+        w = self.widget
+        w._max_generations = 1
+        self.assertTrue(w.refresh_graph())
+        first_point = self.drag()
+        first_key = w._active_position_cache_key
+        first_render_key = w._render_cache_entry.cache_key
+        w._max_generations = 4
+        self.assertTrue(w.refresh_graph())
+        second_key = w._active_position_cache_key
+        self.assertNotEqual(second_key, first_key)
+        self.assertNotEqual(w._render_cache_entry.cache_key, first_render_key)
+        second_map = self.saved()
+        w._max_generations = 1
+        self.assertTrue(w.refresh_graph())
+        self.assertEqual(w.node_positions["C"], first_point)
+        w.settings["vertical_layout_mode"] = "chronological"
+        self.assertTrue(w.refresh_graph())
+        self.drag(dx=3, dy=20)
+        self.assertEqual(w.node_positions["C"][1], 2020.0)
+        chrono_point = w.node_positions["C"]
+        w.settings["vertical_layout_mode"] = "partner_normalized"
+        self.assertTrue(w.refresh_graph())
+        self.assertEqual(w.node_positions["C"], first_point)
+        w.settings["vertical_layout_mode"] = "chronological"
+        self.assertTrue(w.refresh_graph())
+        self.assertEqual(w.node_positions["C"], chrono_point)
+        self.assertEqual(self.saved(second_key), second_map)
+
+    def test_reordered_selection_language_grid_and_view_changes_preserve_map_without_writes(self):
+        self.app.selected_animals = ["C", "M"]
+        self.widget.refresh_graph()
+        expected = self.drag()
+        old_map = self.saved()
+        writes = self.app.backend.records.put_count
+        self.app.selected_animals = ["M", "C", "M"]
+        self.widget.resize(1050, 650)
+        self.widget.update_language({})
+        self.widget.settings["show_grid"] = True
+        self.widget.current_xlim = (-20, 20)
+        self.widget.current_ylim = (-10, 20)
+        self.assertTrue(self.widget.refresh_graph(keep_view=True))
+        self.assertEqual(self.widget.node_positions["C"], expected)
+        self.assertEqual(self.saved(), old_map)
+        self.assertEqual(self.app.backend.records.put_count, writes)
+        self.assertEqual(len(self.widget.figure.axes), 1)
+        self.assertIs(self.widget._hover_annotation.axes, self.widget.ax)
+
+    def test_explicit_refresh_replaces_only_current_map_and_keeps_core_unchanged(self):
+        core = copy.deepcopy(self.app.animals)
+        original = dict(self.widget._render_cache_entry.route_plan.animal_positions)
+        self.app.selected_animals = ["Other"]
+        self.widget.refresh_graph()
+        other_key, other_map = self.widget._active_position_cache_key, self.saved()
+        self.app.selected_animals = ["C"]
+        self.widget.refresh_graph()
+        self.drag()
+        self.refresh_button()
+        self.assertEqual(dict(self.widget._render_cache_entry.route_plan.animal_positions), original)
+        self.assertEqual(self.saved(other_key), other_map)
+        self.assertEqual(self.app.animals, core)
+        self.assertEqual(self.app.backend.records.get("heritage", "graph")["animals"], {})
+
+    def test_registry_failures_before_and_after_install_restore_previous_entry(self):
+        registry = self.plugin._render_cache
+        real_put = registry.put
+        for after_install in (False, True):
+            with self.subTest(after_install=after_install):
+                old_entry, old_map, old_axes = self.widget._render_cache_entry, self.saved(), self.widget.ax
+                def fail(entry):
+                    if after_install:
+                        real_put(entry)
+                    raise RuntimeError("registry publication failed")
+                with patch.object(registry, "put", side_effect=fail):
+                    self.refresh_button()
+                self.assertIs(registry.get(old_entry.cache_key), old_entry)
+                self.assertEqual(self.saved(), old_map)
+                self.assertIs(self.widget.ax, old_axes)
+                self.assertFalse(self.widget._force_relayout)
+                self.assertEqual(len(self.widget.figure.axes), 1)
+
+    def test_failed_drag_restores_preview_artists_and_saved_map(self):
+        w = self.widget
+        old_entry, old_map = w._render_cache_entry, self.saved()
+        old_point = w.node_positions["C"]
+        marker = w.node_meta["C"]["marker_artist"]
+        marker.set_data([old_point[0] + 5], [old_point[1]])
+        self.app.backend.records.fail_put = True
+        self.drag()
+        self.app.backend.records.fail_put = False
+        self.assertIs(w._render_cache_entry, old_entry)
+        self.assertEqual(self.saved(), old_map)
+        self.assertEqual(tuple(axis[0] for axis in marker.get_data()), old_point)
+        self.assertFalse(w.temp_positions)
+        self.assertFalse(w.drag_active)
+
+    def test_late_artist_failure_preserves_old_axes_artists_and_map(self):
+        from matplotlib.axes import Axes
+        real_annotate = Axes.annotate
+        old_axes, old_map = self.widget.ax, self.saved()
+        old_marker = self.widget.node_meta["C"]["marker_artist"]
+        def fail(axes, text, *args, **kwargs):
+            result = real_annotate(axes, text, *args, **kwargs)
+            if text == "C":
+                raise RuntimeError("late label paint failure")
+            return result
+        with patch.object(Axes, "annotate", new=fail):
+            self.refresh_button()
+        self.assertIs(self.widget.ax, old_axes)
+        self.assertIs(self.widget.node_meta["C"]["marker_artist"], old_marker)
+        self.assertEqual(self.saved(), old_map)
+
+    def test_rejected_selection_update_restores_old_write_context(self):
+        old = self.widget._render_cache_entry
+        self.app.selected_animals = ["Other"]
+        with patch.object(self.widget._pedigree_router, "plan", side_effect=GeometryValidationError("bad layout")):
+            self.assertFalse(self.widget.refresh_graph())
+        self.assertEqual(self.widget._canonical_selection_ids, old.canonical_selection)
+        self.assertEqual(self.widget._active_position_cache_key, old.position_cache_key)
+        self.assertIs(self.widget._render_cache_entry, old)
+
+    def test_external_position_update_invalidates_warm_frame_and_stale_drag_is_rejected(self):
+        other = HeritageStore("", self.app.backend)
+        old = self.widget._render_cache_entry
+        positions = dict(old.route_plan.animal_positions)
+        positions["C"] = (8.0, 3.6)
+        other.set_position_cache_entry("guest", old.position_cache_key, positions,
+                                       old.position_cache_revision, old.position_cache_dependencies)
+        newer_map = self.saved()
+        self.drag()
+        self.assertEqual(self.saved(), newer_map)
+        self.assertIs(self.widget._render_cache_entry, old)
+        self.assertTrue(self.widget.refresh_graph())
+        self.assertEqual(self.widget.node_positions["C"], (8.0, 3.6))
+
+    def test_same_context_write_during_publication_rejects_candidate_without_overwriting(self):
+        other = HeritageStore("", self.app.backend)
+        old = self.widget._render_cache_entry
+        publish = self.plugin.cache_render_entry
+        newer = {}
+        def interleave(entry):
+            publish(entry)
+            positions = dict(old.route_plan.animal_positions)
+            positions["C"] = (9.0, 3.6)
+            other.set_position_cache_entry("guest", old.position_cache_key, positions,
+                                           old.position_cache_revision, old.position_cache_dependencies)
+            newer.update(self.saved())
+        with patch.object(self.plugin, "cache_render_entry", side_effect=interleave):
+            self.drag()
+        self.assertEqual(self.saved(), newer)
+        self.assertIs(self.widget._render_cache_entry, old)
+        self.assertIs(self.plugin.get_render_entry(old.cache_key), old)
+
+    def test_unrelated_cas_interleaving_retries_without_lost_update(self):
+        records = self.app.backend.records
+        other = HeritageStore("", self.app.backend)
+        put = records.put
+        interleaved = False
+        def interleave(namespace, record_id, payload, **kwargs):
+            nonlocal interleaved
+            if not interleaved:
+                interleaved = True
+                other.set_position_cache_entry("someone-else", "different-context", {"Other": (7, 8)}, "rev", ["Other"])
+                other.atomic_update(lambda data: data["settings"].update(show_grid=True))
+            return put(namespace, record_id, payload, **kwargs)
+        # Inject a CAS race once: the retry must reload unrelated fields while
+        # retaining the original current-context precondition.
+        with patch.object(records, "put", side_effect=interleave):
+            self.drag()
+        saved = records.get("heritage", "graph")
+        self.assertTrue(saved["settings"]["show_grid"])
+        self.assertIn("different-context", saved["position_cache"]["someone-else"])
+        self.assertEqual(self.saved()["positions"]["C"]["x"], self.widget.node_positions["C"][0])
+        self.assertNotEqual(self.widget.node_positions["C"][0], 0.0)
+
+    def test_reopen_and_different_user_keep_separate_complete_maps(self):
+        expected = self.drag()
+        guest_key, guest_map = self.widget._active_position_cache_key, self.saved()
+        self.widget.close()
+        self.plugin = HeritageTrackPlugin(self.app)
+        self.widget = HeritageTrackWidget(self.plugin)
+        self.widget.settings.update(animal_label_detail="nothing", show_legend=False)
+        self.assertTrue(self.widget.refresh_graph())
+        self.assertEqual(self.widget.node_positions["C"], expected)
+        self.app.master_track = SimpleNamespace(current_username="different-user")
+        self.assertTrue(self.widget.refresh_graph())
+        self.assertNotEqual(self.widget.node_positions["C"], expected)
+        self.drag(dx=2)
+        self.assertEqual(self.plugin.store.get_position_cache_entry("guest", guest_key), guest_map)
+
+    def test_collapse_expand_does_not_overwrite_expanded_layout(self):
+        expected = self.drag()
+        expanded_key, expanded_map = self.widget._active_position_cache_key, self.saved()
+        family = next(iter(self.widget.family_members))
+        self.widget.collapsed_families.add(family)
+        self.assertTrue(self.widget.refresh_graph())
+        self.assertEqual(self.saved(expanded_key), expanded_map)
+        self.widget.collapsed_families.clear()
+        self.assertTrue(self.widget.refresh_graph())
+        self.assertEqual(self.widget.node_positions["C"], expected)
+
+    def test_raster_draw_failure_precedes_position_write(self):
+        from matplotlib.axes import Axes
+        old_axes, old_map = self.widget.ax, self.saved()
+        with patch.object(Axes, "draw", side_effect=RuntimeError("rasterization failed")):
+            self.refresh_button()
+        self.assertIs(self.widget.ax, old_axes)
+        self.assertEqual(self.saved(), old_map)
+
+    def test_failed_explicit_geometry_repair_retains_accepted_frame(self):
+        old_entry, old_map, old_axes = self.widget._render_cache_entry, self.saved(), self.widget.ax
+        with patch.object(self.plugin.store, "get_invalid_node_positions", return_value={"bad": [float("inf"), 0]}), \
+                patch.object(self.plugin.store, "cleanup_invalid_node_positions", side_effect=OSError("repair failed")):
+            self.refresh_button()
+        self.assertIs(self.widget.ax, old_axes)
+        self.assertIs(self.plugin.get_render_entry(old_entry.cache_key), old_entry)
+        self.assertEqual(self.saved(), old_map)
+
+    def test_eviction_notice_is_visible_on_the_accepting_frame(self):
+        with patch.object(self.plugin.store, "POSITION_CACHE_LIMIT", 1):
+            self.app.selected_animals = ["Other"]
+            self.assertTrue(self.widget.refresh_graph())
+        self.assertIn("Position cache limit reached", self.widget.status_label.text())
+
+    def test_chronological_singleton_drag_preserves_month_snapped_y(self):
+        self.app.selected_animals = ["Other"]
+        self.widget.settings["vertical_layout_mode"] = "chronological"
+        self.assertTrue(self.widget.refresh_graph())
+        self.assertEqual(self.widget.node_positions["Other"][1], 2010.0)
+        self.drag(node="Other", dx=3, dy=10)
+        self.assertEqual(self.widget.node_positions["Other"][1], 2010.0)
+
+    def test_real_mouse_group_drag_pan_and_zoom_preserve_accepted_map(self):
+        w = self.widget
+        w.canvas.draw()
+        family = next(iter(w.family_members))
+        start = w.family_positions[family]
+        px, py = w.ax.transData.transform(start)
+        w._on_mouse_press(SimpleNamespace(button=1, inaxes=w.ax, xdata=start[0],
+                                          ydata=start[1], x=px, y=py, dblclick=False))
+        event = SimpleNamespace(button=1, inaxes=w.ax, xdata=start[0]+5,
+                                ydata=start[1]+2, x=px+80, y=py+40)
+        original = dict(w._route_plan.animal_positions)
+        w._on_mouse_move(event)
+        self.assertTrue(w.is_dragging)
+        w._on_mouse_release(event)
+        for node, point in original.items():
+            self.assertAlmostEqual(w.node_positions[node][0], point[0]+5)
+            self.assertAlmostEqual(w.node_positions[node][1], point[1]+2)
+        saved = self.saved()
+        w._on_scroll(SimpleNamespace(inaxes=w.ax, xdata=start[0], ydata=start[1], button="up"))
+        w._on_mouse_press(SimpleNamespace(button=2, inaxes=w.ax, xdata=start[0], ydata=start[1]))
+        w._on_mouse_move(SimpleNamespace(button=2, inaxes=w.ax, xdata=start[0]+1, ydata=start[1]+1))
+        w._on_mouse_release(SimpleNamespace(button=2))
+        self.assertEqual(self.saved(), saved)
+        self.assertTrue(w.refresh_graph(keep_view=True))
+        self.assertEqual(self.saved(), saved)
+
+
+class HeritagePositionSQLiteTest(unittest.TestCase):
+    def test_production_repository_merges_other_context_and_rejects_stale_same_context(self):
+        from Plugins.core.backend import ProgTrackBackend
+        from Plugins.core.runtime_paths import BackendProfile, RuntimePaths
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            paths = RuntimePaths(
+                application_root=Path(__file__).resolve().parents[1],
+                profile=BackendProfile.STANDALONE_SQLITE,
+                data_root=base / "data", config_root=base / "config",
+                cache_root=base / "cache", state_root=base / "state",
+                database_path=base / "data/database/progtrack.sqlite3",
+                managed_root=base / "managed", managed_documents=base / "managed/documents",
+                managed_config_assets=base / "managed/config-assets", logs=base / "state/logs",
+                runtime=base / "state/runtime", exports=base / "exports",
+                preferences=base / "preferences", profile_file=base / "config/backend.json",
+            )
+            paths.create_mutable_roots()
+            backend = ProgTrackBackend(paths, acquire_process_lock=False)
+            try:
+                core = copy.deepcopy(backend.load_core_data())
+                first, second = HeritageStore("", backend), HeritageStore("", backend)
+                first.set_position_cache_entry("alice", "A", {"C": (1, 2)}, "rev", ["C"], expected_entry=None)
+                baseline = first.get_position_cache_entry("alice", "A")
+                second.set_position_cache_entry("bob", "B", {"D": (3, 4)}, "rev", ["D"])
+                other_map = second.get_position_cache_entry("bob", "B")
+                first.set_position_cache_entry("alice", "A", {"C": (5, 6)}, "rev", ["C"], expected_entry=baseline)
+                self.assertEqual(first.get_position_cache_entry("bob", "B"), other_map)
+                latest = first.get_position_cache_entry("alice", "A")
+                with self.assertRaises(ConflictError):
+                    second.set_position_cache_entry("alice", "A", {"C": (9, 9)}, "rev", ["C"], expected_entry=baseline)
+                self.assertEqual(second.get_position_cache_entry("alice", "A"), latest)
+                self.assertEqual(backend.load_core_data(), core)
+            finally:
+                backend.close()
 
 
 if __name__ == "__main__":

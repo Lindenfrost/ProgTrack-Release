@@ -21,6 +21,7 @@ from Plugins.core.backend.errors import ConflictError
 
 PARENT_KEYS = ("egg_donor", "sperm_donor", "surrogate_mother", "surrogate_father")
 _PATCH_DELETE = object()
+_POSITION_ENTRY_UNCHECKED = object()
 
 
 class HeritageStore:
@@ -1263,6 +1264,7 @@ class HeritageStore:
         *,
         pedigree_revision: Optional[str] = None,
         dependency_ids: Optional[Iterable[str]] = None,
+        snapshot: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Return one complete logical position cache record, read-only.
 
@@ -1278,7 +1280,9 @@ class HeritageStore:
         # Refresh the read from the backend so a second session's committed
         # cache replacement is visible immediately.  The helper restores this
         # object's in-memory/pending state and does not write normalization.
-        data, _revision = self.load_latest_with_revision()
+        data = snapshot
+        if data is None:
+            data, _revision = self.load_latest_with_revision()
         cache = data.get("position_cache", {}) if isinstance(data, dict) else {}
         entries = cache.get(user, {}) if isinstance(cache, dict) else {}
         if not isinstance(entries, dict):
@@ -1311,6 +1315,7 @@ class HeritageStore:
         dependency_ids: Iterable[str],
         *,
         selection_type: str = "selected",
+        expected_entry: Any = _POSITION_ENTRY_UNCHECKED,
     ) -> Dict[str, Any]:
         """Atomically replace one user's complete selection position map.
 
@@ -1368,6 +1373,13 @@ class HeritageStore:
                 pending_baseline = deepcopy(baseline)
 
         def mutate(data: Dict[str, Any]) -> Dict[str, Any]:
+            # Guard this context, not the aggregate graph: unrelated writes can
+            # merge, but a stale frame must not replace a newer position map.
+            if expected_entry is not _POSITION_ENTRY_UNCHECKED:
+                entries = data.get("position_cache", {}).get(user, {})
+                current_entry = self._normalize_position_cache_entry(entries.get(key))
+                if current_entry != expected_entry:
+                    raise ConflictError("The saved layout changed; reload before moving it again")
             if pending_patch and pending_patch.get("has_changes"):
                 self._check_patch_conflicts(
                     pending_patch,

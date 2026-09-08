@@ -13,7 +13,7 @@ import json
 import math
 import os
 import time
-from copy import deepcopy
+from copy import copy, deepcopy
 from collections import defaultdict
 from datetime import datetime, timezone
 from dataclasses import replace
@@ -49,6 +49,7 @@ from PyQt6.QtWidgets import (
 )
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_agg import RendererAgg
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
@@ -1185,6 +1186,7 @@ class HeritageTrackWidget(QWidget):
             selection=canonical_selection,
             selection_type="selected",
             display_mode=display_mode,
+            max_generations=int(self._max_generations),
         )
 
     def _position_cache_user_id(self) -> str:
@@ -1221,6 +1223,10 @@ class HeritageTrackWidget(QWidget):
             "show_heritage_only": bool(self.settings.get("show_heritage_only", True)),
             "exclude_archived": bool(self.settings.get("exclude_archived", False)),
         }
+        if self.__dict__.get("collapsed_families"):
+            # A collapsed visible scope must not replace its expanded map.
+            # Leave existing expanded keys compatible with persisted v1 maps.
+            payload["collapsed_families"] = sorted(self.collapsed_families, key=str.casefold)
         return self._render_revision(payload)
 
     @staticmethod
@@ -1296,10 +1302,8 @@ class HeritageTrackWidget(QWidget):
     def _save_position_cache(
         self,
         positions: Dict[str, Tuple[float, float]],
-        *,
-        confirm_delete_on_failure: bool = False,
     ) -> bool:
-        """Persist one complete map, retrying exactly once on backend failure."""
+        """Persist one complete map; retries retain the same context precondition."""
         key = self._active_position_cache_key
         if not key or not positions:
             return True
@@ -1320,6 +1324,7 @@ class HeritageTrackWidget(QWidget):
                     payload,
                     self._active_position_cache_revision or "genesis",
                     self._active_position_cache_dependencies,
+                    expected_entry=self._position_cache_expected_entry,
                     selection_type=(
                         f"selected:{self.layout_mode}:"
                         f"{self.settings.get('vertical_layout_mode', VERTICAL_LAYOUT_PARTNER_NORMALIZED)}"
@@ -1332,6 +1337,13 @@ class HeritageTrackWidget(QWidget):
                         "Position cache limit reached; the oldest layout was replaced.",
                     )
                 return True
+            except ConflictError as exc:
+                last_error = exc
+                current = self.plugin.store.get_position_cache_entry(
+                    self._active_position_cache_user, key,
+                )
+                if current != self._position_cache_expected_entry:
+                    break  # Never rebase a stale map onto a newer one.
             except Exception as exc:  # pragma: no cover - backend-specific failures
                 last_error = exc
                 logging.getLogger(__name__).exception(
@@ -1342,27 +1354,8 @@ class HeritageTrackWidget(QWidget):
             "heritage_track.position_cache.write_failed",
             "The pedigree layout could not be saved; the previous saved layout was kept.",
         )
-        if confirm_delete_on_failure and key:
-            answer = QMessageBox.question(
-                self,
-                self.messages.get("heritage_track.position_cache.write_failed_title", "Layout not saved"),
-                self.messages.get(
-                    "heritage_track.position_cache.delete_failed_entry",
-                    "Delete the saved layout for this selection?",
-                ),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if answer == QMessageBox.StandardButton.Yes:
-                try:
-                    self.plugin.store.remove_position_cache_entry(
-                        self._active_position_cache_user, key
-                    )
-                except Exception:
-                    logging.getLogger(__name__).exception(
-                        "Could not remove failed Heritage position cache entry"
-                    )
-        _ = last_error
+        if isinstance(last_error, ConflictError):
+            self._position_cache_notice += f" {last_error}"
         return False
 
     def _build_render_cache_entry(
@@ -2272,71 +2265,23 @@ class HeritageTrackWidget(QWidget):
         return base.parent / "icons"
 
     def _on_refresh_clicked(self) -> None:
-        """Handle refresh button click with confirmation to reset positions."""
-        invalid_positions = self.plugin.store.get_invalid_node_positions()
-        if invalid_positions:
-            try:
+        """Request replacement of only the current context's complete map."""
+        try:
+            # Retain #159's explicit repair of malformed legacy geometry.
+            # A failed repair must not delete the accepted render entry.
+            if self.plugin.store.get_invalid_node_positions():
                 self.plugin.store.cleanup_invalid_node_positions()
-            except Exception as exc:
-                logging.getLogger(__name__).exception(
-                    "Could not clean invalid Heritage node positions"
-                )
-                confirm = QMessageBox.warning(
-                    self,
-                    self.messages.get(
-                        "heritage_track.error.geometry_cleanup_title",
-                        "Invalid saved geometry",
-                    ),
-                    self.messages.get(
-                        "heritage_track.error.geometry_cleanup_failed",
-                        "Invalid saved geometry could not be cleaned. Remove the cached frame for this selection?",
-                    )
-                    + f"\n\n{exc}",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.No,
-                )
-                if confirm != QMessageBox.StandardButton.Yes:
-                    return
-                if self._render_cache_entry is not None:
-                    self.plugin.remove_render_cache_entry(self._render_cache_entry.cache_key)
-                    self._render_cache_entry = None
-
-        # Refresh only concerns the current user's selection-scoped layout.
-        # The historical global node_positions map is not part of this reset.
-        selected_animals = list(self._canonicalize_selection())
-        cache_key = self._position_cache_key(selected_animals)
-        # Read all inputs from one current snapshot.  The aggregate backend
-        # revision is intentionally not used for position validity: unrelated
-        # pedigree edits must not evict this selection's coordinates.
-        current_core = self.plugin._current_core_records()
-        current_store, current_backend_revision = self.plugin.store.load_latest_with_revision()
-        current_engine = self.plugin.build_engine(
-            sync=False,
-            core_snapshot=current_core,
-            store_snapshot=current_store,
-            backend_revision=current_backend_revision,
-        )
-        current_nodes = (
-            set(self._render_cache_entry.display_nodes)
-            if self._render_cache_entry is not None
-            and tuple(self._render_cache_entry.canonical_selection) == tuple(selected_animals)
-            else set(current_engine.get_display_nodes(selected_animals))
-        )
-        cache_dependencies = self._position_cache_dependencies(
-            current_engine, current_nodes
-        )
-        cache_revision = self._position_cache_dependency_revision(
-            current_engine,
-            cache_dependencies,
-            core_snapshot=current_core,
-            store_snapshot=current_store,
-        )
-        saved_entry = self.plugin.store.get_position_cache_entry(
-            self._position_cache_user_id(),
-            cache_key,
-            pedigree_revision=cache_revision,
-            dependency_ids=cache_dependencies,
-        )
+            selected_animals = list(self._canonicalize_selection())
+            cache_key = self._position_cache_key(
+                selected_animals,
+                display_mode=self._layout_mode_for_selection(selected_animals),
+            )
+            saved_entry = self.plugin.store.get_position_cache_entry(
+                self._position_cache_user_id(), cache_key,
+            )
+        except Exception as exc:
+            self._report_geometry_failure(exc)
+            return
 
         if saved_entry:
             # Ask user if they want to reset positions
@@ -2366,15 +2311,11 @@ class HeritageTrackWidget(QWidget):
             if confirm != QMessageBox.StandardButton.Yes:
                 return
         
-        # Normal refresh without consuming the old entry.  refresh_graph()
-        # replaces it only after a complete automatic frame is accepted.
-        self._force_relayout = True
-        self.selected_nodes.clear()
-        self.temp_positions.clear()
-        self.current_xlim = None
-        self.current_ylim = None
+        # Only this explicit action requests an automatic replacement. The
+        # old frame/map survive any failure and the flag cannot leak to a
+        # later ordinary redraw.
         self._show_coefficients_dialog()
-        self.refresh_graph()
+        self.refresh_graph(reset_positions=True)
 
     def _report_geometry_failure(self, error: object) -> None:
         """Keep the last accepted frame and expose a localized geometry error."""
@@ -3802,7 +3743,7 @@ class HeritageTrackWidget(QWidget):
         *,
         keep_view: bool = False,
         recompute_gaps: bool = True,
-    ) -> None:
+    ) -> bool:
         """Paint an already accepted frame without rebuilding its model.
 
         The cache entry is immutable and contains all semantic data needed by
@@ -3954,9 +3895,15 @@ class HeritageTrackWidget(QWidget):
             except GeometryValidationError as exc:
                 restore_previous_frame()
                 self._report_geometry_failure(exc)
-                return
+                return False
 
         self.ax.clear()
+        self._hover_annotation = self.ax.annotate(
+            "", xy=(0, 0), xytext=(12, 12), textcoords="offset points",
+            bbox={"boxstyle": "round", "fc": "#fff9db", "ec": "black", "alpha": 0.95},
+            arrowprops={"arrowstyle": "->", "color": "black"},
+        )
+        self._hover_annotation.set_visible(False)
         self._legend_artist = None
         self._legend_anchor_axes = None
         self.ax.set_aspect(self._view_data_aspect(), adjustable="box")
@@ -4128,6 +4075,7 @@ class HeritageTrackWidget(QWidget):
         self.temp_positions.clear()
         self._hover_annotation.set_visible(False)
         self.canvas.draw_idle()
+        return True
 
     def _render_source_revision(
         self,
@@ -4174,7 +4122,80 @@ class HeritageTrackWidget(QWidget):
             }
         )
 
-    def refresh_graph(self, keep_view: bool = False) -> None:
+    def refresh_graph(
+        self, keep_view: bool = False, *, reset_positions: bool = False,
+        position_candidate: Optional[Dict[str, Tuple[float, float]]] = None,
+    ) -> bool:
+        """Accept a frame and its complete map together, or retain the old frame.
+
+        Painting uses separate axes and detached mutable widget collections.
+        No event-loop yield occurs before publication/persistence completes;
+        draw_idle displays only the accepted axes after this call returns.
+        """
+        previous = dict(self.__dict__)
+        old_axes = self.ax
+        old_position = old_axes.get_position().frozen()
+        old_original_position = old_axes.get_position(original=True).frozen()
+        old_limits = (old_axes.get_xlim(), old_axes.get_ylim())
+        subplot = self.figure.subplotpars
+        old_subplot = {key: getattr(subplot, key) for key in
+                       ("left", "right", "bottom", "top", "wspace", "hspace")}
+        old_stack = self.stack.currentWidget()
+        # Keep the original collection objects (including artist metadata) for
+        # rollback; the candidate can clear/replace only its detached copies.
+        for name, value in previous.items():
+            if isinstance(value, (dict, list, set)):
+                setattr(self, name, copy(value))
+        candidate_axes = self.figure.add_subplot(111)
+        self.ax = candidate_axes
+        candidate_axes.set_xlim(old_limits[0])
+        candidate_axes.set_ylim(old_limits[1])
+        candidate_axes.set_aspect(old_axes.get_aspect(), adjustable="box")
+        accepted = False
+        error = None
+        try:
+            self._force_relayout = bool(reset_positions or self._force_relayout)
+            if self._force_relayout:
+                self.selected_nodes.clear()
+                self.temp_positions.clear()
+                self.current_xlim = self.current_ylim = None
+            accepted = bool(self._refresh_graph(keep_view, position_candidate=position_candidate))
+            return accepted
+        except Exception as exc:
+            error = exc
+            logging.getLogger(__name__).exception("Could not accept Heritage layout")
+            return False
+        finally:
+            notice = self._position_cache_notice
+            if accepted:
+                old_axes.remove()
+                if notice:
+                    self.status_label.setText(f"{self.status_label.text()} | {notice}")
+                    self.status_label.setToolTip(notice)
+                    self._position_cache_notice = ""
+            else:
+                candidate_axes.remove()
+                self.__dict__.clear()
+                self.__dict__.update(previous)
+                self.figure.subplots_adjust(**old_subplot)
+                old_axes.set_position(old_original_position, which="original")
+                old_axes.set_position(old_position, which="active")
+                old_axes.set_xlim(old_limits[0])
+                old_axes.set_ylim(old_limits[1])
+                self.stack.setCurrentWidget(old_stack)
+                if error is not None:
+                    self._report_geometry_failure(error)
+                if notice:
+                    self.status_label.setText(notice)
+                    self.status_label.setToolTip(notice)
+            self._force_relayout = False
+            self._render_core_animals = self._render_store_animals = None
+            self.canvas.draw_idle()
+
+    def _refresh_graph(
+        self, keep_view: bool = False, *,
+        position_candidate: Optional[Dict[str, Tuple[float, float]]] = None,
+    ) -> bool:
         # Rendering is one read-only transaction.  Capture Core and the latest
         # Heritage backend record/revision before building the engine so every
         # projection, resolver and position lookup uses the same snapshot.
@@ -4227,7 +4248,7 @@ class HeritageTrackWidget(QWidget):
         # A complete immutable frame is the fast path.  It is only reusable
         # when the full Core/Heritage source token matches; dependency and
         # revision checks remain available through the plugin registry.
-        if selected_animals and not self._force_relayout:
+        if selected_animals and not self._force_relayout and position_candidate is None:
             cache_key = self._render_cache_key(
                 selected_animals,
                 chronological_mode,
@@ -4235,12 +4256,22 @@ class HeritageTrackWidget(QWidget):
             )
             cached_render_entry = self.plugin.get_render_entry(cache_key)
             if cached_render_entry is not None:
-                if cached_render_entry.source_revision == source_revision and cached_render_entry.valid:
-                    self._paint_cached_render_entry(cached_render_entry, keep_view=keep_view)
-                    self._render_store_animals = None
-                    self._render_core_animals = None
-                    return
-                self.plugin.remove_render_cache_entry(cache_key)
+                saved = self.plugin.store.get_position_cache_entry(
+                    self._position_cache_user_id(), self._position_cache_key(selected_animals),
+                    pedigree_revision=cached_render_entry.position_cache_revision,
+                    dependency_ids=cached_render_entry.position_cache_dependencies,
+                    snapshot=raw_store,
+                )
+                saved_positions = {
+                    node: (point["x"], point["y"])
+                    for node, point in (saved or {}).get("positions", {}).items()
+                }
+                if (cached_render_entry.source_revision == source_revision
+                        and cached_render_entry.valid and saved is not None
+                        and saved_positions == dict(cached_render_entry.route_plan.animal_positions)):
+                    self._position_cache_expected_entry = saved
+                    return self._paint_cached_render_entry(cached_render_entry, keep_view=keep_view)
+                # Keep the previous entry until its replacement commits.
 
         # No-selection mode only shows the splash screen.  Avoid building the
         # complete pedigree, level map, families, layout, and routes merely to
@@ -4250,7 +4281,7 @@ class HeritageTrackWidget(QWidget):
             self._render_store_animals = None
             self._render_core_animals = None
             self.plugin._clear_active_projection_snapshot()
-            return
+            return True
 
         engine = self.plugin.build_engine(
             sync=False,
@@ -4360,6 +4391,9 @@ class HeritageTrackWidget(QWidget):
             core_snapshot=core_snapshot,
             store_snapshot=raw_store,
         )
+        self._position_cache_expected_entry = self.plugin.store.get_position_cache_entry(
+            position_cache_user, position_cache_key, snapshot=raw_store,
+        )
         cached_entry = None
         if not self._force_relayout:
             cached_entry = self.plugin.store.get_position_cache_entry(
@@ -4367,6 +4401,7 @@ class HeritageTrackWidget(QWidget):
                 position_cache_key,
                 pedigree_revision=position_cache_revision,
                 dependency_ids=position_cache_dependencies,
+                snapshot=raw_store,
             )
         cached_positions: Dict[str, Tuple[float, float]] = {}
         if isinstance(cached_entry, dict):
@@ -4390,11 +4425,23 @@ class HeritageTrackWidget(QWidget):
                 cached_entry = None
                 cached_positions = {}
 
+        if position_candidate is not None:
+            accepted_entry = self._render_cache_entry
+            expected_positions = {
+                node: (point["x"], point["y"])
+                for node, point in (cached_entry or {}).get("positions", {}).items()
+            }
+            if (accepted_entry is None or accepted_entry.position_cache_key != position_cache_key
+                    or dict(accepted_entry.route_plan.animal_positions) != expected_positions
+                    or set(position_candidate) != set(expected_positions)):
+                raise ConflictError("The displayed layout changed; reload before moving it again")
+            cached_positions = dict(position_candidate)
+
         self._active_position_cache_key = position_cache_key
         self._active_position_cache_user = position_cache_user
         self._active_position_cache_revision = position_cache_revision
         self._active_position_cache_dependencies = set(position_cache_dependencies)
-        self._position_cache_hit = bool(cached_entry)
+        self._position_cache_hit = bool(cached_entry) and position_candidate is None
 
         locked_positions = cached_positions if cached_entry else {}
 
@@ -4561,11 +4608,11 @@ class HeritageTrackWidget(QWidget):
                         self._get_node_display_label(node).casefold(),
                     ),
                 )
-                if chronological and connected_points
+                if chronological
                 else singletons
             )
             for index, node in enumerate(ordered_singletons):
-                if chronological and connected_points:
+                if chronological:
                     # Keep the birth-date Y coordinate, but reserve columns
                     # clearly outside the family-tree envelope.
                     y = animal_positions[node][1]
@@ -4662,163 +4709,45 @@ class HeritageTrackWidget(QWidget):
             self._report_geometry_failure("\n".join(fatal_geometry))
             return
 
-        # Prepare renderer state before the pixel-only gap pass.  The frame is
-        # still invisible at this point, so a rejected render leaves the last
-        # accepted artists intact.
-        previous_route_plan = self._route_plan
-        previous_family_routes = self.family_routes
-        previous_rendered_engine = self._rendered_engine
-        previous_rendered_families = self._rendered_families
-        previous_artist_scale = self._rendered_artist_scale
-        previous_render_cache_entry = self._render_cache_entry
-        previous_position_context = (
-            self._active_position_cache_key,
-            self._active_position_cache_user,
-            self._active_position_cache_revision,
-            set(self._active_position_cache_dependencies),
-            bool(self._position_cache_hit),
-        )
         self._rendered_artist_scale = focused_artist_scale
-        # Marker/crossing gaps are measured in data units derived from the
-        # final pixel scale.  At this point the axes still carry the previous
-        # frame's limits (or Matplotlib's defaults on the first render), so a
-        # direct gap pass would use the wrong scale and can miss a marker that
-        # the new route actually crosses.  Prime the transform with the
-        # candidate bounds for the pass, then restore the old transform until
-        # the complete frame is accepted and painted below.
-        previous_axes_xlim = tuple(self.ax.get_xlim())
-        previous_axes_ylim = tuple(self.ax.get_ylim())
+        previous_axes_xlim, previous_axes_ylim = self.ax.get_xlim(), self.ax.get_ylim()
         try:
             self.ax.set_xlim(view_xlim)
             self.ax.set_ylim(view_ylim)
             self._recompute_route_visual_gaps(route_plan)
-        except GeometryValidationError as exc:
-            self._route_plan = previous_route_plan
-            self.family_routes = previous_family_routes
-            self._rendered_engine = previous_rendered_engine
-            self._rendered_families = previous_rendered_families
-            self._rendered_artist_scale = previous_artist_scale
-            self._report_geometry_failure(exc)
-            return
         finally:
             self.ax.set_xlim(previous_axes_xlim)
             self.ax.set_ylim(previous_axes_ylim)
-
-        # Publish the complete frame atomically before any visible artists are
-        # created.  Every later view operation can derive its pixel-only route
-        # copy from this accepted entry without rereading mutable backend data.
-        render_entry: Optional[RenderCacheEntry] = None
-        try:
-            render_entry = self._build_render_cache_entry(
-                engine=engine,
-                selected_animals=selected_animals,
-                display_nodes=display_nodes,
-                ghost_nodes=ghost_nodes,
-                levels=levels,
-                families=families,
-                positions=positions,
-                locked_positions=locked_positions,
-                route_plan=route_plan,
-                bounds=(view_xlim, view_ylim),
-                f_values=f_values,
-                f_status=f_status,
-                obstacle_labels=obstacle_labels,
-                chronological_mode=chronological_mode,
-                display_mode=self.layout_mode,
-                source_revision=source_revision,
-                artist_scale=focused_artist_scale,
-                chronological_undated_nodes=self._chronological_undated_nodes,
-            )
-            if not render_entry.valid:
-                logging.getLogger(__name__).error(
-                    "Rejected Heritage render frame: %s",
-                    "; ".join(render_entry.fatal_diagnostics),
-                )
-                self._route_plan = previous_route_plan
-                self.family_routes = previous_family_routes
-                self._rendered_engine = previous_rendered_engine
-                self._rendered_families = previous_rendered_families
-                self._rendered_artist_scale = previous_artist_scale
-                self._report_geometry_failure("; ".join(render_entry.fatal_diagnostics))
-                self._render_store_animals = None
-                return
-            # Publish exactly once, before any durable position write.  If
-            # publication fails, no persistent coordinates have changed and
-            # the previously accepted frame remains authoritative.
-            self.plugin.cache_render_entry(render_entry)
-        except Exception:
-            # A failed cache publication must never paint a plausible partial
-            # frame.  Keep the previous accepted entry and report the failure
-            # through the normal status/diagnostic channel.
-            if render_entry is not None:
-                try:
-                    self.plugin.remove_render_cache_entry(render_entry.cache_key)
-                except Exception:
-                    logging.getLogger(__name__).exception(
-                        "Could not remove rejected Heritage render cache entry"
-                    )
-            self._route_plan = previous_route_plan
-            self.family_routes = previous_family_routes
-            self._rendered_engine = previous_rendered_engine
-            self._rendered_families = previous_rendered_families
-            self._rendered_artist_scale = previous_artist_scale
-            self._render_cache_entry = previous_render_cache_entry
-            (
-                self._active_position_cache_key,
-                self._active_position_cache_user,
-                self._active_position_cache_revision,
-                previous_dependencies,
-                self._position_cache_hit,
-            ) = previous_position_context
-            self._active_position_cache_dependencies = set(previous_dependencies)
-            logging.getLogger(__name__).exception("Could not publish Heritage render cache entry")
-            self._render_store_animals = None
-            return
-
-        # A cache miss (or explicit Refresh) stores the complete final map,
-        # including nodes that were not moved.  Publication was staged above;
-        # a failed position write removes that staged entry so neither the
-        # durable cache nor the last accepted frame is replaced.
-        if not getattr(self, "_position_cache_hit", False):
-            saved_position_cache = self._save_position_cache(
-                animal_positions,
-                confirm_delete_on_failure=self._force_relayout,
-            )
-            if saved_position_cache:
-                self._force_relayout = False
-            else:
-                self.plugin.remove_render_cache_entry(render_entry.cache_key)
-                self._route_plan = previous_route_plan
-                self.family_routes = previous_family_routes
-                self._rendered_engine = previous_rendered_engine
-                self._rendered_families = previous_rendered_families
-                self._rendered_artist_scale = previous_artist_scale
-                self._render_cache_entry = previous_render_cache_entry
-                (
-                    self._active_position_cache_key,
-                    self._active_position_cache_user,
-                    self._active_position_cache_revision,
-                    previous_dependencies,
-                    self._position_cache_hit,
-                ) = previous_position_context
-                self._active_position_cache_dependencies = set(previous_dependencies)
-                self._render_store_animals = None
-                return
-
-        self._render_cache_entry = render_entry
-
-        # Paint through the same immutable-entry consumer used by warm
-        # renders.  The legacy inline painter below is retained temporarily as
-        # a compatibility reference, but is unreachable for accepted frames;
-        # this keeps one authoritative paint path during the migration.
-        self._paint_cached_render_entry(
-            render_entry,
-            keep_view=keep_view,
-            recompute_gaps=False,
+        render_entry = self._build_render_cache_entry(
+            engine=engine, selected_animals=selected_animals, display_nodes=display_nodes,
+            ghost_nodes=ghost_nodes, levels=levels, families=families, positions=positions,
+            locked_positions=locked_positions, route_plan=route_plan,
+            bounds=(view_xlim, view_ylim), f_values=f_values, f_status=f_status,
+            obstacle_labels=obstacle_labels, chronological_mode=chronological_mode,
+            display_mode=self.layout_mode, source_revision=source_revision,
+            artist_scale=focused_artist_scale,
+            chronological_undated_nodes=self._chronological_undated_nodes,
         )
-        self._render_store_animals = None
-        self._render_core_animals = None
-        return
+        if not render_entry.valid:
+            raise GeometryValidationError("; ".join(render_entry.fatal_diagnostics))
+        needs_position_write = not self._position_cache_hit
+        if not self._paint_cached_render_entry(render_entry, keep_view=keep_view, recompute_gaps=False):
+            return False
+        # Exercise the artists against a private raster buffer before a write.
+        # Qt's scheduled draw_idle alone would discover font/path failures only
+        # after the durable map had already been replaced.
+        if needs_position_write:
+            self.ax.draw(RendererAgg(
+                max(1, int(self.figure.bbox.width)),
+                max(1, int(self.figure.bbox.height)), self.figure.dpi,
+            ))
+        # All fallible rendering work precedes the durable write. Roll back an
+        # actual registry put failure as well as a later persistence failure.
+        with self.plugin._render_cache.preserve_on_failure(render_entry.cache_key):
+            self.plugin.cache_render_entry(render_entry)
+            if needs_position_write and not self._save_position_cache(animal_positions):
+                raise RuntimeError(self._position_cache_notice)
+        return True
 
         self.ax.clear()
         self._legend_artist = None
@@ -5560,9 +5489,19 @@ class HeritageTrackWidget(QWidget):
                         for node, point in self.node_positions.items()
                         if not self._is_family_node(node)
                     }
-                    self._save_position_cache(complete_positions)
                     self._finish_drag_blit()
-                    self.refresh_graph(keep_view=True)
+                    if not self.refresh_graph(keep_view=True, position_candidate=complete_positions):
+                        # The drag preview moved existing artists. Restore their
+                        # accepted positions without repainting a rejected frame.
+                        for node, point in self.node_positions.items():
+                            meta = self.node_meta.get(node, {})
+                            if meta.get("kind") != "animal":
+                                continue
+                            artists = [meta.get(key) for key in
+                                       ("marker_artist", "label_artist", "f_artist", "undated_artist")]
+                            self._position_drag_artists(artists, *point)
+                        self.temp_positions.clear()
+                        self.canvas.draw_idle()
                 elif self._is_family_node(self.drag_node):
                     self._toggle_family_collapsed(self.drag_node)
                     self.refresh_graph(keep_view=True)
@@ -7918,7 +7857,10 @@ class HeritageTrackPlugin:
             and self._engine_backend_revision != backend_revision
         ):
             self._engine_cache.invalidate()
-            self.clear_render_cache()
+            # Complete render entries validate their semantic source and
+            # current position map at consumption. A position write changes
+            # the aggregate revision too; clearing all contexts here would
+            # discard the rollback entry and unrelated warm layouts.
         self._engine_backend_revision = backend_revision
         self._active_core_snapshot = core_snapshot
         self._active_store_snapshot = store_snapshot
