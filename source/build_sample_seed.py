@@ -87,6 +87,14 @@ REMOVED_ANIMAL_NAMES = frozenset({
     "Andy", "Betta", "RoleProbe", "Test",
 })
 
+# These are the canonical ownership markers used by Heritage Track for
+# records that are not Core animals.  They remain valid for explicitly
+# authored runtime fixtures, but none may be copied into the shipped seed.
+HERITAGE_DUMMY_KINDS = frozenset({"direct", "former_core"})
+HERITAGE_DUMMY_PERSISTENCE_KINDS = frozenset({
+    "temporary_dummy", "direct_dummy", "former_core_dummy",
+})
+
 _ANIMAL_REFERENCE_FIELDS = frozenset({
     "ipid",
     "animal",
@@ -97,6 +105,24 @@ _ANIMAL_REFERENCE_FIELDS = frozenset({
     "sperm_donor",
     "egg_donor",
     "surrogate",
+})
+
+_HERITAGE_REFERENCE_FIELDS = _ANIMAL_REFERENCE_FIELDS | frozenset({
+    "egg_donor",
+    "sperm_donor",
+    "surrogate_mother",
+    "surrogate_father",
+    "mother",
+    "father",
+    "parent",
+    "parent_ipid",
+    "mother_ipid",
+    "father_ipid",
+    "partner",
+    "partner_von",
+    "verpaart_mit",
+    "ziehmutter",
+    "ziehvater",
 })
 
 
@@ -261,6 +287,72 @@ def removed_animal_reference_paths(value: Any, path: str = "$") -> list[str]:
             found.extend(removed_animal_reference_paths(item, f"{path}[{index}]"))
     elif _is_removed_animal_reference(value):
         found.append(path)
+    return found
+
+
+def heritage_dummy_identity_values(value: Any) -> set[str]:
+    """Return every identity token belonging to an archived Heritage dummy."""
+    if not isinstance(value, dict) or not isinstance(value.get("animals"), dict):
+        return set()
+    identities: set[str] = set()
+    for legacy_key, entry in value["animals"].items():
+        if not isinstance(entry, dict) or not bool(entry.get("heritage_only")):
+            continue
+        for candidate in (
+            legacy_key,
+            entry.get("ipid"),
+            entry.get("id"),
+            entry.get("name"),
+            entry.get("_base_name"),
+            entry.get("display_name"),
+        ):
+            token = str(candidate or "").strip()
+            if token:
+                identities.add(token)
+    return identities
+
+
+def heritage_dummy_reference_paths(
+    value: Any,
+    identities: set[str],
+    path: str = "$",
+    reference_context: bool = False,
+) -> list[str]:
+    """Find references to Heritage dummies removed from the shipped seed."""
+    if not identities:
+        return []
+    if isinstance(value, str):
+        return [path] if reference_context and value.strip() in identities else []
+    found: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            child = f"{path}.{key}"
+            key_token = str(key or "").strip()
+            if key_token in identities:
+                found.append(child + " (key)")
+            normalized_key = key_token.casefold()
+            is_reference = (
+                normalized_key in _HERITAGE_REFERENCE_FIELDS
+                or normalized_key.endswith("_ipid")
+            )
+            if is_reference:
+                found.extend(
+                    heritage_dummy_reference_paths(
+                        item, identities, child, reference_context=True
+                    )
+                )
+            else:
+                found.extend(heritage_dummy_reference_paths(item, identities, child))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            found.extend(
+                heritage_dummy_reference_paths(
+                    item,
+                    identities,
+                    f"{path}[{index}]",
+                    reference_context=reference_context,
+                )
+            )
     return found
 
 RETRIEVAL_DATES = (
@@ -1294,81 +1386,20 @@ def complete_housing(
     return result
 
 
-def complete_heritage(
-    core: dict[str, Any],
-    legacy: Any = None,
-) -> dict[str, Any]:
-    """Build the seed's Heritage-owned records without Core shadows.
+def complete_heritage() -> dict[str, Any]:
+    """Return the clean shipped Heritage graph.
 
-    Core animals are projected directly at runtime and must never be copied
-    into ``heritage/graph.animals``.  Keep only explicit Heritage-only
-    authoring records from the archived fixture.  Older fixtures do not carry
-    the typed dummy markers introduced by the ownership boundary, so assign a
-    deterministic kind while rebuilding the disposable example package.
+    Heritage Track still supports direct and former-Core dummy records when a
+    user explicitly creates them at runtime.  Those records are authoring
+    fixtures, however, not canonical example data.  The archived Heritage
+    JSON contains stale dummy animals and is therefore deliberately not
+    projected into the package at all.  Core animals are projected read-only
+    by Heritage Track from the backend's canonical Core records.
     """
-    core_records = {
-        str(ipid).strip(): animal
-        for ipid, animal in {
-            **(core.get("animals", {}) or {}),
-            **(core.get("archived_animals", {}) or {}),
-        }.items()
-        if str(ipid).strip() and isinstance(animal, dict)
-    }
-    core_keys = set(core_records)
-    core_ipids = {
-        str(animal.get("ipid", "") or "").strip()
-        for animal in core_records.values()
-        if str(animal.get("ipid", "") or "").strip()
-    }
-    legacy_animals = (
-        legacy.get("animals", {})
-        if isinstance(legacy, dict)
-        else {}
-    )
-    animals: dict[str, dict[str, Any]] = {}
-    if not isinstance(legacy_animals, dict):
-        legacy_animals = {}
-
-    for legacy_key, raw_entry in legacy_animals.items():
-        if not isinstance(raw_entry, dict) or not bool(raw_entry.get("heritage_only")):
-            # Real Core rows from the old fixture are intentionally omitted;
-            # they are reconstructed as a read-only projection by the plugin.
-            continue
-        key = str(raw_entry.get("ipid") or legacy_key or "").strip()
-        if not key or key in core_keys or key in core_ipids:
-            continue
-        entry = copy.deepcopy(raw_entry)
-        entry["ipid"] = key
-        entry["heritage_only"] = True
-        source = str(entry.get("source", "") or "").strip().casefold()
-        existing_kind = str(entry.get("dummy_kind", "") or "").strip().casefold()
-        existing_persistence = str(
-            entry.get("persistence_kind", "") or ""
-        ).strip().casefold()
-        if existing_kind not in {"direct", "former_core"}:
-            existing_kind = "former_core" if source == "core" else "direct"
-        if existing_persistence not in {
-            "direct_dummy",
-            "former_core_dummy",
-        }:
-            existing_persistence = (
-                "former_core_dummy"
-                if existing_kind == "former_core"
-                else "direct_dummy"
-            )
-        entry["dummy_kind"] = existing_kind
-        entry["persistence_kind"] = existing_persistence
-        entry["source"] = (
-            "former_core_dummy"
-            if existing_kind == "former_core"
-            else str(entry.get("source", "") or "plugin").strip() or "plugin"
-        )
-        entry["updated_at"] = SEED_CREATED
-        animals[key] = entry
     return {
         "version": "2.0.0",
         "updated_at": SEED_CREATED,
-        "animals": animals,
+        "animals": {},
         "genotype_colors": {
             "H-/H-": "#ff8ce8", "WT/H-": "#ffd9ee", "WT/WT": "#ffffff"
         },
@@ -1793,6 +1824,12 @@ def _enrich_project_catalog(project_catalog: dict[str, Any],
 def domain_records(core: dict[str, Any], key_map: dict[str, str],
                    scenario: dict[str, Any]) -> dict[tuple[str, str], Any]:
     records: dict[tuple[str, str], Any] = {}
+    legacy_heritage = load_json("Plugins/Heritage_Track/heritage_animals.json", {})
+    # Keep the archived identity set only for dangling-reference validation;
+    # the legacy records themselves are never inserted into the package.
+    scenario["retired_heritage_dummy_identities"] = sorted(
+        heritage_dummy_identity_values(legacy_heritage)
+    )
     legacy = {
         ("projects", "catalog"): load_json("Plugins/Projects_Track/project_data.json", {"version": 1, "projects": {}}),
         ("projects", "history"): load_json("Plugins/Projects_Track/projects_history.json", {"version": 1, "projects": {}}),
@@ -1800,7 +1837,6 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
         ("housing", "inspections"): load_json("Plugins/Cage__Track/inspection.json", {"records": []}),
         ("medical", "history"): load_json("Plugins/Medi_Track/medi_history.json", {"version": "1.7", "animals": {}}),
         ("reports", "animal-reports"): load_json("Plugins/Animal_Reports/animal_report_data.json", {}),
-        ("heritage", "graph"): load_json("Plugins/Heritage_Track/heritage_animals.json", {}),
         ("samples", "organs"): load_json("Plugins/Sample_Track/organs.json", []),
         ("samples", "other"): load_json("Plugins/Sample_Track/other.json", []),
     }
@@ -1882,10 +1918,7 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
     records[("housing", "cage")] = complete_housing(
         records[("housing", "cage")], core["animals"]
     )
-    records[("heritage", "graph")] = complete_heritage(
-        core,
-        records.get(("heritage", "graph"), {}),
-    )
+    records[("heritage", "graph")] = complete_heritage()
     medical = _remove_obsolete_project_medical_entries(
         records[("medical", "history")]
     )
@@ -1925,9 +1958,8 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
         **core.get("archived_animals", {}),
     }
     # Medical records are Core-owned and must remain keyed only by real
-    # animals.  Heritage additionally owns its explicitly marked dummies;
-    # retaining those records is intentional and does not reintroduce Core
-    # shadows.
+    # animals.  The shipped Heritage graph is intentionally dummy-free;
+    # explicitly authored runtime dummies are not seed data.
     for domain_key, container_key in ((("medical", "history"), "animals"),):
         payload = records.get(domain_key, {})
         container = payload.get(container_key, {}) if isinstance(payload, dict) else {}
@@ -1940,17 +1972,10 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
     heritage_payload = records.get(("heritage", "graph"), {})
     if isinstance(heritage_payload, dict):
         heritage_animals = heritage_payload.get("animals", {})
-        heritage_keys = {
-            str(ipid).strip()
-            for ipid, value in heritage_animals.items()
-            if str(ipid).strip()
-            and isinstance(value, dict)
-            and bool(value.get("heritage_only"))
-        } if isinstance(heritage_animals, dict) else set()
         heritage_payload["animals"] = {
             ipid: value
             for ipid, value in heritage_animals.items()
-            if ipid in known_animals or ipid in heritage_keys
+            if ipid in known_animals
         } if isinstance(heritage_animals, dict) else {}
     report_payload = records.get(("reports", "animal-reports"), {})
     if isinstance(report_payload, dict):
@@ -1989,14 +2014,15 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
     for key, entry in heritage_only.items():
         if key in all_animals or str(entry.get("ipid", "") or "").strip() in core_ipids:
             errors.append(f"Heritage Core shadow remains in seed: {key}")
-        if str(entry.get("dummy_kind", "") or "").strip().casefold() not in {
-            "direct", "former_core"
-        }:
+        if str(entry.get("dummy_kind", "") or "").strip().casefold() not in HERITAGE_DUMMY_KINDS:
             errors.append(f"Heritage dummy kind missing: {key}")
-        if str(entry.get("persistence_kind", "") or "").strip().casefold() not in {
-            "direct_dummy", "former_core_dummy"
-        }:
+        if str(entry.get("persistence_kind", "") or "").strip().casefold() not in HERITAGE_DUMMY_PERSISTENCE_KINDS:
             errors.append(f"Heritage dummy persistence kind missing: {key}")
+    if heritage_only:
+        errors.append(
+            "Heritage-owned dummy animals must not be shipped in the seed: "
+            f"{len(heritage_only)} record(s) remain"
+        )
     # The Ringbearer fixture is used to exercise experimental procedure plots.
     # Validate its canonical lifecycle explicitly so a seed cannot silently
     # lose the surgery events or reintroduce mouse birth rows.
@@ -2042,6 +2068,18 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         for path in removed_animal_reference_paths(payload):
             errors.append(
                 "removed animal reference remains: "
+                f"{namespace}/{record_id}{path[1:]}"
+            )
+        for path in heritage_dummy_reference_paths(
+            payload,
+            {
+                str(identity).strip()
+                for identity in scenario.get("retired_heritage_dummy_identities", [])
+                if str(identity).strip()
+            },
+        ):
+            errors.append(
+                "dangling Heritage dummy reference remains: "
                 f"{namespace}/{record_id}{path[1:]}"
             )
     for ipid, record in all_animals.items():
@@ -2464,6 +2502,7 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         "counts": {
             "active_animals": len(core["animals"]),
             "archived_animals": len(core["archived_animals"]),
+            "heritage_owned_dummy_animals": len(heritage_only),
             "domain_records": len(records),
             "weighted_animals": sum(bool(v.get("gewicht")) for v in all_animals.values()),
             "species": len({v["species"] for v in all_animals.values()}),
@@ -2573,6 +2612,7 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | Species | Callitrix, Macaca, Papio, Mus |
 | Mus musculus | Canonical Hobbit-derived genealogy (Drogo + Primula -> Frodo), Italian partner names, realistic mouse weights and connected ancestry |
 | Ringbearer | Frodo/Sam and Merry/Pippin are adult experimental mice in one project and two pair cages; each has one surgery event and no birth event |
+| Heritage shipped seed | No Heritage-owned dummy animals are packaged; runtime dummy support is exercised only through explicit fixtures |
 | Mouse House | Dedicated building/unit/room; two Ringbearer pair cages, breeding group, and Bilbo's deliberate single cage |
 | Denethor family | Elros descendant; Boromir and Faramir with distinct donors/surrogates |
 | OTOF- success | Two complete transfer, pregnancy-verification, and live-birth paths |

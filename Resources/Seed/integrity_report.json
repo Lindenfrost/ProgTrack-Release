@@ -4,6 +4,7 @@
     "archived_animals": 90,
     "canonical_users": 7,
     "domain_records": 17,
+    "heritage_owned_dummy_animals": 0,
     "pregnancy_verifications": 6,
     "scientifically_current_weights": 257,
     "species": 4,
@@ -12,7 +13,7 @@
   },
   "errors": [],
   "fictional": true,
-  "package_sha256": "6fecb1543dec1ea375f82e455a6edda0785fe1c5fee95dde71ab3317dd90d229",
+  "package_sha256": "75ce6bdf9b626e990821f49dde63a1ecf344d5c523bcb0b1b7c9b0b6b7ad45d8",
   "schema": "progtrack-seed-integrity/1",
   "seed_version": "0.2.1",
   "valid": true
