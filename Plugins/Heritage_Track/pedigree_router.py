@@ -175,6 +175,10 @@ class RoutePlan:
     # makes the decision observable and prevents downstream consumers from
     # inferring a second mode from a differently shaped focus set.
     display_mode: str = LAYOUT_MODE_OVERVIEW
+    # Family junctions supplied by the user are authoritative anchors. Their
+    # coordinates must survive automatic placement/recovery unchanged; route
+    # gaps are still recomputed from the resulting geometry.
+    manual_family_ids: Set[str] = field(default_factory=set)
 
     def mark_geometry_changed(self) -> None:
         """Invalidate structural geometry caches after an in-place edit."""
@@ -274,6 +278,8 @@ class PedigreeRouter:
         *,
         labels: Optional[Mapping[str, str]] = None,
         protected_nodes: Optional[Set[str]] = None,
+        movable_nodes: Optional[Set[str]] = None,
+        manual_family_positions: Optional[Mapping[str, Point]] = None,
         focus_nodes: Optional[Set[str]] = None,
         display_mode: Optional[str] = None,
         show_inbreeding: bool = True,
@@ -282,6 +288,13 @@ class PedigreeRouter:
         labels = labels or {}
         _assert_finite_points(animal_positions, kind="animal input")
         protected = set(protected_nodes or set())
+        # ``movable_nodes`` is retained as a compatibility keyword for older
+        # callers, but a node explicitly supplied as a placement candidate is
+        # now a committed manual anchor. The #203 precedence rule forbids
+        # every automatic recovery pass from moving it to resolve a collision.
+        protected.update(
+            set(movable_nodes or set()) & set(animal_positions)
+        )
         focus = set(focus_nodes or set()) & set(animal_positions)
         chronological = str(vertical_layout_mode or "").strip().casefold() == "chronological"
         # The widget supplies one explicit semantic mode for the complete
@@ -298,6 +311,12 @@ class PedigreeRouter:
             layout_mode = str(display_mode).strip().casefold()
             if layout_mode not in {LAYOUT_MODE_FOCUSED, LAYOUT_MODE_OVERVIEW}:
                 layout_mode = LAYOUT_MODE_OVERVIEW
+        # Focused views are intentionally dense, complete contexts.  Labels
+        # and detail lines remain visible and may be disentangled by zoom; only
+        # marker/marker contact remains a hard placement collision.  Keep this
+        # policy on the router transaction so every recovery pass uses the
+        # same rule without special-casing a seed or animal name.
+        self._allow_dense_label_overlaps = layout_mode == LAYOUT_MODE_FOCUSED
         adjusted = self._arrange_nodes(
             animal_positions,
             families,
@@ -308,6 +327,45 @@ class PedigreeRouter:
             prefer_descendant_order=layout_mode == LAYOUT_MODE_FOCUSED,
             focus_nodes=focus,
         )
+        # The final node solver works on animal/label rectangles.  A
+        # chronological parent entry can still be geometrically legal at
+        # that level while its canonical vertical leg crosses a marker from
+        # the same family (the two parents may occupy different date rows).
+        # Repair those route-only lane conflicts before publishing junctions;
+        # this keeps the canonical two-segment parent shape intact.
+        if not self._is_simple_linear_family_graph(adjusted, families):
+            self._repair_parent_entry_marker_lanes(
+                adjusted,
+                families,
+                labels,
+                protected,
+                show_inbreeding,
+                focus_nodes=focus,
+                preserve_y=chronological,
+            )
+            # Parent-entry repair is still an animal-placement operation.  It
+            # may move a complete partner block to clear a foreign marker lane
+            # after the ordinary collision solver has finished.  Recheck the
+            # same calibrated node/marker model before junctions are built so
+            # the final route pass never starts from a stale collision state.
+            post_entry_node_rects = self.node_obstacles(
+                adjusted, labels, show_inbreeding
+            )
+            post_entry_marker_rects = self.marker_obstacles(adjusted)
+            if self._collision_pairs(
+                adjusted, post_entry_node_rects, post_entry_marker_rects
+            ):
+                self._resolve_obstacle_collisions(
+                    adjusted,
+                    families,
+                    labels,
+                    protected,
+                    show_inbreeding,
+                    preserve_y=chronological,
+                )
+        recovery_diagnostic = str(
+            getattr(self, "_last_collision_recovery_diagnostic", "") or ""
+        )
         _assert_finite_points(adjusted, kind="animal")
         animal_obstacles = self.node_obstacles(adjusted, labels, show_inbreeding)
         family_positions = self._place_junctions(
@@ -315,7 +373,20 @@ class PedigreeRouter:
             families,
             animal_obstacles,
             chronological=chronological,
+            focused=layout_mode == LAYOUT_MODE_FOCUSED,
         )
+        # Family handles are committed as part of the same position-cache
+        # record as animal anchors. In chronological mode only their X
+        # coordinate is user-controlled; the Y coordinate remains the fixed
+        # date/layout result, matching the animal rule in the widget.
+        for family_id, stored in (manual_family_positions or {}).items():
+            automatic = family_positions.get(family_id)
+            if automatic is None:
+                continue
+            family_positions[family_id] = (
+                float(stored[0]),
+                float(automatic[1]) if chronological else float(stored[1]),
+            )
         _assert_finite_points(family_positions, kind="family")
         family_members = self._family_members(adjusted, families)
         cycle_nodes = self._parentage_cycle_nodes(adjusted, families)
@@ -333,7 +404,7 @@ class PedigreeRouter:
 
         routes: Dict[str, Dict[str, List[Point]]] = {}
         owned_segments: List[_OwnedSegment] = []
-        unresolved: List[str] = []
+        unresolved: List[str] = [recovery_diagnostic] if recovery_diagnostic else []
         route_obstacle_hits: List[str] = []
         route_obstacle_index = (
             self._build_rect_spatial_index(obstacles)
@@ -378,6 +449,7 @@ class PedigreeRouter:
                     adjusted[endpoint],
                     obstacles,
                     owned_segments,
+                    allowed_obstacle_names=family_members.get(family_id, set()),
                     parent_entry=endpoint in parents,
                     obstacle_index=route_obstacle_index,
                     owned_segment_index=owned_segment_index,
@@ -414,6 +486,11 @@ class PedigreeRouter:
             unresolved=sorted(set(unresolved)),
             route_obstacle_hits=sorted(set(route_obstacle_hits)),
             display_mode=layout_mode,
+            manual_family_ids={
+                str(family_id)
+                for family_id in (manual_family_positions or {})
+                if family_id in family_positions
+            },
         )
         self.recompute_line_gaps(
             plan,
@@ -631,6 +708,21 @@ class PedigreeRouter:
         """Return semantic geometry violations; intended for tests and diagnostics."""
         labels = labels or {}
         problems: List[str] = []
+        expected_families = {
+            family_id
+            for family_id, family in families.items()
+            if any(parent in plan.animal_positions for parent in self._parents(family))
+            and any(child in plan.animal_positions for child in self._children(family))
+        }
+        actual_families = set(plan.routes)
+        for family_id in sorted(expected_families - actual_families, key=str.casefold):
+            problems.append(f"{family_id}: expected routable family is missing")
+        for family_id in sorted(actual_families - set(families), key=str.casefold):
+            problems.append(f"{family_id}: unexpected routed family")
+        for family_id in sorted(expected_families - set(plan.family_positions), key=str.casefold):
+            problems.append(f"{family_id}: expected family junction is missing")
+        for family_id in sorted(set(plan.family_positions) - set(families), key=str.casefold):
+            problems.append(f"{family_id}: unexpected family junction")
         animal_obstacles = self.node_obstacles(
             plan.animal_positions,
             labels,
@@ -641,9 +733,17 @@ class PedigreeRouter:
             isinstance(labels.get(node, node), str)
             for node in plan.animal_positions
         ):
-            obstacle_items = sorted(
-                animal_obstacles.items(), key=lambda item: item[0].casefold()
-            )
+            if plan.display_mode == LAYOUT_MODE_FOCUSED:
+                # A focused frame is a complete, zoomable context.  Text may
+                # be dense at its initial scale; only coincident interactive
+                # markers are a hard topology/interaction failure.
+                obstacle_items = sorted(
+                    marker_obstacles.items(), key=lambda item: item[0].casefold()
+                )
+            else:
+                obstacle_items = sorted(
+                    animal_obstacles.items(), key=lambda item: item[0].casefold()
+                )
             for index, (first_node, first_rect) in enumerate(obstacle_items):
                 for second_node, second_rect in obstacle_items[index + 1 :]:
                     if (
@@ -664,6 +764,7 @@ class PedigreeRouter:
                             f"{first_node}/{second_node}: animal markers or labels overlap"
                         )
 
+        manual_family_ids = set(getattr(plan, "manual_family_ids", set()))
         for family_id, endpoint_routes in plan.routes.items():
             family = families.get(family_id, {})
             expected = set(self._ordered_endpoints(family, plan.animal_positions))
@@ -689,15 +790,34 @@ class PedigreeRouter:
                 ]
                 if len(visible_children) == 1:
                     child_x = plan.animal_positions[visible_children[0]][0]
-                    child_clearance = max(0.35, self.node_gap)
-                    if (
-                        parent_xs[0] + child_clearance
+                    child_axis_eligible = (
+                        parent_xs[0] + 0.08 < child_x < parent_xs[1] - 0.08
+                    )
+                    child_inside_corridor = (
+                        parent_xs[0] + self.node_gap
                         <= child_x
-                        <= parent_xs[1] - child_clearance
-                    ):
+                        <= parent_xs[1] - self.node_gap
+                    )
+                    child_near_parent_edge = min(
+                        abs(child_x - parent_xs[0]),
+                        abs(child_x - parent_xs[1]),
+                    ) <= self.route_clearance + _EPSILON and (
+                        child_x < parent_xs[0] - _EPSILON
+                        or child_x > parent_xs[1] + _EPSILON
+                    )
+                    if child_inside_corridor or child_near_parent_edge:
                         allowed_shift = min(
                             max(allowed_shift, abs(child_x - midpoint) + self.route_clearance),
                             max(0.0, (span / 2.0) - 0.08),
+                        )
+                    elif child_axis_eligible:
+                        # A single child is an owned endpoint. Its incoming
+                        # line may overlap its own label, so a junction on
+                        # that same X axis is valid even when the label-sized
+                        # node gap is not available on both shoulders.
+                        allowed_shift = max(
+                            allowed_shift,
+                            abs(child_x - midpoint),
                         )
                 if not parent_xs[0] < junction[0] < parent_xs[1]:
                     problems.append(
@@ -707,9 +827,15 @@ class PedigreeRouter:
                     problems.append(
                         f"{family_id}: junction is excessively displaced from the parent midpoint"
                     )
-            for node, rect in animal_obstacles.items():
-                if node not in plan.family_members.get(family_id, set()) and rect.contains(junction):
-                    problems.append(f"{family_id}: family junction intersects foreign node {node}")
+            # A line anchor may sit below a foreign text label: labels are
+            # rendered above genealogy lines and the overlap is therefore a
+            # readable presentation choice, not a broken pedigree. A family
+            # junction must still stay out of a foreign animal marker, which
+            # is the actual interactive node geometry.
+            if family_id not in manual_family_ids:
+                for node, rect in marker_obstacles.items():
+                    if node not in plan.family_members.get(family_id, set()) and rect.contains(junction):
+                        problems.append(f"{family_id}: family junction intersects foreign marker {node}")
 
             for endpoint, path in endpoint_routes.items():
                 if not path or not _points_equal(path[0], junction):
@@ -741,7 +867,10 @@ class PedigreeRouter:
                         # label/marker rectangle.
                         if node == endpoint:
                             continue
-                        if rect.intersects(segment, margin=0.01):
+                        if (
+                            family_id not in manual_family_ids
+                            and rect.intersects(segment, margin=0.01)
+                        ):
                             route_gaps = plan.crossing_gaps.get((family_id, endpoint, index), [])
                             if any(rect.contains(point, margin=0.08) for point in route_gaps):
                                 continue
@@ -751,9 +880,28 @@ class PedigreeRouter:
                             break
 
         owned = self._owned_segments(plan.routes)
+        route_parts: Dict[Tuple[str, str], List[_OwnedSegment]] = defaultdict(list)
+        for segment in owned:
+            route_parts[(segment.family_id, segment.endpoint)].append(segment)
+        route_paths: Dict[Tuple[str, str], List[Point]] = {}
+        for route_key, route_segments in route_parts.items():
+            ordered = sorted(route_segments, key=lambda segment: segment.index)
+            if ordered:
+                route_paths[route_key] = [
+                    ordered[0].segment[0],
+                    *(segment.segment[1] for segment in ordered),
+                ]
         for index, first in enumerate(owned):
             for second in owned[index + 1 :]:
                 if first.family_id == second.family_id:
+                    continue
+                # A user-anchored family may reroot its connections through
+                # an otherwise occupied corridor. The anchor and topology
+                # remain authoritative; only its visual gaps are recomputed.
+                if (
+                    first.family_id in manual_family_ids
+                    or second.family_id in manual_family_ids
+                ):
                     continue
                 relation, point = _segment_relation(first.segment, second.segment)
                 if relation == "none":
@@ -776,6 +924,16 @@ class PedigreeRouter:
                     plan.animal_positions,
                     relation=relation,
                     marker_tolerance=_MARKER_TOLERANCE,
+                ):
+                    continue
+                first_path = route_paths.get((first.family_id, first.endpoint), [])
+                if first_path and self._is_shared_parent_port_join(
+                    first,
+                    second,
+                    relation,
+                    point,
+                    first_path,
+                    owned,
                 ):
                     continue
                 if self._is_terminal_shared_endpoint_merge(
@@ -811,6 +969,7 @@ class PedigreeRouter:
         focus_nodes: Optional[Set[str]] = None,
     ) -> Dict[str, Point]:
         adjusted = {node: (float(point[0]), float(point[1])) for node, point in positions.items()}
+        self._last_collision_recovery_diagnostic = ""
         if not adjusted:
             return adjusted
 
@@ -820,6 +979,30 @@ class PedigreeRouter:
                 for node in protected
                 if node in adjusted
             }
+            # A very large one-parent/one-child chain is a legitimate sparse
+            # pedigree, not a dense layout problem.  Its canonical geometry
+            # is already collision-free when the generation rows are clear;
+            # running every compacting and horizontal-constraint pass here
+            # both costs quadratic-ish work and can move a long chain into
+            # route-only conflicts.  Keep the ordinary recovery path as a
+            # fallback whenever this conservative fast-path precondition is
+            # not met or the cheap obstacle check finds a real collision.
+            if (
+                len(adjusted) > 256
+                and not protected
+                and self._is_simple_linear_family_graph(adjusted, families)
+            ):
+                if not preserve_y:
+                    self._assign_generation_rows(adjusted, families)
+                fast_obstacles = self.node_obstacles(
+                    adjusted, labels, show_inbreeding
+                )
+                if not self._collision_pairs(
+                    adjusted,
+                    fast_obstacles,
+                    self.marker_obstacles(adjusted),
+                ):
+                    return adjusted
             # A large overview stress graph should remain responsive even
             # when it contains a long sparse pedigree.  The full refinement
             # pipeline is retained for all normal/current-seed views; above
@@ -851,6 +1034,10 @@ class PedigreeRouter:
                     self._deoverlap_row(
                         adjusted, row, labels, protected, show_inbreeding
                     )
+                self._resolve_obstacle_collisions(
+                    adjusted, families, labels, protected, show_inbreeding,
+                    preserve_y=preserve_y,
+                )
                 return adjusted
             if not preserve_y:
                 self._assign_generation_rows(adjusted, families)
@@ -886,6 +1073,7 @@ class PedigreeRouter:
                         labels,
                         protected,
                         prefer_descendant_order=True,
+                        focus_nodes=set(focus_nodes or set()),
                     )
                     for row in self._cluster_rows(adjusted):
                         self._deoverlap_row(
@@ -918,6 +1106,7 @@ class PedigreeRouter:
                                 labels,
                                 protected,
                                 prefer_descendant_order=False,
+                                focus_nodes=set(focus_nodes or set()),
                             )
                         for row in self._cluster_rows(adjusted):
                             self._deoverlap_row(
@@ -950,6 +1139,7 @@ class PedigreeRouter:
                     labels,
                     protected,
                     prefer_descendant_order=prefer_descendant_order,
+                    focus_nodes=set(focus_nodes or set()),
                 )
                 for row in self._cluster_rows(adjusted):
                     self._deoverlap_row(
@@ -998,6 +1188,12 @@ class PedigreeRouter:
                         show_inbreeding,
                         chronological=preserve_y,
                     )
+                    self._compact_overview_terminal_child_fans(
+                        adjusted,
+                        families,
+                        labels,
+                        show_inbreeding,
+                    )
                 if prefer_descendant_order and focus_nodes:
                     for _compact_round in range(1):
                         node_weights = self._compact_focused_terminal_sibling_fans(
@@ -1006,6 +1202,14 @@ class PedigreeRouter:
                             labels,
                             set(focus_nodes),
                             partner_blocks,
+                            preserve_y=preserve_y,
+                            show_inbreeding=show_inbreeding,
+                        )
+                        self._stagger_focused_terminal_siblings(
+                            adjusted,
+                            families,
+                            labels,
+                            set(focus_nodes),
                             preserve_y=preserve_y,
                             show_inbreeding=show_inbreeding,
                         )
@@ -1088,6 +1292,7 @@ class PedigreeRouter:
                     labels,
                     protected,
                     show_inbreeding,
+                    partner_blocks=partner_blocks,
                 )
             else:
                 partner_blocks = self._pack_partner_blocks_on_rows(
@@ -1113,6 +1318,406 @@ class PedigreeRouter:
                     protected,
                     show_inbreeding,
                 )
+            self._resolve_obstacle_collisions(
+                adjusted, families, labels, protected, show_inbreeding,
+                preserve_y=preserve_y,
+                partner_blocks=partner_blocks,
+            )
+            # Recovery may translate a descendant cohort after the first
+            # interval pass. Recompute one-child corridors against those
+            # final parent coordinates before junctions are published.
+            if not protected:
+                self._align_single_child_axes_final(
+                    adjusted,
+                    families,
+                    labels,
+                    protected,
+                    show_inbreeding,
+                    partner_blocks=partner_blocks,
+                )
+                # The axis pass may be blocked by a neighbouring automatic
+                # node that can be moved safely by the general recovery
+                # solver. Re-run the axis pass after that local recovery so
+                # the published junction is both collision-free and aligned.
+                self._resolve_obstacle_collisions(
+                    adjusted,
+                    families,
+                    labels,
+                    protected,
+                    show_inbreeding,
+                    preserve_y=preserve_y,
+                    partner_blocks=partner_blocks,
+                )
+                # The second axis projection is a soft refinement.  It may
+                # move a partner block after the hard recovery pass and can
+                # therefore expose a new collision outside the one-child
+                # family it is aligning.  Keep the clean pre-projection
+                # geometry if that happens; the preceding pass already
+                # supplied the valid routed layout.
+                before_final_axis = dict(adjusted)
+                self._align_single_child_axes_final(
+                    adjusted,
+                    families,
+                    labels,
+                    protected,
+                    show_inbreeding,
+                    partner_blocks=partner_blocks,
+                )
+                final_node_rects = self.node_obstacles(
+                    adjusted, labels, show_inbreeding
+                )
+                final_marker_rects = self.marker_obstacles(adjusted)
+                if self._collision_pairs(
+                    adjusted, final_node_rects, final_marker_rects
+                ):
+                    adjusted.update(before_final_axis)
+                focused_shoulder_nodes: Set[str] = set()
+                focused_branch_weights: Dict[str, float] = {}
+                if prefer_descendant_order and len(focus_nodes) >= 3:
+                    focused_shoulder_nodes = (
+                        self._enforce_focused_sibling_shoulders(
+                            adjusted,
+                            families,
+                            labels,
+                            set(focus_nodes),
+                            show_inbreeding=show_inbreeding,
+                        )
+                    )
+                    # The broad focus pass also compacts ancestor fans. Once
+                    # terminal peers have been put on their intended shoulder
+                    # and donor branches have been recovered, make one final
+                    # direct-selection pass for the mixed sibship containing
+                    # the selected node itself. This keeps the selected
+                    # continuation near its actual origin without reopening
+                    # every upstream branch that was already settled.
+                    focused_branch_weights = (
+                        self._compact_focused_terminal_sibling_fans(
+                            adjusted,
+                            families,
+                            labels,
+                            set(focus_nodes),
+                            partner_blocks,
+                            preserve_y=preserve_y,
+                            show_inbreeding=show_inbreeding,
+                            direct_focus_only=True,
+                        )
+                    )
+                if focused_shoulder_nodes:
+                    # The shoulder pass intentionally puts the terminal
+                    # siblings next to the focused parent axis.  Protect
+                    # those semantic anchors (and the explicitly selected
+                    # nodes) while the ordinary recovery solver moves an
+                    # unrelated donor branch out of the way.  Without this
+                    # second phase the solver's cheapest move is to exile
+                    # the terminal leaves, which makes the origin junction
+                    # appear detached again.
+                    focused_recovery_protected = (
+                        set(protected)
+                        | set(focused_shoulder_nodes)
+                    )
+                    self._resolve_obstacle_collisions(
+                        adjusted,
+                        families,
+                        labels,
+                        focused_recovery_protected,
+                        show_inbreeding,
+                        preserve_y=preserve_y,
+                        partner_blocks=partner_blocks,
+                    )
+                if focused_branch_weights:
+                    focused_recovery_protected = (
+                        set(protected)
+                        | set(focused_shoulder_nodes)
+                        | set(focused_branch_weights)
+                    )
+                    self._resolve_obstacle_collisions(
+                        adjusted,
+                        families,
+                        labels,
+                        focused_recovery_protected,
+                        show_inbreeding,
+                        preserve_y=preserve_y,
+                        partner_blocks=partner_blocks,
+                    )
+                # The final single-child axis projection above can
+                # re-introduce an X collision after the bounded recovery
+                # pass. Run one last horizontal constraint projection against
+                # the post-projection coordinates so the published route plan
+                # cannot carry a stale overlap into the renderer veto. In
+                # chronological mode Y remains immutable; partner-normalized
+                # mode uses its existing Y rows and simply receives the same
+                # hard horizontal clearance boundary.
+                self._solve_horizontal_constraints(
+                    adjusted,
+                    families,
+                    labels,
+                    show_inbreeding,
+                    chronological=preserve_y,
+                    node_weights={
+                        node: self.focused_branch_weight * 4.0
+                        for node in focused_shoulder_nodes
+                    }
+                    | {
+                        node: max(
+                            self.focused_branch_weight * 4.0,
+                            float(weight),
+                        )
+                        for node, weight in focused_branch_weights.items()
+                    },
+                    apply_soft_alignment=False,
+                )
+                final_node_rects = self.node_obstacles(
+                    adjusted, labels, show_inbreeding
+                )
+                final_marker_rects = self.marker_obstacles(adjusted)
+                final_collision_pairs = self._collision_pairs(
+                    adjusted, final_node_rects, final_marker_rects
+                )
+                if final_collision_pairs:
+                    # The final weighted horizontal projection can expose a
+                    # real label/marker collision after the earlier focused
+                    # recovery has already run. Repair that last state with
+                    # the same semantic anchors, so an unrelated branch is
+                    # moved as a legal block instead of undoing the compact
+                    # selected origin.
+                    final_recovery_protected = (
+                        set(protected)
+                        | set(focused_shoulder_nodes)
+                        | set(focused_branch_weights)
+                    )
+                    self._resolve_obstacle_collisions(
+                        adjusted,
+                        families,
+                        labels,
+                        final_recovery_protected,
+                        show_inbreeding,
+                        preserve_y=preserve_y,
+                        partner_blocks=partner_blocks,
+                    )
+                    final_node_rects = self.node_obstacles(
+                        adjusted, labels, show_inbreeding
+                    )
+                    final_marker_rects = self.marker_obstacles(adjusted)
+                    final_collision_pairs = self._collision_pairs(
+                        adjusted, final_node_rects, final_marker_rects
+                    )
+                if not final_collision_pairs:
+                    # A prior bounded recovery may have recorded a transient
+                    # diagnostic before this final projection cleared the
+                    # actual geometry. Do not publish that stale warning as
+                    # an unresolved route-plan failure.
+                    self._last_collision_recovery_diagnostic = ""
+                if focused_branch_weights:
+                    # A hard horizontal projection may legitimately widen a
+                    # focused partner block while clearing a foreign label.
+                    # Reapply the direct-selection compaction once, after all
+                    # such projections, so the published plan retains the
+                    # selected branch's local origin relationship. The
+                    # subsequent recovery is deliberately the last movement
+                    # operation and is allowed to move only non-anchor
+                    # semantic branches.
+                    final_focus_weights = (
+                        self._compact_focused_terminal_sibling_fans(
+                            adjusted,
+                            families,
+                            labels,
+                            set(focus_nodes),
+                            partner_blocks,
+                            preserve_y=preserve_y,
+                            show_inbreeding=show_inbreeding,
+                            direct_focus_only=True,
+                        )
+                    )
+                    final_recovery_protected = (
+                        set(protected)
+                        | set(focused_shoulder_nodes)
+                        | set(focused_branch_weights)
+                        | set(final_focus_weights)
+                    )
+                    self._resolve_obstacle_collisions(
+                        adjusted,
+                        families,
+                        labels,
+                        final_recovery_protected,
+                        show_inbreeding,
+                        preserve_y=preserve_y,
+                        partner_blocks=partner_blocks,
+                    )
+                    final_node_rects = self.node_obstacles(
+                        adjusted, labels, show_inbreeding
+                    )
+                    final_marker_rects = self.marker_obstacles(adjusted)
+                    if not self._collision_pairs(
+                        adjusted, final_node_rects, final_marker_rects
+                    ):
+                        self._last_collision_recovery_diagnostic = ""
+                if overview_mode:
+                    # The final one-child-axis projection can move a shared
+                    # parent block while aligning a descendant family.  That
+                    # movement is valid for the descendant, but it can undo
+                    # the origin-aware terminal fan compacted above (most
+                    # visibly when one child is also a parent elsewhere in
+                    # the Overview).  Reapply the fan rule as the final
+                    # overview-only position pass; it is collision-safe and
+                    # therefore cannot publish a new node/marker overlap.
+                    self._compact_overview_terminal_child_fans(
+                        adjusted,
+                        families,
+                        labels,
+                        show_inbreeding,
+                    )
+                self._compact_excess_partner_gaps(
+                    adjusted,
+                    families,
+                    labels,
+                    protected,
+                    focus_nodes=set(focus_nodes or set()),
+                    show_inbreeding=show_inbreeding,
+                )
+                self._compact_chronological_parent_gaps(
+                    adjusted,
+                    families,
+                    labels,
+                    protected,
+                    show_inbreeding,
+                    focus_nodes=set(focus_nodes or set()),
+                    focused=prefer_descendant_order,
+                    chronological=preserve_y,
+                )
+                # A late focused compaction can expose a label/marker overlap
+                # after the weighted recovery has deliberately protected its
+                # semantic shoulder.  Run one final ordinary recovery with
+                # only explicit/manual and selected anchors frozen; unrelated
+                # branches must remain movable so the published frame cannot
+                # be rejected for a collision introduced by that refinement.
+                final_node_rects = self.node_obstacles(
+                    adjusted, labels, show_inbreeding
+                )
+                final_marker_rects = self.marker_obstacles(adjusted)
+                if self._collision_pairs(
+                    adjusted, final_node_rects, final_marker_rects
+                ):
+                    self._resolve_obstacle_collisions(
+                        adjusted,
+                        families,
+                        labels,
+                        set(protected) | set(focus_nodes or set()),
+                        show_inbreeding,
+                        preserve_y=preserve_y,
+                        partner_blocks=partner_blocks,
+                    )
+                # The last generic recovery may move a terminal leaf while
+                # clearing an unrelated obstacle. Reapply the bounded branch
+                # role lanes after that pass so a continuing sibling and its
+                # terminal peers cannot be re-coupled by generic compaction.
+                # This is a final structural presentation seam; it does not
+                # alter family topology or manual/protected coordinates.
+                if prefer_descendant_order and focus_nodes:
+                    # Generic recovery above may separate a focused
+                    # multi-mate hub again while clearing an unrelated
+                    # obstacle. Reapply the same-side fan rule at the final
+                    # presentation seam, including mates that have a visible
+                    # origin family, then protect only the derived fan during
+                    # its bounded collision cleanup.
+                    before_final_mate_fan = dict(adjusted)
+                    self._compact_focused_parentless_multi_mate_fans(
+                        adjusted,
+                        families,
+                        labels,
+                        set(focus_nodes),
+                        show_inbreeding,
+                        chronological=preserve_y,
+                    )
+                    final_mate_fan_nodes = {
+                        node
+                        for node, point in adjusted.items()
+                        if node in before_final_mate_fan
+                        and (
+                            abs(point[0] - before_final_mate_fan[node][0]) > _EPSILON
+                            or abs(point[1] - before_final_mate_fan[node][1]) > _EPSILON
+                        )
+                    }
+                    if final_mate_fan_nodes:
+                        final_fan_node_rects = self.node_obstacles(
+                            adjusted,
+                            labels,
+                            show_inbreeding,
+                        )
+                        final_fan_marker_rects = self.marker_obstacles(adjusted)
+                        if self._collision_pairs(
+                            adjusted,
+                            final_fan_node_rects,
+                            final_fan_marker_rects,
+                        ):
+                            self._resolve_obstacle_collisions(
+                                adjusted,
+                                families,
+                                labels,
+                                set(protected)
+                                | set(focus_nodes)
+                                | set(final_mate_fan_nodes),
+                                show_inbreeding,
+                                preserve_y=preserve_y,
+                                partner_blocks=partner_blocks,
+                            )
+                    self._stagger_focused_terminal_siblings(
+                        adjusted,
+                        families,
+                        labels,
+                        set(focus_nodes),
+                        preserve_y=preserve_y,
+                        show_inbreeding=show_inbreeding,
+                    )
+                    # The terminal-lane pass intentionally changes only the
+                    # Partner-normalized Y lanes, but that can make a label or
+                    # marker meet an unrelated branch at its retained X.  It
+                    # is therefore followed by the same bounded semantic
+                    # recovery used everywhere else; publishing a frame with
+                    # a late, unvalidated collision would violate #195.
+                    final_node_rects = self.node_obstacles(
+                        adjusted, labels, show_inbreeding
+                    )
+                    final_marker_rects = self.marker_obstacles(adjusted)
+                    if self._collision_pairs(
+                        adjusted, final_node_rects, final_marker_rects
+                    ):
+                        self._resolve_obstacle_collisions(
+                            adjusted,
+                            families,
+                            labels,
+                            set(protected) | set(focus_nodes),
+                            show_inbreeding,
+                            preserve_y=preserve_y,
+                            partner_blocks=partner_blocks,
+                        )
+                    # The final generic recovery can move an unselected
+                    # terminal peer back across the focused branch shoulder.
+                    # Re-establish the structural branch split as the last
+                    # focused operation, then protect only those derived
+                    # peers during one bounded collision recovery.  This keeps
+                    # chronological Y coordinates authoritative and never
+                    # hides, drops, or name-special-cases any node or label.
+                    final_shoulder_nodes = (
+                        self._enforce_focused_sibling_shoulders(
+                            adjusted,
+                            families,
+                            labels,
+                            set(focus_nodes),
+                            show_inbreeding=show_inbreeding,
+                        )
+                    )
+                    if final_shoulder_nodes:
+                        self._resolve_obstacle_collisions(
+                            adjusted,
+                            families,
+                            labels,
+                            set(protected)
+                            | set(focus_nodes)
+                            | set(final_shoulder_nodes),
+                            show_inbreeding,
+                            preserve_y=preserve_y,
+                            partner_blocks=partner_blocks,
+                        )
             return adjusted
 
         if preserve_y:
@@ -1153,7 +1758,1022 @@ class PedigreeRouter:
         rows = self._cluster_rows(adjusted)
         for row in rows:
             self._deoverlap_row(adjusted, row, labels, protected, show_inbreeding)
+        self._resolve_obstacle_collisions(
+            adjusted, families, labels, protected, show_inbreeding,
+            preserve_y=preserve_y,
+        )
         return adjusted
+
+    def _family_components(
+        self,
+        positions: Mapping[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+    ) -> List[Set[str]]:
+        """Return deterministic visible family components for rigid moves."""
+        adjacency: Dict[str, Set[str]] = {node: set() for node in positions}
+        for family_id, family in families.items():
+            members = [
+                node for node in self._parents(family) + self._children(family)
+                if node in positions
+            ]
+            for node in members:
+                adjacency[node].update(member for member in members if member != node)
+        components: List[Set[str]] = []
+        unseen = set(positions)
+        while unseen:
+            seed = min(unseen, key=str.casefold)
+            pending = [seed]
+            component: Set[str] = set()
+            while pending:
+                node = pending.pop()
+                if node in component:
+                    continue
+                component.add(node)
+                pending.extend(adjacency[node] - component)
+            unseen -= component
+            components.append(component)
+        return sorted(components, key=lambda group: min(node.casefold() for node in group))
+
+    def _branch_movement_groups(
+        self,
+        positions: Mapping[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        partner_blocks: Mapping[str, Set[str]],
+        requested_nodes: Optional[Set[str]] = None,
+    ) -> Dict[str, List[Set[str]]]:
+        """Build bounded child branches without absorbing origin parents/hubs."""
+        children_by_parent: Dict[str, Set[str]] = defaultdict(set)
+        families_by_parent: Dict[str, List[Tuple[str, Tuple[str, ...]]]] = defaultdict(list)
+        parents_by_child: Dict[str, Set[str]] = defaultdict(set)
+        origin_families_by_child: Dict[str, Set[str]] = defaultdict(set)
+        for family_id, family in families.items():
+            parents = [node for node in self._parents(family) if node in positions]
+            children = [node for node in self._children(family) if node in positions]
+            family_key = str(family_id)
+            for child in children:
+                parents_by_child[child].update(parents)
+                origin_families_by_child[child].add(family_key)
+            for parent in parents:
+                children_by_parent[parent].update(children)
+                families_by_parent[parent].append((family_key, tuple(sorted(children, key=str.casefold))))
+        root_groups: Dict[Tuple[str, str], Set[str]] = {}
+        for parent in families_by_parent:
+            families_by_parent[parent].sort(key=lambda item: item[0].casefold())
+        roots = set(positions) if requested_nodes is None else set(requested_nodes) & set(positions)
+        for root in sorted(roots, key=str.casefold):
+            origin_families = sorted(origin_families_by_child.get(root, {""}), key=str.casefold)
+            for origin_family in origin_families:
+                group = set(partner_blocks.get(root, {root}))
+                pending = list(group)
+                seen = set(group)
+                while pending:
+                    parent = pending.pop()
+                    # Downward traversal is deliberately rooted by the
+                    # (root, origin-family) pair.  Multiple outgoing families
+                    # mean multiple mates/children, not a shared hub; only a
+                    # later reconvergence makes a descendant ineligible.
+                    for _family_key, children in families_by_parent.get(parent, []):
+                        for child in children:
+                            child_block = set(partner_blocks.get(child, {child}))
+                            if child_block & seen:
+                                continue
+                            seen.update(child_block)
+                            group.update(child_block)
+                            pending.extend(child_block)
+                root_groups[(root, origin_family)] = group
+        # A reconvergence is meaningful only among roots that are siblings in
+        # the same origin family. Nested ancestor/descendant requests may
+        # legitimately share descendants and must not invalidate one another.
+        owners: Dict[Tuple[str, str], Set[str]] = defaultdict(set)
+        for (root, origin_family), group in root_groups.items():
+            for member in group:
+                if member != root:
+                    owners[(origin_family, member)].add(root)
+        groups: Dict[str, List[Set[str]]] = {}
+        for node in sorted(roots, key=str.casefold):
+            candidates: List[Set[str]] = []
+            base = set(partner_blocks.get(node, {node}))
+            candidates.append(base)
+            # Only the root/its partner block owns a branch alternative.  A
+            # broad ancestor group must not become a legal candidate merely
+            # because the conflict endpoint is one of its descendants.
+            for (root, _origin_family), group in sorted(
+                root_groups.items(), key=lambda item: (item[0][0].casefold(), item[0][1].casefold())
+            ):
+                root_block = set(partner_blocks.get(root, {root}))
+                terminal_descendant = (
+                    node not in root_block
+                    and bool(parents_by_child.get(node))
+                    and not bool(children_by_parent.get(node))
+                    and node in group
+                )
+                if node not in root_block and not terminal_descendant:
+                    continue
+                shared_boundary = {
+                    member
+                    for member in group
+                    if member not in root_block
+                    and owners.get((_origin_family, member), set()) - {root}
+                }
+                candidate_group = set(group) - shared_boundary
+                if candidate_group not in candidates:
+                    candidates.append(candidate_group)
+            groups[node] = sorted(
+                candidates,
+                key=lambda group: (
+                    len(group),
+                    tuple(sorted((member.casefold(), member) for member in group)),
+                ),
+            )
+        return groups
+
+    @staticmethod
+    def _collision_pairs(
+        positions: Mapping[str, Point],
+        node_obstacles: Mapping[str, Rect],
+        marker_obstacles: Mapping[str, Rect],
+        *,
+        include_labels: bool = True,
+    ) -> List[Tuple[str, str]]:
+        """Return stable node pairs for marker/label intersections.
+
+        Focused displays pass ``include_labels=False`` so a dense but complete
+        frame is still publishable: zoom is the user-facing way to separate
+        crowded text.  Marker/marker intersections remain hard because they
+        would make the interactive node hit targets ambiguous.
+        """
+        entities: List[Tuple[str, str, Rect]] = []
+        for node in sorted(positions, key=lambda value: (value.casefold(), value)):
+            if include_labels:
+                entities.append((node, "label", node_obstacles[node]))
+            entities.append((node, "marker", marker_obstacles[node]))
+        # Broad phase: long labels may span multiple cells, so every entity
+        # is indexed into each covered cell before exact rectangle checks.
+        cell_size = 2.5
+        spatial: Dict[Tuple[int, int], List[int]] = defaultdict(list)
+        for index, (_node, _kind, rect) in enumerate(entities):
+            for ix in range(math.floor(rect.left / cell_size), math.floor(rect.right / cell_size) + 1):
+                for iy in range(math.floor(rect.bottom / cell_size), math.floor(rect.top / cell_size) + 1):
+                    spatial[(ix, iy)].append(index)
+        candidate_indexes: Set[Tuple[int, int]] = set()
+        for indexes in spatial.values():
+            for first_index, second_index in combinations(sorted(set(indexes)), 2):
+                candidate_indexes.add((first_index, second_index))
+        pairs: Set[Tuple[str, str]] = set()
+        for first_index, second_index in sorted(candidate_indexes):
+            first, second = entities[first_index], entities[second_index]
+            if first[0] == second[0]:
+                continue
+            if not (
+                _ranges_overlap(first[2].left, first[2].right, second[2].left, second[2].right)
+                and _ranges_overlap(first[2].bottom, first[2].top, second[2].bottom, second[2].top)
+            ):
+                continue
+            pair = tuple(sorted((first[0], second[0]), key=lambda value: (value.casefold(), value)))
+            pairs.add(pair)
+        return sorted(pairs, key=lambda pair: tuple((value.casefold(), value) for value in pair))
+
+    def _directional_collision_shift(
+        self,
+        first: str,
+        second: str,
+        node_rects: Mapping[str, Rect],
+        marker_rects: Mapping[str, Rect],
+        direction: int,
+    ) -> float:
+        """Return the boundary-derived shift for moving one endpoint."""
+        required = 0.0
+        first_rects = (node_rects[first], marker_rects[first])
+        second_rects = (node_rects[second], marker_rects[second])
+        for left, right in ((first_rects[0], second_rects[0]),
+                            (first_rects[0], second_rects[1]),
+                            (first_rects[1], second_rects[0]),
+                            (first_rects[1], second_rects[1])):
+            if not _ranges_overlap(left.bottom, left.top, right.bottom, right.top):
+                continue
+            if direction > 0:
+                required = max(required, right.right + self.node_gap - left.left)
+            else:
+                required = max(required, left.right + self.node_gap - right.left)
+        return max(0.0, required)
+
+    def _placement_candidate_is_legal(
+        self,
+        candidate: Mapping[str, Point],
+        baseline: Mapping[str, Point],
+        protected: Set[str],
+        partner_orders: Mapping[Tuple[str, str], int],
+        sibling_orders: Mapping[Tuple[str, str], int],
+        partner_groups: Mapping[str, Set[str]],
+        *,
+        preserve_y: bool,
+    ) -> bool:
+        if not all(is_finite_point(point) for point in candidate.values()):
+            return False
+        for node in protected:
+            if node in baseline and candidate.get(node) != baseline[node]:
+                return False
+        if preserve_y and any(
+            abs(candidate[node][1] - baseline[node][1]) > _EPSILON
+            for node in baseline
+        ):
+            return False
+        for (left, right), _order in partner_orders.items():
+            if left in candidate and right in candidate:
+                if candidate[left][0] >= candidate[right][0]:
+                    return False
+        for (left, right), _order in sibling_orders.items():
+            if left in candidate and right in candidate:
+                if candidate[left][0] >= candidate[right][0]:
+                    return False
+        # A legal trial cannot insert an unrelated node into an established
+        # same-row partner block.  Uniform branch moves preserve internal
+        # vectors; the only permitted non-uniform case is the explicit
+        # internal-row widening candidate generated below.
+        for group in {frozenset(value) for value in partner_groups.values() if len(value) > 1}:
+            members = [node for node in group if node in candidate]
+            if len(members) < 2:
+                continue
+            ys = [candidate[node][1] for node in members]
+            if max(ys) - min(ys) > 0.42:
+                continue
+            left = min(candidate[node][0] for node in members)
+            right = max(candidate[node][0] for node in members)
+            for node, (x, y) in candidate.items():
+                if node in group or abs(y - ys[0]) > 0.42:
+                    continue
+                if left < x < right:
+                    return False
+        return True
+
+    def _resolve_obstacle_collisions(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        protected: Set[str],
+        show_inbreeding: bool,
+        *,
+        preserve_y: bool = False,
+        partner_blocks: Optional[Mapping[str, Set[str]]] = None,
+        movable_nodes: Optional[Set[str]] = None,
+        allow_label_overlaps: Optional[bool] = None,
+    ) -> bool:
+        """Perform bounded pre-junction collision recovery on legal blocks."""
+        self._last_collision_recovery_diagnostic = ""
+        if allow_label_overlaps is None:
+            allow_label_overlaps = bool(
+                getattr(self, "_allow_dense_label_overlaps", False)
+            )
+        if len(positions) < 2:
+            return True
+        protected = set(protected)
+        if movable_nodes is not None:
+            # Kept for source compatibility with the pre-#203 call boundary.
+            # Explicit candidate nodes are manual anchors, not an escape hatch
+            # for collision recovery; automatic nodes remain the only legal
+            # recovery subjects.
+            protected |= set(movable_nodes) & set(positions)
+        baseline = dict(positions)
+        # Discover whether recovery is needed before constructing any
+        # component, branch, partner-order, or sibling-cohort state.  Sparse
+        # large graphs are the dominant stress case and normally arrive
+        # collision-free; making them pay that semantic setup cost defeats
+        # the bounded-recovery contract even though no recovery candidate is
+        # required.
+        initial_node_rects = self.node_obstacles(
+            baseline, labels, show_inbreeding
+        )
+        initial_marker_rects = self.marker_obstacles(baseline)
+        initial_pairs = self._collision_pairs(
+            baseline,
+            initial_node_rects,
+            initial_marker_rects,
+            include_labels=not allow_label_overlaps,
+        )
+        if not initial_pairs:
+            return True
+        if partner_blocks is None:
+            setup_positions = dict(baseline)
+            partner_blocks = self._pack_partner_blocks_on_rows(
+                setup_positions, families, labels, protected
+            )
+        components = self._family_components(baseline, families)
+        component_by_node = {
+            node: component for component in components for node in component
+        }
+        parents_by_node: Dict[str, Set[str]] = defaultdict(set)
+        children_by_node: Dict[str, Set[str]] = defaultdict(set)
+        for family in families.values():
+            visible_parents = [node for node in self._parents(family) if node in baseline]
+            visible_children = [node for node in self._children(family) if node in baseline]
+            for child in visible_children:
+                parents_by_node[child].update(visible_parents)
+            for parent in visible_parents:
+                children_by_node[parent].update(visible_children)
+        partner_orders: Dict[Tuple[str, str], int] = {}
+        sibling_orders: Dict[Tuple[str, str], int] = {}
+        for group in partner_blocks.values():
+            ordered = sorted(
+                group, key=lambda node: (baseline[node][0], node.casefold())
+            )
+            for left, right in zip(ordered, ordered[1:]):
+                partner_orders[(left, right)] = 1
+        for family in families.values():
+            children = [node for node in self._children(family) if node in baseline]
+            ordered = sorted(
+                children, key=lambda node: (baseline[node][0], node.casefold())
+            )
+            for left, right in zip(ordered, ordered[1:]):
+                sibling_orders[(left, right)] = 1
+        budget = min(4096, max(24, 8 * (len(baseline) + len(families))))
+        attempts = 0
+        accepted = dict(baseline)
+        seen = {
+            tuple(
+                sorted(
+                    (node.casefold(), node, round(x, 9), round(y, 9))
+                    for node, (x, y) in accepted.items()
+                )
+            )
+        }
+
+        def collision_state(state: Mapping[str, Point]):
+            node_rects = self.node_obstacles(state, labels, show_inbreeding)
+            marker_rects = self.marker_obstacles(state)
+            pairs = self._collision_pairs(
+                state,
+                node_rects,
+                marker_rects,
+                include_labels=not allow_label_overlaps,
+            )
+            # The first recovery objective is the collision-progress prefix:
+            # remove whole inter-animal pairs before optimizing clearance.
+            # Horizontal penetration is the next geometric measure because
+            # the solver moves semantic blocks on X.  The final tie-break is
+            # the existing route scorer's provisional foreign-marker count;
+            # this is deliberately different from counting arbitrary marker
+            # rectangles that happen to overlap one another.
+            horizontal_penetration = 0.0
+            for left, right in pairs:
+                overlaps = []
+                for first in (node_rects[left], marker_rects[left]):
+                    for second in (node_rects[right], marker_rects[right]):
+                        overlaps.append(
+                            (
+                                max(0.0, min(first.right, second.right) - max(first.left, second.left)),
+                                max(0.0, min(first.top, second.top) - max(first.bottom, second.bottom)),
+                            )
+                        )
+                positive = [
+                    value for value in overlaps
+                    if value[0] > _EPSILON and value[1] > _EPSILON
+                ]
+                if not positive:
+                    continue
+                width, _height = max(positive, key=lambda value: (value[0], value[1]))
+                horizontal_penetration += width
+            if not pairs:
+                return pairs, (0, 0.0, 0)
+            _node_hits, foreign_marker_hits, _crossings = self._layout_geometry_score(
+                state,
+                families,
+                labels,
+                show_inbreeding,
+                chronological=preserve_y,
+            )
+            return pairs, (
+                len(pairs),
+                round(horizontal_penetration, 9),
+                foreign_marker_hits,
+            )
+
+        anchor_nodes = set(protected)
+
+        def anchor_collision_count(pairs: Sequence[Tuple[str, str]]) -> int:
+            return sum(
+                1
+                for first, second in pairs
+                if first in anchor_nodes or second in anchor_nodes
+            )
+
+        requested_nodes = {node for pair in initial_pairs for node in pair}
+        branch_groups = self._branch_movement_groups(
+            baseline, families, partner_blocks, requested_nodes=requested_nodes
+        )
+        branch_group_cache = dict(branch_groups)
+
+        def legal_groups(node: str) -> List[Set[str]]:
+            """Lazily discover semantic groups for newly exposed conflicts."""
+            if node not in branch_group_cache:
+                discovered = self._branch_movement_groups(
+                    baseline,
+                    families,
+                    partner_blocks,
+                    requested_nodes={node},
+                )
+                branch_group_cache.update(discovered)
+            groups = [set(group) for group in branch_group_cache.get(node, [])]
+            component = component_by_node.get(node, {node})
+            partner = set(partner_blocks.get(node, {node}))
+
+            # A donor/mate can be a parent of a visible child without being a
+            # root of the selected ancestry.  In that case the root-oriented
+            # branch discovery above may expose only the endpoint itself,
+            # even though moving it alone would detach the family axis. Build
+            # one deterministic downward branch candidate for every conflict
+            # endpoint so a free reproduction branch moves as a semantic unit.
+            downstream: Set[str] = set(partner) & set(baseline)
+            pending_downstream = sorted(downstream, key=str.casefold, reverse=True)
+            while pending_downstream:
+                parent = pending_downstream.pop()
+                for child in sorted(
+                    children_by_node.get(parent, set()), key=str.casefold, reverse=True
+                ):
+                    child_block = set(partner_blocks.get(child, {child})) & set(baseline)
+                    additions = child_block - downstream
+                    if not additions:
+                        continue
+                    downstream.update(additions)
+                    pending_downstream.extend(additions)
+            if (
+                preserve_y
+                and downstream not in groups
+                and not downstream & protected
+            ):
+                groups.append(downstream)
+            groups = [
+                group for group in groups
+                if len(group) > 1
+                or component == {node}
+                or (
+                    bool(parents_by_node.get(node))
+                    and not bool(children_by_node.get(node))
+                    and partner == {node}
+                    # A terminal descendant of a continuing sibling branch
+                    # still belongs to that branch.  Only a terminal child
+                    # whose parent is an origin/root may move independently;
+                    # otherwise a singleton rescue would shear the child off
+                    # its parent and change the branch vector.
+                    and not any(
+                        parents_by_node.get(parent)
+                        for parent in parents_by_node.get(node, set())
+                    )
+                )
+            ]
+            # A singleton is legal only for a structurally independent node;
+            # family/partner members must move through a semantic cohort.
+            if component == {node} and partner == {node}:
+                groups.append({node})
+            return groups
+
+        def sibling_cohort_groups(node: str) -> List[Set[str]]:
+            """Return ordered prefix/suffix cohorts for a blocked sibling root."""
+            cohorts: List[Set[str]] = []
+            for family_id in sorted(families, key=str.casefold):
+                family = families[family_id]
+                children = [child for child in self._children(family) if child in baseline]
+                if node not in children or len(children) < 2:
+                    continue
+                ordered = sorted(
+                    children,
+                    key=lambda child: (baseline[child][0], child.casefold(), child),
+                )
+                index = ordered.index(node)
+                root_groups: Dict[str, Set[str]] = {}
+                for root in ordered:
+                    alternatives = legal_groups(root)
+                    if alternatives:
+                        root_groups[root] = set(alternatives[-1])
+                for start, end in (
+                    (0, index + 1),
+                    (index, len(ordered)),
+                ):
+                    cohort = set()
+                    for root in ordered[start:end]:
+                        cohort.update(root_groups.get(root, {root}))
+                    if node in cohort and cohort not in cohorts:
+                        cohorts.append(cohort)
+            return cohorts
+
+        for _sweep in range(6):
+            sweep_progress = False
+            while attempts < budget:
+                pairs, prefix = collision_state(accepted)
+                if not pairs:
+                    positions.update(accepted)
+                    return True
+                anchor_prefix = anchor_collision_count(pairs)
+                progressed = False
+                for first, second in pairs:
+                    rects = self.node_obstacles(accepted, labels, show_inbreeding)
+                    marker_rects = self.marker_obstacles(accepted)
+                    def group_shift(
+                        moving: Set[str], other: Set[str], direction: int,
+                    ) -> float:
+                        moving_rects = [
+                            rect
+                            for node in moving
+                            for rect in (rects[node], marker_rects[node])
+                        ]
+                        other_rects = [
+                            rect
+                            for node in other
+                            for rect in (rects[node], marker_rects[node])
+                        ]
+                        required = 0.0
+                        for moving_rect in moving_rects:
+                            for other_rect in other_rects:
+                                if not _ranges_overlap(
+                                    moving_rect.bottom, moving_rect.top,
+                                    other_rect.bottom, other_rect.top,
+                                ):
+                                    continue
+                                if direction < 0:
+                                    required = max(
+                                        required,
+                                        moving_rect.right + self.node_gap - other_rect.left,
+                                    )
+                                else:
+                                    required = max(
+                                        required,
+                                        other_rect.right + self.node_gap - moving_rect.left,
+                                )
+                        return max(0.0, required)
+
+                    def group_shift_candidates(
+                        moving: Set[str], other: Set[str]
+                    ) -> List[float]:
+                        """Return bounded boundary and overshoot shifts.
+
+                        The boundary-derived shift is the smallest legal
+                        displacement for the active pair.  In a dense
+                        chronological row that boundary can place the moving
+                        branch directly against a second protected anchor,
+                        leaving the greedy recovery solver in a local minimum.
+                        A short deterministic overshoot ladder lets the same
+                        semantic block reach the next free interval without
+                        turning collision recovery into an unbounded search.
+                        """
+                        left = group_shift(moving, other, -1)
+                        right = group_shift(moving, other, 1)
+                        extras = (
+                            (0.0, 0.50, 1.00, 2.00, 4.00, 8.00, 16.00)
+                            if protected
+                            else (0.0,)
+                        )
+                        shifts: List[float] = []
+                        for extra in extras:
+                            for magnitude, sign in ((left + extra, -1.0), (right + extra, 1.0)):
+                                shift = sign * magnitude
+                                if abs(shift) <= _EPSILON:
+                                    continue
+                                if shift not in shifts:
+                                    shifts.append(shift)
+                        return shifts
+
+                    candidates: List[Tuple[Set[str], float]] = []
+                    same_component = (
+                        component_by_node.get(first) is component_by_node.get(second)
+                    )
+                    first_groups = legal_groups(first) + sibling_cohort_groups(first)
+                    second_groups = legal_groups(second) + sibling_cohort_groups(second)
+                    same_partner_block = partner_blocks.get(first, {first}) == partner_blocks.get(
+                        second, {second}
+                    )
+                    if same_partner_block and len(partner_blocks.get(first, {first})) > 1:
+                        candidates.append((set(), 0.0))
+                    for group in first_groups:
+                        if group.isdisjoint({second}) and not group & protected:
+                            candidates.extend(
+                                (group, shift)
+                                for shift in group_shift_candidates(group, {second})
+                            )
+                    for group in second_groups:
+                        if group.isdisjoint({first}) and not group & protected:
+                            candidates.extend(
+                                (group, shift)
+                                for shift in group_shift_candidates(group, {first})
+                            )
+                    if not same_component:
+                        for group in (
+                            component_by_node.get(first, {first}),
+                            component_by_node.get(second, {second}),
+                        ):
+                            if not group & protected:
+                                moved_group = set(group)
+                                stationary = {second} if first in group else {first}
+                                candidates.extend(
+                                    (moved_group, shift)
+                                    for shift in group_shift_candidates(
+                                        moved_group, stationary
+                                    )
+                                )
+                    ranked: List[Tuple[Tuple[object, ...], Dict[str, Point]]] = []
+                    for group, delta in candidates:
+                        if not group and delta == 0.0:
+                            trial = dict(accepted)
+                            row = [
+                                node for node in partner_blocks.get(first, {first})
+                                if abs(accepted[node][1] - accepted[first][1]) <= 0.42
+                            ]
+                            self._deoverlap_row(trial, row, labels, protected, show_inbreeding)
+                        else:
+                            if attempts >= budget:
+                                break
+                            trial = dict(accepted)
+                            for node in group:
+                                x, y = trial[node]
+                                trial[node] = (x + delta, y)
+                        attempts += 1
+                        key = tuple(
+                            sorted(
+                                (node.casefold(), node, round(x, 9), round(y, 9))
+                                for node, (x, y) in trial.items()
+                            )
+                        )
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        if not self._placement_candidate_is_legal(
+                            trial, baseline, protected, partner_orders, sibling_orders,
+                            partner_blocks, preserve_y=preserve_y,
+                        ):
+                            continue
+                        trial_pairs, trial_prefix = collision_state(trial)
+                        if (first, second) in trial_pairs:
+                            continue
+                        trial_anchor_prefix = anchor_collision_count(trial_pairs)
+                        if protected:
+                            # During focused/manual recovery the protected
+                            # anchors are the semantic invariant.  Prefer a
+                            # state with fewer anchor collisions even when a
+                            # free branch temporarily collides with another
+                            # free branch.  At equal anchor count, accept only
+                            # a non-increasing aggregate pair count; this
+                            # permits a bounded conflict-identity transition
+                            # without allowing an expanding search.
+                            if trial_anchor_prefix > anchor_prefix:
+                                continue
+                            if (
+                                trial_anchor_prefix == anchor_prefix
+                                and trial_prefix[0] > prefix[0]
+                            ):
+                                continue
+                        elif trial_prefix >= prefix:
+                            continue
+                        # A legal branch move can remove the active pair while
+                        # exposing another pair with the same aggregate count
+                        # (for example when a focused chronological shoulder
+                        # is between two date-anchored donor branches).  The
+                        # old strict-prefix gate treated that as no progress
+                        # and stopped in a local minimum.  Pair identity is a
+                        # real progress signal: the active conflict is gone,
+                        # the state is deduplicated below, and the next sweep
+                        # can solve the newly exposed pair.  Keep the original
+                        # monotonic penetration objective whenever possible;
+                        # equal-prefix transitions are bounded by ``seen`` and
+                        # the global recovery budget.
+                        moved = sum(1 for node in trial if trial[node] != accepted[node])
+                        displacement = sum(
+                            abs(trial[node][0] - accepted[node][0]) for node in trial
+                        )
+                        span = max(point[0] for point in trial.values()) - min(
+                            point[0] for point in trial.values()
+                        )
+                        rank = (
+                            (
+                                trial_anchor_prefix,
+                                trial_prefix,
+                            )
+                            if protected
+                            else (trial_prefix,)
+                        )
+                        ranked.append(
+                            (
+                                (
+                                    rank,
+                                    moved,
+                                    round(displacement, 9),
+                                    round(span, 9),
+                                    tuple((node.casefold(), node) for node in sorted(group)),
+                                ),
+                                trial,
+                            )
+                        )
+                    if ranked:
+                        _rank, accepted = min(ranked, key=lambda item: item[0])
+                        progressed = True
+                        sweep_progress = True
+                        break
+                if not progressed:
+                    break
+            if not sweep_progress:
+                break
+
+        if protected:
+            # The ordinary greedy pass intentionally optimizes the aggregate
+            # collision prefix.  A focused frame can still reach a local
+            # minimum where moving one free branch removes an anchor pair but
+            # exposes another one at the same total count.  Perform a small
+            # anchor-first rescue search before publishing the diagnostic.
+            # This remains semantic: only legal branch groups are moved, Y is
+            # immutable in chronological mode, and the existing budget/seen
+            # safeguards still bound the search.
+            def rescue_shifts(
+                state: Mapping[str, Point],
+                moving: Set[str],
+                stationary: Set[str],
+            ) -> List[float]:
+                node_rects = self.node_obstacles(state, labels, show_inbreeding)
+                marker_rects = self.marker_obstacles(state)
+                moving_rects = [
+                    rect
+                    for node in moving
+                    for rect in (node_rects[node], marker_rects[node])
+                ]
+                stationary_rects = [
+                    rect
+                    for node in stationary
+                    for rect in (node_rects[node], marker_rects[node])
+                ]
+                shifts: List[float] = []
+                for direction in (-1, 1):
+                    required = 0.0
+                    for moving_rect in moving_rects:
+                        for stationary_rect in stationary_rects:
+                            if not _ranges_overlap(
+                                moving_rect.bottom,
+                                moving_rect.top,
+                                stationary_rect.bottom,
+                                stationary_rect.top,
+                            ):
+                                continue
+                            if direction < 0:
+                                required = max(
+                                    required,
+                                    moving_rect.right
+                                    + self.node_gap
+                                    - stationary_rect.left,
+                                )
+                            else:
+                                required = max(
+                                    required,
+                                    stationary_rect.right
+                                    + self.node_gap
+                                    - moving_rect.left,
+                                )
+                    for extra in (0.0, 0.50, 1.00, 2.00, 4.00, 8.00, 16.00, 32.00):
+                        magnitude = required + extra
+                        if magnitude <= _EPSILON:
+                            continue
+                        shift = direction * magnitude
+                        if shift not in shifts:
+                            shifts.append(shift)
+                return shifts
+
+            for _rescue_round in range(12):
+                pairs, prefix = collision_state(accepted)
+                anchor_prefix = anchor_collision_count(pairs)
+                anchor_pairs = [
+                    pair
+                    for pair in pairs
+                    if pair[0] in anchor_nodes or pair[1] in anchor_nodes
+                ]
+                if not anchor_pairs:
+                    break
+                rescue_ranked: List[
+                    Tuple[Tuple[object, ...], Dict[str, Point]]
+                ] = []
+                for first, second in anchor_pairs:
+                    for endpoint, other in ((first, second), (second, first)):
+                        if endpoint in protected:
+                            continue
+                        groups = legal_groups(endpoint) + sibling_cohort_groups(endpoint)
+                        for group in groups:
+                            if not group or group & protected or group & {other}:
+                                continue
+                            for shift in rescue_shifts(accepted, group, {other}):
+                                trial = dict(accepted)
+                                for node in group:
+                                    x, y = trial[node]
+                                    trial[node] = (x + shift, y)
+                                if not self._placement_candidate_is_legal(
+                                    trial,
+                                    baseline,
+                                    protected,
+                                    partner_orders,
+                                    sibling_orders,
+                                    partner_blocks,
+                                    preserve_y=preserve_y,
+                                ):
+                                    continue
+                                trial_pairs, trial_prefix = collision_state(trial)
+                                if (first, second) in trial_pairs:
+                                    continue
+                                trial_anchor_prefix = anchor_collision_count(trial_pairs)
+                                if trial_anchor_prefix > anchor_prefix:
+                                    continue
+                                if (
+                                    trial_anchor_prefix == anchor_prefix
+                                    and trial_prefix[0] > prefix[0]
+                                ):
+                                    continue
+                                key = tuple(
+                                    sorted(
+                                        (
+                                            node.casefold(),
+                                            node,
+                                            round(x, 9),
+                                            round(y, 9),
+                                        )
+                                        for node, (x, y) in trial.items()
+                                    )
+                                )
+                                if key in seen and trial_anchor_prefix >= anchor_prefix:
+                                    continue
+                                displacement = sum(
+                                    abs(trial[node][0] - accepted[node][0])
+                                    for node in trial
+                                )
+                                span = max(point[0] for point in trial.values()) - min(
+                                    point[0] for point in trial.values()
+                                )
+                                rescue_ranked.append(
+                                    (
+                                        (
+                                            trial_anchor_prefix,
+                                            trial_prefix,
+                                            round(displacement, 9),
+                                            round(span, 9),
+                                            tuple(
+                                                (node.casefold(), node)
+                                                for node in sorted(group)
+                                            ),
+                                        ),
+                                        trial,
+                                    )
+                                )
+                if not rescue_ranked:
+                    break
+                _rank, accepted = min(rescue_ranked, key=lambda item: item[0])
+                seen.add(
+                    tuple(
+                        sorted(
+                            (
+                                node.casefold(),
+                                node,
+                                round(x, 9),
+                                round(y, 9),
+                            )
+                            for node, (x, y) in accepted.items()
+                        )
+                    )
+                )
+
+        # A greedy sweep can legitimately settle on a state where the last
+        # collision is between two members of one sibling fan, while the
+        # branch candidate that clears it was considered earlier against an
+        # older conflict identity.  Give that final semantic conflict a small
+        # deterministic repair pass.  This is deliberately group-only: a
+        # continuing child and its visible descendants translate together,
+        # while a terminal sibling may move as its own owned branch.  The pass
+        # never moves a protected node and accepts only a globally improving
+        # candidate, so it cannot turn recovery into an unbounded optimizer.
+        for _fan_repair_round in range(24):
+            pairs, prefix = collision_state(accepted)
+            if not pairs:
+                break
+            repaired = False
+            for first, second in pairs:
+                for endpoint, other in ((first, second), (second, first)):
+                    groups = legal_groups(endpoint) + sibling_cohort_groups(endpoint)
+                    groups = [
+                        set(group)
+                        for group in groups
+                        if endpoint in group
+                        and group
+                        and not group & protected
+                        and len(group) > 1
+                    ] or [
+                        set(group)
+                        for group in groups
+                        if endpoint in group
+                        and group
+                        and not group & protected
+                    ]
+                    for group in groups:
+                        if other in group:
+                            continue
+                        node_rects = self.node_obstacles(
+                            accepted, labels, show_inbreeding
+                        )
+                        marker_rects = self.marker_obstacles(accepted)
+                        moving_rects = [
+                            rect
+                            for node in group
+                            for rect in (node_rects[node], marker_rects[node])
+                        ]
+                        stationary_rects = [
+                            rect
+                            for node in accepted
+                            if node not in group
+                            for rect in (node_rects[node], marker_rects[node])
+                        ]
+                        if not stationary_rects:
+                            continue
+                        shifts: List[float] = []
+                        for direction in (-1, 1):
+                            required = 0.0
+                            for moving_rect in moving_rects:
+                                for stationary_rect in stationary_rects:
+                                    if not _ranges_overlap(
+                                        moving_rect.bottom,
+                                        moving_rect.top,
+                                        stationary_rect.bottom,
+                                        stationary_rect.top,
+                                    ):
+                                        continue
+                                    if direction < 0:
+                                        required = max(
+                                            required,
+                                            moving_rect.right
+                                            + self.node_gap
+                                            - stationary_rect.left,
+                                        )
+                                    else:
+                                        required = max(
+                                            required,
+                                            stationary_rect.right
+                                            + self.node_gap
+                                            - moving_rect.left,
+                                        )
+                            for extra in (0.0, 0.25, 0.50, 1.0, 2.0, 4.0, 8.0):
+                                magnitude = required + extra
+                                if magnitude <= _EPSILON:
+                                    continue
+                                shift = direction * magnitude
+                                if shift not in shifts:
+                                    shifts.append(shift)
+                        ranked_repairs: List[
+                            Tuple[Tuple[object, ...], Dict[str, Point]]
+                        ] = []
+                        for shift in shifts:
+                            trial = dict(accepted)
+                            for node in group:
+                                x, y = trial[node]
+                                trial[node] = (x + shift, y)
+                            if not self._placement_candidate_is_legal(
+                                trial,
+                                baseline,
+                                protected,
+                                partner_orders,
+                                sibling_orders,
+                                partner_blocks,
+                                preserve_y=preserve_y,
+                            ):
+                                continue
+                            trial_pairs, trial_prefix = collision_state(trial)
+                            if len(trial_pairs) >= len(pairs):
+                                continue
+                            displacement = sum(
+                                abs(trial[node][0] - accepted[node][0])
+                                for node in trial
+                            )
+                            ranked_repairs.append(
+                                (
+                                    (
+                                        len(trial_pairs),
+                                        trial_prefix,
+                                        round(displacement, 9),
+                                        tuple(
+                                            (node.casefold(), node)
+                                            for node in sorted(group)
+                                        ),
+                                    ),
+                                    trial,
+                                )
+                            )
+                        if ranked_repairs:
+                            _repair_rank, accepted = min(
+                                ranked_repairs, key=lambda item: item[0]
+                            )
+                            repaired = True
+                            break
+                    if repaired:
+                        break
+                if repaired:
+                    break
+            if not repaired:
+                break
+        positions.update(accepted)
+        remaining = collision_state(accepted)[0]
+        if remaining:
+            self._last_collision_recovery_diagnostic = (
+                "unresolved node/marker collision recovery: "
+                + ", ".join(f"{left}/{right}" for left, right in remaining)
+            )
+        return not remaining
 
     def _compact_disconnected_family_components(
         self,
@@ -1240,6 +2860,7 @@ class PedigreeRouter:
         protected: Set[str],
         *,
         prefer_descendant_order: bool = False,
+        focus_nodes: Optional[Set[str]] = None,
     ) -> Dict[str, Set[str]]:
         """Keep same-row mates contiguous without recursively moving ancestry.
 
@@ -1249,15 +2870,69 @@ class PedigreeRouter:
         """
 
         block_by_node: Dict[str, Set[str]] = {}
+        focus = set(focus_nodes or set()) & set(positions)
+        focus_ancestry: Set[str] = set(focus)
+        if prefer_descendant_order and focus:
+            parent_map: Dict[str, Set[str]] = defaultdict(set)
+            for family in families.values():
+                visible_parents = [
+                    parent for parent in self._parents(family) if parent in positions
+                ]
+                for child in self._children(family):
+                    if child in positions:
+                        parent_map[child].update(visible_parents)
+            pending = sorted(focus, key=str.casefold, reverse=True)
+            while pending:
+                node = pending.pop()
+                for parent in sorted(
+                    parent_map.get(node, set()),
+                    key=str.casefold,
+                    reverse=True,
+                ):
+                    if parent not in focus_ancestry:
+                        focus_ancestry.add(parent)
+                        pending.append(parent)
         rows = sorted(
             self._cluster_rows(positions),
             key=lambda row: -sum(positions[node][1] for node in row) / len(row),
         )
+        row_by_node = {
+            node: row[0]
+            for row in rows
+            for node in row
+        }
+        # Index family membership once.  Scanning every family for every row
+        # is quadratic for a sparse large pedigree where most rows contain a
+        # single node.  The index preserves the same sorted family order but
+        # limits each row/component to families that can actually affect it.
+        family_ids_by_row: Dict[str, List[str]] = defaultdict(list)
+        family_ids_by_node: Dict[str, Set[str]] = defaultdict(set)
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            members = [
+                node
+                for node in self._parents(family) + self._children(family)
+                if node in positions
+            ]
+            for node in members:
+                family_ids_by_node[node].add(family_id)
+            parents = [
+                parent
+                for parent in self._parents(family)
+                if parent in positions
+            ]
+            if len(parents) != 2:
+                continue
+            first, second = sorted(parents, key=str.casefold)
+            first_row = row_by_node.get(first)
+            if first_row is not None and first_row == row_by_node.get(second):
+                family_ids_by_row[first_row].append(family_id)
+
         for row in rows:
             row_set = set(row)
             adjacency: Dict[str, Set[str]] = {node: set() for node in row}
             edges: Set[Tuple[str, str]] = set()
-            for family_id in sorted(families, key=str.casefold):
+            for family_id in family_ids_by_row.get(row[0], ()):
                 family = families[family_id]
                 parents = [parent for parent in self._parents(family) if parent in row_set]
                 if len(parents) != 2:
@@ -1292,6 +2967,46 @@ class PedigreeRouter:
 
             def order_component(component: Set[str]) -> List[str]:
                 baseline = sorted(component, key=lambda node: (positions[node][0], node.casefold()))
+                # In a focused ancestry frame, a two-mate fan with one
+                # selected descendant has one unambiguous semantic branch:
+                # the selected branch's mate is the inner partner and the
+                # other mate is the outer partner.  Put the shared hub at the
+                # stable left boundary of that focused fan.  This is a
+                # structural rule (hub degree, family membership and focus
+                # ancestry), not a seed/name ordering shortcut.  Ambiguous
+                # fans retain the ordinary deterministic ordering below.
+                if len(component) == 3:
+                    hubs = [
+                        node for node in component
+                        if len(adjacency[node] & component) == 2
+                    ]
+                    if len(hubs) == 1:
+                        hub = hubs[0]
+                        focused_partners: List[str] = []
+                        ordinary_partner: Optional[str] = None
+                        for first, second in edges:
+                            if hub not in {first, second}:
+                                continue
+                            partner = second if first == hub else first
+                            family_ids = [
+                                family_id
+                                for family_id in family_ids_by_node.get(hub, ())
+                                if family_id in family_ids_by_node.get(partner, ())
+                            ]
+                            family_is_focused = any(
+                                any(
+                                    child in focus_ancestry
+                                    for child in self._children(families[family_id])
+                                    if child in positions
+                                )
+                                for family_id in family_ids
+                            )
+                            if family_is_focused:
+                                focused_partners.append(partner)
+                            else:
+                                ordinary_partner = partner
+                        if len(focused_partners) == 1 and ordinary_partner is not None:
+                            return [hub, focused_partners[0], ordinary_partner]
                 if len(component) <= 2:
                     return baseline
                 component_edges = [
@@ -1331,7 +3046,10 @@ class PedigreeRouter:
                 relationship_targets: List[float] = []
                 origin_targets: List[float] = []
                 descendant_targets: List[float] = []
-                for family_id in sorted(families, key=str.casefold):
+                component_family_ids: Set[str] = set()
+                for node in component:
+                    component_family_ids.update(family_ids_by_node.get(node, ()))
+                for family_id in sorted(component_family_ids, key=str.casefold):
                     family = families[family_id]
                     parents = [parent for parent in self._parents(family) if parent in component]
                     children = [child for child in self._children(family) if child in positions]
@@ -1443,6 +3161,477 @@ class PedigreeRouter:
 
 
         return block_by_node
+
+    def _compact_excess_partner_gaps(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        protected: Set[str],
+        *,
+        focus_nodes: Optional[Set[str]] = None,
+        show_inbreeding: bool = True,
+    ) -> bool:
+        """Close unjustified same-row gaps inside mating blocks.
+
+        The row packer establishes order and minimum clearance, but later
+        focused branch projection can leave a pair many layout units apart
+        while still treating it as one partner block.  That makes the family
+        rail visually span unrelated ancestry.  Move only a prefix or suffix
+        of the affected block, keep all ordering constraints, and accept the
+        smallest collision-free improvement.  The rule is independent of
+        names, species, or selection shape.
+        """
+        if len(positions) < 2 or not families:
+            return False
+
+        block_seed = dict(positions)
+        partner_blocks = self._pack_partner_blocks_on_rows(
+            block_seed,
+            families,
+            labels,
+            protected,
+            focus_nodes=set(focus_nodes or set()),
+        )
+        groups = {
+            frozenset(group)
+            for group in partner_blocks.values()
+            if len(group) > 1
+        }
+        if not groups:
+            return False
+
+        partner_orders: Dict[Tuple[str, str], int] = {}
+        for group in groups:
+            ordered = sorted(
+                group,
+                key=lambda node: (positions[node][0], node.casefold()),
+            )
+            for left, right in zip(ordered, ordered[1:]):
+                partner_orders[(left, right)] = 1
+        sibling_orders: Dict[Tuple[str, str], int] = {}
+        for family in families.values():
+            children = [
+                child for child in self._children(family) if child in positions
+            ]
+            ordered = sorted(
+                children,
+                key=lambda node: (positions[node][0], node.casefold()),
+            )
+            for left, right in zip(ordered, ordered[1:]):
+                sibling_orders[(left, right)] = 1
+
+        frozen = set(protected) | set(focus_nodes or set())
+        current = dict(positions)
+        changed = False
+        for _pass in range(min(8, max(1, len(groups) * 2))):
+            best: Optional[
+                Tuple[
+                    Tuple[float, int, float, float, Tuple[str, ...]],
+                    Dict[str, Point],
+                ]
+            ] = None
+            current_rects = self.node_obstacles(
+                current, labels, show_inbreeding
+            )
+            current_markers = self.marker_obstacles(current)
+            current_collisions = self._collision_pairs(
+                current, current_rects, current_markers
+            )
+            for group in sorted(
+                groups,
+                key=lambda value: tuple(sorted(value, key=str.casefold)),
+            ):
+                ordered = sorted(
+                    group,
+                    key=lambda node: (current[node][0], node.casefold()),
+                )
+                for index, (left, right) in enumerate(zip(ordered, ordered[1:])):
+                    if abs(current[left][1] - current[right][1]) > 0.42:
+                        continue
+                    required = (
+                        self._estimated_label_width(
+                            str(labels.get(left, left))
+                        )
+                        / 2.0
+                        + self._estimated_label_width(
+                            str(labels.get(right, right))
+                        )
+                        / 2.0
+                        + self.node_gap
+                        + 0.18
+                    )
+                    actual = current[right][0] - current[left][0]
+                    excess = actual - required
+                    if excess <= 0.35:
+                        continue
+                    suffix = set(ordered[index + 1 :])
+                    prefix = set(ordered[: index + 1])
+                    for moving, direction in ((suffix, -1.0), (prefix, 1.0)):
+                        if not moving or moving & frozen:
+                            continue
+                        trial = dict(current)
+                        for node in moving:
+                            x, y = trial[node]
+                            trial[node] = (x + (direction * excess), y)
+                        if not self._placement_candidate_is_legal(
+                            trial,
+                            current,
+                            frozen,
+                            partner_orders,
+                            sibling_orders,
+                            partner_blocks,
+                            preserve_y=True,
+                        ):
+                            continue
+                        trial_rects = self.node_obstacles(
+                            trial, labels, show_inbreeding
+                        )
+                        trial_markers = self.marker_obstacles(trial)
+                        trial_collisions = self._collision_pairs(
+                            trial, trial_rects, trial_markers
+                        )
+                        if len(trial_collisions) > len(current_collisions):
+                            continue
+                        displacement = sum(
+                            abs(trial[node][0] - current[node][0])
+                            for node in moving
+                        )
+                        rank = (
+                            # Resolve the largest unjustified rail first. A
+                            # small local gap elsewhere must not consume the
+                            # bounded pass budget while a mating pair still
+                            # spans an entire unrelated branch.
+                            -round(excess, 9),
+                            len(trial_collisions),
+                            round(displacement, 9),
+                            round(abs(excess), 9),
+                            tuple(sorted(moving, key=str.casefold)),
+                        )
+                        if best is None or rank < best[0]:
+                            best = (rank, trial)
+            if best is None:
+                break
+            _rank, current = best
+            changed = True
+
+        if changed:
+            positions.update(current)
+        return changed
+
+    def _compact_chronological_parent_gaps(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        protected: Set[str],
+        show_inbreeding: bool,
+        *,
+        focus_nodes: Optional[Set[str]] = None,
+        focused: bool = False,
+        chronological: bool = False,
+    ) -> bool:
+        """Close oversized parent spans without changing date-derived Y.
+
+        Chronological partners are intentionally allowed to occupy different
+        date lanes, so the same-row partner-gap pass cannot see a wide X span
+        between them.  Keep that date geometry immutable and make only the
+        smallest collision-free X correction needed to keep a family rail
+        compact.  Shared hubs are preferred as fixed boundaries; when a
+        parent participates in fewer visible families it is the safer
+        movement subject.  The rule is structural and label-aware, and never
+        depends on a particular seed identity.
+        """
+        if len(positions) < 2 or not families or not focus_nodes:
+            return False
+
+        # Only compact parent spans belonging to the requested ancestry
+        # branch.  A chronological overview can contain many unrelated
+        # family rails whose independent date geometry must not be shifted as
+        # a side effect of opening one focused frame.
+        parent_map: Dict[str, Set[str]] = defaultdict(set)
+        for family in families.values():
+            visible_parents = [
+                parent for parent in self._parents(family) if parent in positions
+            ]
+            for child in self._children(family):
+                if child in positions:
+                    parent_map[child].update(visible_parents)
+        focus_lineage = set(focus_nodes) & set(positions)
+        pending = sorted(focus_lineage, key=str.casefold, reverse=True)
+        while pending:
+            node = pending.pop()
+            for parent in sorted(
+                parent_map.get(node, set()),
+                key=str.casefold,
+                reverse=True,
+            ):
+                if parent not in focus_lineage:
+                    focus_lineage.add(parent)
+                    pending.append(parent)
+
+        visible_family_count: Dict[str, int] = defaultdict(int)
+        for family in families.values():
+            parents = [
+                parent for parent in self._parents(family) if parent in positions
+            ]
+            if len(parents) == 2:
+                for parent in parents:
+                    visible_family_count[parent] += 1
+
+        changed = False
+        # Three layout units is the established compact family-rail bound.
+        # Longer labels may still require more room in a same-row collision;
+        # these parents are on distinct chronological lanes, so the measured
+        # collision check below remains the authority for whether the tighter
+        # span is legal.
+        compact_span = 3.0
+
+        def has_foreign_junction_collision(candidate: Mapping[str, Point]) -> bool:
+            candidate_obstacles = self.node_obstacles(
+                candidate,
+                labels,
+                show_inbreeding,
+            )
+            junctions = self._place_junctions(
+                candidate,
+                families,
+                candidate_obstacles,
+                chronological=True,
+                focused=focused,
+            )
+            for family_id, junction in junctions.items():
+                family_members = {
+                    node
+                    for node in self._parents(families[family_id])
+                    + self._children(families[family_id])
+                    if node in candidate
+                }
+                if any(
+                    node not in family_members
+                    and obstacle.contains(junction)
+                    for node, obstacle in candidate_obstacles.items()
+                ):
+                    return True
+            return False
+
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            parents = [
+                parent for parent in self._parents(family) if parent in positions
+            ]
+            if len(parents) != 2:
+                continue
+            focus_members = set(self._children(family))
+            if chronological:
+                focus_members |= set(parents)
+            if not (focus_members & focus_lineage):
+                continue
+            left, right = sorted(
+                parents,
+                key=lambda node: (positions[node][0], node.casefold()),
+            )
+            gap = positions[right][0] - positions[left][0]
+            children = [
+                child for child in self._children(family) if child in positions
+            ]
+            # In a chronological frame a contextual one-child family can
+            # have its child just beyond the current parent interval because
+            # its date-derived X lane was retained.  Bring the complete,
+            # movable parent pair toward that child before the knot is built;
+            # otherwise the knot is forced to the parent interval while the
+            # child rail remains visibly diagonal.  This is a relation-based
+            # correction and applies equally to active animals and ghosts.
+            if chronological and len(children) == 1:
+                child_x = positions[children[0]][0]
+                alignment_inset = min(
+                    0.18,
+                    max(0.0, (gap / 2.0) - 0.04),
+                )
+                pair_shift = 0.0
+                if child_x < positions[left][0] + alignment_inset:
+                    pair_shift = child_x - (positions[left][0] + alignment_inset)
+                elif child_x > positions[right][0] - alignment_inset:
+                    pair_shift = child_x - (positions[right][0] - alignment_inset)
+                if abs(pair_shift) > _EPSILON and children[0] not in protected:
+                    # An unanchored contextual child is the safest movement
+                    # subject: moving it into the existing parent corridor
+                    # preserves shared hubs and their other mate rails. This
+                    # is especially important when the boundary parent is a
+                    # multi-mate hub; translating that hub would put its
+                    # partners on opposing shoulders. Chronological Y stays
+                    # untouched because only X is corrected here.
+                    child_trial = dict(positions)
+                    child_trial[children[0]] = (
+                        child_x - pair_shift,
+                        positions[children[0]][1],
+                    )
+                    child_obstacles = self.node_obstacles(
+                        child_trial,
+                        labels,
+                        show_inbreeding,
+                    )
+                    if not self._collision_pairs(
+                        child_trial,
+                        child_obstacles,
+                        self.marker_obstacles(child_trial),
+                    ) and not has_foreign_junction_collision(child_trial):
+                        positions.update(child_trial)
+                        changed = True
+                        left, right = sorted(
+                            parents,
+                            key=lambda node: (
+                                positions[node][0],
+                                node.casefold(),
+                            ),
+                        )
+                        gap = positions[right][0] - positions[left][0]
+                        child_x = positions[children[0]][0]
+                        pair_shift = 0.0
+                if abs(pair_shift) > _EPSILON and not any(
+                    parent in protected for parent in parents
+                ):
+                    pair_trial = dict(positions)
+                    for parent in parents:
+                        parent_x, parent_y = pair_trial[parent]
+                        pair_trial[parent] = (parent_x + pair_shift, parent_y)
+                    pair_obstacles = self.node_obstacles(
+                        pair_trial,
+                        labels,
+                        show_inbreeding,
+                    )
+                    if not self._collision_pairs(
+                        pair_trial,
+                        pair_obstacles,
+                        self.marker_obstacles(pair_trial),
+                    ) and not has_foreign_junction_collision(pair_trial):
+                        positions.update(pair_trial)
+                        changed = True
+                        left, right = sorted(
+                            parents,
+                            key=lambda node: (
+                                positions[node][0],
+                                node.casefold(),
+                            ),
+                        )
+                        gap = positions[right][0] - positions[left][0]
+            if gap <= compact_span + _EPSILON:
+                continue
+            excess = gap - compact_span
+            candidates: List[Tuple[Tuple[int, float, str], Dict[str, Point]]] = []
+            for mover, direction in ((left, 1.0), (right, -1.0)):
+                if mover in protected:
+                    continue
+                trial = dict(positions)
+                x, y = trial[mover]
+                trial[mover] = (x + (direction * excess), y)
+                if self._collision_pairs(
+                    trial,
+                    self.node_obstacles(trial, labels, show_inbreeding),
+                    self.marker_obstacles(trial),
+                ):
+                    continue
+                if has_foreign_junction_collision(trial):
+                    continue
+                candidates.append(
+                    (
+                        (
+                            visible_family_count.get(mover, 0),
+                            round(abs(excess), 9),
+                            mover.casefold(),
+                        ),
+                        trial,
+                    )
+                )
+            if not candidates:
+                continue
+            _rank, selected = min(candidates, key=lambda item: item[0])
+            positions.update(selected)
+            changed = True
+
+            # A compact chronological parent pair can leave its sole child
+            # just outside the usable parent corridor.  In that state the
+            # junction is forced toward the midpoint even though a small
+            # inward child placement would produce the intended perpendicular
+            # family rail.  Reuse the same marker-clearance inset as the
+            # junction validator, keep Y untouched, and accept the child move
+            # only when the complete node and junction checks remain clear.
+            if len(children) == 1:
+                child = children[0]
+                parent_left, parent_right = sorted(
+                    positions[parent][0] for parent in parents
+                )
+                parent_span = parent_right - parent_left
+                inset = min(
+                    self.node_gap,
+                    max(0.0, (parent_span / 2.0) - 0.08),
+                )
+                low, high = parent_left + inset, parent_right - inset
+                child_x, child_y = positions[child]
+                if child_x < low - _EPSILON or child_x > high + _EPSILON:
+                    # If the child is outside the usable corridor, moving the
+                    # child alone can collide with a neighbouring dated
+                    # label. Translate the complete two-parent origin by the
+                    # smallest amount that puts the child into the corridor;
+                    # this preserves the family span and leaves the
+                    # chronological child Y untouched.
+                    pair_shift = (
+                        child_x - low
+                        if child_x < low
+                        else child_x - high
+                    )
+                    pair_trial = dict(positions)
+                    for parent in parents:
+                        parent_x, parent_y = pair_trial[parent]
+                        pair_trial[parent] = (
+                            parent_x + pair_shift,
+                            parent_y,
+                        )
+                    pair_obstacles = self.node_obstacles(
+                        pair_trial,
+                        labels,
+                        show_inbreeding,
+                    )
+                    if not self._collision_pairs(
+                        pair_trial,
+                        pair_obstacles,
+                        self.marker_obstacles(pair_trial),
+                    ) and not has_foreign_junction_collision(pair_trial):
+                        positions.update(pair_trial)
+                        changed = True
+        return changed
+
+    def _classify_visible_branch_roles(
+        self,
+        positions: Mapping[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+    ) -> Dict[str, str]:
+        """Classify visible nodes by their bounded downward branch shape.
+
+        A node is continuing when it is a visible parent of at least one
+        visible child in a family. All other visible nodes are terminal for
+        this frame. The classification is deliberately derived from the
+        current effective positions/family projection, so ghosts, missing
+        co-parents, half-siblings, multiple mates, archived boundaries, and
+        depth clipping follow the same structural rule without relying on
+        names, roles, or birth-date heuristics.
+        """
+        roles: Dict[str, str] = {
+            str(node): "terminal" for node in positions
+        }
+        for family in families.values():
+            visible_children = {
+                child
+                for child in self._children(family)
+                if child in positions
+            }
+            if not visible_children:
+                continue
+            for parent in self._parents(family):
+                if parent in positions:
+                    roles[parent] = "continuing"
+        return roles
+
     def _compact_focused_terminal_sibling_fans(
         self,
         positions: Dict[str, Point],
@@ -1453,6 +3642,7 @@ class PedigreeRouter:
         *,
         preserve_y: bool = False,
         show_inbreeding: bool = True,
+        direct_focus_only: bool = False,
     ) -> Dict[str, float]:
         """Separate continuing sibling subtrees from terminal sibling leaves.
 
@@ -1472,6 +3662,7 @@ class PedigreeRouter:
             return {}
 
         row_tolerance = 0.18
+        branch_roles = self._classify_visible_branch_roles(positions, families)
 
         node_weights: Dict[str, float] = {}
 
@@ -1514,13 +3705,7 @@ class PedigreeRouter:
                     pending.append(parent)
 
         def is_continuing(node: str) -> bool:
-            return any(
-                any(
-                    child in positions
-                    for child in self._children(families[family_id])
-                )
-                for family_id in outgoing.get(node, [])
-            )
+            return branch_roles.get(node) == "continuing"
 
         changed = False
         claimed: Set[str] = set()
@@ -1540,7 +3725,9 @@ class PedigreeRouter:
             if not continuing or not terminal:
                 continue
             focused_branches = [
-                child for child in continuing if child in focus_lineage
+                child
+                for child in continuing
+                if child in (focus_nodes if direct_focus_only else focus_lineage)
             ]
             if not focused_branches or any(node in focus_nodes for node in terminal):
                 continue
@@ -1549,10 +3736,91 @@ class PedigreeRouter:
             # With multiple continuing siblings their individual subtrees keep
             # their own positions; the independent terminal group still moves
             # to the opposite shoulder.
+            pre_compaction_positions = {
+                node: positions[node]
+                for node in set(parents) | set(continuing) | set(terminal)
+                if node in positions
+            }
             trunk = continuing[0] if len(continuing) == 1 else None
             moving: Set[str] = set()
             if trunk is not None:
                 moving = set(partner_blocks.get(trunk, {trunk})) | {trunk}
+                pre_compaction_positions.update(
+                    {
+                        node: positions[node]
+                        for node in moving
+                        if node in positions
+                    }
+                )
+                # A continuing child may already have a visible mating family
+                # even when the partner did not share the current row closely
+                # enough to enter ``partner_blocks``.  Keep that second parent
+                # in the compact continuation block and first close the
+                # measured label gap.  This is the generic family relation;
+                # it must not depend on a particular seed name or role.
+                for descendant_family_id in sorted(
+                    outgoing.get(trunk, []), key=str.casefold
+                ):
+                    if preserve_y:
+                        # Chronological mode keeps the date-derived X/Y
+                        # arrangement under the ordinary focused compaction;
+                        # partner-pair tightening is a partner-normalized
+                        # readability refinement only.
+                        continue
+                    descendant_family = families[descendant_family_id]
+                    descendant_children = [
+                        child
+                        for child in self._children(descendant_family)
+                        if child in positions
+                    ]
+                    # Compact a partner block only when this mating family
+                    # lies on the requested continuation itself.  A focused
+                    # ancestor can have several unrelated outgoing families;
+                    # pulling every mate into the same visual block would
+                    # crowd sibling branches that are merely contextual.
+                    if not any(
+                        child in focus_nodes or child in focus_lineage
+                        for child in descendant_children
+                    ):
+                        continue
+                    descendant_parents = [
+                        parent
+                        for parent in self._parents(descendant_family)
+                        if parent in positions
+                    ]
+                    if len(descendant_parents) != 2:
+                        continue
+                    partner = next(
+                        (
+                            parent
+                            for parent in descendant_parents
+                            if parent != trunk
+                        ),
+                        None,
+                    )
+                    if partner is None:
+                        continue
+                    pre_compaction_positions.setdefault(partner, positions[partner])
+                    required_partner_gap = (
+                        self._estimated_label_width(str(labels.get(trunk, trunk))) / 2.0
+                        + self._estimated_label_width(str(labels.get(partner, partner))) / 2.0
+                        + self.node_gap
+                    )
+                    trunk_x = positions[trunk][0]
+                    partner_x = positions[partner][0]
+                    actual_partner_gap = abs(partner_x - trunk_x)
+                    if actual_partner_gap > required_partner_gap + 0.04:
+                        side_to_partner = 1.0 if partner_x >= trunk_x else -1.0
+                        compact_partner_x = trunk_x + side_to_partner * required_partner_gap
+                        positions[partner] = (
+                            compact_partner_x,
+                            positions[partner][1],
+                        )
+                        moving.update(
+                            set(partner_blocks.get(partner, {partner})) | {partner}
+                        )
+                for node in moving:
+                    pre_compaction_positions.setdefault(node, positions[node])
                 # Expand only downwards from the continuing child. Origin
                 # ancestors stay fixed, while mates and descendants move as
                 # one visual subtree.
@@ -1565,14 +3833,16 @@ class PedigreeRouter:
                         outgoing.get(parent, []), key=str.casefold
                     ):
                         descendant_family = families[descendant_family_id]
-                        additions = {
-                            node
-                            for node in (
-                                self._parents(descendant_family)
-                                + self._children(descendant_family)
-                            )
-                            if node in positions
-                        }
+                        # Descendant-first fan ownership is downward only:
+                        # the continuing root's origin parents and unrelated
+                        # co-parents are fixed boundaries, never additions to
+                        # the moved branch. A child's established partner
+                        # block is still kept together.
+                        additions = set()
+                        for descendant in self._children(descendant_family):
+                            if descendant not in positions:
+                                continue
+                            additions.update(partner_blocks.get(descendant, {descendant}))
                         for addition in sorted(
                             additions - moving,
                             key=str.casefold,
@@ -1617,7 +3887,7 @@ class PedigreeRouter:
             # chronological view even though the opposite shoulder was free.
             # The block still moves as one, so partner and descendant spacing
             # cannot be distorted by this compaction.
-            target_offset = max(1.0, min(2.2, (block_width / 2.0) + 0.35))
+            target_offset = max(1.0, min(2.1, (block_width / 2.0) + 0.35))
             shift_x = 0.0
             if trunk is not None:
                 trunk_x, _trunk_y = positions[trunk]
@@ -1644,6 +3914,10 @@ class PedigreeRouter:
                     x, y = positions[node]
                     positions[node] = (x + shift_x, y + lift)
 
+            terminal_baseline = {
+                node: positions[node]
+                for node in terminal
+            }
             terminal_count = len(terminal)
             fan_step = min(2.1, max(1.55, generation_gap * 0.20))
             base_y = max(
@@ -1669,6 +3943,14 @@ class PedigreeRouter:
                 x = parent_center - (side * fan_step * opposite_distance)
                 y = positions[node][1] if preserve_y else base_y + (index * fan_step)
                 positions[node] = (x, y)
+            if direct_focus_only and preserve_y:
+                # The final direct pass repairs the selected continuation
+                # after the hard X projection. Chronological terminal dates
+                # were already placed by the shoulder pass; reassigning
+                # their X positions here can create a new same-date label
+                # collision with the selected branch. Keep those established
+                # anchors and move only the continuation block.
+                positions.update(terminal_baseline)
 
             # Do not keep a compacting move that creates a rendered-box
             # collision elsewhere in the same generation. Large overviews
@@ -1676,7 +3958,11 @@ class PedigreeRouter:
             # safer than letting one family repair another by pushing a whole
             # branch away.
             touched = set(parents) | set(continuing) | set(terminal) | set(moving)
-            snapshot = {node: positions[node] for node in touched if node in positions}
+            snapshot = {
+                node: pre_compaction_positions.get(node, positions[node])
+                for node in touched
+                if node in positions
+            }
             obstacles_after = self.node_obstacles(positions, labels, show_inbreeding)
             collision = False
             ordered_touched = sorted(touched, key=str.casefold)
@@ -1694,11 +3980,21 @@ class PedigreeRouter:
                     collision = True
                     break
             if collision:
-                for node, point in snapshot.items():
-                    positions[node] = point
-                for node in touched:
-                    node_weights.pop(node, None)
-                continue
+                # The opposite-shoulder placement is a semantic focus
+                # invariant, not an optional symmetry hint.  Keep the
+                # bounded candidate even when it temporarily touches another
+                # member of the connected focus scope; the subsequent hard
+                # recovery pass moves the least constrained branch and
+                # resolves that contact without undoing the shoulder choice.
+                # A full rollback here was the reason Elrohir repeatedly
+                # returned to Arwen's side in the current seed.
+                # The final direct-selection pass follows that recovery
+                # boundary, so it must retain its compact branch candidate
+                # even when the local pre-check sees a donor label. The
+                # normal broad pass keeps its conservative rollback behavior.
+                if not direct_focus_only:
+                    positions.update(snapshot)
+                    continue
 
             # Preserve this compact seed preferentially while leaving the
             # general solver enough freedom to clear genuine conflicts.
@@ -1723,6 +4019,267 @@ class PedigreeRouter:
             changed = True
 
         return node_weights if changed else {}
+
+    def _stagger_focused_terminal_siblings(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        focus_nodes: Set[str],
+        *,
+        preserve_y: bool = False,
+        show_inbreeding: bool = True,
+    ) -> bool:
+        """Give terminal members of a continuing sibship distinct Y lanes.
+
+        Focused packing can legitimately reject a large rigid branch move when
+        another visible family already claims part of that branch.  The
+        terminal siblings must not then fall back to the same row: their
+        labels and descendant rails become one visual object.  This correction
+        changes only the bounded terminal leaves of a mixed sibling family;
+        it never claims an ancestor, a co-parent, or a descendant subtree.
+
+        Chronological mode keeps the date-derived Y coordinates authoritative.
+        In that mode the same shoulder separation is applied on X only.
+        """
+        if not focus_nodes or not positions:
+            return False
+
+        branch_roles = self._classify_visible_branch_roles(positions, families)
+        outgoing: Dict[str, List[str]] = {node: [] for node in positions}
+        parents_by_child: Dict[str, Set[str]] = {
+            node: set() for node in positions
+        }
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            visible_parents = [
+                parent for parent in self._parents(family) if parent in positions
+            ]
+            visible_children = [
+                child for child in self._children(family) if child in positions
+            ]
+            if not visible_children:
+                continue
+            for parent in visible_parents:
+                outgoing.setdefault(parent, []).append(family_id)
+            for child in visible_children:
+                parents_by_child.setdefault(child, set()).update(visible_parents)
+
+        focus_lineage = set(focus_nodes) & set(positions)
+        pending = sorted(focus_lineage, key=str.casefold, reverse=True)
+        while pending:
+            node = pending.pop()
+            for parent in sorted(
+                parents_by_child.get(node, set()),
+                key=str.casefold,
+                reverse=True,
+            ):
+                if parent not in focus_lineage:
+                    focus_lineage.add(parent)
+                    pending.append(parent)
+
+        def is_continuing(node: str) -> bool:
+            return branch_roles.get(node) == "continuing"
+
+        changed = False
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            parents = [
+                parent for parent in self._parents(family) if parent in positions
+            ]
+            children = [
+                child for child in self._children(family) if child in positions
+            ]
+            if len(parents) != 2 or len(children) < 2:
+                continue
+            continuing = [child for child in children if is_continuing(child)]
+            terminal = [child for child in children if not is_continuing(child)]
+            if (
+                not continuing
+                or not terminal
+                or not any(child in focus_lineage for child in continuing)
+                or any(child in focus_nodes for child in terminal)
+            ):
+                continue
+
+            terminal_y = [positions[node][1] for node in terminal]
+            if max(terminal_y) - min(terminal_y) > 0.18:
+                continue
+
+            parent_y = [positions[node][1] for node in parents]
+            continuation_y = [positions[node][1] for node in continuing]
+            descending = min(continuation_y) >= max(parent_y)
+            direction = 1.0 if descending else -1.0
+            parent_edge = max(parent_y) if descending else min(parent_y)
+            closest_continuing = (
+                min(continuation_y) if descending else max(continuation_y)
+            )
+            generation_gap = max(2.4, abs(closest_continuing - parent_edge))
+            fan_step = min(2.1, max(1.55, generation_gap * 0.20))
+            clearance = min(5.8, max(4.4, generation_gap * 0.50))
+            if descending:
+                base_y = max(min(terminal_y), parent_edge + clearance)
+            else:
+                base_y = min(max(terminal_y), parent_edge - clearance)
+            ordered_terminal = sorted(
+                terminal,
+                key=lambda node: (positions[node][0], node.casefold()),
+            )
+            if preserve_y:
+                parent_center = sum(positions[node][0] for node in parents) / 2.0
+                continuing_center = sum(
+                    positions[node][0] for node in continuing
+                ) / len(continuing)
+                continuing_delta = continuing_center - parent_center
+                if abs(continuing_delta) <= 0.05:
+                    terminal_center = sum(
+                        positions[node][0] for node in terminal
+                    ) / len(terminal)
+                    continuing_delta = terminal_center - parent_center
+                if abs(continuing_delta) <= 0.05:
+                    continuing_delta = 1.0
+                side = -1.0 if continuing_delta > 0.0 else 1.0
+                parent_span = abs(
+                    positions[parents[0]][0] - positions[parents[1]][0]
+                )
+                base_offset = max(
+                    1.35,
+                    (parent_span / 2.0) + 0.55,
+                    abs(continuing_delta) * 0.5,
+                )
+                side_step = max(1.55, min(2.2, base_offset * 0.55))
+                if side < 0.0:
+                    ordered_terminal.reverse()
+                for index, node in enumerate(ordered_terminal):
+                    _old_x, y = positions[node]
+                    positions[node] = (
+                        parent_center + side * (base_offset + index * side_step),
+                        y,
+                    )
+                changed = True
+                continue
+            if not descending:
+                ordered_terminal.reverse()
+
+            for index, node in enumerate(ordered_terminal):
+                x, _old_y = positions[node]
+                positions[node] = (x, base_y + (direction * index * fan_step))
+            # The normal bounded collision solver runs after this focused
+            # refinement and owns any newly exposed horizontal conflicts. Do
+            # not reject the semantic Y separation here merely because a
+            # neighbouring label still occupies the old X shoulder; doing so
+            # re-couples the terminal leaves that this rule is meant to split.
+            changed = True
+
+        return changed
+
+    def _enforce_focused_sibling_shoulders(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        focus_nodes: Set[str],
+        *,
+        show_inbreeding: bool = True,
+    ) -> Set[str]:
+        """Keep side siblings on the shoulder opposite a focused branch.
+
+        The earlier focused compaction pass can be followed by the final
+        single-child-axis projection.  That projection is intentionally
+        topology-agnostic and may move one of the other children of the
+        focused origin back across the parent axis.  Establish the semantic
+        shoulder once more immediately before the final hard clearance pass;
+        the returned nodes are weighted as protected visual anchors while
+        unrelated branches make room for them.
+        """
+        if not positions or not focus_nodes:
+            return set()
+
+        parents_by_child: Dict[str, Set[str]] = {
+            node: set() for node in positions
+        }
+        for family in families.values():
+            parents = [
+                parent for parent in self._parents(family) if parent in positions
+            ]
+            for child in self._children(family):
+                if child in positions:
+                    parents_by_child[child].update(parents)
+
+        focus_lineage = set(focus_nodes) & set(positions)
+        pending = sorted(focus_lineage, key=str.casefold, reverse=True)
+        while pending:
+            node = pending.pop()
+            for parent in sorted(
+                parents_by_child.get(node, set()),
+                key=str.casefold,
+                reverse=True,
+            ):
+                if parent not in focus_lineage:
+                    focus_lineage.add(parent)
+                    pending.append(parent)
+
+        def half_width(node: str) -> float:
+            return self._estimated_label_width(
+                str(labels.get(node, node)).strip()
+            ) / 2.0
+
+        weighted: Set[str] = set()
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            parents = [
+                parent for parent in self._parents(family) if parent in positions
+            ]
+            children = [
+                child for child in self._children(family) if child in positions
+            ]
+            if len(parents) != 2 or len(children) < 2:
+                continue
+            # Re-apply the shoulder only at the mixed sibship that directly
+            # contains a selected child.  Applying the same rule to every
+            # ancestor family in the reverse focus lineage can move several
+            # unrelated terminal fans onto the same narrow shoulder and
+            # create a new collision elsewhere in the graph.
+            focused_children = [
+                child for child in children if child in focus_nodes
+            ]
+            if len(focused_children) != 1:
+                continue
+
+            parent_center = sum(positions[parent][0] for parent in parents) / 2.0
+            focused_child = focused_children[0]
+            side_delta = positions[focused_child][0] - parent_center
+            if abs(side_delta) <= _EPSILON:
+                child_center = sum(positions[child][0] for child in children) / len(children)
+                side_delta = child_center - parent_center
+            side = 1.0 if side_delta >= 0.0 else -1.0
+            peers = [child for child in children if child != focused_child]
+            peers.sort(key=lambda node: (positions[node][0], node.casefold(), node))
+            # Leave a marker/label-sized shoulder between the parent axis and
+            # the nearest peer, then keep the peers separated as one fan.
+            cursor = parent_center - side * (0.72 + half_width(peers[0]))
+            target_points: Dict[str, Point] = {}
+            for index, peer in enumerate(peers):
+                _old_x, old_y = positions[peer]
+                target_points[peer] = (round(float(cursor), 10), old_y)
+                if index + 1 < len(peers):
+                    next_peer = peers[index + 1]
+                    cursor -= side * (
+                        half_width(peer) + self.node_gap + half_width(next_peer)
+                    )
+
+            # Keep the fan at the compact shoulder first.  If an unrelated
+            # branch occupies that shoulder, the following bounded recovery
+            # pass moves that branch as a semantic unit.  Moving the focused
+            # terminal leaves outward until they happen to clear a donor was
+            # self-defeating: it preserved a local pixel invariant by
+            # recreating the long origin corridor this method is responsible
+            # for preventing.
+            for peer, point in target_points.items():
+                positions[peer] = point
+            weighted.update(peers)
+
+        return weighted
 
     def _rotate_partner_blocks_toward_ancestry(
         self,
@@ -2550,6 +5107,234 @@ class PedigreeRouter:
                 changed = True
         return changed
 
+    def _compact_overview_terminal_child_fans(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        show_inbreeding: bool,
+    ) -> bool:
+        """Center terminal multi-child fans on their real parent corridor.
+
+        A terminal child has no visible descendant branch that can justify a
+        distant barycentric placement.  In a complete Overview it should stay
+        with its sibling fan and the two-parent corridor.  This pass handles
+        the common all-terminal case as one ordered group, preserving the
+        children as readable siblings while preventing one stale seed
+        coordinate from becoming a disproportionate route outlier.
+        """
+        if not positions or not families:
+            return False
+
+        child_has_visible_family: Set[str] = set()
+        children_by_parent: Dict[str, Set[str]] = defaultdict(set)
+        family_ids_by_parent: Dict[str, List[object]] = defaultdict(list)
+        for family_id, family in sorted(
+            families.items(), key=lambda item: str(item[0]).casefold()
+        ):
+            visible_children = {
+                child for child in self._children(family) if child in positions
+            }
+            for parent in self._parents(family):
+                if parent not in positions:
+                    continue
+                child_has_visible_family.add(parent)
+                children_by_parent[parent].update(visible_children)
+                family_ids_by_parent[parent].append(family_id)
+
+        def branch_group(root: str) -> Set[str]:
+            """Return a visible downward branch without absorbing ancestors."""
+            group = {root}
+            pending = [root]
+            while pending:
+                parent = pending.pop()
+                for family_id in sorted(
+                    family_ids_by_parent.get(parent, []),
+                    key=lambda value: str(value).casefold(),
+                ):
+                    family = families.get(family_id)
+                    if family is None:
+                        continue
+                    for member in self._parents(family):
+                        if member in positions and member not in group:
+                            group.add(member)
+                            pending.append(member)
+                    for child in self._children(family):
+                        if child in positions and child not in group:
+                            group.add(child)
+                            pending.append(child)
+            return group
+
+        def half_width(node: str) -> float:
+            return self._estimated_label_width(
+                str(labels.get(node, node)).strip()
+            ) / 2.0
+
+        def clear(candidate: Mapping[str, Point]) -> bool:
+            return not self._collision_pairs(
+                candidate,
+                self.node_obstacles(candidate, labels, show_inbreeding),
+                self.marker_obstacles(candidate),
+            )
+
+        changed = False
+        for family_id in sorted(families, key=str.casefold):
+            family = families[family_id]
+            parents = [
+                parent for parent in self._parents(family) if parent in positions
+            ]
+            children = [
+                child for child in self._children(family) if child in positions
+            ]
+            if len(parents) != 2 or len(children) < 2:
+                continue
+
+            parent_center = sum(positions[parent][0] for parent in parents) / 2.0
+            current_distance = max(
+                abs(positions[child][0] - parent_center) for child in children
+            )
+            if current_distance <= 8.0:
+                continue
+
+            continuing = [
+                child for child in children if child in child_has_visible_family
+            ]
+            if continuing:
+                # A continuing child may still be the outlier. Move its full
+                # downward branch to the nearest ordered slot beside the
+                # remaining siblings; never move a branch through a sibling
+                # or through an existing semantic group.
+                ordered_children = sorted(
+                    children,
+                    key=lambda child: (
+                        positions[child][0],
+                        child.casefold(),
+                        child,
+                    ),
+                )
+                for child in sorted(
+                    continuing,
+                    key=lambda item: abs(positions[item][0] - parent_center),
+                    reverse=True,
+                ):
+                    others = [item for item in ordered_children if item != child]
+                    if not others:
+                        continue
+                    child_x = positions[child][0]
+                    child_half = half_width(child)
+                    if child_x > max(positions[item][0] for item in others):
+                        nearest = max(others, key=lambda item: positions[item][0])
+                        target = max(
+                            parent_center,
+                            positions[nearest][0]
+                            + half_width(nearest)
+                            + self.node_gap
+                            + child_half,
+                        )
+                    elif child_x < min(positions[item][0] for item in others):
+                        nearest = min(others, key=lambda item: positions[item][0])
+                        target = min(
+                            parent_center,
+                            positions[nearest][0]
+                            - half_width(nearest)
+                            - self.node_gap
+                            - child_half,
+                        )
+                    else:
+                        continue
+                    if abs(target - child_x) >= abs(child_x - parent_center) - 0.05:
+                        continue
+                    moving = branch_group(child)
+                    if moving & (set(parents) | set(others)):
+                        continue
+                    delta = target - child_x
+                    candidate = dict(positions)
+                    for node in moving:
+                        x, y = candidate[node]
+                        candidate[node] = (x + delta, y)
+                    if not clear(candidate):
+                        candidate = None
+                        for fraction in (
+                            0.15,
+                            0.25,
+                            0.35,
+                            0.50,
+                            0.65,
+                            0.80,
+                            1.00,
+                        ):
+                            trial = dict(positions)
+                            for node in moving:
+                                x, y = trial[node]
+                                trial[node] = (x + (delta * fraction), y)
+                            if clear(trial):
+                                candidate = trial
+                                break
+                        if candidate is None:
+                            continue
+                    for node in moving:
+                        positions[node] = candidate[node]
+                    changed = True
+                continue
+
+            ordered = sorted(
+                children,
+                key=lambda child: (
+                    positions[child][0],
+                    child.casefold(),
+                    child,
+                ),
+            )
+            total_width = sum(2.0 * half_width(child) for child in ordered)
+            total_width += self.node_gap * max(0, len(ordered) - 1)
+            cursor = parent_center - (total_width / 2.0)
+            target_x: Dict[str, float] = {}
+            for child in ordered:
+                target = cursor + half_width(child)
+                target_x[child] = target
+                cursor = target + half_width(child) + self.node_gap
+
+            candidate = dict(positions)
+            for child, target in target_x.items():
+                candidate[child] = (target, candidate[child][1])
+            if not clear(candidate):
+                # Try monotonic fractions toward the compact fan if another
+                # visible component occupies the ideal parent-centered slots.
+                # A partial pull is accepted only when it remains globally
+                # clear and materially shortens the worst child route.
+                candidate = None
+                for fraction in (
+                    0.15,
+                    0.25,
+                    0.35,
+                    0.50,
+                    0.65,
+                    0.80,
+                    1.00,
+                ):
+                    trial = dict(positions)
+                    for child, target in target_x.items():
+                        current_x = positions[child][0]
+                        trial[child] = (
+                            current_x + ((target - current_x) * fraction),
+                            trial[child][1],
+                        )
+                    if clear(trial):
+                        candidate = trial
+                        break
+                if candidate is None:
+                    continue
+
+            after_distance = max(
+                abs(candidate[child][0] - parent_center) for child in children
+            )
+            if after_distance >= current_distance - 0.05:
+                continue
+            for child in children:
+                positions[child] = candidate[child]
+            changed = True
+        return changed
+
     def _layout_geometry_score(
         self,
         candidate: Mapping[str, Point],
@@ -2612,6 +5397,232 @@ class PedigreeRouter:
         )
         return node_hits, marker_hits, crossings
 
+    def _route_marker_hit_details(
+        self,
+        positions: Mapping[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        *,
+        show_inbreeding: bool,
+        chronological: bool,
+    ) -> List[Tuple[str, str, str, int]]:
+        """Return canonical route segments that cross a foreign marker.
+
+        This deliberately mirrors the route portion of ``validate_plan``
+        before a ``RoutePlan`` exists, but scopes the repair signal to the
+        parent-entry case it owns: a marker belonging to the other visible
+        parent of the same family.  Direct child rays and unrelated foreign
+        markers have separate routing/masking policies and must not cause a
+        partner block to move here.
+        """
+        obstacles = self.node_obstacles(positions, labels, show_inbreeding)
+        junctions = self._place_junctions(
+            positions,
+            families,
+            obstacles,
+            chronological=chronological,
+        )
+        markers = self.marker_obstacles(positions)
+        hits: List[Tuple[str, str, str, int]] = []
+        for family_id in sorted(junctions, key=str.casefold):
+            family = families.get(family_id, {})
+            parents = set(self._parents(family)) & set(positions)
+            junction = junctions[family_id]
+            for endpoint in self._ordered_endpoints(family, positions):
+                # This repair owns only the canonical parent-entry lanes.
+                # Direct child rays have a separate, intentionally maskable
+                # foreign-marker policy and must never cause a parent/mate
+                # block to be shifted as a side effect of this pass.
+                if endpoint not in parents:
+                    continue
+                if endpoint in parents:
+                    path = _simplify_path(
+                        [
+                            junction,
+                            (positions[endpoint][0], junction[1]),
+                            positions[endpoint],
+                        ]
+                    )
+                else:
+                    path = [junction, positions[endpoint]]
+                for index, segment in enumerate(_path_segments(path)):
+                    for foreign, rect in markers.items():
+                        if foreign == endpoint or foreign not in parents:
+                            continue
+                        if rect.intersects(segment, margin=0.01):
+                            hits.append((family_id, endpoint, foreign, index))
+        return hits
+
+    def _repair_parent_entry_marker_lanes(
+        self,
+        positions: Dict[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        protected: Set[str],
+        show_inbreeding: bool,
+        *,
+        focus_nodes: Optional[Set[str]] = None,
+        preserve_y: bool = False,
+    ) -> bool:
+        """Move legal same-row blocks away from foreign parent-entry markers.
+
+        Node collision recovery cannot see a route-only conflict when two
+        parents are on different date rows.  The canonical parent route still
+        has to descend vertically into its endpoint, so a nearby parent
+        marker can sit directly in that lane without overlapping either
+        animal rectangle.  Search a bounded set of boundary-derived uniform
+        block shifts and accept only candidates that strictly reduce the
+        actual canonical route-marker hit count without adding node/marker
+        collisions or changing protected/focused anchors.
+        """
+        if len(positions) < 2 or not families:
+            return False
+
+        baseline = dict(positions)
+        block_seed = dict(baseline)
+        partner_blocks = self._pack_partner_blocks_on_rows(
+            block_seed,
+            families,
+            labels,
+            protected,
+        )
+        partner_orders: Dict[Tuple[str, str], int] = {}
+        for group in partner_blocks.values():
+            ordered = sorted(
+                group,
+                key=lambda node: (baseline[node][0], node.casefold()),
+            )
+            for left, right in zip(ordered, ordered[1:]):
+                partner_orders[(left, right)] = 1
+        sibling_orders: Dict[Tuple[str, str], int] = {}
+        for family in families.values():
+            children = [
+                node for node in self._children(family) if node in baseline
+            ]
+            ordered = sorted(
+                children,
+                key=lambda node: (baseline[node][0], node.casefold()),
+            )
+            for left, right in zip(ordered, ordered[1:]):
+                sibling_orders[(left, right)] = 1
+
+        frozen = set(protected) | set(focus_nodes or set())
+        current = dict(baseline)
+        changed = False
+        for _pass in range(min(8, max(1, len(families)))):
+            hits = self._route_marker_hit_details(
+                current,
+                families,
+                labels,
+                show_inbreeding=show_inbreeding,
+                chronological=preserve_y,
+            )
+            if not hits:
+                break
+            current_node_rects = self.node_obstacles(
+                current, labels, show_inbreeding
+            )
+            current_marker_rects = self.marker_obstacles(current)
+            current_collisions = self._collision_pairs(
+                current,
+                current_node_rects,
+                current_marker_rects,
+            )
+            candidates: List[
+                Tuple[
+                    Tuple[int, int, float, Tuple[str, ...]],
+                    Dict[str, Point],
+                ]
+            ] = []
+            marker_margin = max(0.02, self.route_clearance * 0.25)
+            for family_id, endpoint, foreign, _segment_index in hits:
+                family = families.get(family_id, {})
+                possible_nodes = [endpoint]
+                possible_nodes.extend(
+                    node
+                    for node in self._parents(family)
+                    if node in current and node not in possible_nodes
+                )
+                foreign_rect = current_marker_rects.get(foreign)
+                for moving_node in possible_nodes:
+                    group = set(
+                        partner_blocks.get(moving_node, {moving_node})
+                    ) & set(current)
+                    if not group or group & frozen:
+                        continue
+                    x = current[moving_node][0]
+                    deltas = {
+                        round(foreign_rect.left - marker_margin - x, 7),
+                        round(foreign_rect.right + marker_margin - x, 7),
+                    } if foreign_rect is not None else set()
+                    for magnitude in (0.16, 0.32, 0.64, 1.28, 2.56):
+                        deltas.update(
+                            {
+                                round(-magnitude, 7),
+                                round(magnitude, 7),
+                            }
+                        )
+                    for delta in sorted(deltas):
+                        if abs(delta) <= _EPSILON:
+                            continue
+                        trial = dict(current)
+                        for node in group:
+                            node_x, node_y = trial[node]
+                            trial[node] = (node_x + delta, node_y)
+                        if not self._placement_candidate_is_legal(
+                            trial,
+                            current,
+                            frozen,
+                            partner_orders,
+                            sibling_orders,
+                            partner_blocks,
+                            preserve_y=preserve_y,
+                        ):
+                            continue
+                        trial_node_rects = self.node_obstacles(
+                            trial, labels, show_inbreeding
+                        )
+                        trial_marker_rects = self.marker_obstacles(trial)
+                        trial_collisions = self._collision_pairs(
+                            trial,
+                            trial_node_rects,
+                            trial_marker_rects,
+                        )
+                        if len(trial_collisions) > len(current_collisions):
+                            continue
+                        trial_hits = self._route_marker_hit_details(
+                            trial,
+                            families,
+                            labels,
+                            show_inbreeding=show_inbreeding,
+                            chronological=preserve_y,
+                        )
+                        if len(trial_hits) >= len(hits):
+                            continue
+                        displacement = sum(
+                            abs(trial[node][0] - current[node][0])
+                            for node in group
+                        )
+                        candidates.append(
+                            (
+                                (
+                                    len(trial_hits),
+                                    len(trial_collisions),
+                                    round(displacement, 9),
+                                    tuple(sorted(group, key=str.casefold)),
+                                ),
+                                trial,
+                            )
+                        )
+            if not candidates:
+                break
+            _rank, current = min(candidates, key=lambda item: item[0])
+            changed = True
+
+        if changed:
+            positions.update(current)
+        return changed
+
     def _compact_focused_parentless_multi_mate_fans(
         self,
         positions: Dict[str, Point],
@@ -2622,13 +5633,16 @@ class PedigreeRouter:
         *,
         chronological: bool = False,
     ) -> bool:
-        """Keep parentless mates together around an indirectly focused hub.
+        """Keep contextual mates together around an indirectly focused hub.
 
         Ghost status is deliberately irrelevant. The pass handles only an
         unselected hub whose terminal child lies on the selected ancestry
         line, so directly selected hubs and overview layouts retain their
-        current geometry. Candidate fans may share one shoulder when that is
-        the least disruptive collision-free arrangement.
+        current geometry. A mate may have one visible origin family; moving
+        that mate's X coordinate is still safer than moving the shared hub,
+        and the normal route validation keeps the resulting ancestry leg
+        honest. Candidate fans may share one shoulder when that is the least
+        disruptive collision-free arrangement.
         """
         if not focus_nodes:
             return False
@@ -2672,7 +5686,13 @@ class PedigreeRouter:
                     continue
                 mate = parents[0] if parents[1] == hub else parents[1]
                 child = children[0]
-                if origin_families.get(mate) or parent_families.get(child):
+                # A continuing child owns a larger descendant subtree and is
+                # handled by the branch compaction passes. A mate with a
+                # visible origin family is still eligible: its X coordinate
+                # can move while its origin remains a fixed ancestry boundary.
+                if parent_families.get(child) or (
+                    origin_families.get(mate) and not chronological
+                ):
                     continue
                 records.append((family_id, mate, child))
             if (
@@ -2703,10 +5723,20 @@ class PedigreeRouter:
             }
             mixed_sides = len(current_sides) > 1
             preferred_side: Optional[float] = None
-            if mixed_sides:
-                # Keep the shoulder of the non-focused branch when possible;
-                # this makes a selected sibling join its existing family
-                # group instead of pulling that group across the hub.
+            # The focused terminal branch is the semantic anchor of this
+            # fan. Preserve its existing shoulder whenever it is available;
+            # otherwise an incidental family-id ordering can pull the
+            # selected branch across the hub and reverse the partner order.
+            for _family_id, mate, child in records:
+                if child not in focus_nodes:
+                    continue
+                delta = positions[mate][0] - hub_x
+                if abs(delta) > _EPSILON:
+                    preferred_side = 1.0 if delta > 0.0 else -1.0
+                    break
+            if preferred_side is None and mixed_sides:
+                # If no focused mate has a usable shoulder, retain the
+                # existing shoulder of the non-focused branch as a fallback.
                 for _family_id, mate, child in records:
                     if child in focus_nodes:
                         continue
@@ -2717,7 +5747,7 @@ class PedigreeRouter:
             hub_half = self._estimated_label_width(str(labels.get(hub, hub))) / 2.0
             candidates: List[
                 Tuple[
-                    Tuple[float, float, int, int, float, int, float, Tuple[str, ...]],
+                    Tuple[int, float, float, int, int, float, int, float, Tuple[str, ...]],
                     Dict[str, Point],
                 ]
             ] = []
@@ -2838,6 +5868,7 @@ class PedigreeRouter:
                     candidates.append(
                         (
                             (
+                                focus_order_penalty,
                                 float(geometry[0]),
                                 geometry[1],
                                 geometry[2],
@@ -2845,7 +5876,7 @@ class PedigreeRouter:
                                 if preferred_side is None or side == preferred_side
                                 else 1,
                                 round(span, 9),
-                                focus_order_penalty,
+                                int(focus_order_penalty),
                                 round(displacement, 9),
                                 tuple(
                                     f"{side:+.0f}:{mate.casefold()}"
@@ -2857,32 +5888,47 @@ class PedigreeRouter:
                     )
 
             candidate_pool = candidates
-            if mixed_sides and preferred_side is not None:
-                preferred = [item for item in candidates if item[0][3] == 0]
+            if preferred_side is not None:
+                preferred = [item for item in candidates if item[0][4] == 0]
                 if preferred:
                     candidate_pool = preferred
             score, best = min(candidate_pool, key=lambda item: item[0])
             preferred_side_candidate = (
-                mixed_sides and preferred_side is not None and int(score[3]) == 0
+                preferred_side is not None and int(score[4]) == 0
             )
-            if int(score[0]) > baseline_geometry[0] and not (
+            # In a chronological focused frame, keeping all mates of one
+            # visible hub on one shoulder is a semantic readability rule.
+            # Labels may be dense and the X lanes are intentionally compact,
+            # so do not reject that rule merely because the candidate has a
+            # larger text-overlap count or a wider fan. Hard marker hits and
+            # unrelated route crossings remain non-negotiable.
+            chronological_preferred_fan = (
+                chronological and preferred_side_candidate
+            )
+            if int(score[1]) > baseline_geometry[0] and not (
                 preferred_side_candidate
-                and int(score[0]) <= baseline_geometry[0] + 2
+                and int(score[1]) <= baseline_geometry[0] + 2
             ):
                 continue
-            if int(score[1]) > baseline_geometry[1] and not (
+            if int(score[2]) > baseline_geometry[1] and not (
                 preferred_side_candidate
-                and int(score[1]) <= baseline_geometry[1] + 1
+                and int(score[2]) <= baseline_geometry[1] + 1
             ):
                 continue
-            if int(score[2]) > baseline_geometry[2] + 1 and not (
+            if chronological_preferred_fan and (
+                int(score[1]) > baseline_geometry[0]
+                or int(score[2]) > baseline_geometry[1]
+            ):
+                continue
+            if int(score[3]) > baseline_geometry[2] + 1 and not (
                 preferred_side_candidate
-                and int(score[2]) <= baseline_geometry[2] + 1
+                and int(score[3]) <= baseline_geometry[2] + 1
             ):
                 continue
             if (
-                float(score[4]) + 0.75 >= baseline_span
-                and not (preferred_side_candidate and float(score[4]) <= baseline_span + 2.0)
+                float(score[5]) + 0.75 >= baseline_span
+                and not chronological_preferred_fan
+                and not (preferred_side_candidate and float(score[5]) <= baseline_span + 2.0)
             ):
                 continue
             changed_nodes = {
@@ -3170,6 +6216,7 @@ class PedigreeRouter:
         labels: Mapping[str, str],
         protected: Set[str],
         show_inbreeding: bool,
+        partner_blocks: Optional[Mapping[str, Set[str]]] = None,
     ) -> None:
         """Restore perpendicular axes for visible single-child families.
 
@@ -3244,8 +6291,81 @@ class PedigreeRouter:
                 component_parents.update(other_parents)
                 component_entries.extend(other_entries)
 
-        for _component_parents, lane_entries in components:
+        # Apply corrections in dependency order.  A parent that is itself a
+        # one-child result must settle before its descendant family computes
+        # the current parent interval; lexicographic family order allowed a
+        # later ancestor adjustment to invalidate an already aligned child.
+        component_by_family: Dict[str, int] = {}
+        for component_index, (_parents, lane_entries) in enumerate(components):
+            for lane_entry in lane_entries:
+                component_by_family[str(lane_entry["family_id"])] = component_index
+        component_edges: Dict[int, Set[int]] = defaultdict(set)
+        component_indegree: Dict[int, int] = {index: 0 for index in range(len(components))}
+        family_children: Dict[str, Set[str]] = {
+            str(entry["family_id"]): {str(entry["child"])}
+            for _parents, lane_entries in components
+            for entry in lane_entries
+        }
+        family_parents: Dict[str, Set[str]] = {
+            str(entry["family_id"]): set(entry["parents"])
+            for _parents, lane_entries in components
+            for entry in lane_entries
+        }
+        for first_family, first_children in family_children.items():
+            first_component = component_by_family[first_family]
+            for second_family, second_parents in family_parents.items():
+                second_component = component_by_family[second_family]
+                if first_component == second_component:
+                    continue
+                if first_children & second_parents and second_component not in component_edges[first_component]:
+                    component_edges[first_component].add(second_component)
+                    component_indegree[second_component] += 1
+        ready = [
+            index for index, degree in component_indegree.items() if degree == 0
+        ]
+        ready.sort(key=lambda index: min(
+            str(entry["family_id"]).casefold()
+            for entry in components[index][1]
+        ))
+        ordered_component_indices: List[int] = []
+        while ready:
+            current = ready.pop(0)
+            ordered_component_indices.append(current)
+            for successor in sorted(component_edges.get(current, set())):
+                component_indegree[successor] -= 1
+                if component_indegree[successor] == 0:
+                    ready.append(successor)
+                    ready.sort(key=lambda index: min(
+                        str(entry["family_id"]).casefold()
+                        for entry in components[index][1]
+                    ))
+        ordered_component_indices.extend(
+            index for index in range(len(components))
+            if index not in ordered_component_indices
+        )
+
+        for component_index in ordered_component_indices:
+            _component_parents, lane_entries = components[component_index]
             group_children = {str(entry["child"]) for entry in lane_entries}
+            # Parent blocks may have moved while earlier dependency
+            # components were aligned. Re-read every interval and preferred
+            # child coordinate at the point of use; the values captured while
+            # collecting entries are only discovery hints.
+            for lane_entry in lane_entries:
+                current_child = str(lane_entry["child"])
+                current_parents = [
+                    parent for parent in lane_entry["parents"] if parent in positions
+                ]
+                if len(current_parents) < 2:
+                    continue
+                left, right = sorted(positions[parent][0] for parent in current_parents)
+                span = max(0.0, right - left)
+                inset = min(0.18, max(0.0, (span / 2.0) - 0.04))
+                low, high = left + inset, right - inset
+                lane_entry["current"] = positions[current_child][0]
+                lane_entry["low"] = low
+                lane_entry["high"] = high
+                lane_entry["preferred"] = min(max((left + right) / 2.0, low), high)
             assigned: Dict[str, float] = {}
             ordered = sorted(
                 lane_entries,
@@ -3271,34 +6391,58 @@ class PedigreeRouter:
                 candidates.append(current_x)
 
                 chosen = current_x
+                moving_block = set(
+                    (partner_blocks or {}).get(child, {child})
+                ) & set(positions)
+                if not moving_block:
+                    moving_block = {child}
                 for candidate_x in candidates:
                     trial = dict(positions)
                     for assigned_child, assigned_x in assigned.items():
-                        trial[assigned_child] = (assigned_x, trial[assigned_child][1])
-                    trial[child] = (candidate_x, trial[child][1])
+                        assigned_block = set(
+                            (partner_blocks or {}).get(assigned_child, {assigned_child})
+                        ) & set(trial)
+                        delta = assigned_x - positions[assigned_child][0]
+                        for member in assigned_block:
+                            trial[member] = (
+                                positions[member][0] + delta,
+                                trial[member][1],
+                            )
+                    delta = candidate_x - positions[child][0]
+                    for member in moving_block:
+                        trial[member] = (
+                            positions[member][0] + delta,
+                            trial[member][1],
+                        )
                     obstacles = self.node_obstacles(trial, labels, show_inbreeding)
                     markers = self.marker_obstacles(
                         trial, half_width=0.30, half_height=0.42
                     )
-                    child_obstacle = obstacles[child]
-                    child_marker = markers[child]
                     collision = False
-                    for other in trial:
-                        if other == child:
-                            continue
-                        # Do not test against a same-lane child that has not
-                        # received its new coordinate yet; otherwise two
-                        # crossing single-child branches block each other.
-                        if other in group_children and other not in assigned:
-                            continue
-                        if overlaps(child_obstacle, obstacles[other]):
-                            collision = True
-                            break
-                        if overlaps(child_obstacle, markers[other]):
-                            collision = True
-                            break
-                        if overlaps(obstacles[other], child_marker):
-                            collision = True
+                    # Validate the complete moved partner block, not only its
+                    # child.  A prior version could accept an axis candidate
+                    # whose child was clear while a moved partner crossed an
+                    # unrelated terminal marker, leaving a fatal collision
+                    # in the published frame.
+                    for moving_node in moving_block:
+                        for other in trial:
+                            if other == moving_node or other in moving_block:
+                                continue
+                            # Do not test against a same-lane child that has
+                            # not received its new coordinate yet; otherwise
+                            # two crossing branches block each other before
+                            # the lane has been assigned.
+                            if other in group_children and other not in assigned:
+                                continue
+                            if (
+                                overlaps(obstacles[moving_node], obstacles[other])
+                                or overlaps(obstacles[moving_node], markers[other])
+                                or overlaps(markers[moving_node], obstacles[other])
+                                or overlaps(markers[moving_node], markers[other])
+                            ):
+                                collision = True
+                                break
+                        if collision:
                             break
                     if not collision:
                         chosen = candidate_x
@@ -3306,10 +6450,24 @@ class PedigreeRouter:
                 assigned[child] = chosen
 
             original_group_positions = {
-                child: positions[child] for child in group_children
+                member: positions[member]
+                for child in group_children
+                for member in (
+                    set((partner_blocks or {}).get(child, {child})) & set(positions)
+                )
             }
             for child, chosen in assigned.items():
-                positions[child] = (chosen, positions[child][1])
+                delta = chosen - original_group_positions.get(
+                    child, positions[child]
+                )[0]
+                moving_block = set(
+                    (partner_blocks or {}).get(child, {child})
+                ) & set(positions)
+                for member in moving_block:
+                    positions[member] = (
+                        original_group_positions.get(member, positions[member])[0] + delta,
+                        positions[member][1],
+                    )
 
             # The greedy candidate order may leave a later child at its old
             # coordinate when every new candidate is blocked.  Never retain a
@@ -3396,6 +6554,10 @@ class PedigreeRouter:
             for child in self._children(family):
                 if child in positions:
                     parent_map[child].update(parents)
+        children_by_parent: Dict[str, Set[str]] = defaultdict(set)
+        for child, parents in parent_map.items():
+            for parent in parents:
+                children_by_parent[parent].add(child)
 
         levels: Dict[str, int] = {}
         visiting: List[str] = []
@@ -3428,7 +6590,7 @@ class PedigreeRouter:
             # Soft partner-row preference: raise only a lower partner whose
             # direct children remain strictly below the proposed row.  This
             # keeps ordinary family rows compact while preventing an
-            # ancestor/descendant pair from being collapsed into one row.
+            # ancestor/descendant pair from being placed into one row.
             for family_id in sorted(families, key=str.casefold):
                 parents = [
                     parent for parent in self._parents(families[family_id])
@@ -3440,11 +6602,7 @@ class PedigreeRouter:
                 for partner in parents:
                     if levels[partner] >= target:
                         continue
-                    children = {
-                        child
-                        for child, child_parents in parent_map.items()
-                        if partner in child_parents
-                    }
+                    children = children_by_parent.get(partner, set())
                     if all(
                         child in cycle_nodes
                         or levels[child] > target
@@ -3487,6 +6645,7 @@ class PedigreeRouter:
         *,
         chronological: bool = False,
         node_weights: Optional[Mapping[str, float]] = None,
+        apply_soft_alignment: bool = True,
     ) -> None:
         """Resolve label/route collisions while retaining family block order.
 
@@ -3513,7 +6672,15 @@ class PedigreeRouter:
         initial = np.asarray([positions[node][0] for node in nodes], dtype=float)
         obstacles = self.node_obstacles(positions, labels, show_inbreeding)
         route_obstacles = self.marker_obstacles(positions)
-        soft_center_rows: List[Tuple[np.ndarray, float]] = []
+        # Keep family-centering equations sparse.  A dense vector per family
+        # turns a sparse graph with N nodes and O(N) families into an O(N²)
+        # allocation before the actual projection even starts.  The sparse
+        # representation is mathematically identical: each equation still
+        # contains the same child/parent coefficients, but only non-zero
+        # terms are stored.
+        soft_center_rows: List[
+            Tuple[Tuple[Tuple[int, float], ...], float]
+        ] = []
         collision_pairs: List[Tuple[int, int, float, float]] = []
         row_pair_requirements: List[Tuple[int, int, float]] = []
 
@@ -3638,7 +6805,7 @@ class PedigreeRouter:
             for child in children:
                 child_x, child_y = positions[child]
                 corridor = (junction, (child_x, child_y))
-                for foreign in sorted(route_obstacles, key=str.casefold):
+                for foreign in corridor_candidates(corridor):
                     if foreign in family_members:
                         continue
                     rect = route_obstacles[foreign]
@@ -3695,14 +6862,26 @@ class PedigreeRouter:
                 # to a compensating common barycentre) here.
                 continue
             centered_children = children
-            vector = np.zeros(len(nodes), dtype=float)
+            coefficient_by_index: Dict[int, float] = defaultdict(float)
+            child_coefficient = 1.0 / len(centered_children)
+            parent_coefficient = -1.0 / len(parents)
             for child in centered_children:
-                vector[index[child]] += 1.0 / len(centered_children)
+                coefficient_by_index[index[child]] += child_coefficient
             for parent in parents:
-                vector[index[parent]] -= 1.0 / len(parents)
+                coefficient_by_index[index[parent]] += parent_coefficient
+            coefficients = tuple(
+                sorted(
+                    (
+                        node_index,
+                        coefficient,
+                    )
+                    for node_index, coefficient in coefficient_by_index.items()
+                    if abs(coefficient) > 1e-12
+                )
+            )
             soft_center_rows.append(
                 (
-                    vector,
+                    coefficients,
                     0.45
                     if len(centered_children) == 1
                     else 0.16,
@@ -3732,24 +6911,50 @@ class PedigreeRouter:
         candidate = initial.copy()
 
         def relax_family_centers(scale: float, max_node_step: float) -> None:
-            for vector, strength in soft_center_rows:
-                residual = float(np.dot(vector, candidate))
+            for coefficients, strength in soft_center_rows:
+                residual = sum(
+                    coefficient * candidate[node_index]
+                    for node_index, coefficient in coefficients
+                )
                 if abs(residual) <= 1e-7:
                     continue
-                movement = metric_inverse * vector
-                gain = float(np.dot(vector, movement))
+                gain = sum(
+                    coefficient * metric_inverse[node_index] * coefficient
+                    for node_index, coefficient in coefficients
+                )
                 if gain <= 1e-10:
                     continue
-                delta = movement * (-(residual * strength * scale) / gain)
-                largest = float(np.max(np.abs(delta)))
-                if largest > max_node_step:
-                    delta *= max_node_step / largest
-                candidate[:] = candidate + delta
+                factor = -(residual * strength * scale) / gain
+                largest = max(
+                    (
+                        abs(
+                            metric_inverse[node_index]
+                            * coefficient
+                            * factor
+                        )
+                        for node_index, coefficient in coefficients
+                    ),
+                    default=0.0,
+                )
+                step_scale = (
+                    max_node_step / largest
+                    if largest > max_node_step
+                    else 1.0
+                )
+                factor *= step_scale
+                for node_index, coefficient in coefficients:
+                    candidate[node_index] += (
+                        metric_inverse[node_index] * coefficient * factor
+                    )
 
         # A few bounded sweeps bring badly slanted one-child branches back
-        # toward vertical without reinstating an exact global equation.
-        for _round in range(3):
-            relax_family_centers(1.0, 1.0)
+        # toward vertical without reinstating an exact global equation.  The
+        # final post-projection invocation disables this soft phase: it is a
+        # hard-clearance repair and must not undo an already compact semantic
+        # partner block while repairing one newly exposed collision.
+        if apply_soft_alignment:
+            for _round in range(3):
+                relax_family_centers(1.0, 1.0)
 
         # The repeated origin-aware block sweeps supply the meaningful layer
         # order (including extended sibling blocks around multiple mates).
@@ -3883,18 +7088,57 @@ class PedigreeRouter:
         row_centers: List[float] = []
         for node in sorted(positions, key=lambda name: (positions[name][1], positions[name][0], name.casefold())):
             y = positions[node][1]
-            target: Optional[int] = None
-            for index, center in enumerate(row_centers):
-                if abs(y - center) <= tolerance:
-                    target = index
-                    break
-            if target is None:
+            # The input is ordered by ascending Y.  Row centers therefore
+            # remain ordered as well, and a point can only join the most
+            # recently created row: if it is farther than ``tolerance`` from
+            # that row, every earlier row is farther still.  Avoiding the
+            # historical scan over all row centers keeps sparse large graphs
+            # linear after the initial sort while preserving the same
+            # first-match clustering semantics.
+            if not rows or abs(y - row_centers[-1]) > tolerance:
                 rows.append([node])
                 row_centers.append(y)
             else:
-                rows[target].append(node)
-                row_centers[target] = sum(positions[item][1] for item in rows[target]) / len(rows[target])
+                row = rows[-1]
+                row.append(node)
+                row_centers[-1] += (y - row_centers[-1]) / len(row)
         return rows
+
+    @classmethod
+    def _is_simple_linear_family_graph(
+        cls,
+        positions: Mapping[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+    ) -> bool:
+        """Return whether the visible graph is one unbranched family chain.
+
+        This deliberately describes topology, not a fixture or a node-name
+        convention: every visible family must have exactly one parent and one
+        child, every visible node must participate in the chain, and no node
+        may have more than one incoming or outgoing family edge.  Requiring
+        ``V - 1`` edges makes the accepted graph a single path rather than a
+        collection of unrelated short edges.  The predicate is used only for
+        the large-graph performance shortcut; all other pedigrees continue
+        through the full collision/recovery pipeline.
+        """
+        if len(positions) <= 256 or len(families) != len(positions) - 1:
+            return False
+        parent_degree: Dict[str, int] = defaultdict(int)
+        child_degree: Dict[str, int] = defaultdict(int)
+        participating: Set[str] = set()
+        for family in families.values():
+            parents = [node for node in cls._parents(family) if node in positions]
+            children = [node for node in cls._children(family) if node in positions]
+            if len(parents) != 1 or len(children) != 1:
+                return False
+            parent = parents[0]
+            child = children[0]
+            parent_degree[parent] += 1
+            child_degree[child] += 1
+            if parent_degree[parent] > 1 or child_degree[child] > 1:
+                return False
+            participating.update((parent, child))
+        return participating == set(positions)
 
     def _deoverlap_row(
         self,
@@ -3960,20 +7204,38 @@ class PedigreeRouter:
         obstacles: Mapping[str, Rect],
         *,
         chronological: bool = False,
+        focused: bool = False,
     ) -> Dict[str, Point]:
+        if self._is_simple_linear_family_graph(positions, families):
+            # In a collision-free one-parent/one-child chain, the midpoint is
+            # the canonical family knot.  It keeps the two adjacent vertical
+            # legs disjoint except at their semantic animal endpoint and
+            # avoids the generic obstacle candidate sweep for every family.
+            # The large-graph arrangement fast path has already proved that
+            # the visible node/marker rectangles are clear; non-linear or
+            # colliding pedigrees retain the full obstacle-aware placement.
+            linear_junctions: Dict[str, Point] = {}
+            for family_id in sorted(families, key=str.casefold):
+                family = families[family_id]
+                parents = [
+                    node for node in self._parents(family) if node in positions
+                ]
+                children = [
+                    node for node in self._children(family) if node in positions
+                ]
+                if len(parents) != 1 or len(children) != 1:
+                    return {}
+                parent_x, parent_y = positions[parents[0]]
+                child_x, child_y = positions[children[0]]
+                linear_junctions[family_id] = (
+                    (parent_x + child_x) / 2.0,
+                    (parent_y + child_y) / 2.0,
+                )
+            return linear_junctions
         grouped: Dict[
             Tuple[float, float],
-            List[Tuple[str, float, float, float, bool, float, float]],
+            List[Tuple[str, float, float, float, bool, float, float, float]],
         ] = {}
-        collapsed: List[
-            Tuple[
-                str,
-                Point,
-                bool,
-                Optional[Tuple[float, float]],
-                Optional[Tuple[float, float]],
-            ]
-        ] = []
 
         for family_id in sorted(families, key=str.casefold):
             family = families[family_id]
@@ -3982,15 +7244,6 @@ class PedigreeRouter:
             if not parents:
                 continue
             if not children:
-                collapsed.append(
-                    (
-                        family_id,
-                        self._collapsed_junction(parents, positions),
-                        len(parents) == 2,
-                        None,
-                        None,
-                    )
-                )
                 continue
             parent_x = sum(positions[node][0] for node in parents) / len(parents)
             child_xs = sorted(positions[node][0] for node in children)
@@ -4041,12 +7294,36 @@ class PedigreeRouter:
                 corridor_limit = max(
                     0.0, (parent_span / 2.0) - 0.08
                 )
-                child_clearance = max(0.35, self.node_gap)
+                child_axis_eligible = (
+                    len(children) == 1
+                    # A one-child family is best represented by a
+                    # perpendicular child rail whenever the child is between
+                    # the two parent endpoints.  The child label is an owned
+                    # endpoint and may therefore overlap its own incoming
+                    # line; requiring a full label-sized ``node_gap`` here
+                    # needlessly displaced the family knot in dense frames.
+                    and parent_left + _EPSILON < child_x < parent_right - _EPSILON
+                )
                 child_inside_corridor = (
                     len(children) == 1
-                    and parent_left + child_clearance <= child_x <= parent_right - child_clearance
+                    and parent_left + self.node_gap <= child_x <= parent_right - self.node_gap
                 )
-                if child_inside_corridor:
+                child_near_parent_edge = (
+                    len(children) == 1
+                    and chronological
+                    and focused
+                    and (
+                        child_x < parent_left - _EPSILON
+                        or child_x > parent_right + _EPSILON
+                    )
+                    and min(
+                        abs(child_x - parent_left),
+                        abs(child_x - parent_right),
+                    )
+                    <= self.route_clearance + _EPSILON
+                )
+                corridor_shift = 0.0
+                if child_axis_eligible or child_near_parent_edge:
                     maximum_shift = min(
                         corridor_limit,
                         max(1.35, abs(child_x - parent_x) + self.route_clearance),
@@ -4059,10 +7336,12 @@ class PedigreeRouter:
                         corridor_limit,
                     )
                     desired_shift = (child_x - parent_x) * 0.55
+                corridor_shift = maximum_shift
                 base_x = parent_x + max(
                     -maximum_shift, min(maximum_shift, desired_shift)
                 )
             else:
+                corridor_shift = 0.0
                 base_x = (parent_x + child_x) / 2.0
             key = (round(parent_y, 5), round(child_y, 5))
             grouped.setdefault(key, []).append(
@@ -4074,6 +7353,7 @@ class PedigreeRouter:
                     bounded_between_parents,
                     min(positions[node][0] for node in parents),
                     max(positions[node][0] for node in parents),
+                    corridor_shift,
                 )
             )
 
@@ -4085,12 +7365,13 @@ class PedigreeRouter:
                 Optional[Tuple[float, float]],
                 Optional[Tuple[float, float]],
             ]
-        ] = list(collapsed)
+        ] = []
+        vertically_repositioned: Set[str] = set()
         for entries in grouped.values():
             entries.sort(key=lambda item: (item[5], item[6], item[0].casefold()))
             lane_right_edges: List[float] = []
             entry_lanes: Dict[str, int] = {}
-            for family_id, _base_x, _py, _cy, _fixed, left, right in entries:
+            for family_id, _base_x, _py, _cy, _fixed, left, right, _corridor_shift in entries:
                 lane = next(
                     (
                         index
@@ -4121,42 +7402,210 @@ class PedigreeRouter:
                 ),
             )
             lane_rank = {lane: rank for rank, lane in enumerate(lane_order)}
-            for family_id, base_x, parent_y, child_y, bounded_x, left, right in entries:
+            all_single_child = all(
+                len(self._children(families.get(family_id, {}))) == 1
+                for family_id, *_rest in entries
+            )
+            for family_id, base_x, parent_y, child_y, bounded_x, left, right, corridor_shift in entries:
                 # Only parent intervals that actually overlap receive distinct
                 # rails.  Fractions stay in the clear corridor between marker
                 # and label boxes; unrelated families remain on one tidy row.
+                family_children = [
+                    child
+                    for child in self._children(families.get(family_id, {}))
+                    if child in positions
+                ]
+                single_child = all_single_child and len(
+                    family_children
+                ) == 1
                 fraction = (
-                    0.52
-                    if lane_count == 1
-                    else 0.38 + (0.24 * lane_rank[entry_lanes[family_id]] / (lane_count - 1))
+                    (
+                        0.42
+                        if lane_count == 1
+                        else 0.34
+                        + (0.14 * lane_rank[entry_lanes[family_id]] / (lane_count - 1))
+                    )
+                    if single_child
+                    else (
+                        0.52
+                        if lane_count == 1
+                        else 0.38
+                        + (0.24 * lane_rank[entry_lanes[family_id]] / (lane_count - 1))
+                    )
                 )
                 y = parent_y + ((child_y - parent_y) * fraction)
                 low_y, high_y = sorted((parent_y, child_y))
                 padding = min(0.25, (high_y - low_y) * 0.15)
+                y_bounds = (low_y + padding, high_y - padding)
+                if len(family_children) == 1 and family_children[0] in obstacles:
+                    # A single-child knot is allowed to stay on the parent
+                    # midpoint.  If the mixed row fraction puts that knot
+                    # inside the child's label rectangle, prefer the clear
+                    # vertical corridor immediately on the parent side of
+                    # the child.  Otherwise _free_junction_point would pick
+                    # a lateral boundary candidate and create a false
+                    # parent-midpoint displacement.
+                    child_rect = obstacles[family_children[0]]
+                    if child_rect.contains((base_x, y), margin=0.04):
+                        if child_y >= parent_y:
+                            safe_y = child_rect.bottom - self.junction_clearance - 0.04
+                        else:
+                            safe_y = child_rect.top + self.junction_clearance + 0.04
+                        base_y = min(max(safe_y, y_bounds[0]), y_bounds[1])
+                        vertically_repositioned.add(family_id)
+                    else:
+                        base_y = y
+                else:
+                    base_y = y
                 x_bounds: Optional[Tuple[float, float]] = None
                 if bounded_x:
                     midpoint = (left + right) / 2.0
-                    parent_span = right - left
-                    maximum_shift = min(
-                        1.35,
-                        parent_span * 0.22,
-                        max(0.0, (parent_span / 2.0) - 0.08),
-                    )
                     x_bounds = (
-                        midpoint - maximum_shift,
-                        midpoint + maximum_shift,
+                        midpoint - corridor_shift,
+                        midpoint + corridor_shift,
                     )
                 raw.append(
                     (
                         family_id,
-                        (base_x, y),
+                        (base_x, base_y),
                         bounded_x,
                         x_bounds,
-                        (low_y + padding, high_y - padding),
+                        y_bounds,
                     )
                 )
 
         placed: Dict[str, Point] = {}
+        # Parent-rail conflicts only compare junctions on the same Y lane.
+        # Index those lanes for large graphs so a sparse set of unrelated
+        # junctions does not turn this late presentation check into an
+        # all-pairs scan.  Small graphs retain the original mapping traversal
+        # and therefore the exact legacy iteration behavior.
+        rail_cell = max(_EPSILON * 2.0, 1e-9)
+        placed_rail_index: Optional[Dict[int, List[str]]] = (
+            defaultdict(list) if len(obstacles) > 256 else None
+        )
+        placed_order: Dict[str, int] = {}
+        # Family knots whose parent intervals overlap must not share an exact
+        # horizontal rail.  A later family can otherwise start inside an
+        # earlier family's shoulder and inherit a collinear route segment,
+        # especially in Chronological mode where adjacent generation spans
+        # often produce the same interpolated Y value.  Keep the X corridor
+        # and all parent/child bounds intact, but reserve a small deterministic
+        # Y lane for the later knot.  This is a layout invariant, not a seed-
+        # specific exception and leaves genuinely shared parent ports to the
+        # route-level topology classifier below.
+        raw_metadata: Dict[
+            str,
+            Tuple[Tuple[str, ...], Tuple[float, float], Optional[str]],
+        ] = {}
+        for family_id, _base, _bounded_x, _x_bounds, y_bounds in raw:
+            parents = tuple(
+                parent
+                for parent in self._parents(families.get(family_id, {}))
+                if parent in positions
+            )
+            children = tuple(
+                child
+                for child in self._children(families.get(family_id, {}))
+                if child in positions
+            )
+            excluded_node = children[0] if len(children) == 1 else None
+            raw_metadata[family_id] = (
+                parents,
+                y_bounds or (float("-inf"), float("inf")),
+                excluded_node,
+            )
+
+        def parent_rail_intervals(family_id: str, point: Point) -> Tuple[Tuple[float, float], ...]:
+            parents, _y_bounds, _excluded_node = raw_metadata[family_id]
+            return tuple(
+                sorted((point[0], positions[parent][0]))
+                for parent in parents
+                if abs(point[0] - positions[parent][0]) > _EPSILON
+            )
+
+        def rails_conflict(family_id: str, point: Point, other_id: str, other_point: Point) -> bool:
+            if abs(point[1] - other_point[1]) > _EPSILON:
+                return False
+            for left, right in parent_rail_intervals(family_id, point):
+                for other_left, other_right in parent_rail_intervals(other_id, other_point):
+                    if min(right, other_right) - max(left, other_left) > 0.02:
+                        return True
+            return False
+
+        def avoid_parent_rail_conflicts(family_id: str, point: Point) -> Point:
+            if not placed:
+                return point
+
+            def same_lane_items(candidate: Point):
+                if placed_rail_index is None:
+                    return list(placed.items())
+                bucket = math.floor(candidate[1] / rail_cell)
+                found: Dict[str, Point] = {}
+                for lane in (bucket - 1, bucket, bucket + 1):
+                    for other_id in placed_rail_index.get(lane, ()):
+                        other_point = placed.get(other_id)
+                        if other_point is not None and abs(
+                            candidate[1] - other_point[1]
+                        ) <= _EPSILON:
+                            found[other_id] = other_point
+                return [
+                    (other_id, found[other_id])
+                    for other_id in sorted(
+                        found,
+                        key=lambda value: placed_order.get(value, 0),
+                    )
+                ]
+
+            conflict_ids = [
+                other_id
+                for other_id, other_point in same_lane_items(point)
+                if rails_conflict(family_id, point, other_id, other_point)
+            ]
+            if not conflict_ids:
+                return point
+            _parents, y_bounds, excluded_node = raw_metadata[family_id]
+            low_y, high_y = y_bounds
+            lane_gap = max(0.24, self.route_clearance + 0.04)
+            candidate_ys: Set[float] = {round(point[1], 7)}
+            for other_id in conflict_ids:
+                other_y = placed[other_id][1]
+                for candidate in (other_y - lane_gap, other_y + lane_gap):
+                    if low_y <= candidate <= high_y:
+                        candidate_ys.add(round(candidate, 7))
+            candidates: List[Point] = []
+            for candidate_y in sorted(candidate_ys):
+                candidate = (point[0], float(candidate_y))
+                if any(
+                    rect.contains(candidate, margin=0.04)
+                    for _name, rect in foreign_obstacle_candidates(
+                        candidate, excluded_node
+                    )
+                ):
+                    continue
+                nearby_lane_items = same_lane_items(candidate)
+                if any(
+                    abs(candidate[0] - other_point[0]) < self.junction_clearance * 2.0
+                    and abs(candidate[1] - other_point[1]) < self.junction_clearance * 2.0
+                    for _other_id, other_point in nearby_lane_items
+                ):
+                    continue
+                if any(
+                    rails_conflict(family_id, candidate, other_id, other_point)
+                    for other_id, other_point in nearby_lane_items
+                ):
+                    continue
+                candidates.append(candidate)
+            if not candidates:
+                return point
+            return min(
+                candidates,
+                key=lambda candidate: (
+                    abs(candidate[1] - point[1]),
+                    candidate[1],
+                ),
+            )
+
         # Large pedigrees used to rescan every node obstacle and every placed
         # junction for every candidate point.  Keep the exact legacy scoring
         # for normal/current-seed graphs, but use a small uniform index for
@@ -4164,6 +7613,9 @@ class PedigreeRouter:
         spatial_cell = 2.0
         obstacle_index: Optional[Dict[Tuple[int, int], List[Rect]]] = None
         placed_index: Optional[Dict[Tuple[int, int], List[Point]]] = None
+        named_obstacle_index: Optional[
+            Dict[Tuple[int, int], List[Tuple[str, Rect]]]
+        ] = None
         if len(obstacles) > 256:
             obstacle_index = defaultdict(list)
             for rect in obstacles.values():
@@ -4174,15 +7626,227 @@ class PedigreeRouter:
                 for ix in range(left, right + 1):
                     for iy in range(bottom, top + 1):
                         obstacle_index[(ix, iy)].append(rect)
+            named_obstacle_index = self._build_rect_spatial_index(
+                obstacles,
+                cell_size=spatial_cell,
+            )
             placed_index = defaultdict(list)
+
+        def foreign_obstacle_candidates(
+            point: Point,
+            excluded_node: Optional[str],
+        ) -> Sequence[Tuple[str, Rect]]:
+            """Return only animal rectangles near a junction candidate.
+
+            The old implementation materialized a copy of every obstacle
+            for every one-child family.  On a sparse large pedigree that was
+            an unnecessary O(F*N) cost before any candidate was evaluated.
+            The same exact rectangle predicate is retained, but large graphs
+            use the already calibrated broad-phase index.
+            """
+            if named_obstacle_index is None:
+                return tuple(
+                    (name, rect)
+                    for name, rect in obstacles.items()
+                    if name != excluded_node
+                )
+            radius = 0.04
+            ix0 = math.floor((point[0] - radius) / spatial_cell)
+            ix1 = math.floor((point[0] + radius) / spatial_cell)
+            iy0 = math.floor((point[1] - radius) / spatial_cell)
+            iy1 = math.floor((point[1] + radius) / spatial_cell)
+            found: Dict[str, Rect] = {}
+            for ix in range(ix0, ix1 + 1):
+                for iy in range(iy0, iy1 + 1):
+                    for name, rect in named_obstacle_index.get((ix, iy), ()):
+                        if name != excluded_node:
+                            found[name] = rect
+            return tuple(found.items())
+
+        def escape_foreign_junction_obstacles(
+            family_id: str,
+            point: Point,
+            *,
+            bounded_x: bool,
+            x_bounds: Optional[Tuple[float, float]],
+            chronological_layout: bool,
+        ) -> Point:
+            """Move a knot out of an unavoidable foreign label footprint.
+
+            The node solver deliberately models the complete rendered label
+            rectangle. A family knot is a line anchor, however, and labels
+            are painted above lines. When a dense focused frame leaves no
+            collision-free point inside the normal vertical interpolation
+            corridor, keep the canonical X corridor and move the knot to the
+            nearest clear edge of the blocking label. This is only a
+            presentation fallback: animal Y coordinates stay untouched in a
+            chronological layout, and the topology/route shape is unchanged.
+            """
+            _parents, _y_bounds, excluded_node = raw_metadata[family_id]
+
+            def foreign_hits(candidate: Point) -> bool:
+                return any(
+                    rect.contains(candidate, margin=0.04)
+                    for _name, rect in foreign_obstacle_candidates(
+                        candidate, excluded_node
+                    )
+                )
+
+            if not foreign_hits(point):
+                return point
+
+            # Chronological animal rows are the hard date geometry. A
+            # label-over-line overlap is acceptable there and must not cause a
+            # family handle to jump to another date lane merely to avoid text.
+            if chronological_layout:
+                return point
+
+            candidate_points: Set[Point] = set()
+            for _name, rect in foreign_obstacle_candidates(point, excluded_node):
+                if not rect.contains(point, margin=0.04):
+                    continue
+                candidate_points.update(
+                    {
+                        (
+                            point[0],
+                            rect.bottom - self.junction_clearance - 0.04,
+                        ),
+                        (
+                            point[0],
+                            rect.top + self.junction_clearance + 0.04,
+                        ),
+                        (
+                            rect.left - self.junction_clearance - 0.04,
+                            point[1],
+                        ),
+                        (
+                            rect.right + self.junction_clearance + 0.04,
+                            point[1],
+                        ),
+                    }
+                )
+
+            def legal(candidate: Point) -> bool:
+                if bounded_x and x_bounds is not None and not (
+                    x_bounds[0] - _EPSILON
+                    <= candidate[0]
+                    <= x_bounds[1] + _EPSILON
+                ):
+                    return False
+                if foreign_hits(candidate):
+                    return False
+                return not any(
+                    abs(candidate[0] - other[0]) < self.junction_clearance * 2.0
+                    and abs(candidate[1] - other[1]) < self.junction_clearance * 2.0
+                    for other in placed.values()
+                )
+
+            legal_candidates = [
+                (float(round(x, 7)), float(round(y, 7)))
+                for x, y in candidate_points
+                if legal((x, y))
+            ]
+            if not legal_candidates:
+                return point
+            return min(
+                legal_candidates,
+                key=lambda candidate: (
+                    abs(candidate[0] - point[0]) + abs(candidate[1] - point[1]),
+                    abs(candidate[1] - point[1]),
+                    candidate[0],
+                    candidate[1],
+                ),
+            )
 
         for family_id, base, bounded_x, x_bounds, y_bounds in sorted(
             raw,
             key=lambda item: (item[1][1], item[1][0], item[0].casefold()),
         ):
+            family_children = {
+                child
+                for child in self._children(families.get(family_id, {}))
+                if child in positions
+            }
+            junction_obstacles = obstacles
+            excluded_obstacle_ids: Set[int] = set()
+            # A narrow chronological one-child interval can put the proposed
+            # knot inside that child's *text* rectangle even though the knot
+            # is its own family endpoint.  Treating the endpoint's label as a
+            # foreign junction obstacle forces _free_junction_point to move
+            # the knot laterally, violating the parent-midpoint contract. The
+            # route is allowed to enter its own endpoint marker/label; foreign
+            # animal and already placed-family obstacles remain hard.
+            if len(family_children) == 1:
+                child = next(iter(family_children))
+                # The child is an owned endpoint, never a foreign junction
+                # obstacle.  Excluding it for every single-child family is
+                # important when the midpoint is just outside its expanded
+                # text rectangle: otherwise the free-point search can still
+                # choose a lateral candidate and detach the child rail by a
+                # fraction of a layout unit.
+                excluded_obstacle_ids.add(id(obstacles[child]))
+                # For a child whose X already lies inside the two-parent
+                # corridor, keep the knot on that child axis.  The only
+                # reason the free-point search should move it sideways is a
+                # genuinely foreign obstacle.  First lift/lower the knot out
+                # of the parent text band when the generation interval has
+                # enough room; this preserves both parent readability and
+                # the perpendicular child rail.
+                if bounded_x and x_bounds is not None:
+                    child_y = positions[child][1]
+                    parent_nodes = [
+                        parent
+                        for parent in self._parents(families.get(family_id, {}))
+                        if parent in positions and parent in obstacles
+                    ]
+                    if parent_nodes:
+                        parent_y = sum(positions[parent][1] for parent in parent_nodes) / len(parent_nodes)
+                        if child_y >= parent_y:
+                            parent_clear_y = max(
+                                obstacles[parent].top
+                                for parent in parent_nodes
+                            ) + self.junction_clearance + 0.04
+                            base_y = max(base_y, parent_clear_y)
+                        else:
+                            parent_clear_y = min(
+                                obstacles[parent].bottom
+                                for parent in parent_nodes
+                            ) - self.junction_clearance - 0.04
+                            base_y = min(base_y, parent_clear_y)
+                        base_y = min(max(base_y, y_bounds[0]), y_bounds[1])
+                        # Carry the adjusted ordinate into the candidate
+                        # search.  Keeping only the local scalar above would
+                        # leave ``base`` unchanged and silently undo this
+                        # collision-free parent-band correction.
+                        base = (base[0], base_y)
+                # A one-child family uses one horizontal parent rail and one
+                # direct child rail.  The parent rail must stay on the parent
+                # side of the child's marker; otherwise it starts a fraction
+                # of a unit below the child centre and still cuts through the
+                # owned marker while travelling to both parents.  This is a
+                # semantic invariant for every layout, not a seed-specific
+                # exception.  Keep the existing y corridor where possible,
+                # but lower/raise its child-facing edge by a small explicit
+                # marker margin before the free-point search.
+                child_y = positions[child][1]
+                marker_margin = max(0.02, self.route_clearance * 0.25)
+                if child_y >= parent_y:
+                    child_side_limit = child_y - _MARKER_RADIUS - marker_margin
+                    y_bounds = (
+                        y_bounds[0],
+                        min(y_bounds[1], child_side_limit),
+                    )
+                    base = (base[0], min(base[1], child_side_limit))
+                else:
+                    child_side_limit = child_y + _MARKER_RADIUS + marker_margin
+                    y_bounds = (
+                        max(y_bounds[0], child_side_limit),
+                        y_bounds[1],
+                    )
+                    base = (base[0], max(base[1], child_side_limit))
             point = self._free_junction_point(
                 base,
-                obstacles,
+                junction_obstacles,
                 placed,
                 bounded_x=bounded_x,
                 x_bounds=x_bounds,
@@ -4190,8 +7854,22 @@ class PedigreeRouter:
                 obstacle_index=obstacle_index,
                 placed_index=placed_index,
                 spatial_cell=spatial_cell,
+                excluded_obstacle_ids=excluded_obstacle_ids,
             )
+            point = escape_foreign_junction_obstacles(
+                family_id,
+                point,
+                bounded_x=bounded_x,
+                x_bounds=x_bounds,
+                chronological_layout=chronological,
+            )
+            point = avoid_parent_rail_conflicts(family_id, point)
             placed[family_id] = point
+            placed_order[family_id] = len(placed_order)
+            if placed_rail_index is not None:
+                placed_rail_index[math.floor(point[1] / rail_cell)].append(
+                    family_id
+                )
             if placed_index is not None:
                 cell = (
                     math.floor(point[0] / spatial_cell),
@@ -4199,12 +7877,6 @@ class PedigreeRouter:
                 )
                 placed_index[cell].append(point)
         return placed
-
-    @staticmethod
-    def _collapsed_junction(parents: Sequence[str], positions: Mapping[str, Point]) -> Point:
-        x = sum(positions[node][0] for node in parents) / len(parents)
-        y = sum(positions[node][1] for node in parents) / len(parents)
-        return x, y + 0.65
 
     def _free_junction_point(
         self,
@@ -4218,12 +7890,18 @@ class PedigreeRouter:
         obstacle_index: Optional[Mapping[Tuple[int, int], Sequence[Rect]]] = None,
         placed_index: Optional[Mapping[Tuple[int, int], Sequence[Point]]] = None,
         spatial_cell: float = 2.0,
+        excluded_obstacle_ids: Optional[Set[int]] = None,
     ) -> Point:
         base_x, base_y = base
+        excluded_ids = set(excluded_obstacle_ids or set())
 
         def indexed_rects(x: float, y: float, radius: float = 0.05) -> List[Rect]:
             if obstacle_index is None:
-                return list(obstacles.values())
+                return [
+                    rect
+                    for rect in obstacles.values()
+                    if id(rect) not in excluded_ids
+                ]
             ix0 = math.floor((x - radius) / spatial_cell)
             ix1 = math.floor((x + radius) / spatial_cell)
             iy0 = math.floor((y - radius) / spatial_cell)
@@ -4232,12 +7910,17 @@ class PedigreeRouter:
             for ix in range(ix0, ix1 + 1):
                 for iy in range(iy0, iy1 + 1):
                     for rect in obstacle_index.get((ix, iy), ()):
-                        found[id(rect)] = rect
+                        if id(rect) not in excluded_ids:
+                            found[id(rect)] = rect
             return list(found.values())
 
         def indexed_rects_for_x(low: float, high: float) -> List[Rect]:
             if obstacle_index is None:
-                return list(obstacles.values())
+                return [
+                    rect
+                    for rect in obstacles.values()
+                    if id(rect) not in excluded_ids
+                ]
             # Boundary candidates are only a heuristic.  For large graphs a
             # bounded local window is sufficient and avoids a full scan.
             center = (low + high) / 2.0
@@ -4384,6 +8067,7 @@ class PedigreeRouter:
         obstacles: Mapping[str, Rect],
         owned_segments: Sequence[_OwnedSegment],
         *,
+        allowed_obstacle_names: Optional[Set[str]] = None,
         parent_entry: bool,
         obstacle_index: Optional[Mapping[Tuple[int, int], Sequence[Tuple[str, Rect]]]] = None,
         owned_segment_index: Optional[
@@ -4398,6 +8082,7 @@ class PedigreeRouter:
                 path,
                 obstacles,
                 owned_segments,
+                allowed_obstacle_names=allowed_obstacle_names,
                 obstacle_index=obstacle_index,
                 owned_segment_index=owned_segment_index,
             )
@@ -4416,6 +8101,7 @@ class PedigreeRouter:
             canonical,
             obstacles,
             owned_segments,
+            allowed_obstacle_names=allowed_obstacle_names,
             obstacle_index=obstacle_index,
             owned_segment_index=owned_segment_index,
         )
@@ -4429,6 +8115,7 @@ class PedigreeRouter:
         obstacles: Mapping[str, Rect],
         owned_segments: Sequence[_OwnedSegment],
         *,
+        allowed_obstacle_names: Optional[Set[str]] = None,
         obstacle_index: Optional[Mapping[Tuple[int, int], Sequence[Tuple[str, Rect]]]] = None,
         owned_segment_index: Optional[
             Mapping[Tuple[int, int], Sequence[_OwnedSegment]]
@@ -4444,6 +8131,15 @@ class PedigreeRouter:
                 segment, obstacles, obstacle_index
             ):
                 if obstacle_name == f"@{family_id}":
+                    continue
+                # A family route may pass behind another endpoint belonging
+                # to the same semantic family (for example the horizontal
+                # parent rail can cross a sibling label).  That is not a
+                # foreign relationship or a routing failure: the normal gap
+                # computation masks the covered marker/label interval.  Only
+                # foreign animal/family obstacles remain recovery/diagnostic
+                # hits.
+                if allowed_obstacle_names and obstacle_name in allowed_obstacle_names:
                     continue
                 if obstacle_name == endpoint and index == len(segments) - 1:
                     continue
@@ -4464,19 +8160,30 @@ class PedigreeRouter:
                 relation, point = _segment_relation(segment, other.segment)
                 if relation == "none":
                     continue
+                current_owned = _OwnedSegment(
+                    family_id,
+                    endpoint,
+                    index,
+                    segment,
+                    is_terminal=index == len(segments) - 1,
+                )
+                shared_parent_join = self._is_shared_parent_port_join(
+                    current_owned,
+                    other,
+                    relation,
+                    point,
+                    path,
+                    owned_segments,
+                )
+                if shared_parent_join:
+                    continue
                 # Multiple mating families legitimately merge on the way into
                 # their shared animal port.  Keep that terminal rail
                 # continuous, but do not suppress arbitrary same-name
                 # crossings (the structural classifier checks those against
                 # the actual marker below).
                 if self._is_terminal_shared_endpoint_merge(
-                    _OwnedSegment(
-                        family_id,
-                        endpoint,
-                        index,
-                        segment,
-                        is_terminal=index == len(segments) - 1,
-                    ),
+                    current_owned,
                     other,
                     relation,
                     point,
@@ -4611,6 +8318,18 @@ class PedigreeRouter:
     ) -> Tuple[Dict[RouteKey, List[Point]], List[str]]:
         gaps: Dict[RouteKey, List[Point]] = {}
         problems: List[str] = []
+        route_parts: Dict[Tuple[str, str], List[_OwnedSegment]] = defaultdict(list)
+        for owned in segments:
+            route_parts[(owned.family_id, owned.endpoint)].append(owned)
+        route_paths: Dict[Tuple[str, str], List[Point]] = {}
+        for route_key, route_segments in route_parts.items():
+            ordered = sorted(route_segments, key=lambda owned: owned.index)
+            if not ordered:
+                continue
+            route_paths[route_key] = [
+                ordered[0].segment[0],
+                *(owned.segment[1] for owned in ordered),
+            ]
 
         if len(segments) <= 256:
             candidate_pairs = (
@@ -4680,6 +8399,16 @@ class PedigreeRouter:
                 animal_positions,
                 relation=relation,
                 marker_tolerance=_MARKER_TOLERANCE,
+            ):
+                continue
+            first_path = route_paths.get((first.family_id, first.endpoint), [])
+            if first_path and self._is_shared_parent_port_join(
+                first,
+                second,
+                relation,
+                point,
+                first_path,
+                segments,
             ):
                 continue
             if self._is_terminal_shared_endpoint_merge(
@@ -4930,6 +8659,106 @@ class PedigreeRouter:
             <= tolerance + _EPSILON
             for overlap_point in overlap
         )
+
+    def _is_shared_parent_port_join(
+        self,
+        current: _OwnedSegment,
+        other: _OwnedSegment,
+        relation: str,
+        point: Optional[Point],
+        path: Sequence[Point],
+        owned_segments: Sequence[_OwnedSegment],
+    ) -> bool:
+        """Allow canonical parent rails to meet at one shared animal port.
+
+        Multiple mating families may enter the same parent.  Their horizontal
+        shoulders can therefore meet the common vertical entry at the port
+        above that animal.  This is a bounded topological join, not a generic
+        crossing: both routes must be the canonical two-segment parent-entry
+        shape, the endpoint identity must match, and the intersection must be
+        the exact outer end of both terminal vertical entries.
+        """
+        if relation == "none":
+            return False
+        if current.endpoint != other.endpoint:
+            return False
+        current_segments = _path_segments(path)
+        if len(current_segments) != 2 or current.index >= len(current_segments):
+            return False
+        endpoint_position = path[-1]
+
+        def port_for(segments: Sequence[Segment]) -> Optional[Point]:
+            if len(segments) != 2:
+                return None
+            terminal = segments[-1]
+            if abs(terminal[0][0] - terminal[1][0]) > _EPSILON:
+                return None
+            if not _points_equal(terminal[1], endpoint_position):
+                return None
+            if abs(terminal[0][0] - endpoint_position[0]) > _EPSILON:
+                return None
+            return terminal[0]
+
+        current_port = port_for(current_segments)
+        if current_port is None:
+            return False
+        other_route = sorted(
+            (
+                candidate
+                for candidate in owned_segments
+                if candidate.family_id == other.family_id
+                and candidate.endpoint == other.endpoint
+            ),
+            key=lambda candidate: candidate.index,
+        )
+        other_segments = [candidate.segment for candidate in other_route]
+        other_port = port_for(other_segments)
+        if other_port is None:
+            return False
+        if not _points_equal(current_port, other_port):
+            # Date-lane parents can enter one shared animal at different
+            # heights. Their terminal vertical entries may therefore overlap
+            # from the shared marker to the lower of the two ports even though
+            # the port coordinates are not identical. This is still one
+            # semantic parent connection, provided both complete routes keep
+            # the canonical two-segment shape and the overlap reaches only the
+            # shared marker. Arbitrary horizontal/child-route overlap remains
+            # invalid because it does not satisfy these structural predicates.
+            if relation != "overlap" or len(other_segments) != 2:
+                return False
+            other_terminal = other_segments[-1]
+            current_terminal = current_segments[-1]
+            if not (
+                abs(current_terminal[0][0] - current_terminal[1][0]) <= _EPSILON
+                and abs(other_terminal[0][0] - other_terminal[1][0]) <= _EPSILON
+                and abs(current_terminal[0][0] - endpoint_position[0]) <= _EPSILON
+                and abs(other_terminal[0][0] - endpoint_position[0]) <= _EPSILON
+                and _points_equal(current_terminal[1], endpoint_position)
+                and _points_equal(other_terminal[1], endpoint_position)
+            ):
+                return False
+            overlap = _segment_overlap(current.segment, other.segment)
+            if overlap is None:
+                return False
+            if not any(
+                math.hypot(
+                    overlap_point[0] - endpoint_position[0],
+                    overlap_point[1] - endpoint_position[1],
+                )
+                <= _MARKER_TOLERANCE + _EPSILON
+                for overlap_point in overlap
+            ):
+                return False
+        if relation == "overlap":
+            # ``_segment_relation`` has no single point for a collinear
+            # overlap.  Once both complete canonical parent-entry routes
+            # terminate at the same shared animal port, their common
+            # horizontal shoulder or vertical terminal stub is one semantic
+            # connection and is safe to retain.
+            return _segment_overlap(current.segment, other.segment) is not None
+        if point is None:
+            return False
+        return _points_equal(point, current_port)
 
     @staticmethod
     def _missing_shared_animal_endpoint(

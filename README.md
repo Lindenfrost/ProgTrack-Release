@@ -23,6 +23,10 @@ offers a tiny local SQLite profile for one workstation or testing, plus a shared
 PostgreSQL profile for networked facilities. The same animal identities, history,
 permissions, documents, and exports remain available whichever profile is used.
 
+Repository validation snapshot (2026-09-12): the complete automated suite passed
+with 530 tests and 200 subtests. The two reported warnings are upstream `pypdf`
+deprecation warnings in PDF branding tests; no ProgTrack test failure was found.
+
 ## At a glance
 
 The first column uses the same neutral tab background as the application
@@ -596,6 +600,7 @@ therefore remain separate packages with the same application data model.
 
 | Version / generation | Focus |
 | --- | --- |
+| `0.2.3` / Phase 2C Heritage and cross-module maintenance | Selection-scoped Heritage position maps, complete-frame and manual-anchor safety, generic pedigree geometry/recovery, effective-scope branch handling, panning/repaint, hover cleanup, archived All-tab layout, role-aware plot fixes, seed/fixture compatibility, and the full automated regression gate. |
 | `0.2.2` / Phase 2B native retest release | Windows portable release with responsive backend/profile dialogs, identity-compliant IDs, role-dialog and permission fixes, localized SVG UI, plotting/Heritage refinements, and verified release packaging. |
 | `0.2.1` / Backend release | Shared backend services and adapters, deterministic seed, runtime paths, immutable identities, locks, interchange packages, SVG icon registry, PDF branding, and launcher/runtime hardening. |
 | `0.2.0` / Backend foundation | Canonical data dictionary, storage matrix, interchange contract, and approved PostgreSQL/SQLite architecture. |

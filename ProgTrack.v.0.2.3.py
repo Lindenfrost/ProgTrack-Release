@@ -181,7 +181,7 @@ from Plugins.Animal_Reports.report_index import (
     ReportIndexRepository,
     ReportJsonMTimeCache,
 )
-from typing import List, Dict, Any, Optional, Tuple, Callable, Iterable, Mapping, TYPE_CHECKING
+from typing import List, Dict, Any, Optional, Tuple, Callable, Iterable, Mapping, Set, TYPE_CHECKING
 
 APP_BASE_DIR = Path(__file__).resolve().parent
 APP_RUNTIME_DIR = (
@@ -416,6 +416,77 @@ class ControlledCatalogCombo(QComboBox):
 
     def text(self) -> str:
         return str(self.currentData() or self.currentText() or "")
+
+
+class _BoundedNameLabel(QLabel):
+    """Render a full identity in a width-bounded, tooltip-preserving label."""
+
+    def __init__(self, text: str, parent=None) -> None:
+        self._full_text = str(text or "")
+        super().__init__(parent)
+        self.setToolTip(self._full_text)
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self._refresh_elision()
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt API name
+        return QSize(0, max(1, self.fontMetrics().height()))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API name
+        return QSize(0, max(1, self.fontMetrics().height()))
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt API name
+        super().resizeEvent(event)
+        self._refresh_elision()
+
+    def changeEvent(self, event) -> None:  # noqa: N802 - Qt API name
+        """Recompute elision when style or font metrics change in place."""
+        super().changeEvent(event)
+        if event.type() in {
+            QEvent.Type.FontChange,
+            QEvent.Type.ApplicationFontChange,
+            QEvent.Type.StyleChange,
+        }:
+            self._refresh_elision()
+
+    def _refresh_elision(self) -> None:
+        width = max(0, self.contentsRect().width())
+        self.setText(self.fontMetrics().elidedText(
+            self._full_text, Qt.TextElideMode.ElideRight, width
+        ))
+
+
+class _ViewportSyncListWidget(QListWidget):
+    """List widget that resynchronizes custom rows after viewport relayout."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._viewport_sync_callback = None
+        self._viewport_sync_pending = False
+        self.viewport().installEventFilter(self)
+
+    def set_viewport_sync_callback(self, callback) -> None:
+        """Register the owner callback used after a viewport resize."""
+        self._viewport_sync_callback = callback
+
+    def schedule_viewport_sync(self) -> None:
+        """Run one callback after Qt has completed the pending layout pass."""
+        callback = self._viewport_sync_callback
+        if not callable(callback) or self._viewport_sync_pending:
+            return
+        self._viewport_sync_pending = True
+        QTimer.singleShot(0, self._run_viewport_sync)
+
+    def _run_viewport_sync(self) -> None:
+        self._viewport_sync_pending = False
+        callback = self._viewport_sync_callback
+        if callable(callback):
+            callback()
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 - Qt API name
+        if obj is self.viewport() and event.type() == QEvent.Type.Resize:
+            self.schedule_viewport_sync()
+        return super().eventFilter(obj, event)
 
 
 class RolePresetCombo(QComboBox):
@@ -3928,6 +3999,47 @@ class _IdleResetFilter(QtCore.QObject):
 
 # # ================================================================ #
 class ProgTrackApp(QtWidgets.QMainWindow):
+    # Declarative ownership for Plot visibility controls.  Applicability is
+    # role based and uses the existing role-block/data gates below; saved
+    # booleans remain keyed by these stable semantic names.
+    _PLOT_DISPLAY_FEATURES = {
+        "progesterone": {
+            "roles": frozenset({
+                # The existing Plot UI exposes progesterone controls for the
+                # two female donor roles.  Keep this semantic rule aligned
+                # with _tab_shows_prog_event_controls rather than making
+                # data-bearing roles silently gain a hidden control.
+                "egg_cell_donor", "surrogate",
+            }),
+            "default": True,
+            "session_key": "display_chk_prog",
+        },
+        "weight": {
+            "roles": frozenset(),
+            "default": True,
+            "session_key": "display_chk_weight",
+        },
+        "events": {
+            "roles": frozenset({
+                "egg_cell_donor", "surrogate",
+                "offspring", "breeding_animal", "experimental_animal",
+                "experimental_offspring",
+            }),
+            "default": True,
+            "session_key": "display_chk_events",
+        },
+        "sperm_measurements": {
+            "roles": frozenset({"sperm_donor"}),
+            "default": True,
+            "session_key": "display_chk_sperm_measurements",
+        },
+        "weight_overlay": {
+            "roles": frozenset({"offspring", "experimental_offspring"}),
+            "default": True,
+            "session_key": "display_chk_ref_weight",
+        },
+    }
+
     def __init__(self):
         try:
             # Initialize QMainWindow
@@ -4208,6 +4320,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # If we have a loading label, update it
             if hasattr(self, 'loading_label'):
                 self.loading_label.setText(f"Loaded {len(self.animals)} animals and {len(self.archived_animals)} archived animals")
+
+            # The UI is built before the authoritative Core snapshot is
+            # loaded, so the initial list population necessarily sees an
+            # empty animal mapping.  Re-enter the canonical list/status
+            # renderer immediately after persistence has populated the
+            # mappings; this is the same path used by ordinary refreshes and
+            # creates the SVG status widgets before the first visible frame.
+            self._refresh_list()
             
             # Process any pending events
             QtWidgets.QApplication.processEvents()
@@ -5076,6 +5196,152 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         self.rb_weight_on.setEnabled(weight_enabled)
         self.rb_weight_off.setEnabled(weight_enabled)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt API name
+        """Rebind mixed All-tab rows after the host viewport changes size."""
+        super().resizeEvent(event)
+        self._sync_animal_list_row_widths()
+
+    def _schedule_animal_list_row_width_sync(self) -> None:
+        """Resync rows after a parent layout has settled its new viewport."""
+        lst = getattr(self, "lst", None)
+        schedule = getattr(lst, "schedule_viewport_sync", None)
+        if callable(schedule):
+            schedule()
+        else:
+            QTimer.singleShot(0, self._sync_animal_list_row_widths)
+
+    def _apply_plot_display_state(self, *_args) -> None:
+        """Apply semantic display preferences to the complete artist groups.
+
+        This centralizes screen and export state: each checkbox owns one
+        series group, while line-style radios only change the line style.
+        Hidden or unavailable data keeps its saved preference for a later
+        selection with data.
+        """
+        applicable = self._plot_applicable_features()
+        progesterone_applicable = "progesterone" in applicable
+        weight_visible = bool(
+            getattr(self, "chk_weight", None)
+            and self.chk_weight.isChecked()
+            and "weight" in applicable
+        )
+        reference_visible = bool(
+            getattr(self, "chk_ref_weight", None)
+            and self.chk_ref_weight.isChecked()
+            and "weight_overlay" in applicable
+        )
+        events_checkbox = self._get_current_events_checkbox()
+        events_visible = bool(
+            events_checkbox and events_checkbox.isChecked()
+            and "events" in applicable
+        )
+        sperm_visible = bool(
+            getattr(self, "chk_sperm_measurements", None)
+            and self.chk_sperm_measurements.isChecked()
+            and "sperm_measurements" in applicable
+        )
+        for line in getattr(self, "weight_lines", []):
+            line.set_visible(weight_visible)
+        for band in getattr(self, "weight_ref_bands", []):
+            band.set_visible(reference_visible)
+        for line in getattr(self, "ev_lines", []):
+            # Sperm artists are also retained in ev_lines for historical
+            # picking; the dedicated group must remain independent of Events.
+            if line not in getattr(self, "sperm_artists", []):
+                line.set_visible(events_visible)
+        for text_artist in getattr(self, "ev_texts", []):
+            text_artist.set_visible(events_visible)
+        for artist in getattr(self, "sperm_artists", []):
+            artist.set_visible(sperm_visible)
+        for artist in self.__dict__.get("sperm_overlay_dots", []):
+            # Hover markers are transient, but may still exist while a
+            # checkbox is toggled.  Keep them in the same sperm visibility
+            # group as the bars and measurement lines.
+            artist.set_visible(sperm_visible)
+        # The mode helper owns which progesterone sub-mode is active, but
+        # role applicability is owned here.  This prevents a stale blood/PdG
+        # artist from surviving a role switch to a role without progesterone.
+        if not progesterone_applicable:
+            for artist_group in (
+                self.__dict__.get("prog_lines", []),
+                self.__dict__.get("pdg_lines", []),
+                self.__dict__.get("pdg_conv_lines", []),
+                self.__dict__.get("prog_overlay_dots", []),
+                self.__dict__.get("pdg_hollow_dots", []),
+            ):
+                for artist in artist_group:
+                    artist.set_visible(False)
+        if self.current_canvas is not None:
+            self.current_canvas.draw_idle()
+        if self.__dict__.get("rb_weight_on") is not None:
+            self._update_toggle_controls()
+
+    def _update_plot_display_control_visibility(self, availability=None) -> None:
+        """Resolve role-aware Plot control presence and data availability.
+
+        Applicability is based on the selected canonical roles.  A valid
+        feature remains visible when its current selection has no rows to
+        render; it is disabled in that state so a restored preference is not
+        destroyed merely because data is temporarily absent.  This is
+        important for ``experimental_offspring`` in the mixed All tab, which
+        has no dedicated category tab of its own.
+        """
+        selected = list(getattr(self, "selected_animals", []) or [])
+        has_selection = bool(selected)
+        applicable = self._plot_applicable_features()
+        if availability is None:
+            try:
+                availability = self._plot_feature_availability(selected)
+            except Exception:
+                availability = {}
+
+        has_reference_weight = bool(availability.get("has_reference_weight"))
+        has_sperm_measurements = bool(availability.get("has_sperm_measurements"))
+        has_events = bool(availability.get("has_events"))
+        steroid_active = bool(availability.get("steroid_active"))
+        has_prog_data = bool(
+            availability.get("has_blood")
+            or availability.get("has_urine")
+            or availability.get("has_combined")
+        )
+
+        reference_control = getattr(self, "chk_ref_weight", None)
+        if reference_control is not None:
+            reference_applicable = has_selection and "weight_overlay" in applicable
+            reference_control.setVisible(reference_applicable)
+            reference_control.setEnabled(reference_applicable and has_reference_weight)
+
+        sperm_control = getattr(self, "chk_sperm_measurements", None)
+        if sperm_control is not None:
+            sperm_applicable = has_selection and "sperm_measurements" in applicable
+            sperm_control.setVisible(sperm_applicable)
+            sperm_control.setEnabled(sperm_applicable and has_sperm_measurements)
+
+        # The existing category-specific Events/Progesterone controls remain
+        # authoritative on their dedicated tabs.  On All, use the existing
+        # generic controls for the union of selected roles so experimental
+        # offspring keeps its required Events control.
+        category_tab = getattr(self, "category_tab", None)
+        current_index = category_tab.currentIndex() if category_tab is not None else None
+        try:
+            all_index = self._all_category_tab_index()
+        except Exception:
+            all_index = None
+        if current_index == all_index:
+            events_control = getattr(self, "chk_events", None)
+            if events_control is not None:
+                events_applicable = has_selection and "events" in applicable
+                events_control.setVisible(events_applicable)
+                events_control.setEnabled(events_applicable and has_events)
+
+            progesterone_control = self.__dict__.get("chk_prog")
+            if progesterone_control is not None:
+                progesterone_applicable = has_selection and "progesterone" in applicable
+                progesterone_control.setVisible(progesterone_applicable)
+                progesterone_control.setEnabled(
+                    progesterone_applicable and steroid_active and has_prog_data
+                )
 
     # _update_urine_scale_enable method has been removed - always use urine scale
 
@@ -6026,31 +6292,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # 7.6.1 Checkbox Toggles: Show/Hide Prog, Weight & Events
         # ------------------------
         self.chk_prog.toggled.connect(self._on_prog_checkbox_toggled)
-        self.chk_weight.toggled.connect(
-            lambda checked: (
-                [ln.set_visible(checked) for ln in self.weight_lines],
-                [band.set_visible(checked) for band in getattr(self, 'weight_ref_bands', [])],
-                self.current_canvas.draw_idle() if self.current_canvas else None,
-                self._update_toggle_controls()
-            )
-        )
-        self.chk_events.toggled.connect(
-            lambda checked: (
-                [ln.set_visible(checked) for ln in self.ev_lines],
-                [tx.set_visible(checked) for tx in self.ev_texts],
-                self.current_canvas.draw_idle() if self.current_canvas else None
-            )
-        )
+        self.chk_weight.toggled.connect(self._apply_plot_display_state)
+        self.chk_events.toggled.connect(self._apply_plot_display_state)
+        self.chk_ref_weight.toggled.connect(self._apply_plot_display_state)
+        self.chk_sperm_measurements.toggled.connect(self._apply_plot_display_state)
 
         # Per-role Events checkboxes share the same toggle handler
         for chk in (self.chk_events_offspring, self.chk_events_breeding, self.chk_events_experimental):
-            chk.toggled.connect(
-                lambda checked: (
-                    [ln.set_visible(checked) for ln in self.ev_lines],
-                    [tx.set_visible(checked) for tx in self.ev_texts],
-                    self.current_canvas.draw_idle() if self.current_canvas else None
-                )
-            )
+            chk.toggled.connect(self._apply_plot_display_state)
 
         # ------------------------
         # 7.7 Restore Persisted Settings (e.g. last mode, linestyles, etc.)
@@ -8627,7 +8876,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     tabs_widget.setVisible(False)
         
         # Animal list (narrower to accommodate project tabs)
-        self.lst = QListWidget()
+        self.lst = _ViewportSyncListWidget(self)
+        self.lst.set_viewport_sync_callback(self._sync_animal_list_row_widths)
+        # Row content is constrained to the real viewport.  A horizontal
+        # scrollbar would otherwise reduce that viewport after a long name or
+        # item size hint has already been published, making the next row-width
+        # calculation self-reinforcing and capable of clipping the status tail.
+        self.lst.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.lst.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
         self.lst.itemSelectionChanged.connect(self._on_select)
         self.lst.itemClicked.connect(self._on_animal_item_clicked)
@@ -8824,20 +9079,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Progesterone checkbox - only for female tab
         if hasattr(self, 'chk_prog') and self.chk_prog is not None:
             self.chk_prog.setVisible(visible and not events_only)
-            if not visible:
-                self.chk_prog.blockSignals(True)
-                self.chk_prog.setChecked(False)
-                self.chk_prog.blockSignals(False)
 
         # Events checkbox - show appropriate one based on tab
         if hasattr(self, 'chk_events') and self.chk_events is not None:
             self.chk_events.setVisible(visible and not events_only)
             if not visible:
-                self.chk_events.blockSignals(True)
-                self.chk_events.setChecked(False)
-                self.chk_events.blockSignals(False)
+                # Keep the semantic Display preference intact.  Applicability
+                # and the effective artist state are resolved centrally by
+                # _apply_plot_display_state; hiding a category control must
+                # not turn a future valid role's default into False.
                 for ln in getattr(self, 'ev_lines', []):
-                    ln.set_visible(False)
+                    if ln not in getattr(self, 'sperm_artists', []):
+                        ln.set_visible(False)
                 for tx in getattr(self, 'ev_texts', []):
                     tx.set_visible(False)
 
@@ -9148,6 +9401,27 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.chk_weight = QCheckBox(self.messages["checkbox.weight"])
         self.chk_weight.setChecked(True)
         h_chk.addWidget(self.chk_weight)
+
+        # The reference range is an independent display feature.  It shares
+        # the existing offspring species lookup and never changes the subject
+        # weight series or its preference.
+        self.chk_ref_weight = QCheckBox(
+            self.messages.get("checkbox.reference_weight", "Reference weight")
+        )
+        self.chk_ref_weight.setChecked(
+            self._PLOT_DISPLAY_FEATURES["weight_overlay"].get("default", True)
+        )
+        h_chk.addWidget(self.chk_ref_weight)
+
+        # Sperm Display owns the complete existing sperm artist group
+        # (bars, lines and hover overlays); line style remains separate.
+        self.chk_sperm_measurements = QCheckBox(
+            self.messages.get("checkbox.sperm_measurements", "Sperm measurements")
+        )
+        self.chk_sperm_measurements.setChecked(
+            self._PLOT_DISPLAY_FEATURES["sperm_measurements"].get("default", True)
+        )
+        h_chk.addWidget(self.chk_sperm_measurements)
         
         # Events checkbox (for female tab - used as default/fallback)
         self.chk_events = QCheckBox(self.messages["checkbox.events"])
@@ -9168,6 +9442,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.chk_events_offspring.setVisible(False)
         self.chk_events_breeding.setVisible(False)
         self.chk_events_experimental.setVisible(False)
+        self.chk_ref_weight.setVisible(False)
+        self.chk_sperm_measurements.setVisible(False)
 
         h_chk.addStretch()
         lay_chk.addLayout(h_chk)
@@ -14163,17 +14439,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             h = QHBoxLayout(row_widget)
             
             # Add the animal name label
-            name_label = QLabel(display_name)
+            name_label = (
+                _BoundedNameLabel(display_name)
+                if show_all_animals_tab
+                else QLabel(display_name)
+            )
             name_label.setToolTip(identity_label)
             if show_all_animals_tab:
-                # The All tab can combine several status icons.  Let the name
-                # yield all spare width first so the fixed status area stays
-                # visible; the complete display name remains available via
-                # the tooltip.
-                name_label.setMinimumWidth(0)
-                name_label.setSizePolicy(
-                    QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
-                )
+                # The All tab can combine several status icons.  The bounded
+                # label yields spare width first while retaining the complete
+                # identity in its tooltip.
                 h.addWidget(name_label, 1)
             else:
                 h.addWidget(name_label)
@@ -14347,18 +14622,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     arch_item = QListWidgetItem()
                     arch_row = QWidget()
                     arch_h = QHBoxLayout(arch_row)
-                    arch_name_lbl = QLabel(self._display_name(arch_name))
+                    arch_name_lbl = (
+                        _BoundedNameLabel(self._display_name(arch_name))
+                        if show_all_animals_tab
+                        else QLabel(self._display_name(arch_name))
+                    )
                     arch_name_lbl.setToolTip(arch_identity_label)
                     arch_name_lbl.setStyleSheet('color: black;')
                     if show_all_animals_tab:
-                        # Archived rows share the All-tab row geometry with
-                        # active animals.  Keep long archived names from
-                        # expanding the row's size hint and consuming the
-                        # fixed status area reserved by active rows.
-                        arch_name_lbl.setMinimumWidth(0)
-                        arch_name_lbl.setSizePolicy(
-                            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
-                        )
+                        # Archived rows share the same bounded All-tab name
+                        # contract and cannot widen active rows.
                         arch_h.addWidget(arch_name_lbl, 1)
                     else:
                         arch_h.addWidget(arch_name_lbl)
@@ -14403,7 +14676,47 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if hasattr(self, 'btn_edit_animal'):
             self.btn_edit_animal.setEnabled(active_selected and can_edit)
 
+        # QListWidget item size hints are measured before the row is inserted;
+        # a long archived label can therefore widen the content area and push
+        # the active-row status tail out of the viewport.  Rebind every custom
+        # row to the current viewport after population so the viewport owns
+        # width and the name column receives only the remaining space.
+        self._sync_animal_list_row_widths()
+        self._schedule_animal_list_row_width_sync()
         logging.info(f"Refreshed list with {visible_count} visible animals")
+
+    def _sync_animal_list_row_widths(self) -> None:
+        """Keep All-tab custom rows inside the list viewport.
+
+        Rows in category tabs retain their historical size-hint behavior.  On
+        the mixed All tab, row width follows the viewport and labels are
+        allowed to contract; their identity tooltip remains the full value.
+        """
+        lst = getattr(self, "lst", None)
+        tab = getattr(self, "category_tab", None)
+        if lst is None or tab is None or tab.currentIndex() != self._all_category_tab_index():
+            return
+        # Disable horizontal overflow before reading the viewport width.  This
+        # makes the width owner explicit and prevents a stale scrollbar from
+        # becoming part of the geometry contract during a mixed-row refresh.
+        lst.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        viewport = lst.viewport()
+        width = max(0, viewport.contentsRect().width())
+        if width <= 0:
+            return
+        for index in range(lst.count()):
+            item = lst.item(index)
+            row = lst.itemWidget(item)
+            if row is None:
+                # Separators and heritage-only text items are governed by Qt's
+                # native item rendering and need no custom-row adjustment.
+                continue
+            row.setMinimumWidth(0)
+            row.setMaximumWidth(width)
+            row.resize(width, max(row.height(), row.sizeHint().height()))
+            hint = item.sizeHint()
+            item.setSizeHint(QSize(width, max(hint.height(), row.sizeHint().height())))
+        lst.updateGeometry()
 
     def _apply_project_filter(self, project_name):
         """Filter animal list by project (called by ProjectsTrack plugin).
@@ -15146,6 +15459,86 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         for button in buttons:
             button.setFixedWidth(width)
 
+    def _plot_feature_availability(self, selected=None):
+        """Return data gates for the semantic Plot display features."""
+        selected = list(self.selected_animals if selected is None else selected)
+        steroid_active = self._is_steroid_track_active()
+        has_blood = has_urine = has_combined = has_weight = has_events = False
+        has_reference_weight = has_sperm_measurements = False
+        specs = self._PLOT_DISPLAY_FEATURES
+        for name in selected:
+            animal = self.animals.get(name, {})
+            if not isinstance(animal, dict):
+                continue
+            has_blood |= steroid_active and bool(animal.get("daten"))
+            has_urine |= steroid_active and bool(animal.get("pdg"))
+            has_weight |= bool(animal.get("gewicht"))
+            role_value = canonical_role_value(
+                self._animal_role_value(animal), default=Role.UNKNOWN.value
+            )
+            has_reference_weight |= bool(
+                animal.get("gewicht")
+                and role_value in specs["weight_overlay"]["roles"]
+                and self._uses_offspring_weight_evaluation(role_value)
+            )
+            has_sperm_measurements |= bool(
+                steroid_active
+                and animal.get("sperm")
+                and role_value in specs["sperm_measurements"]["roles"]
+            )
+            has_events |= steroid_active and bool(
+                animal.get("sperm") or animal.get("events")
+            )
+        if steroid_active and self.has_pdg_plugin and getattr(self, "pdg_cap", None):
+            for name in selected:
+                params = self.pdg_cap._plugin.get_parameters(name)
+                if params and params.get("n_pairs", 0) > 0:
+                    has_combined = True
+                    break
+        return {
+            "steroid_active": steroid_active,
+            "has_blood": bool(has_blood),
+            "has_urine": bool(has_urine),
+            "has_combined": bool(has_combined),
+            "has_weight": bool(has_weight),
+            "has_events": bool(has_events),
+            "has_reference_weight": bool(has_reference_weight),
+            "has_sperm_measurements": bool(has_sperm_measurements),
+        }
+
+    def _plot_features_for_role(self, role_value: Any) -> Set[str]:
+        """Return semantic Plot controls applicable to one canonical role."""
+        role = canonical_role_value(role_value, default=Role.UNKNOWN.value)
+        features: Set[str] = set()
+        for feature, spec in self._PLOT_DISPLAY_FEATURES.items():
+            roles = spec.get("roles", frozenset())
+            if not roles or role in roles:
+                features.add(feature)
+        if not self._uses_offspring_weight_evaluation(role):
+            features.discard("weight_overlay")
+        return features
+
+    def _plot_applicable_features(self) -> Set[str]:
+        """Resolve visibility applicability for the current selected roles.
+
+        Saved checkbox state remains independent from applicability.  When a
+        selection changes, stale artists are therefore hidden immediately if
+        their semantic feature has no applicable role in the new selection.
+        The empty/uninitialised fallback keeps the state hook safe during
+        construction, before the normal selection model exists.
+        """
+        selected = list(getattr(self, "selected_animals", []) or [])
+        animals = getattr(self, "animals", None)
+        if not selected or not isinstance(animals, dict):
+            return set(self._PLOT_DISPLAY_FEATURES)
+        features: Set[str] = set()
+        for name in selected:
+            record = animals.get(name, {})
+            if not isinstance(record, dict):
+                continue
+            features.update(self._plot_features_for_role(self._animal_role_value(record)))
+        return features
+
     def _plot_selected(self) -> None:
 
         # Initialize storage for sperm hover overlay dots
@@ -15175,27 +15568,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ------------------------
         # 7.18.1 Check data availability
         # ------------------------
-        steroid_active = self._is_steroid_track_active()
-        has_blood, has_urine, has_combined, has_weight, has_events = False, False, False, False, False
-        # Filter to only main-list animals (heritage-only are not in self.animals)
-        main_animals = [n for n in self.selected_animals if n in self.animals]
-        for name in main_animals:
-            animal = self.animals[name]
-            has_blood |= steroid_active and bool(animal.get('daten'))
-            has_urine |= steroid_active and bool(animal.get('pdg'))
-            has_weight |= bool(animal.get('gewicht'))
-            has_events |= steroid_active and bool(
-                animal.get('sperm') or animal.get('events')
-            )
-
-            # Check if plugin has fitted model for combined data availability
-            has_combined = False
-            if steroid_active and self.has_pdg_plugin and hasattr(self, 'pdg_cap') and self.pdg_cap:
-                for name in self.selected_animals:
-                    params = self.pdg_cap._plugin.get_parameters(name)
-                    if params and params.get('n_pairs', 0) > 0:
-                        has_combined = True
-                        break
+        availability = self._plot_feature_availability()
+        steroid_active = availability["steroid_active"]
+        has_blood = availability["has_blood"]
+        has_urine = availability["has_urine"]
+        has_combined = availability["has_combined"]
+        has_weight = availability["has_weight"]
+        has_events = availability["has_events"]
+        has_reference_weight = availability["has_reference_weight"]
+        has_sperm_measurements = availability["has_sperm_measurements"]
 
         # ------------------------
         # 7.18.2 Enable/disable UI controls based on available data
@@ -15208,6 +15589,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.chk_prog.setEnabled(has_blood or has_urine or has_combined)
         self.chk_weight.setEnabled(has_weight)
         self.chk_events.setEnabled(has_events)
+        self._update_plot_display_control_visibility(availability)
 
         # ------------------------
         # 7.18.3 Auto-select the appropriate display mode
@@ -15267,7 +15649,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.rb_sperm_off.setChecked(False)
 
         if has_selection:
-            # Set all line style toggles to "on" by default
+            # Set line-style toggles to "on" for a newly rendered selection.
+            # Display checkbox preferences are intentionally not changed here.
             radio_buttons = [self.rb_weight_on, self.rb_blood_on]
             if self.has_pdg_plugin:
                 radio_buttons.append(self.rb_combined_on)
@@ -15276,16 +15659,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rb.blockSignals(True)
                 rb.setChecked(True)
                 rb.blockSignals(False)
-
-            # Preserve user checkbox states - only update enabled state, not checked state
-            # This allows per-user display preferences to persist across animal switches
-            for cb in (self.chk_prog, self.chk_weight, self.chk_events):
-                cb.blockSignals(True)
-                # Only uncheck if the checkbox is disabled (no data available)
-                # Keep user's checked preference if data is available
-                if not cb.isEnabled() and cb.isChecked():
-                    cb.setChecked(False)
-                cb.blockSignals(False)
 
         # ------------------------
         # 7.18.5 Initialize Matplotlib artist lists
@@ -15304,6 +15677,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.pdg_lines = []
         self.pdg_conv_lines = []
         self.sperm_lines = []
+        self.sperm_artists = []
         # plotting context per animal for later urine scaling
         self._plot_ctx = {}
 
@@ -15566,7 +15940,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                 label='Reference range'
                             )
                             # Respect user's display checkbox preference
-                            ref_band.set_visible(getattr(self, 'chk_weight', None) and self.chk_weight.isChecked())
+                            ref_band.set_visible(
+                                getattr(self, 'chk_ref_weight', None)
+                                and self.chk_ref_weight.isChecked()
+                            )
                             self.weight_ref_bands.append(ref_band)
                 
                 weight_line, = weight_ax.plot(
@@ -15847,6 +16224,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     )
                     for rect in bars_total + bars_motile + bars_progress:
                         self.ev_lines.append(rect)
+                        self.sperm_artists.append(rect)
                     # Total count, motile count, progressive count
                     vals_total     = list(counts)
                     vals_motile    = [c * (m / 100.0) for c, m in zip(counts, motility_pct)]
@@ -15873,6 +16251,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
                     # collect sperm lines for toggling
                     self.sperm_lines = [total_line, motile_line, prog_line]
+                    self.sperm_artists.extend(self.sperm_lines)
                     # store original linestyles
                     for ln in self.sperm_lines:
                         ln._orig_linestyle = ln.get_linestyle()
@@ -16125,6 +16504,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # enforce Anzeige-mode on the freshly plotted lines
         if has_selection:
             self._apply_mode()
+            self._apply_plot_display_state()
             # and apply urine scaling (if in urine mode)
             self._apply_urine_scale()
             if self._plot_x_viewport is None:
@@ -19608,6 +19988,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.chk_prog.setText(self.messages["checkbox.progesterone"])
         self.chk_weight.setText(self.messages["checkbox.weight"])
         self.chk_events.setText(self.messages["checkbox.events"])
+        if hasattr(self, "chk_ref_weight"):
+            self.chk_ref_weight.setText(
+                self.messages.get("checkbox.reference_weight", "Reference weight")
+            )
+        if hasattr(self, "chk_sperm_measurements"):
+            self.chk_sperm_measurements.setText(
+                self.messages.get("checkbox.sperm_measurements", "Sperm measurements")
+            )
         if self.has_pdg_plugin and hasattr(self, 'chk_mode_combined'):
             self.chk_mode_combined.setText(self.messages.get("mode.combined", "Combined"))
         self.chk_mode_blood.setText(self.messages.get("mode.blood", "Blood (Pgr)"))
@@ -19941,6 +20329,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             extra["display_chk_weight"] = self.chk_weight.isChecked()
         if hasattr(self, 'chk_events'):
             extra["display_chk_events"] = self.chk_events.isChecked()
+        if hasattr(self, 'chk_ref_weight'):
+            key = self._PLOT_DISPLAY_FEATURES["weight_overlay"]["session_key"]
+            extra[key] = self.chk_ref_weight.isChecked()
+        if hasattr(self, 'chk_sperm_measurements'):
+            key = self._PLOT_DISPLAY_FEATURES["sperm_measurements"]["session_key"]
+            extra[key] = self.chk_sperm_measurements.isChecked()
         # Per-role Events checkbox states
         if hasattr(self, 'chk_events_offspring'):
             extra["display_chk_events_offspring"] = self.chk_events_offspring.isChecked()
@@ -20023,6 +20417,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.chk_weight.setChecked(session.get("display_chk_weight", True))
         if hasattr(self, 'chk_events'):
             self.chk_events.setChecked(session.get("display_chk_events", True))
+        if hasattr(self, 'chk_ref_weight'):
+            key = self._PLOT_DISPLAY_FEATURES["weight_overlay"]["session_key"]
+            self.chk_ref_weight.setChecked(
+                session.get(
+                    key,
+                    self._PLOT_DISPLAY_FEATURES["weight_overlay"].get("default", True),
+                )
+            )
+        if hasattr(self, 'chk_sperm_measurements'):
+            key = self._PLOT_DISPLAY_FEATURES["sperm_measurements"]["session_key"]
+            self.chk_sperm_measurements.setChecked(
+                session.get(
+                    key,
+                    self._PLOT_DISPLAY_FEATURES["sperm_measurements"].get("default", True),
+                )
+            )
         # Restore per-role Events checkbox states
         if hasattr(self, 'chk_events_offspring'):
             self.chk_events_offspring.setChecked(session.get("display_chk_events_offspring", True))
@@ -26666,10 +27076,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return
 
         steroid_active = self._is_steroid_track_active()
+        progesterone_applicable = "progesterone" in self._plot_applicable_features()
 
         # Get checkbox states for modes
         # Main progesterone checkbox must be checked for any sub-mode to show
-        prog_enabled = steroid_active and getattr(self, 'chk_prog', None) and self.chk_prog.isChecked()
+        prog_enabled = (
+            steroid_active
+            and progesterone_applicable
+            and getattr(self, 'chk_prog', None)
+            and self.chk_prog.isChecked()
+        )
         show_combined = prog_enabled and self.chk_mode_combined.isChecked() if self.has_pdg_plugin and hasattr(self, 'chk_mode_combined') else False
         show_blood = prog_enabled and self.chk_mode_blood.isChecked()
         show_urine = prog_enabled and self.chk_mode_urin.isChecked() if self.has_pdg_plugin and hasattr(self, 'chk_mode_urin') else False
@@ -26925,6 +27341,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if self.has_pdg_plugin and hasattr(self, 'chk_mode_urin'):
                 self.chk_mode_urin.setChecked(False)
             self._apply_mode()
+            self._apply_plot_display_state()
             return
 
         if not checked:
@@ -26940,6 +27357,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # Trigger mode application
         self._apply_mode()
+        self._apply_plot_display_state()
     
     def _apply_default_prog_mode(self):
         """Set default progesterone mode based on data availability.

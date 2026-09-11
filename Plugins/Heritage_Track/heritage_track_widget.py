@@ -18,7 +18,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from PyQt6.QtCore import QSize, Qt, QTimer
 from PyQt6.QtGui import QColor, QPixmap
@@ -541,7 +541,6 @@ class HeritageTrackWidget(QWidget):
         self._ghost_nodes: Set[str] = set()
         self._chronological_undated_nodes: Set[str] = set()
         self.settings: Dict[str, Any] = self.plugin.get_settings()
-        self.collapsed_families: Set[str] = set(self.plugin.store.get_collapsed_families())
 
         # View/interaction state (FlowTrack-like)
         self.temp_positions: Dict[str, Tuple[float, float]] = {}
@@ -549,7 +548,6 @@ class HeritageTrackWidget(QWidget):
         self.current_ylim: Optional[Tuple[float, float]] = None
         self.pan_active = False
         self.pan_start: Optional[Tuple[float, float]] = None
-        self._pan_background: Optional[Any] = None
         self.drag_active = False
         self.drag_node: Optional[str] = None
         self.drag_group_nodes: Set[str] = set()
@@ -629,16 +627,6 @@ class HeritageTrackWidget(QWidget):
         )
         self.ax = self.figure.add_subplot(111)
         self.figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
-
-        self._hover_annotation = self.ax.annotate(
-            "",
-            xy=(0, 0),
-            xytext=(12, 12),
-            textcoords="offset points",
-            bbox={"boxstyle": "round", "fc": "#fff9db", "ec": "black", "alpha": 0.95},
-            arrowprops={"arrowstyle": "->", "color": "black"},
-        )
-        self._hover_annotation.set_visible(False)
 
         self._build_ui()
         self._connect_canvas_events()
@@ -1223,10 +1211,6 @@ class HeritageTrackWidget(QWidget):
             "show_heritage_only": bool(self.settings.get("show_heritage_only", True)),
             "exclude_archived": bool(self.settings.get("exclude_archived", False)),
         }
-        if self.__dict__.get("collapsed_families"):
-            # A collapsed visible scope must not replace its expanded map.
-            # Leave existing expanded keys compatible with persisted v1 maps.
-            payload["collapsed_families"] = sorted(self.collapsed_families, key=str.casefold)
         return self._render_revision(payload)
 
     @staticmethod
@@ -1302,6 +1286,7 @@ class HeritageTrackWidget(QWidget):
     def _save_position_cache(
         self,
         positions: Dict[str, Tuple[float, float]],
+        family_positions: Optional[Dict[str, Tuple[float, float]]] = None,
     ) -> bool:
         """Persist one complete map; retries retain the same context precondition."""
         key = self._active_position_cache_key
@@ -1315,6 +1300,11 @@ class HeritageTrackWidget(QWidget):
         }
         if not payload:
             return True
+        family_payload = {
+            family_id: tuple(point)
+            for family_id, point in (family_positions or {}).items()
+            if self._is_family_node(family_id)
+        }
         last_error: Optional[Exception] = None
         for _attempt in range(2):
             try:
@@ -1325,6 +1315,7 @@ class HeritageTrackWidget(QWidget):
                     self._active_position_cache_revision or "genesis",
                     self._active_position_cache_dependencies,
                     expected_entry=self._position_cache_expected_entry,
+                    family_positions=family_payload,
                     selection_type=(
                         f"selected:{self.layout_mode}:"
                         f"{self.settings.get('vertical_layout_mode', VERTICAL_LAYOUT_PARTNER_NORMALIZED)}"
@@ -1379,6 +1370,7 @@ class HeritageTrackWidget(QWidget):
         source_revision: str = "",
         artist_scale: float = 1.0,
         chronological_undated_nodes: Optional[Set[str]] = None,
+        cached_family_positions: Optional[Mapping[str, Tuple[float, float]]] = None,
     ) -> RenderCacheEntry:
         """Freeze one complete render transaction before any artists paint."""
         record_index = {
@@ -1486,8 +1478,10 @@ class HeritageTrackWidget(QWidget):
         )
         # Singleton parking and other widget-level post-routing adjustments
         # happen after the router's own placement pass.  Reuse the router's
-        # obstacle model as the final hard collision boundary so no render
-        # cache entry can certify overlapping labels or markers.
+        # obstacle model as the final publication boundary. Overview frames
+        # keep the full label footprint clear; focused frames may remain dense
+        # because zoom is the explicit disambiguation mechanism. No label or
+        # node is removed from either frame.
         fatal.extend(
             item
             for item in self._render_node_collision_diagnostics(
@@ -1498,8 +1492,46 @@ class HeritageTrackWidget(QWidget):
                     != "nothing"
                     or self._malformed_f_nodes & set(route_plan.animal_positions)
                 ),
+                allow_dense_label_overlaps=display_mode == LAYOUT_MODE_FOCUSED,
             )
             if item not in fatal
+        )
+        # Route construction and the render cache share one publication
+        # boundary. A family junction, endpoint, parent-entry shape, foreign
+        # marker hit, or line crossing is invalid. Text labels may overlap a
+        # route because labels are painted above lines; focused text may also
+        # be dense and is disentangled through zoom. Run the router's complete
+        # validator here, after singleton parking has updated the plan, so the
+        # cache can never certify a partial or stale route plan as valid.
+        try:
+            plan_validation = self._pedigree_router.validate_plan(
+                route_plan,
+                families,
+                labels=obstacle_labels,
+                show_inbreeding=bool(
+                    self.settings.get("animal_label_detail", "inbreeding_f")
+                    != "nothing"
+                    or self._malformed_f_nodes & set(route_plan.animal_positions)
+                ),
+            )
+        except GeometryValidationError as exc:
+            plan_validation = [str(exc)]
+        fatal.extend(item for item in plan_validation if item not in fatal)
+        # Structural route diagnostics remain fatal here.  ``route_obstacle_hits``
+        # is deliberately different: it is an internal record of a route that
+        # had to pass through an obstacle while preserving canonical topology.
+        # The gap recomputation and the validator below decide whether a
+        # foreign marker actually lacks the required mask.  Treating every
+        # conservative label/obstacle hit as fatal rejects otherwise valid
+        # dense pedigrees before their established gap/halo presentation can
+        # be published.
+        fatal.extend(
+            item
+            for item in (
+                list(route_plan.unresolved)
+                + list(route_plan.line_crossing_problems)
+            )
+            if item and item not in fatal
         )
         # A topology diagnostic is deliberately fatal for cache publication:
         # an unresolved frame may be inspected locally, but must never replace
@@ -1528,6 +1560,7 @@ class HeritageTrackWidget(QWidget):
             family_members=route_plan.family_members,
             positions=positions,
             locked_positions=locked_positions,
+            manual_family_positions=dict(cached_family_positions or {}),
             route_plan=route_plan,
             obstacles=obstacle_labels,
             bounds=bounds,
@@ -1601,19 +1634,25 @@ class HeritageTrackWidget(QWidget):
         labels: Mapping[str, str],
         *,
         show_inbreeding: bool,
+        allow_dense_label_overlaps: bool = False,
     ) -> List[str]:
-        """Return final label/marker collisions before a frame is published.
+        """Return final interactive-marker collisions before publication.
 
         The router performs collision avoidance during placement, but the
         widget can still add detached/singleton coordinates afterwards.  A
         final sweep over the same obstacle rectangles used by the router is a
-        cheap publication boundary and prevents an accidentally overlapping
-        frame from replacing the last accepted one.
+        cheap publication boundary. Focused frames deliberately allow dense
+        text because zoom is the disambiguation mechanism and no content may
+        be hidden; marker/marker contact remains a hard interactive failure.
         """
-        obstacles = self._pedigree_router.node_obstacles(
-            positions,
-            labels,
-            show_inbreeding,
+        obstacles = (
+            self._pedigree_router.marker_obstacles(positions)
+            if allow_dense_label_overlaps
+            else self._pedigree_router.node_obstacles(
+                positions,
+                labels,
+                show_inbreeding,
+            )
         )
         problems: List[str] = []
         ordered = sorted(obstacles.items(), key=lambda item: item[1].left)
@@ -1628,9 +1667,399 @@ class HeritageTrackWidget(QWidget):
                     and second_rect.top > first_rect.bottom
                 ):
                     problems.append(
-                        f"{first_node}/{second_node}: animal markers or labels overlap"
+                        (
+                            f"{first_node}/{second_node}: animal markers overlap"
+                            if allow_dense_label_overlaps
+                            else f"{first_node}/{second_node}: animal markers or labels overlap"
+                        )
                     )
         return problems
+
+    def _render_artist_fatal_diagnostics(
+        self,
+        renderer: Any,
+        *,
+        check_viewport: bool,
+        check_collisions: bool = True,
+        allow_dense_label_overlaps: bool = False,
+    ) -> List[str]:
+        """Measure final node artists before publishing a render entry."""
+        try:
+            axes_box = self.ax.get_window_extent(renderer)
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return ["final artist renderer has no valid axes bounds"]
+        boxes: Dict[str, List[Tuple[str, Any]]] = {}
+        fatal: List[str] = []
+        for node, meta in sorted(self.node_meta.items(), key=lambda item: str(item[0]).casefold()):
+            node_boxes: List[Tuple[str, Any]] = []
+            for kind in ("marker_artist", "label_artist", "f_artist", "undated_artist"):
+                artist = meta.get(kind)
+                if artist is None or not artist.get_visible():
+                    continue
+                try:
+                    get_clip_on = getattr(artist, "get_clip_on", None)
+                    clip_on = bool(get_clip_on()) if callable(get_clip_on) else True
+                    check_xy = getattr(artist, "_check_xy", None)
+                    if callable(check_xy):
+                        try:
+                            if not bool(check_xy(renderer)):
+                                if check_viewport and clip_on:
+                                    fatal.append(
+                                        f"{node}/{kind}: artist outside automatic-fit viewport"
+                                    )
+                                continue
+                        except (AttributeError, RuntimeError, TypeError, ValueError):
+                            fatal.append(f"{node}/{kind}: artist draw eligibility unavailable")
+                            continue
+                    box = artist.get_window_extent(renderer)
+                    values = (box.x0, box.y0, box.x1, box.y1)
+                    if not all(math.isfinite(float(value)) for value in values):
+                        fatal.append(f"{node}/{kind}: non-finite artist bounds")
+                        continue
+                    if check_viewport and clip_on and (
+                        box.x0 < axes_box.x0 - 1.0
+                        or box.x1 > axes_box.x1 + 1.0
+                        or box.y0 < axes_box.y0 - 1.0
+                        or box.y1 > axes_box.y1 + 1.0
+                    ):
+                        fatal.append(f"{node}/{kind}: artist outside automatic-fit viewport")
+                    # Matplotlib may return Bbox.unit() for an annotation
+                    # whose anchor is clipped completely outside the axes.
+                    # It remains visible logically but contributes no pixels;
+                    # compare only the intersection with the actual viewport.
+                    visible_box = (
+                        Bbox.from_extents(
+                            max(float(box.x0), float(axes_box.x0)),
+                            max(float(box.y0), float(axes_box.y0)),
+                            min(float(box.x1), float(axes_box.x1)),
+                            min(float(box.y1), float(axes_box.y1)),
+                        )
+                        if clip_on else box
+                    )
+                    if visible_box.width <= 0 or visible_box.height <= 0:
+                        continue
+                    node_boxes.append((kind, visible_box))
+                except (AttributeError, RuntimeError, TypeError, ValueError):
+                    fatal.append(f"{node}/{kind}: artist bounds unavailable")
+            if node_boxes:
+                boxes[node] = node_boxes
+        if not check_collisions:
+            return sorted(set(fatal))
+        ordered = sorted(boxes.items(), key=lambda item: str(item[0]).casefold())
+        for index, (first, first_boxes) in enumerate(ordered):
+            for second, second_boxes in ordered[index + 1:]:
+                for first_kind, first_box in first_boxes:
+                    for second_kind, second_box in second_boxes:
+                        if not first_box.overlaps(second_box):
+                            continue
+                        if (
+                            allow_dense_label_overlaps
+                            and (
+                                first_kind != "marker_artist"
+                                or second_kind != "marker_artist"
+                            )
+                        ):
+                            # Focused frames keep every label/detail artist
+                            # visible. Dense text is resolved by user zoom;
+                            # it must not veto publication or cause hiding.
+                            # Coincident markers remain fatal because they
+                            # would make click/drag targets ambiguous.
+                            continue
+                        fatal.append(
+                            f"{first}/{first_kind}/{second}/{second_kind}: "
+                            "final artist boxes overlap"
+                        )
+        return sorted(set(fatal))
+
+    def _artist_obstacle_scale_requirements(
+        self,
+        renderer: Any,
+        labels: Mapping[str, str],
+        *,
+        show_inbreeding: bool,
+    ) -> Optional[Tuple[float, float]]:
+        """Derive generic router scales from the detached artist geometry.
+
+        The router must place against a data-space approximation because the
+        final text extents depend on the active Matplotlib renderer, font,
+        DPI, and viewport.  When the final artist sweep finds a visible
+        collision, use the measured footprint to tighten that approximation
+        and let the canonical router rebuild the semantic blocks.  This is a
+        calibration step only: it never moves artists independently and never
+        identifies a seed, species, or particular animal.
+        """
+        try:
+            axes_box = self.ax.get_window_extent(renderer)
+            inverse = self.ax.transData.inverted()
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return None
+        if axes_box.width <= 1.0 or axes_box.height <= 1.0:
+            return None
+
+        router = self._pedigree_router
+        current_width_scale = max(
+            1.0, float(getattr(router, "label_width_scale", 1.0))
+        )
+        current_height_scale = max(
+            1.0, float(getattr(router, "label_height_scale", 1.0))
+        )
+        required_width_scale = current_width_scale
+        required_height_scale = current_height_scale
+        bottom_base = 0.78 if show_inbreeding else 0.56
+        top_base = 0.34
+
+        for node, meta in sorted(
+            self.node_meta.items(), key=lambda item: str(item[0]).casefold()
+        ):
+            if meta.get("kind") != "animal":
+                continue
+            anchor = self.node_positions.get(node)
+            if anchor is None:
+                continue
+            data_boxes: List[Tuple[float, float, float, float]] = []
+            for kind in (
+                "marker_artist",
+                "label_artist",
+                "f_artist",
+                "undated_artist",
+            ):
+                artist = meta.get(kind)
+                if artist is None or not artist.get_visible():
+                    continue
+                try:
+                    box = artist.get_window_extent(renderer)
+                    visible = Bbox.intersection(box, axes_box)
+                    if visible is None or visible.width <= 0 or visible.height <= 0:
+                        continue
+                    transformed = inverse.transform(
+                        (
+                            (float(box.x0), float(box.y0)),
+                            (float(box.x1), float(box.y1)),
+                        )
+                    )
+                    left = min(float(transformed[0][0]), float(transformed[1][0]))
+                    right = max(float(transformed[0][0]), float(transformed[1][0]))
+                    bottom = min(float(transformed[0][1]), float(transformed[1][1]))
+                    top = max(float(transformed[0][1]), float(transformed[1][1]))
+                    if all(
+                        math.isfinite(value)
+                        for value in (left, right, bottom, top)
+                    ):
+                        data_boxes.append((left, right, bottom, top))
+                except (
+                    AttributeError,
+                    RuntimeError,
+                    TypeError,
+                    ValueError,
+                    OverflowError,
+                ):
+                    continue
+            if not data_boxes:
+                continue
+
+            left = min(box[0] for box in data_boxes)
+            right = max(box[1] for box in data_boxes)
+            bottom = min(box[2] for box in data_boxes)
+            top = max(box[3] for box in data_boxes)
+            # Add a small renderer-relative safety margin.  Using the inverse
+            # transform keeps it in pixels, so the calibration is stable
+            # across data ranges and does not encode a viewport size.
+            try:
+                display_anchor = self.ax.transData.transform(anchor)
+                origin = inverse.transform(
+                    (
+                        display_anchor,
+                        (float(display_anchor[0]) + 1.0, float(display_anchor[1])),
+                    )
+                )
+                x_per_pixel = abs(float(origin[1][0] - origin[0][0]))
+                y_origin = inverse.transform(
+                    (
+                        display_anchor,
+                        (float(display_anchor[0]), float(display_anchor[1]) + 1.0),
+                    )
+                )
+                y_per_pixel = abs(float(y_origin[1][1] - y_origin[0][1]))
+            except (AttributeError, RuntimeError, TypeError, ValueError, OverflowError):
+                continue
+            x_safety = max(1e-7, x_per_pixel * 2.0)
+            y_safety = max(1e-7, y_per_pixel * 2.0)
+
+            label = str(labels.get(node, node)).strip()
+            estimated = float(router._estimated_label_width(label))
+            raw_estimated = estimated / current_width_scale
+            if raw_estimated > 1e-7:
+                required_width_scale = max(
+                    required_width_scale,
+                    (right - left + x_safety) / raw_estimated,
+                )
+            required_height_scale = max(
+                required_height_scale,
+                (float(anchor[1]) - bottom + y_safety) / bottom_base,
+                (top - float(anchor[1]) + y_safety) / top_base,
+            )
+
+        # A retry is useful only when the measured footprint exceeds the
+        # current shared obstacle model by a meaningful amount.  The upper
+        # bound keeps an adversarial font/renderer mismatch from creating an
+        # unbounded retry loop; an impossible protected layout still reaches
+        # the existing explicit publication veto.
+        if (
+            required_width_scale <= current_width_scale * 1.02
+            and required_height_scale <= current_height_scale * 1.02
+        ):
+            return None
+        return (
+            min(required_width_scale, current_width_scale * 2.0),
+            min(required_height_scale, current_height_scale * 2.0),
+        )
+
+    def _rebuild_render_entry_after_artist_collision(
+        self,
+        *,
+        engine: PedigreeEngine,
+        selected_animals: List[str],
+        display_nodes: Set[str],
+        ghost_nodes: Set[str],
+        levels: Dict[str, int],
+        families: Dict[str, Dict[str, Any]],
+        seed_positions: Mapping[str, Tuple[float, float]],
+        locked_positions: Dict[str, Tuple[float, float]],
+        protected_nodes: Set[str],
+        singleton_nodes: Set[str],
+        obstacle_labels: Dict[str, str],
+        show_inbreeding: bool,
+        f_values: Dict[str, float],
+        f_status: Dict[str, str],
+        chronological_mode: bool,
+        display_mode: str,
+        source_revision: str,
+        cached_family_positions: Dict[str, Tuple[float, float]],
+        chronological_undated_nodes: Set[str],
+    ) -> RenderCacheEntry:
+        """Rebuild one semantic frame after renderer-driven calibration."""
+        # Singleton parking is a widget-level post-routing operation. Keep
+        # those already parked coordinates stable while the router re-solves
+        # connected semantic blocks from the measured collision feedback.
+        recovery_protected = set(protected_nodes) | set(singleton_nodes)
+        route_plan = self._pedigree_router.plan(
+            dict(seed_positions),
+            families,
+            labels=obstacle_labels,
+            protected_nodes=recovery_protected,
+            focus_nodes=set(selected_animals),
+            display_mode=display_mode,
+            show_inbreeding=show_inbreeding,
+            vertical_layout_mode=self.settings.get(
+                "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
+            ),
+            movable_nodes=None,
+            manual_family_positions=cached_family_positions or None,
+        )
+        route_plan.layout_diagnostics = list(
+            engine.generation_diagnostics(display_nodes, levels)
+        )
+        if route_plan.layout_diagnostics:
+            route_plan.unresolved = sorted(
+                set(route_plan.unresolved) | set(route_plan.layout_diagnostics),
+                key=str.casefold,
+            )
+        animal_positions = dict(route_plan.animal_positions)
+        family_positions = dict(route_plan.family_positions)
+        positions: Dict[str, Tuple[float, float]] = dict(animal_positions)
+        positions.update(family_positions)
+        fit_xlim, fit_ylim = self._compute_view_bounds(
+            positions, route_plan.all_points()
+        )
+        view_bounds = self._apply_aspect_fill(fit_xlim, fit_ylim)
+        return self._build_render_cache_entry(
+            engine=engine,
+            selected_animals=selected_animals,
+            display_nodes=display_nodes,
+            ghost_nodes=ghost_nodes,
+            levels=levels,
+            families=families,
+            positions=positions,
+            locked_positions=locked_positions,
+            route_plan=route_plan,
+            bounds=view_bounds,
+            f_values=f_values,
+            f_status=f_status,
+            obstacle_labels=obstacle_labels,
+            chronological_mode=chronological_mode,
+            display_mode=display_mode,
+            source_revision=source_revision,
+            artist_scale=self._rendered_artist_scale,
+            chronological_undated_nodes=chronological_undated_nodes,
+            cached_family_positions=cached_family_positions,
+        )
+
+    def _expand_bounds_for_outside_artists(
+        self,
+        renderer: Any,
+        bounds: Tuple[Tuple[float, float], Tuple[float, float]],
+    ) -> Optional[Tuple[Tuple[float, float], Tuple[float, float]]]:
+        """Return data bounds that include clipped, drawable node artists.
+
+        Annotation clipping is evaluated by Matplotlib in display space.  A
+        suppressed annotation can therefore expose only ``Bbox.unit()``;
+        recover its data anchor rather than treating that placeholder box as
+        geometry.  Every intended node artist is measured here; the caller's
+        manual keep-view policy decides whether fitting is requested.
+        """
+        try:
+            axes_box = self.ax.get_window_extent(renderer)
+            inverse = self.ax.transData.inverted()
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return None
+        points: List[Tuple[float, float]] = []
+        for meta in self.node_meta.values():
+            for kind in ("marker_artist", "label_artist", "f_artist", "undated_artist"):
+                artist = meta.get(kind)
+                if artist is None or not artist.get_visible():
+                    continue
+                get_clip_on = getattr(artist, "get_clip_on", None)
+                clip_on = bool(get_clip_on()) if callable(get_clip_on) else True
+                try:
+                    check_xy = getattr(artist, "_check_xy", None)
+                    eligible = bool(check_xy(renderer)) if callable(check_xy) else True
+                    box = artist.get_window_extent(renderer)
+                    outside = (
+                        not eligible
+                        or box.x0 < axes_box.x0 - 1.0
+                        or box.x1 > axes_box.x1 + 1.0
+                        or box.y0 < axes_box.y0 - 1.0
+                        or box.y1 > axes_box.y1 + 1.0
+                    )
+                    if not outside:
+                        continue
+                    if not eligible:
+                        anchor = getattr(artist, "xy", None)
+                        coords = getattr(artist, "xycoords", "data")
+                        if anchor is not None and coords in ("data", self.ax.transData):
+                            points.append((float(anchor[0]), float(anchor[1])))
+                        continue
+                    transformed = inverse.transform(
+                        ((float(box.x0), float(box.y0)), (float(box.x1), float(box.y1)))
+                    )
+                    points.extend((float(point[0]), float(point[1])) for point in transformed)
+                except (AttributeError, RuntimeError, TypeError, ValueError, OverflowError):
+                    continue
+        if not points:
+            return None
+        x_values = [float(bounds[0][0]), float(bounds[0][1])] + [point[0] for point in points]
+        y_values = [float(bounds[1][0]), float(bounds[1][1])] + [point[1] for point in points]
+        span_x = max(x_values) - min(x_values)
+        span_y = max(y_values) - min(y_values)
+        pad_x = max(abs(span_x) * 0.02, 1e-6)
+        pad_y = max(abs(span_y) * 0.02, 1e-6)
+        expanded = (
+            (min(x_values) - pad_x, max(x_values) + pad_x),
+            (min(y_values) - pad_y, max(y_values) + pad_y),
+        )
+        if expanded == bounds:
+            return None
+        return self._apply_aspect_fill(expanded[0], expanded[1])
 
     def _replace_route_collections(self) -> None:
         """Redraw only genealogy lines after masks or zoom scale change."""
@@ -3105,60 +3534,6 @@ class HeritageTrackWidget(QWidget):
     def _is_family_node(self, node_id: Optional[str]) -> bool:
         return str(node_id or "").startswith("__family__::")
 
-    def _set_family_collapsed(self, family_id: str, collapsed: bool) -> None:
-        family_key = str(family_id or "").strip()
-        if not self._is_family_node(family_key):
-            return
-
-        if collapsed:
-            if family_key in self.collapsed_families:
-                return
-            self.collapsed_families.add(family_key)
-        else:
-            if family_key not in self.collapsed_families:
-                return
-            self.collapsed_families.remove(family_key)
-
-        self.plugin.store.set_family_collapsed(family_key, collapsed)
-
-    def _toggle_family_collapsed(self, family_id: str) -> None:
-        family_key = str(family_id or "").strip()
-        if not self._is_family_node(family_key):
-            return
-        self._set_family_collapsed(family_key, family_key not in self.collapsed_families)
-
-    def _collect_descendants(
-        self,
-        roots: Set[str],
-        engine: PedigreeEngine,
-        allowed_nodes: Optional[Set[str]] = None,
-    ) -> Set[str]:
-        allowed = set(allowed_nodes) if allowed_nodes is not None else None
-        seed_nodes = {
-            node
-            for node in roots
-            if node and (allowed is None or node in allowed)
-        }
-        if not seed_nodes:
-            return set()
-
-        descendants: Set[str] = set(seed_nodes)
-        visited: Set[str] = set(seed_nodes)
-        stack: List[str] = sorted(seed_nodes, key=str.lower)
-
-        while stack:
-            current = stack.pop()
-            for child in engine.parent_to_children.get(current, set()):
-                if allowed is not None and child not in allowed:
-                    continue
-                if child in visited:
-                    continue
-                visited.add(child)
-                descendants.add(child)
-                stack.append(child)
-
-        return descendants
-
 
     def _build_family_units(
         self,
@@ -3586,13 +3961,13 @@ class HeritageTrackWidget(QWidget):
         ]
         min_pixels_per_unit = 36.0
         focused = bool(selected and len(selected) <= 8)
-        horizontal_pixels_per_unit = (
-            25.0
-            if focused
-            and self.settings.get("vertical_layout_mode")
-            == VERTICAL_LAYOUT_CHRONOLOGICAL
-            else min_pixels_per_unit
-        )
+        # A focused frame is still a complete connected pedigree, not a
+        # clipped graph: it retains the complete connected route plan while
+        # opening on a bounded readable window around the selected anchors.
+        # Contextual ancestors/descendants outside that window remain
+        # available through pan/zoom and are deliberately not forced into a
+        # label-colliding first frame.
+        horizontal_pixels_per_unit = 25.0 if focused else min_pixels_per_unit
         max_width = max(16.0, axes_width / horizontal_pixels_per_unit)
         # A focused pedigree has few semantic anchors but may include a deep
         # ancestry context. At 36 px/unit the viewport cut through complete
@@ -3898,12 +4273,6 @@ class HeritageTrackWidget(QWidget):
                 return False
 
         self.ax.clear()
-        self._hover_annotation = self.ax.annotate(
-            "", xy=(0, 0), xytext=(12, 12), textcoords="offset points",
-            bbox={"boxstyle": "round", "fc": "#fff9db", "ec": "black", "alpha": 0.95},
-            arrowprops={"arrowstyle": "->", "color": "black"},
-        )
-        self._hover_annotation.set_visible(False)
         self._legend_artist = None
         self._legend_anchor_axes = None
         self.ax.set_aspect(self._view_data_aspect(), adjustable="box")
@@ -3918,9 +4287,8 @@ class HeritageTrackWidget(QWidget):
         self._replace_route_collections()
         self._replace_relationship_highlights()
 
-        collapsed_families = set(self.collapsed_families)
         for family_id, (fx, fy) in family_positions.items():
-            family_fill = "black" if family_id in collapsed_families else "white"
+            family_fill = "white"
             self.ax.plot(
                 [fx], [fy], linestyle="None", marker="o", markersize=8.4,
                 markeredgecolor="black", markerfacecolor=family_fill,
@@ -4073,7 +4441,6 @@ class HeritageTrackWidget(QWidget):
         self.status_label.setToolTip("\n".join(tooltip_lines))
         self.status_label.setText(status_text)
         self.temp_positions.clear()
-        self._hover_annotation.set_visible(False)
         self.canvas.draw_idle()
         return True
 
@@ -4108,7 +4475,6 @@ class HeritageTrackWidget(QWidget):
                 "display_mode": self.layout_mode,
                 "chronological": chronological_mode,
                 "max_generations": int(self._max_generations),
-                "collapsed_families": sorted(self.collapsed_families, key=str.casefold),
                 "settings": {
                     key: self.settings.get(key)
                     for key in (
@@ -4125,6 +4491,7 @@ class HeritageTrackWidget(QWidget):
     def refresh_graph(
         self, keep_view: bool = False, *, reset_positions: bool = False,
         position_candidate: Optional[Dict[str, Tuple[float, float]]] = None,
+        family_position_candidate: Optional[Dict[str, Tuple[float, float]]] = None,
     ) -> bool:
         """Accept a frame and its complete map together, or retain the old frame.
 
@@ -4159,7 +4526,11 @@ class HeritageTrackWidget(QWidget):
                 self.selected_nodes.clear()
                 self.temp_positions.clear()
                 self.current_xlim = self.current_ylim = None
-            accepted = bool(self._refresh_graph(keep_view, position_candidate=position_candidate))
+            accepted = bool(self._refresh_graph(
+                keep_view,
+                position_candidate=position_candidate,
+                family_position_candidate=family_position_candidate,
+            ))
             return accepted
         except Exception as exc:
             error = exc
@@ -4195,6 +4566,7 @@ class HeritageTrackWidget(QWidget):
     def _refresh_graph(
         self, keep_view: bool = False, *,
         position_candidate: Optional[Dict[str, Tuple[float, float]]] = None,
+        family_position_candidate: Optional[Dict[str, Tuple[float, float]]] = None,
     ) -> bool:
         # Rendering is one read-only transaction.  Capture Core and the latest
         # Heritage backend record/revision before building the engine so every
@@ -4248,7 +4620,12 @@ class HeritageTrackWidget(QWidget):
         # A complete immutable frame is the fast path.  It is only reusable
         # when the full Core/Heritage source token matches; dependency and
         # revision checks remain available through the plugin registry.
-        if selected_animals and not self._force_relayout and position_candidate is None:
+        if (
+            selected_animals
+            and not self._force_relayout
+            and position_candidate is None
+            and family_position_candidate is None
+        ):
             cache_key = self._render_cache_key(
                 selected_animals,
                 chronological_mode,
@@ -4266,9 +4643,23 @@ class HeritageTrackWidget(QWidget):
                     node: (point["x"], point["y"])
                     for node, point in (saved or {}).get("positions", {}).items()
                 }
+                saved_family_positions = {
+                    family_id: (point["x"], point["y"])
+                    for family_id, point in (saved or {}).get("family_positions", {}).items()
+                }
                 if (cached_render_entry.source_revision == source_revision
                         and cached_render_entry.valid and saved is not None
-                        and saved_positions == dict(cached_render_entry.route_plan.animal_positions)):
+                        and saved_positions == dict(cached_render_entry.route_plan.animal_positions)
+                        and saved_family_positions == dict(cached_render_entry.manual_family_positions)
+                        and all(
+                            tuple(cached_render_entry.route_plan.family_positions[family_id])
+                            == tuple(point)
+                            for family_id, point in saved_family_positions.items()
+                            if family_id in cached_render_entry.route_plan.family_positions
+                        )
+                        and set(saved_family_positions).issubset(
+                            set(cached_render_entry.route_plan.family_positions)
+                        )):
                     self._position_cache_expected_entry = saved
                     return self._paint_cached_render_entry(cached_render_entry, keep_view=keep_view)
                 # Keep the previous entry until its replacement commits.
@@ -4305,7 +4696,7 @@ class HeritageTrackWidget(QWidget):
 
         # Extract data from context
         display_nodes = context.display_nodes
-        pre_collapse_levels = context.levels
+        levels = context.levels
         ghost_nodes = context.ghost_nodes
         # DisplayContext is immutable; interaction code needs its own mutable
         # membership set when a ghost is promoted to an active selection.
@@ -4321,54 +4712,12 @@ class HeritageTrackWidget(QWidget):
         # Switch to canvas for graph display
         self.stack.setCurrentWidget(self.canvas)
 
-        # Build families from current display set
-        all_families = self._build_family_units(display_nodes, pre_collapse_levels, engine)
-
-        # Track stale collapsed families for deferred cleanup (don't save yet)
-        stale_collapsed = self.collapsed_families - set(all_graph_families.keys())
-        if stale_collapsed:
-            self.collapsed_families = set(self.collapsed_families) - set(stale_collapsed)
-
-        valid_collapsed_families = self.collapsed_families & set(all_families.keys())
-
-        # Compute hidden nodes from collapsed families
-        hidden_nodes: Set[str] = set()
-        for family_id in valid_collapsed_families:
-            family = all_families.get(family_id, {})
-            family_children = {
-                child
-                for child in family.get("children", [])
-                if child in display_nodes
-            }
-            hidden_nodes.update(self._collect_descendants(family_children, engine, allowed_nodes=display_nodes))
-
-        # Filter display_nodes and levels together to maintain consistency
-        if hidden_nodes:
-            display_nodes = {node for node in display_nodes if node not in hidden_nodes}
-            levels = {n: lvl for n, lvl in pre_collapse_levels.items() if n in display_nodes}
-        else:
-            levels = pre_collapse_levels
-
-        # Build collapsed family nodes (parents without visible children)
-        collapsed_family_nodes: Dict[str, Dict[str, Any]] = {}
-        for family_id in sorted(valid_collapsed_families, key=str.lower):
-            family = all_families.get(family_id, {})
-            mother = str(family.get("mother", "")).strip()
-            father = str(family.get("father", "")).strip()
-            if mother not in display_nodes and father not in display_nodes:
-                continue
-
-            family_entry = dict(family)
-            family_entry["children"] = []
-            collapsed_family_nodes[family_id] = family_entry
-
         # Clean up selections and positions (deferred persistence)
         self.selected_nodes = {n for n in self.selected_nodes if n in display_nodes}
         self._cleanup_stale_positions(all_graph_nodes)
 
-        # Build final families ONCE after all filtering
+        # Build the complete family set from the selected display scope.
         families = self._build_family_units(display_nodes, levels, engine)
-        families.update(collapsed_family_nodes)
         # Read only the current user's complete selection map.  Legacy global
         # coordinates are deliberately ignored for selected views and are
         # never migrated into this cache.
@@ -4404,6 +4753,7 @@ class HeritageTrackWidget(QWidget):
                 snapshot=raw_store,
             )
         cached_positions: Dict[str, Tuple[float, float]] = {}
+        cached_family_positions: Dict[str, Tuple[float, float]] = {}
         if isinstance(cached_entry, dict):
             raw_cached_positions = cached_entry.get("positions", {})
             if isinstance(raw_cached_positions, dict):
@@ -4416,6 +4766,16 @@ class HeritageTrackWidget(QWidget):
                     and "x" in value
                     and "y" in value
                 }
+                raw_cached_family_positions = cached_entry.get("family_positions", {})
+                if isinstance(raw_cached_family_positions, dict):
+                    cached_family_positions = {
+                        family_id: (float(value["x"]), float(value["y"]))
+                        for family_id, value in raw_cached_family_positions.items()
+                        if family_id in families
+                        and isinstance(value, dict)
+                        and "x" in value
+                        and "y" in value
+                    }
             visible_animals = {
                 node for node in display_nodes if not self._is_family_node(node)
             }
@@ -4424,24 +4784,59 @@ class HeritageTrackWidget(QWidget):
                 # complete map instead of mixing maps from other selections.
                 cached_entry = None
                 cached_positions = {}
+                cached_family_positions = {}
 
-        if position_candidate is not None:
+        if position_candidate is not None or family_position_candidate is not None:
             accepted_entry = self._render_cache_entry
             expected_positions = {
                 node: (point["x"], point["y"])
                 for node, point in (cached_entry or {}).get("positions", {}).items()
+                if not self._is_family_node(node)
+                and isinstance(point, dict)
+                and "x" in point
+                and "y" in point
+            }
+            expected_family_positions = {
+                family_id: tuple(
+                    cached_family_positions.get(
+                        family_id,
+                        accepted_entry.route_plan.family_positions[family_id],
+                    )
+                )
+                for family_id in (family_position_candidate or {})
+                if accepted_entry is not None
+                and family_id in accepted_entry.route_plan.family_positions
             }
             if (accepted_entry is None or accepted_entry.position_cache_key != position_cache_key
                     or dict(accepted_entry.route_plan.animal_positions) != expected_positions
-                    or set(position_candidate) != set(expected_positions)):
+                    or (
+                        position_candidate is not None
+                        and set(position_candidate) != set(expected_positions)
+                    )
+                    or (
+                        family_position_candidate is not None
+                        and set(family_position_candidate) != set(expected_family_positions)
+                    )
+                    or any(
+                        tuple(accepted_entry.route_plan.family_positions[family_id])
+                        != tuple(expected_family_positions[family_id])
+                        for family_id in expected_family_positions
+                    )):
                 raise ConflictError("The displayed layout changed; reload before moving it again")
-            cached_positions = dict(position_candidate)
+            if position_candidate is not None:
+                cached_positions = dict(position_candidate)
+            if family_position_candidate is not None:
+                cached_family_positions = dict(family_position_candidate)
 
         self._active_position_cache_key = position_cache_key
         self._active_position_cache_user = position_cache_user
         self._active_position_cache_revision = position_cache_revision
         self._active_position_cache_dependencies = set(position_cache_dependencies)
-        self._position_cache_hit = bool(cached_entry) and position_candidate is None
+        self._position_cache_hit = (
+            bool(cached_entry)
+            and position_candidate is None
+            and family_position_candidate is None
+        )
 
         locked_positions = cached_positions if cached_entry else {}
 
@@ -4475,7 +4870,6 @@ class HeritageTrackWidget(QWidget):
                 protected_nodes.add(node)
             else:
                 animal_positions[node] = pos
-
         # Partner order and ancestry locality are resolved together by the
         # router's row-block pass.  The former pre-route swap marked automatic
         # nodes as manually protected and therefore prevented the router from
@@ -4516,16 +4910,35 @@ class HeritageTrackWidget(QWidget):
             if is_focused
             and chronological_mode
             and axes_pixel_width < 1050.0
+            else 0.90
+            if is_focused and not chronological_mode
             else 1.0
         )
-        self._pedigree_router.label_width_scale = (
-            1.08 if is_focused and chronological_mode else 1.0
-        )
+        # The point-sized renderer uses proportional glyphs in both vertical
+        # modes.  Keep the same small width safety margin for a focused
+        # partner-normalized frame; otherwise the final artist sweep can
+        # expose a date/detail collision that the neutral router estimate did
+        # not reserve.
+        self._pedigree_router.label_width_scale = 1.08 if is_focused else 1.0
         # Focused views deliberately show substantially more vertical data per
         # pixel. Reserve the renderer's true marker + two-line point offsets
         # before routing, independent of the slightly wider chronological
         # aspect used to separate animals born close together.
-        self._pedigree_router.label_height_scale = 3.0 if is_focused else 1.0
+        # Partner-normalized focus still renders the optional detail line
+        # below the primary label.  Reserve a slightly larger vertical band
+        # there as well; the previous 3.0 factor left a 1–2 px renderer-level
+        # gap between Fingon's detail text and Turgon's marker that the
+        # data-space validator could not see.
+        self._pedigree_router.label_height_scale = (
+            3.0 if is_focused and not chronological_mode
+            else 3.25 if is_focused
+            # The overview renderer's optional detail/F line extends farther
+            # below its data anchor than the neutral router footprint.  Keep
+            # the obstacle model calibrated to the actual point-sized artist
+            # so chronological nodes with close dates are separated before
+            # final Matplotlib validation rather than rejected afterwards.
+            else 1.5
+        )
         try:
             route_plan = self._pedigree_router.plan(
                 animal_positions,
@@ -4538,13 +4951,15 @@ class HeritageTrackWidget(QWidget):
                 vertical_layout_mode=self.settings.get(
                     "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
                 ),
+                movable_nodes=None,
+                manual_family_positions=cached_family_positions or None,
             )
         except GeometryValidationError as exc:
             self._report_geometry_failure(exc)
             return
         # The engine levels are the canonical hard generation assignment.
-        # Validate the final visible scope after collapse filtering and carry
-        # any cycle/order conflict into the plan and cache boundary.
+        # Validate the final visible scope and carry any cycle/order conflict
+        # into the plan and cache boundary.
         route_plan.layout_diagnostics = list(
             engine.generation_diagnostics(display_nodes, levels)
         )
@@ -4727,25 +5142,157 @@ class HeritageTrackWidget(QWidget):
             display_mode=self.layout_mode, source_revision=source_revision,
             artist_scale=focused_artist_scale,
             chronological_undated_nodes=self._chronological_undated_nodes,
+            cached_family_positions=cached_family_positions,
         )
         if not render_entry.valid:
             raise GeometryValidationError("; ".join(render_entry.fatal_diagnostics))
         needs_position_write = not self._position_cache_hit
-        if not self._paint_cached_render_entry(render_entry, keep_view=keep_view, recompute_gaps=False):
-            return False
-        # Exercise the artists against a private raster buffer before a write.
-        # Qt's scheduled draw_idle alone would discover font/path failures only
-        # after the durable map had already been replaced.
-        if needs_position_write:
-            self.ax.draw(RendererAgg(
+        # Validate artists before the registry/CAS write.  A focused layout
+        # may be capped by readable pixel density while an annotation anchor
+        # falls just outside the resulting viewport.  Automatic fit gets two
+        # bounded redraws to include those real anchors; a keep-view/manual
+        # transaction never pans solely because an artist is clipped.
+        working_entry = render_entry
+        automatic_fit = (
+            not keep_view
+            and position_candidate is None
+            and family_position_candidate is None
+        )
+        # Focused views intentionally keep the readable viewport centered on
+        # the selected anchors; deep contextual ghosts remain pannable.  A
+        # complete overview receives strict measured fit expansion only when
+        # its complete geometry already fits in the proposed frame.  Large
+        # overviews are intentionally pannable; forcing every distant artist
+        # into their readable initial window would shrink the whole graph until
+        # labels overlap.
+        overview_requires_pan = False
+        if automatic_fit and self.layout_mode == LAYOUT_MODE_OVERVIEW:
+            graph_points = list(positions.values()) + list(route_plan.all_points())
+            if graph_points:
+                full_x_span = max(point[0] for point in graph_points) - min(
+                    point[0] for point in graph_points
+                )
+                full_y_span = max(point[1] for point in graph_points) - min(
+                    point[1] for point in graph_points
+                )
+                visible_x_span = max(0.0, view_xlim[1] - view_xlim[0])
+                visible_y_span = max(0.0, view_ylim[1] - view_ylim[0])
+                overview_requires_pan = (
+                    full_x_span > visible_x_span * 1.02
+                    or full_y_span > visible_y_span * 1.02
+                )
+        strict_artist_fit = (
+            automatic_fit
+            and self.layout_mode == LAYOUT_MODE_OVERVIEW
+            and not overview_requires_pan
+        )
+        final_renderer = None
+        artist_fatal: List[str] = []
+
+        for fit_attempt in range(3):
+            if not self._paint_cached_render_entry(
+                working_entry,
+                keep_view=keep_view,
+                recompute_gaps=fit_attempt > 0,
+            ):
+                return False
+            final_renderer = RendererAgg(
                 max(1, int(self.figure.bbox.width)),
                 max(1, int(self.figure.bbox.height)), self.figure.dpi,
-            ))
+            )
+            self.ax.draw(final_renderer)
+            artist_fatal = self._render_artist_fatal_diagnostics(
+                final_renderer,
+                check_viewport=strict_artist_fit,
+                check_collisions=True,
+                allow_dense_label_overlaps=self.layout_mode == LAYOUT_MODE_FOCUSED,
+            )
+            if not artist_fatal:
+                break
+            if (
+                automatic_fit
+                and self.layout_mode == LAYOUT_MODE_FOCUSED
+                and fit_attempt < 2
+            ):
+                # The router's data-space estimate cannot know the active
+                # font/DPI extents until this detached candidate has drawn.
+                # Feed the measured visible footprint back into the same
+                # semantic solver before trying viewport-only adaptations.
+                calibrated_scales = self._artist_obstacle_scale_requirements(
+                    final_renderer,
+                    obstacle_labels,
+                    show_inbreeding=has_secondary_label,
+                )
+                if calibrated_scales is not None:
+                    self._pedigree_router.label_width_scale = calibrated_scales[0]
+                    self._pedigree_router.label_height_scale = calibrated_scales[1]
+                    rebuilt_entry = self._rebuild_render_entry_after_artist_collision(
+                        engine=engine,
+                        selected_animals=selected_animals,
+                        display_nodes=display_nodes,
+                        ghost_nodes=ghost_nodes,
+                        levels=levels,
+                        families=families,
+                        seed_positions=working_entry.route_plan.animal_positions,
+                        locked_positions=locked_positions,
+                        protected_nodes=protected_nodes,
+                        singleton_nodes=set(singletons),
+                        obstacle_labels=obstacle_labels,
+                        show_inbreeding=has_secondary_label,
+                        f_values=f_values,
+                        f_status=f_status,
+                        chronological_mode=chronological_mode,
+                        display_mode=self.layout_mode,
+                        source_revision=source_revision,
+                        cached_family_positions=cached_family_positions,
+                        chronological_undated_nodes=set(
+                            self._chronological_undated_nodes
+                        ),
+                    )
+                    if not rebuilt_entry.valid:
+                        raise GeometryValidationError(
+                            "; ".join(rebuilt_entry.fatal_diagnostics)
+                        )
+                    render_entry = rebuilt_entry
+                    working_entry = rebuilt_entry
+                    route_plan = rebuilt_entry.route_plan
+                    animal_positions = dict(route_plan.animal_positions)
+                    family_positions = dict(route_plan.family_positions)
+                    positions = dict(animal_positions)
+                    positions.update(family_positions)
+                    needs_position_write = True
+                    continue
+            if not strict_artist_fit or fit_attempt >= 2:
+                raise GeometryValidationError("; ".join(artist_fatal))
+            expanded_bounds = self._expand_bounds_for_outside_artists(
+                final_renderer, working_entry.bounds,
+            )
+            if expanded_bounds is None:
+                raise GeometryValidationError("; ".join(artist_fatal))
+            working_entry = replace(working_entry, bounds=expanded_bounds)
+        if final_renderer is None or artist_fatal:
+            raise GeometryValidationError("; ".join(artist_fatal) or "artist validation failed")
+        # ``_paint_cached_render_entry`` recalculates pixel gaps on retry on a
+        # detached mutable plan. Freeze that final plan and its accepted
+        # bounds together so cache consumers cannot observe stale gaps.
+        if working_entry is not render_entry:
+            render_entry = replace(
+                working_entry,
+                route_plan=self._route_plan,
+                bounds=working_entry.bounds,
+            )
+            # The detached painter plan has now been frozen into the entry
+            # that will be published. Keep widget and registry identity
+            # aligned so rollback restores the exact prior immutable frame.
+            self._render_cache_entry = render_entry
         # All fallible rendering work precedes the durable write. Roll back an
         # actual registry put failure as well as a later persistence failure.
         with self.plugin._render_cache.preserve_on_failure(render_entry.cache_key):
             self.plugin.cache_render_entry(render_entry)
-            if needs_position_write and not self._save_position_cache(animal_positions):
+            if needs_position_write and not self._save_position_cache(
+                animal_positions,
+                family_positions=cached_family_positions,
+            ):
                 raise RuntimeError(self._position_cache_notice)
         return True
 
@@ -4769,7 +5316,7 @@ class HeritageTrackWidget(QWidget):
         self._replace_relationship_highlights()
 
         for family_id, (fx, fy) in family_positions.items():
-            family_fill = "black" if family_id in collapsed_family_nodes else "white"
+            family_fill = "white"
             self.ax.plot(
                 [fx],
                 [fy],
@@ -5031,14 +5578,13 @@ class HeritageTrackWidget(QWidget):
         self.status_label.setToolTip("\n".join(tooltip_lines))
         self.status_label.setText(status_text)
 
-        # Do not persist collapsed-family or position cleanup as a side effect
-        # of painting.  Explicit user actions own those writes.
+        # Do not persist position cleanup as a side effect of painting.
+        # Explicit user actions own those writes.
         # Transient drag coordinates have now either been persisted as the
         # complete selection map or rejected; never carry them into another
         # selection's layout.
         self.temp_positions.clear()
 
-        self._hover_annotation.set_visible(False)
         self.canvas.draw_idle()
         self._render_store_animals = None
 
@@ -5085,8 +5631,6 @@ class HeritageTrackWidget(QWidget):
         mode_text = self.messages.get("heritage_track.status.mode_none", "No selection")
         instruction_status = self.messages.get("heritage_track.splash.status", "No scope selected")
         self.status_label.setText(f"{mode_text} | {instruction_status}")
-
-        self._hover_annotation.set_visible(False)
 
     def _node_at_mouse(self, event, pixel_threshold: float = 14.0) -> Optional[str]:
         if event.x is None or event.y is None:
@@ -5158,14 +5702,34 @@ class HeritageTrackWidget(QWidget):
             key = (int(math.floor(float(x) / cell)), int(math.floor(float(y) / cell)))
             self._hit_grid[key].append(name)
 
+    def _redraw_current_view(self, *, synchronous: bool = False) -> None:
+        """Redraw the accepted graph at the current view limits.
+
+        View gestures change only Axes transforms.  A background copied before
+        the transform is therefore never a valid representation of the new
+        viewport.  Rebuild the view-dependent route gaps/highlights and draw
+        the current artists synchronously when the caller needs immediate
+        visual confirmation (notably during middle-button panning/release).
+        """
+        if self._route_plan is not None:
+            if self.settings.get("vertical_layout_mode") == VERTICAL_LAYOUT_CHRONOLOGICAL:
+                self._configure_chronological_axis()
+            self._recompute_route_visual_gaps()
+            self._replace_route_collections()
+            self._replace_relationship_highlights()
+        if synchronous:
+            self.canvas.draw()
+            flush_events = getattr(self.canvas, "flush_events", None)
+            if callable(flush_events):
+                flush_events()
+        else:
+            self.canvas.draw_idle()
+
     def _on_mouse_press(self, event) -> None:
         # Middle button (wheel press) starts panning.
         if event.button == 2 and event.inaxes == self.ax and event.xdata is not None and event.ydata is not None:
             self.pan_active = True
             self.pan_start = (event.xdata, event.ydata)
-            # Cache background for blitting during pan
-            self.canvas.draw()
-            self._pan_background = self.canvas.copy_from_bbox(self.ax.bbox)
             return
 
         if event.inaxes != self.ax:
@@ -5249,8 +5813,9 @@ class HeritageTrackWidget(QWidget):
             if event.xdata is None or event.ydata is None:
                 return
 
-            # Start drag mode for all draggable nodes (animals and families)
-            # On release without drag, we'll add to selection
+            # Start drag mode for all draggable nodes (animals and family
+            # junctions).  A no-drag release only adds an animal to selection;
+            # family junctions are visual/group handles, not toggles.
             node_x, node_y = self.node_positions.get(node, (event.xdata, event.ydata))
             self.drag_active = True
             self.drag_node = node
@@ -5284,10 +5849,10 @@ class HeritageTrackWidget(QWidget):
             self.current_xlim = new_xlim
             self.current_ylim = new_ylim
             self.pan_start = (event.xdata, event.ydata)
-            # Fast pan: restore cached background and blit without re-rendering axes
-            if self._pan_background is not None:
-                self.canvas.restore_region(self._pan_background)
-                self.canvas.blit(self.ax.bbox)
+            # A pre-pan background contains the old transform and cannot be
+            # blitted as the new view. Draw the accepted artists at the new
+            # limits so every motion event is visibly reflected immediately.
+            self._redraw_current_view(synchronous=True)
             return
 
         # Drag selected node while left mouse is held.
@@ -5315,6 +5880,10 @@ class HeritageTrackWidget(QWidget):
                     current_x, current_y = self.node_positions.get(self.drag_node, (new_x, new_y))
                     delta_x = new_x - current_x
                     delta_y = new_y - current_y
+                    # Keep the family handle target in the same transient map
+                    # as its translated members. It is committed as a family
+                    # anchor on release; it is not a second state store.
+                    self.temp_positions[self.drag_node] = (new_x, new_y)
                     for member in self.drag_group_nodes:
                         base_x, base_y = self.node_positions.get(member, self.temp_positions.get(member, (0.0, 0.0)))
                         self.temp_positions[member] = (base_x + delta_x, base_y + delta_y)
@@ -5323,49 +5892,10 @@ class HeritageTrackWidget(QWidget):
                 self._redraw_dragged_nodes()
             return
 
-        # Normal hover behavior.
-        if event.inaxes != self.ax:
-            if self._hover_annotation.get_visible():
-                self._hover_annotation.set_visible(False)
-                self.canvas.draw_idle()
-            return
-
-        node = self._node_at_mouse(event, pixel_threshold=10.0)
-        if not node:
-            if self._hover_annotation.get_visible():
-                self._hover_annotation.set_visible(False)
-                self.canvas.draw_idle()
-            return
-
-        is_ghost = node in getattr(self, '_ghost_nodes', set())
-        genotype = (self.node_meta.get(node, {}).get("genotype") or "").strip()
-
-        # Show tooltip for ghost nodes or nodes with genotype
-        if not genotype and not is_ghost:
-            if self._hover_annotation.get_visible():
-                self._hover_annotation.set_visible(False)
-                self.canvas.draw_idle()
-            return
-
-        x, y = self.node_positions.get(node, (0.0, 0.0))
-        self._hover_annotation.xy = (x, y)
-
-        if is_ghost:
-            # Show ghost node tooltip with click hints
-            display_label = self.node_meta.get(node, {}).get("display_label") or self._get_node_display_label(node)
-            tooltip_text = self.messages.get(
-                "heritage_track.node.tooltip.ghost",
-                "{name} (click to add to selection)"
-            ).format(name=display_label)
-        else:
-            tooltip_text = self.messages.get(
-                "heritage_track.node.tooltip.genotype",
-                "Genotype: {genotype}"
-            ).format(genotype=genotype)
-
-        self._hover_annotation.set_text(tooltip_text)
-        self._hover_annotation.set_visible(True)
-        self.canvas.draw_idle()
+        # Motion over the graph is intentionally presentation-free.  Hit
+        # testing remains available to click/drag handlers, but hovering an
+        # animal must not create a Matplotlib annotation, arrow, or redraw.
+        return
 
     def _dragged_animal_nodes(self) -> Set[str]:
         nodes_to_draw: Set[str] = set()
@@ -5451,12 +5981,10 @@ class HeritageTrackWidget(QWidget):
         if event.button == 2:
             self.pan_active = False
             self.pan_start = None
-            self._pan_background = None
-            if self.settings.get("show_grid", False):
-                self.refresh_graph(keep_view=True)
-            else:
-                # Force full redraw to ensure clean state after pan
-                self.canvas.draw_idle()
+            # Release may occur outside the Axes. The limits were already
+            # accepted during motion; present that final view synchronously so
+            # no queued/unrelated event is required to reveal the pan.
+            self._redraw_current_view(synchronous=True)
             return
 
         if event.button == 1:
@@ -5475,6 +6003,20 @@ class HeritageTrackWidget(QWidget):
                             if chronological_mode:
                                 sy = self.node_positions.get(member, (sx, sy))[1]
                             self.temp_positions[member] = (sx, sy)
+                    family_position_candidate = None
+                    if self.drag_group_nodes and self._is_family_node(self.drag_node):
+                        family_x, family_y = self.temp_positions.get(
+                            self.drag_node,
+                            self.node_positions.get(self.drag_node, (0.0, 0.0)),
+                        )
+                        family_sx, family_sy = self._snap_to_grid(family_x, family_y)
+                        if chronological_mode:
+                            family_sy = self.node_positions.get(
+                                self.drag_node, (family_sx, family_sy)
+                            )[1]
+                        family_position_candidate = {
+                            self.drag_node: (family_sx, family_sy)
+                        }
                     elif not self._is_family_node(self.drag_node):
                         x, y = self.temp_positions.get(self.drag_node, self.node_positions.get(self.drag_node, (0.0, 0.0)))
                         sx, sy = self._snap_to_grid(x, y)
@@ -5490,7 +6032,12 @@ class HeritageTrackWidget(QWidget):
                         if not self._is_family_node(node)
                     }
                     self._finish_drag_blit()
-                    if not self.refresh_graph(keep_view=True, position_candidate=complete_positions):
+                    accepted = self.refresh_graph(
+                        keep_view=True,
+                        position_candidate=complete_positions,
+                        family_position_candidate=family_position_candidate,
+                    )
+                    if not accepted:
                         # The drag preview moved existing artists. Restore their
                         # accepted positions without repainting a rejected frame.
                         for node, point in self.node_positions.items():
@@ -5503,8 +6050,9 @@ class HeritageTrackWidget(QWidget):
                         self.temp_positions.clear()
                         self.canvas.draw_idle()
                 elif self._is_family_node(self.drag_node):
-                    self._toggle_family_collapsed(self.drag_node)
-                    self.refresh_graph(keep_view=True)
+                    # Family junctions are drag handles only.  A click without
+                    # movement has no state-changing action.
+                    pass
                 else:
                     # Click on animal node (not drag): delay selection-add to allow double-click detection
                     pending_node = self.drag_node

@@ -127,10 +127,26 @@ class CompositeGhostStrategy(GhostNodeStrategy):
     ) -> Set[str]:
         """Combine results from all strategies."""
         ghost_nodes: Set[str] = set()
+        # Later strategies must see the staged effective scope so family
+        # completeness can connect context discovered by an earlier pass.
+        # Each strategy still runs once; this is composition staging rather
+        # than recursive closure.
+        staged_nodes = set(display_nodes)
 
         for strategy in self.strategies:
-            ghosts = strategy.find_ghosts(display_nodes, engine, archived_animals)
+            # Archived filtering is a boundary over the ordinary pedigree
+            # scope.  It must not inspect sibling/co-parent ghosts staged by
+            # earlier context passes, otherwise an unrelated archived child
+            # or parent of a context ghost leaks into the frame.  Context and
+            # family-completeness strategies do need the staged frontier.
+            strategy_scope = (
+                set(display_nodes)
+                if isinstance(strategy, ArchivedGhostStrategy)
+                else staged_nodes
+            )
+            ghosts = strategy.find_ghosts(strategy_scope, engine, archived_animals)
             ghost_nodes.update(ghosts)
+            staged_nodes.update(ghosts)
 
         return ghost_nodes
 
@@ -196,16 +212,25 @@ class OffspringAndSiblingsGhostStrategy(GhostNodeStrategy):
                 if child not in display_nodes and child not in self.selected_animals:
                     ghost_nodes.add(child)
 
-        # Find siblings of selected animals.  For a half-sibling, also add
-        # the missing co-parent as a ghost so the shared-parent family is a
-        # real drawable unit rather than a detached sibling marker.
-        for selected in self.selected_animals:
+        # Expand sibling context from every ordinary node already in scope,
+        # including ancestors pulled in by the display strategy.  Newly added
+        # ghosts are not fed back into this pass, keeping the closure bounded
+        # and preventing unrelated ancestry/partner/offspring expansion.
+        sibling_subjects = set(display_nodes) | set(self.selected_animals)
+        for selected in sorted(sibling_subjects, key=str.casefold):
             parents = engine.child_to_parents.get(selected, {})
             selected_parents = {
                 str(parents.get(parent_key, "") or "").strip()
                 for parent_key in ("egg_donor", "sperm_donor")
             } - {""}
             for common_parent in sorted(selected_parents, key=str.casefold):
+                # Sibling completion is bounded by the already resolved
+                # effective scope. A parent outside that scope is a depth
+                # boundary, not permission to reopen its complete sibship;
+                # otherwise a depth-0 focus can unexpectedly pull an
+                # unrelated generation back into the frame.
+                if common_parent not in display_nodes:
+                    continue
                 siblings = engine.parent_to_children.get(common_parent, set())
                 for sibling in sorted(siblings, key=str.casefold):
                     if sibling == selected:

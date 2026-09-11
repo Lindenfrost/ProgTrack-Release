@@ -722,6 +722,15 @@ class ProjectsTrackPlugin:
             self._sp_content_w.setVisible(checked)
         self._update_container_width()
         self._save_sidebar_visibility()
+        schedule_rows = getattr(
+            self.app, "_schedule_animal_list_row_width_sync", None
+        )
+        if callable(schedule_rows):
+            schedule_rows()
+        else:
+            sync_rows = getattr(self.app, "_sync_animal_list_row_widths", None)
+            if callable(sync_rows):
+                sync_rows()
 
     def _update_container_width(self) -> None:
         """Give hidden filter columns no horizontal layout footprint.

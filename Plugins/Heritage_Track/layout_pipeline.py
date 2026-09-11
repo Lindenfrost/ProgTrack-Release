@@ -43,8 +43,8 @@ def family_node_id(mother: Any, father: Any) -> str:
     """Return the canonical ID for a complete genetic parent pair.
 
     Family junctions only exist when both genetic parents are known.  Keeping
-    this check and the serialization in one helper prevents collapse state,
-    grouping and widget routes from silently referring to different nodes.
+    this check and the serialization in one helper prevents grouping and
+    widget routes from silently referring to different nodes.
     """
     mother_name = str(mother or "").strip()
     father_name = str(father or "").strip()

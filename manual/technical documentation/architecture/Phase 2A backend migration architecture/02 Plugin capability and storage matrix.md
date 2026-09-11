@@ -49,7 +49,7 @@ does not mean the current file format should survive Phase 2B.
 | Flow manual data | gamete donation, donor procedure, embryo, embryo transfer, cryostorage event | Include; generated transfer key is a legacy source ID only. |
 | Heritage core copies | none | Exclude as duplicate cache. |
 | Heritage-only animals and parent links | animal (`record_kind=heritage_only`) and animal relationship | Include. |
-| Heritage layout/collapse/grid | user/plugin preference | Exclude from domain package; optional user-preference section only. |
+| Heritage layout/grid | user/plugin preference | Exclude from domain package; optional user-preference section only. |
 | Master users/permissions | user/security configuration | Excluded from ordinary domain package by default; optional protected seed/security section after review. |
 | Master sessions | session/user preference | Exclude from canonical domain package. |
 | Legacy audit text | legacy audit artifact | Preserve separately when required; do not import as trusted normalized event. |

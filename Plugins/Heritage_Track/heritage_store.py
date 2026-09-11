@@ -30,7 +30,7 @@ class HeritageStore:
     """Owns the Heritage graph in the shared backend.
 
     The legacy split-file layout is archived.  Runtime graph data, positions,
-    collapse state, and settings are read from the configured backend record.
+    and settings are read from the configured backend record.
     """
 
     POSITION_CACHE_LIMIT = 1000
@@ -106,7 +106,6 @@ class HeritageStore:
             # ``node_positions`` map is intentionally not migrated into this
             # cache: it has no reliable selection or user ownership metadata.
             "position_cache": {},
-            "collapsed_families": [],
             "genotype_colors": {},
             # Derived values for real Core animals live in their own
             # Heritage-owned namespace.  Core animal records are never copied
@@ -244,6 +243,19 @@ class HeritageStore:
                 return None
             x, y = normalized
             positions[name] = {"x": x, "y": y}
+        raw_family_positions = value.get("family_positions", {})
+        if raw_family_positions is None:
+            raw_family_positions = {}
+        if not isinstance(raw_family_positions, dict):
+            return None
+        family_positions: Dict[str, Dict[str, float]] = {}
+        for raw_name, raw_position in raw_family_positions.items():
+            name = self._normalize_text(raw_name)
+            normalized = self._normalize_position(raw_position)
+            if not name or normalized is None:
+                return None
+            x, y = normalized
+            family_positions[name] = {"x": x, "y": y}
         # Position validity is scoped to the records which can affect this
         # layout.  Older entries only contain the global pedigree token and
         # are intentionally discarded: they cannot prove that an unrelated
@@ -274,6 +286,7 @@ class HeritageStore:
             "dependency_revision": dependency_revision,
             "dependency_ids": dependencies,
             "positions": positions,
+            "family_positions": family_positions,
             "selection_type": selection_type,
             "updated_at": updated_at,
         }
@@ -520,8 +533,10 @@ class HeritageStore:
         raw["position_cache"] = normalized_position_cache
         if not isinstance(raw.get("genotype_colors"), dict):
             raw["genotype_colors"] = {}
-        if not isinstance(raw.get("collapsed_families"), list):
-            raw["collapsed_families"] = []
+        # Family display collapsing is retired.  Ignore the former persisted
+        # field so legacy preferences cannot reactivate the removed behavior
+        # or affect the active store snapshot.
+        raw.pop("collapsed_families", None)
         raw["pedigree_revision"] = self._normalize_text(raw.get("pedigree_revision", ""))
         try:
             raw["pedigree_sequence"] = max(0, int(raw.get("pedigree_sequence", 0) or 0))
@@ -561,16 +576,6 @@ class HeritageStore:
             x, y = normalized
             normalized_positions[key] = {"x": x, "y": y}
         raw["node_positions"] = normalized_positions
-
-        normalized_collapsed_families: List[str] = []
-        seen_families: Set[str] = set()
-        for family_id in raw.get("collapsed_families", []):
-            family_key = self._normalize_text(family_id)
-            if not family_key or family_key in seen_families:
-                continue
-            normalized_collapsed_families.append(family_key)
-            seen_families.add(family_key)
-        raw["collapsed_families"] = normalized_collapsed_families
 
         normalized_genotype_colors: Dict[str, str] = {}
         for genotype, color_value in raw.get("genotype_colors", {}).items():
@@ -792,8 +797,6 @@ class HeritageStore:
             "derived_inbreeding_cache": {},
             "settings": {},
             "node_positions": {},
-            "collapsed_added": set(),
-            "collapsed_removed": set(),
             "has_changes": False,
         }
         if animals:
@@ -885,17 +888,6 @@ class HeritageStore:
                 if value != old_value:
                     patch["node_positions"][key] = value if value is _PATCH_DELETE else deepcopy(value)
 
-            current_collapsed = {
-                str(item) for item in current.get("collapsed_families", [])
-                if str(item).strip()
-            }
-            base_collapsed = {
-                str(item) for item in baseline.get("collapsed_families", [])
-                if str(item).strip()
-            }
-            patch["collapsed_added"] = current_collapsed - base_collapsed
-            patch["collapsed_removed"] = base_collapsed - current_collapsed
-
         patch["has_changes"] = bool(
             patch["animal_fields"]
             or patch["animal_deletes"]
@@ -903,8 +895,6 @@ class HeritageStore:
             or patch["derived_inbreeding_cache"]
             or patch["settings"]
             or patch["node_positions"]
-            or patch["collapsed_added"]
-            or patch["collapsed_removed"]
         )
         return patch
 
@@ -973,17 +963,6 @@ class HeritageStore:
             if now != old and now != intended:
                 raise ConflictError(f"Heritage position {key!r} changed concurrently.")
 
-        if patch["collapsed_added"] or patch["collapsed_removed"]:
-            base = {str(item) for item in baseline.get("collapsed_families", [])}
-            now = {str(item) for item in latest.get("collapsed_families", [])}
-            concurrent_added = now - base
-            concurrent_removed = base - now
-            if (
-                concurrent_added & patch["collapsed_removed"]
-                or concurrent_removed & patch["collapsed_added"]
-            ):
-                raise ConflictError("Collapsed Heritage families changed concurrently.")
-
     @staticmethod
     def _patch_mapping(target: Dict[str, Any], changes: Dict[str, Any]) -> None:
         for key, value in changes.items():
@@ -1032,17 +1011,12 @@ class HeritageStore:
             target["node_positions"] = positions
         self._patch_mapping(positions, patch["node_positions"])
 
-        collapsed = {str(item) for item in target.get("collapsed_families", [])}
-        collapsed.update(patch["collapsed_added"])
-        collapsed.difference_update(patch["collapsed_removed"])
-        target["collapsed_families"] = sorted(collapsed, key=str.casefold)
-
     def _save_animals(self) -> None:
         """Persist only animal records and genotype colours."""
         self._save_sections(animals=True, settings=False)
 
     def _save_settings(self) -> None:
-        """Persist only UI settings, node positions, and collapsed families."""
+        """Persist only UI settings and node positions."""
         self._save_sections(animals=False, settings=True)
 
     def save(self) -> None:
@@ -1315,6 +1289,7 @@ class HeritageStore:
         dependency_ids: Iterable[str],
         *,
         selection_type: str = "selected",
+        family_positions: Optional[Dict[str, Any]] = None,
         expected_entry: Any = _POSITION_ENTRY_UNCHECKED,
     ) -> Dict[str, Any]:
         """Atomically replace one user's complete selection position map.
@@ -1343,6 +1318,18 @@ class HeritageStore:
                 raise ValueError(f"Invalid non-finite cached node position for {name}")
             x, y = normalized
             normalized_positions[name] = {"x": x, "y": y}
+        if family_positions is not None and not isinstance(family_positions, dict):
+            raise ValueError("Cached family positions must be a mapping")
+        normalized_family_positions: Dict[str, Dict[str, float]] = {}
+        for raw_name, raw_position in (family_positions or {}).items():
+            name = self._normalize_text(raw_name)
+            normalized = self._normalize_position(raw_position)
+            if not name:
+                continue
+            if normalized is None:
+                raise ValueError(f"Invalid non-finite cached family position for {name}")
+            x, y = normalized
+            normalized_family_positions[name] = {"x": x, "y": y}
         dependencies = sorted(
             {
                 self._normalize_text(item)
@@ -1401,6 +1388,7 @@ class HeritageStore:
                 "dependency_revision": revision,
                 "dependency_ids": list(dependencies),
                 "positions": deepcopy(normalized_positions),
+                "family_positions": deepcopy(normalized_family_positions),
                 "selection_type": normalized_type,
                 "updated_at": self._utc_now_iso(),
             }
@@ -1631,50 +1619,6 @@ class HeritageStore:
         self._invalid_node_positions.pop("__node_positions__", None)
         self._invalid_node_positions.pop(key, None)
         self._save_settings()
-
-    def get_collapsed_families(self) -> Set[str]:
-        data = self.load()
-        raw_families = data.get("collapsed_families", []) if isinstance(data, dict) else []
-        if not isinstance(raw_families, list):
-            return set()
-
-        families: Set[str] = set()
-        for family_id in raw_families:
-            key = self._normalize_text(family_id)
-            if key:
-                families.add(key)
-        return families
-
-    def set_collapsed_families(self, family_ids: Iterable[str]) -> None:
-        data = self.load()
-        normalized: List[str] = []
-        seen: Set[str] = set()
-        for family_id in family_ids:
-            key = self._normalize_text(family_id)
-            if not key or key in seen:
-                continue
-            normalized.append(key)
-            seen.add(key)
-
-        data["collapsed_families"] = sorted(normalized, key=str.lower)
-        self._save_settings()
-
-    def set_family_collapsed(self, family_id: str, collapsed: bool) -> None:
-        key = self._normalize_text(family_id)
-        if not key:
-            return
-
-        collapsed_families = self.get_collapsed_families()
-        if collapsed:
-            if key in collapsed_families:
-                return
-            collapsed_families.add(key)
-        else:
-            if key not in collapsed_families:
-                return
-            collapsed_families.remove(key)
-
-        self.set_collapsed_families(collapsed_families)
 
     def get_parentage(
         self,

@@ -16,6 +16,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from Plugins.Heritage_Track.display_context import DisplayContextBuilder
 from Plugins.Heritage_Track.display_strategies import DisplaySetStrategy
+from Plugins.Heritage_Track.ghost_strategies import (
+    ArchivedGhostStrategy,
+    CompositeGhostStrategy,
+    OffspringAndSiblingsGhostStrategy,
+)
 from Plugins.Heritage_Track.heritage_track_widget import HeritageTrackWidget
 from Plugins.Heritage_Track.pedigree_router import (
     LAYOUT_MODE_FOCUSED,
@@ -120,6 +125,48 @@ class HeritageSelectionModeScopeTest(unittest.TestCase):
         )
         self.assertEqual(focused.display_mode, LAYOUT_MODE_FOCUSED)
         self.assertEqual(overview.display_mode, LAYOUT_MODE_OVERVIEW)
+
+    def test_archived_boundary_stays_on_ordinary_frontier(self):
+        class Engine:
+            child_to_parents = {
+                "child": {"egg_donor": "parent"},
+                "sibling": {"egg_donor": "parent", "sperm_donor": "co_parent"},
+            }
+            parent_to_children = {
+                "parent": {"child", "sibling"},
+                "sibling": {"archived_descendant"},
+                "co_parent": {"archived_partner_child"},
+            }
+
+        strategy = CompositeGhostStrategy([
+            OffspringAndSiblingsGhostStrategy(selected_animals={"child"}),
+            ArchivedGhostStrategy(),
+        ])
+        ghosts = strategy.find_ghosts(
+            {"child", "parent"}, Engine(), {"archived_descendant", "archived_partner_child"}
+        )
+        self.assertIn("sibling", ghosts)
+        self.assertIn("co_parent", ghosts)
+        self.assertNotIn("archived_descendant", ghosts)
+        self.assertNotIn("archived_partner_child", ghosts)
+
+    def test_sibling_completion_stops_at_effective_scope_parent_boundary(self):
+        class Engine:
+            child_to_parents = {
+                "child": {"egg_donor": "parent"},
+                "sibling": {"egg_donor": "parent", "sperm_donor": "co_parent"},
+            }
+            parent_to_children = {"parent": {"child", "sibling"}}
+
+        strategy = OffspringAndSiblingsGhostStrategy(selected_animals={"child"})
+
+        bounded = strategy.find_ghosts({"child", "parent"}, Engine())
+        self.assertIn("sibling", bounded)
+        self.assertIn("co_parent", bounded)
+
+        clipped = strategy.find_ghosts({"child"}, Engine())
+        self.assertNotIn("sibling", clipped)
+        self.assertNotIn("co_parent", clipped)
 
 
 if __name__ == "__main__":

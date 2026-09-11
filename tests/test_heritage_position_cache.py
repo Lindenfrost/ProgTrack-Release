@@ -47,6 +47,12 @@ class _Backend:
 
 
 class HeritagePositionCacheTest(unittest.TestCase):
+    def test_retired_family_display_preference_is_ignored(self):
+        backend = _Backend({"collapsed_families": ["legacy-family"]})
+        store = HeritageStore("", backend)
+
+        self.assertNotIn("collapsed_families", store.load())
+
     def test_cache_is_scoped_by_user_and_selection_and_keeps_legacy_map_separate(self):
         backend = _Backend({"node_positions": {"legacy": [99, 99]}})
         store = HeritageStore("", backend)
@@ -390,7 +396,18 @@ class HeritagePositionWidgetTest(unittest.TestCase):
         self.assertEqual(self.saved(), old_map)
         self.assertEqual(self.app.backend.records.put_count, writes)
         self.assertEqual(len(self.widget.figure.axes), 1)
-        self.assertIs(self.widget._hover_annotation.axes, self.widget.ax)
+        probe_node, probe_point = next(iter(self.widget.node_positions.items()))
+        probe_px, probe_py = self.widget.ax.transData.transform(probe_point)
+        text_count = len(self.widget.ax.texts)
+        self.widget._on_mouse_move(SimpleNamespace(
+            inaxes=self.widget.ax,
+            x=float(probe_px),
+            y=float(probe_py),
+            xdata=float(probe_point[0]),
+            ydata=float(probe_point[1]),
+        ))
+        self.assertFalse(hasattr(self.widget, "_hover_annotation"))
+        self.assertEqual(len(self.widget.ax.texts), text_count)
 
     def test_explicit_refresh_replaces_only_current_map_and_keeps_core_unchanged(self):
         core = copy.deepcopy(self.app.animals)
@@ -534,17 +551,6 @@ class HeritagePositionWidgetTest(unittest.TestCase):
         self.drag(dx=2)
         self.assertEqual(self.plugin.store.get_position_cache_entry("guest", guest_key), guest_map)
 
-    def test_collapse_expand_does_not_overwrite_expanded_layout(self):
-        expected = self.drag()
-        expanded_key, expanded_map = self.widget._active_position_cache_key, self.saved()
-        family = next(iter(self.widget.family_members))
-        self.widget.collapsed_families.add(family)
-        self.assertTrue(self.widget.refresh_graph())
-        self.assertEqual(self.saved(expanded_key), expanded_map)
-        self.widget.collapsed_families.clear()
-        self.assertTrue(self.widget.refresh_graph())
-        self.assertEqual(self.widget.node_positions["C"], expected)
-
     def test_raster_draw_failure_precedes_position_write(self):
         from matplotlib.axes import Axes
         old_axes, old_map = self.widget.ax, self.saved()
@@ -590,10 +596,16 @@ class HeritagePositionWidgetTest(unittest.TestCase):
         w._on_mouse_move(event)
         self.assertTrue(w.is_dragging)
         w._on_mouse_release(event)
+        expected_family = w._snap_to_grid(start[0] + 5, start[1] + 2)
+        self.assertEqual(w.family_positions[family], expected_family)
         for node, point in original.items():
             self.assertAlmostEqual(w.node_positions[node][0], point[0]+5)
             self.assertAlmostEqual(w.node_positions[node][1], point[1]+2)
         saved = self.saved()
+        self.assertEqual(
+            saved["family_positions"][family],
+            {"x": float(expected_family[0]), "y": float(expected_family[1])},
+        )
         w._on_scroll(SimpleNamespace(inaxes=w.ax, xdata=start[0], ydata=start[1], button="up"))
         w._on_mouse_press(SimpleNamespace(button=2, inaxes=w.ax, xdata=start[0], ydata=start[1]))
         w._on_mouse_move(SimpleNamespace(button=2, inaxes=w.ax, xdata=start[0]+1, ydata=start[1]+1))

@@ -153,6 +153,7 @@ class FrozenRoutePlan:
     last_junction_gap_obstacles: Mapping[str, Any] = field(default_factory=dict)
     route_obstacle_hits: Tuple[str, ...] = ()
     layout_diagnostics: Tuple[str, ...] = ()
+    manual_family_ids: FrozenSet[str] = frozenset()
 
     def __post_init__(self) -> None:
         # A frozen dataclass does not freeze nested dictionaries/lists.  The
@@ -175,6 +176,7 @@ class FrozenRoutePlan:
             "layout_diagnostics",
         ):
             object.__setattr__(self, field_name, tuple(getattr(self, field_name)))
+        object.__setattr__(self, "manual_family_ids", frozenset(self.manual_family_ids))
 
     @classmethod
     def from_route_plan(cls, plan: Any) -> "FrozenRoutePlan":
@@ -208,6 +210,9 @@ class FrozenRoutePlan:
             last_junction_gap_obstacles=dict(getattr(plan, "last_junction_gap_obstacles", {})),
             route_obstacle_hits=tuple(plan.route_obstacle_hits),
             layout_diagnostics=tuple(getattr(plan, "layout_diagnostics", ())),
+            manual_family_ids=frozenset(
+                getattr(plan, "manual_family_ids", set())
+            ),
         )
 
     def route_segments(self, family_id: str, endpoint: str) -> list[tuple[Point, Point]]:
@@ -280,6 +285,7 @@ class FrozenRoutePlan:
             last_junction_gap_obstacles=dict(self.last_junction_gap_obstacles),
             route_obstacle_hits=list(self.route_obstacle_hits),
             layout_diagnostics=list(self.layout_diagnostics),
+            manual_family_ids=set(self.manual_family_ids),
         )
 
 
@@ -337,6 +343,10 @@ class RenderCacheEntry:
     position_cache_user: str = ""
     position_cache_revision: str = ""
     position_cache_dependencies: FrozenSet[str] = field(default_factory=frozenset)
+    # Family-handle anchors are persisted in the same position-cache record
+    # as animal coordinates and mirrored here so a warm frame can verify that
+    # its derived junction geometry still represents the accepted map.
+    manual_family_positions: Mapping[str, Point] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "canonical_selection", tuple(self.canonical_selection))
@@ -366,6 +376,7 @@ class RenderCacheEntry:
         object.__setattr__(self, "position_cache_user", str(self.position_cache_user or ""))
         object.__setattr__(self, "position_cache_revision", str(self.position_cache_revision or ""))
         object.__setattr__(self, "position_cache_dependencies", frozenset(self.position_cache_dependencies))
+        object.__setattr__(self, "manual_family_positions", _freeze_value(self.manual_family_positions))
         if not isinstance(self.route_plan, FrozenRoutePlan):
             object.__setattr__(self, "route_plan", FrozenRoutePlan.from_route_plan(self.route_plan))
         geometry_diagnostics = _non_finite_geometry_diagnostics(
@@ -523,8 +534,6 @@ class DisplayContext:
     display_nodes: Set[str]
     levels: Dict[str, int]
     ghost_nodes: Set[str] = field(default_factory=set)
-    collapsed_families: Set[str] = field(default_factory=set)
-    hidden_nodes: Set[str] = field(default_factory=set)
     family_nodes: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     positions: Dict[str, Tuple[float, float]] = field(default_factory=dict)
     locked_positions: Dict[str, Tuple[float, float]] = field(default_factory=dict)
@@ -541,8 +550,6 @@ class DisplayContext:
         object.__setattr__(self, "display_nodes", frozenset(self.display_nodes))
         object.__setattr__(self, "levels", _freeze_value(self.levels))
         object.__setattr__(self, "ghost_nodes", frozenset(self.ghost_nodes))
-        object.__setattr__(self, "collapsed_families", frozenset(self.collapsed_families))
-        object.__setattr__(self, "hidden_nodes", frozenset(self.hidden_nodes))
         object.__setattr__(self, "family_nodes", _freeze_value(self.family_nodes))
         object.__setattr__(self, "positions", _freeze_value(self.positions))
         object.__setattr__(self, "locked_positions", _freeze_value(self.locked_positions))
@@ -560,8 +567,8 @@ class DisplayContext:
         object.__setattr__(self, "display_mode", str(self.display_mode or "focused").strip() or "focused")
 
     def get_visible_nodes(self) -> Set[str]:
-        """Return nodes that should be rendered (display nodes minus hidden)."""
-        return self.display_nodes - self.hidden_nodes
+        """Return the complete node set selected for rendering."""
+        return self.display_nodes
 
     def get_render_nodes(self) -> Set[str]:
         """Return all nodes to render including family nodes."""
@@ -570,10 +577,6 @@ class DisplayContext:
     def is_ghost(self, node: str) -> bool:
         """Check if a node is a ghost node."""
         return node in self.ghost_nodes
-
-    def is_collapsed(self, family_id: str) -> bool:
-        """Check if a family is collapsed."""
-        return family_id in self.collapsed_families
 
     def get_node_level(self, node: str) -> int:
         """Get the computed level for a node, defaulting to 0."""
@@ -588,8 +591,6 @@ class DisplayContext:
         display_nodes: Optional[Set[str]] = None,
         levels: Optional[Dict[str, int]] = None,
         ghost_nodes: Optional[Set[str]] = None,
-        collapsed_families: Optional[Set[str]] = None,
-        hidden_nodes: Optional[Set[str]] = None,
         family_nodes: Optional[Dict[str, Dict[str, Any]]] = None,
         positions: Optional[Dict[str, Tuple[float, float]]] = None,
         locked_positions: Optional[Dict[str, Tuple[float, float]]] = None,
@@ -600,8 +601,6 @@ class DisplayContext:
             display_nodes=display_nodes if display_nodes is not None else self.display_nodes,
             levels=levels if levels is not None else self.levels,
             ghost_nodes=ghost_nodes if ghost_nodes is not None else self.ghost_nodes,
-            collapsed_families=collapsed_families if collapsed_families is not None else self.collapsed_families,
-            hidden_nodes=hidden_nodes if hidden_nodes is not None else self.hidden_nodes,
             family_nodes=family_nodes if family_nodes is not None else self.family_nodes,
             positions=positions if positions is not None else self.positions,
             locked_positions=locked_positions if locked_positions is not None else self.locked_positions,
@@ -670,8 +669,6 @@ class DisplayContextBuilder:
             display_nodes=display_nodes,
             levels=levels,
             ghost_nodes=ghost_nodes,
-            collapsed_families=set(),
-            hidden_nodes=set(),
             family_nodes={},
             positions={},
             locked_positions={},
@@ -687,36 +684,36 @@ class DisplayContextBuilder:
         # Get base levels from engine
         all_graph_nodes = self.engine.all_nodes
         all_graph_levels = self.engine.compute_levels(all_graph_nodes)
-        pre_collapse_levels = self.engine.compute_levels(display_nodes)
+        computed_levels = self.engine.compute_levels(display_nodes)
 
-        if not pre_collapse_levels:
+        if not computed_levels:
             return {}
 
-        _max_lvl = max(pre_collapse_levels.values(), default=0)
+        _max_lvl = max(computed_levels.values(), default=0)
 
         # Leaf promotion: isolated nodes → max_level
         if _max_lvl > 0:
             for _node in list(display_nodes):
-                if pre_collapse_levels.get(_node, 0) < _max_lvl:
+                if computed_levels.get(_node, 0) < _max_lvl:
                     _has_any_children = bool(self.engine.parent_to_children.get(_node, set()))
                     if not _has_any_children:
-                        pre_collapse_levels[_node] = _max_lvl
+                        computed_levels[_node] = _max_lvl
 
         # Assign levels to ghost nodes from full-graph level dict
         for _ghost in ghost_nodes:
-            if _ghost not in pre_collapse_levels:
-                pre_collapse_levels[_ghost] = all_graph_levels.get(_ghost, 0)
+            if _ghost not in computed_levels:
+                computed_levels[_ghost] = all_graph_levels.get(_ghost, 0)
 
         # Pull-up pass: level 0 parents pulled toward children
         for _pull_pass in range(_max_lvl + 2):
             _pull_changed = False
             for _node in list(display_nodes):
-                if pre_collapse_levels.get(_node, 0) != 0:
+                if computed_levels.get(_node, 0) != 0:
                     continue
                 _kids = self.engine.parent_to_children.get(_node, set()) & display_nodes
                 if not _kids:
                     continue
-                _kid_lvls = [pre_collapse_levels.get(k, 0) for k in _kids]
+                _kid_lvls = [computed_levels.get(k, 0) for k in _kids]
                 _max_kid = max(_kid_lvls)
                 _min_kid = min(_kid_lvls)
                 if _max_kid <= 1:
@@ -724,7 +721,7 @@ class DisplayContextBuilder:
                 _desired = _max_kid - 1
                 if _desired >= _min_kid:
                     continue
-                pre_collapse_levels[_node] = _desired
+                computed_levels[_node] = _desired
                 _pull_changed = True
             if not _pull_changed:
                 break
@@ -741,6 +738,6 @@ class DisplayContextBuilder:
         ):
             self.engine.set_level_diagnostics(
                 display_nodes,
-                self.engine.generation_diagnostics(display_nodes, pre_collapse_levels),
+                self.engine.generation_diagnostics(display_nodes, computed_levels),
             )
-        return pre_collapse_levels
+        return computed_levels
