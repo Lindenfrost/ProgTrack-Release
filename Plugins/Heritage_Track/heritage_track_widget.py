@@ -547,7 +547,12 @@ class HeritageTrackWidget(QWidget):
         self.current_xlim: Optional[Tuple[float, float]] = None
         self.current_ylim: Optional[Tuple[float, float]] = None
         self.pan_active = False
+        # Panning anchors are Matplotlib display coordinates (pixels), not
+        # data coordinates.  Data coordinates are recomputed from the
+        # current transform for each motion; storing xdata/ydata after a
+        # limit change makes the next native motion use a different frame.
         self.pan_start: Optional[Tuple[float, float]] = None
+        self._pan_mouse_grabbed = False
         self.drag_active = False
         self.drag_node: Optional[str] = None
         self.drag_group_nodes: Set[str] = set()
@@ -1777,7 +1782,7 @@ class HeritageTrackWidget(QWidget):
         labels: Mapping[str, str],
         *,
         show_inbreeding: bool,
-    ) -> Optional[Tuple[float, float]]:
+    ) -> Optional[Tuple[float, float, float, float]]:
         """Derive generic router scales from the detached artist geometry.
 
         The router must place against a data-space approximation because the
@@ -1805,6 +1810,14 @@ class HeritageTrackWidget(QWidget):
         )
         required_width_scale = current_width_scale
         required_height_scale = current_height_scale
+        current_marker_half_width = max(
+            0.02, float(getattr(router, "marker_half_width", 0.30))
+        )
+        current_marker_half_height = max(
+            0.02, float(getattr(router, "marker_half_height", 0.30))
+        )
+        required_marker_half_width = current_marker_half_width
+        required_marker_half_height = current_marker_half_height
         bottom_base = 0.78 if show_inbreeding else 0.56
         top_base = 0.34
 
@@ -1885,6 +1898,42 @@ class HeritageTrackWidget(QWidget):
             x_safety = max(1e-7, x_per_pixel * 2.0)
             y_safety = max(1e-7, y_per_pixel * 2.0)
 
+            marker_artist = meta.get("marker_artist")
+            if marker_artist is not None and marker_artist.get_visible():
+                try:
+                    marker_box = marker_artist.get_window_extent(renderer)
+                    marker_data = inverse.transform(
+                        (
+                            (float(marker_box.x0), float(marker_box.y0)),
+                            (float(marker_box.x1), float(marker_box.y1)),
+                        )
+                    )
+                    marker_half_width = max(
+                        abs(float(marker_data[0][0]) - float(anchor[0])),
+                        abs(float(marker_data[1][0]) - float(anchor[0])),
+                    )
+                    marker_half_height = max(
+                        abs(float(marker_data[0][1]) - float(anchor[1])),
+                        abs(float(marker_data[1][1]) - float(anchor[1])),
+                    )
+                    if math.isfinite(marker_half_width) and math.isfinite(marker_half_height):
+                        required_marker_half_width = max(
+                            required_marker_half_width,
+                            marker_half_width + x_safety,
+                        )
+                        required_marker_half_height = max(
+                            required_marker_half_height,
+                            marker_half_height + y_safety,
+                        )
+                except (
+                    AttributeError,
+                    RuntimeError,
+                    TypeError,
+                    ValueError,
+                    OverflowError,
+                ):
+                    pass
+
             label = str(labels.get(node, node)).strip()
             estimated = float(router._estimated_label_width(label))
             raw_estimated = estimated / current_width_scale
@@ -1907,11 +1956,15 @@ class HeritageTrackWidget(QWidget):
         if (
             required_width_scale <= current_width_scale * 1.02
             and required_height_scale <= current_height_scale * 1.02
+            and required_marker_half_width <= current_marker_half_width * 1.02
+            and required_marker_half_height <= current_marker_half_height * 1.02
         ):
             return None
         return (
             min(required_width_scale, current_width_scale * 2.0),
             min(required_height_scale, current_height_scale * 2.0),
+            required_marker_half_width,
+            required_marker_half_height,
         )
 
     def _rebuild_render_entry_after_artist_collision(
@@ -1968,8 +2021,14 @@ class HeritageTrackWidget(QWidget):
         family_positions = dict(route_plan.family_positions)
         positions: Dict[str, Tuple[float, float]] = dict(animal_positions)
         positions.update(family_positions)
+        terminal_nodes = self._terminal_descendants_for_selection(
+            selected_animals, positions, families
+        )
         fit_xlim, fit_ylim = self._compute_view_bounds(
-            positions, route_plan.all_points()
+            positions,
+            route_plan.all_points(),
+            selected_nodes=selected_animals,
+            terminal_nodes=terminal_nodes,
         )
         view_bounds = self._apply_aspect_fill(fit_xlim, fit_ylim)
         return self._build_render_cache_entry(
@@ -3912,6 +3971,9 @@ class HeritageTrackWidget(QWidget):
         self,
         positions: Dict[str, Tuple[float, float]],
         extra_points: Optional[List[Tuple[float, float]]] = None,
+        *,
+        selected_nodes: Optional[Sequence[str]] = None,
+        terminal_nodes: Optional[Sequence[str]] = None,
     ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
         points = list(positions.values()) + list(extra_points or [])
         if not points:
@@ -3956,17 +4018,29 @@ class HeritageTrackWidget(QWidget):
             return full_xlim, full_ylim
         selected = [
             node
-            for node in (self._canonical_selection_ids or self._canonicalize_selection())
+            for node in (
+                selected_nodes
+                if selected_nodes is not None
+                else (self._canonical_selection_ids or self._canonicalize_selection())
+            )
             if node in positions and not self._is_family_node(node)
+        ]
+        terminals = [
+            node
+            for node in (terminal_nodes or ())
+            if node in positions
+            and not self._is_family_node(node)
+            and node not in selected
         ]
         min_pixels_per_unit = 36.0
         focused = bool(selected and len(selected) <= 8)
-        # A focused frame is still a complete connected pedigree, not a
-        # clipped graph: it retains the complete connected route plan while
-        # opening on a bounded readable window around the selected anchors.
-        # Contextual ancestors/descendants outside that window remain
-        # available through pan/zoom and are deliberately not forced into a
-        # label-colliding first frame.
+        # A selection-aware frame is still a complete connected pedigree, not
+        # a clipped graph: it retains the complete connected route plan while
+        # opening on a bounded readable window around the selected anchors and
+        # as many terminal leaves as the available area permits. Contextual
+        # ancestors/descendants outside that window remain available through
+        # pan/zoom and are deliberately not forced into a label-colliding
+        # first frame.
         horizontal_pixels_per_unit = 25.0 if focused else min_pixels_per_unit
         max_width = max(16.0, axes_width / horizontal_pixels_per_unit)
         # A focused pedigree has few semantic anchors but may include a deep
@@ -3984,9 +4058,16 @@ class HeritageTrackWidget(QWidget):
         if full_width <= max_width and full_height <= max_height:
             return full_xlim, full_ylim
 
-        if selected and len(selected) <= 8:
-            center_x = sum(positions[node][0] for node in selected) / len(selected)
-            center_y = sum(positions[node][1] for node in selected) / len(selected)
+        if selected:
+            center_x, center_y = self._best_initial_view_center(
+                positions,
+                selected,
+                terminals,
+                visible_width=min(full_width, max_width),
+                visible_height=min(full_height, max_height),
+                full_xlim=full_xlim,
+                full_ylim=full_ylim,
+            )
         else:
             animal_points = sorted(
                 (
@@ -4018,6 +4099,200 @@ class HeritageTrackWidget(QWidget):
             center_y - (visible_height / 2.0),
             center_y + (visible_height / 2.0),
         )
+
+    @staticmethod
+    def _best_initial_view_center(
+        positions: Mapping[str, Tuple[float, float]],
+        selected_nodes: Sequence[str],
+        terminal_nodes: Sequence[str],
+        *,
+        visible_width: float,
+        visible_height: float,
+        full_xlim: Tuple[float, float],
+        full_ylim: Tuple[float, float],
+    ) -> Tuple[float, float]:
+        """Choose a deterministic readable focus for a bounded first frame.
+
+        This is deliberately a viewport-only optimization.  The accepted
+        logical positions are never moved.  Candidate centres are generated
+        from the selected/terminal anchors and scored lexicographically so a
+        frame keeps as many selected animals as possible, then as many
+        terminal descendants as possible, before using stable distance
+        tie-breakers.  The candidate cap keeps very large pedigrees cheap
+        while retaining the extreme, median, and selection-derived choices.
+        """
+        priority_nodes = list(dict.fromkeys(
+            list(selected_nodes) + list(terminal_nodes)
+        ))
+        priority_points = [
+            positions[node]
+            for node in priority_nodes
+            if node in positions
+        ]
+        selected_points = [
+            positions[node]
+            for node in selected_nodes
+            if node in positions
+        ]
+        terminal_set = set(terminal_nodes)
+        selected_set = set(selected_nodes)
+        if not priority_points:
+            return (
+                (full_xlim[0] + full_xlim[1]) / 2.0,
+                (full_ylim[0] + full_ylim[1]) / 2.0,
+            )
+
+        def clamp(value: float, bounds: Tuple[float, float], span: float) -> float:
+            low = bounds[0] + (span / 2.0)
+            high = bounds[1] - (span / 2.0)
+            if low > high:
+                return (bounds[0] + bounds[1]) / 2.0
+            return min(max(float(value), low), high)
+
+        def median(values: Sequence[float]) -> float:
+            ordered = sorted(float(value) for value in values)
+            return ordered[len(ordered) // 2]
+
+        selected_center = (
+            sum(point[0] for point in selected_points) / len(selected_points),
+            sum(point[1] for point in selected_points) / len(selected_points),
+        ) if selected_points else (
+            (full_xlim[0] + full_xlim[1]) / 2.0,
+            (full_ylim[0] + full_ylim[1]) / 2.0,
+        )
+
+        def axis_candidates(
+            axis: int,
+            span: float,
+            bounds: Tuple[float, float],
+        ) -> List[float]:
+            values = [float(point[axis]) for point in priority_points]
+            candidates = {
+                clamp(value, bounds, span)
+                for value in values
+            }
+            # The interval boundaries are the useful candidates when a
+            # terminal leaf lies near one edge of the readable window.
+            candidates.update(
+                clamp(value - (span / 2.0), bounds, span)
+                for value in values
+            )
+            candidates.update(
+                clamp(value + (span / 2.0), bounds, span)
+                for value in values
+            )
+            candidates.add(clamp(selected_center[axis], bounds, span))
+            candidates.add(clamp(
+                median(values), bounds, span
+            ))
+            candidates.add(clamp(
+                (bounds[0] + bounds[1]) / 2.0, bounds, span
+            ))
+            ordered = sorted(candidates)
+            if len(ordered) <= 48:
+                return ordered
+            # Preserve deterministic coverage of the complete range and the
+            # selection-derived centre without letting a deep graph create a
+            # quadratic candidate explosion.
+            sampled = {
+                ordered[round(index * (len(ordered) - 1) / 47)]
+                for index in range(48)
+            }
+            sampled.add(clamp(selected_center[axis], bounds, span))
+            return sorted(sampled)
+
+        x_candidates = axis_candidates(0, visible_width, full_xlim)
+        y_candidates = axis_candidates(1, visible_height, full_ylim)
+
+        def visible(point: Tuple[float, float], center: Tuple[float, float]) -> bool:
+            return (
+                abs(float(point[0]) - center[0]) <= visible_width / 2.0 + 1e-9
+                and abs(float(point[1]) - center[1]) <= visible_height / 2.0 + 1e-9
+            )
+
+        best_score = None
+        best_center = (
+            clamp(selected_center[0], full_xlim, visible_width),
+            clamp(selected_center[1], full_ylim, visible_height),
+        )
+        for center_x in x_candidates:
+            for center_y in y_candidates:
+                center = (center_x, center_y)
+                selected_visible = sum(
+                    visible(positions[node], center)
+                    for node in selected_set
+                    if node in positions
+                )
+                terminal_visible = sum(
+                    visible(positions[node], center)
+                    for node in terminal_set
+                    if node in positions
+                )
+                priority_visible = selected_visible + terminal_visible
+                distance = sum(
+                    (float(point[0]) - center_x) ** 2
+                    + (float(point[1]) - center_y) ** 2
+                    for point in selected_points
+                )
+                score = (
+                    selected_visible,
+                    terminal_visible,
+                    priority_visible,
+                    -distance,
+                    -abs(center_x - selected_center[0])
+                    -abs(center_y - selected_center[1]),
+                    -center_x,
+                    -center_y,
+                )
+                if best_score is None or score > best_score:
+                    best_score = score
+                    best_center = center
+        return best_center
+
+    @staticmethod
+    def _terminal_descendants_for_selection(
+        selected_nodes: Sequence[str],
+        positions: Mapping[str, Tuple[float, float]],
+        families: Mapping[str, Mapping[str, Any]],
+    ) -> Set[str]:
+        """Return visible leaf descendants using resolved family structure."""
+        visible_animals = {
+            node for node in positions if not str(node).startswith("__family__::")
+        }
+        children_by_parent: Dict[str, Set[str]] = defaultdict(set)
+        for family in families.values():
+            if not isinstance(family, Mapping):
+                continue
+            children = {
+                str(child).strip()
+                for child in (family.get("children", []) or [])
+                if str(child).strip() in visible_animals
+            }
+            if not children:
+                continue
+            for parent_key in ("mother", "father"):
+                parent = str(family.get(parent_key, "") or "").strip()
+                if parent in visible_animals:
+                    children_by_parent[parent].update(children)
+
+        descendants: Set[str] = set()
+        frontier = [
+            node for node in dict.fromkeys(selected_nodes)
+            if node in visible_animals
+        ]
+        seen = set(frontier)
+        while frontier:
+            parent = frontier.pop(0)
+            for child in sorted(children_by_parent.get(parent, set()), key=str.casefold):
+                if child in seen:
+                    continue
+                seen.add(child)
+                descendants.add(child)
+                frontier.append(child)
+        return {
+            node for node in descendants
+            if not children_by_parent.get(node)
+        }
 
     @staticmethod
     def _layout_mode_for_selection(selected_animals: List[str]) -> str:
@@ -5097,7 +5372,15 @@ class HeritageTrackWidget(QWidget):
         prev_xlim = self.current_xlim
         prev_ylim = self.current_ylim
         try:
-            fit_xlim, fit_ylim = self._compute_view_bounds(positions, route_plan.all_points())
+            terminal_nodes = self._terminal_descendants_for_selection(
+                selected_animals, positions, families
+            )
+            fit_xlim, fit_ylim = self._compute_view_bounds(
+                positions,
+                route_plan.all_points(),
+                selected_nodes=selected_animals,
+                terminal_nodes=terminal_nodes,
+            )
         except GeometryValidationError as exc:
             self._report_geometry_failure(exc)
             return
@@ -5209,11 +5492,7 @@ class HeritageTrackWidget(QWidget):
             )
             if not artist_fatal:
                 break
-            if (
-                automatic_fit
-                and self.layout_mode == LAYOUT_MODE_FOCUSED
-                and fit_attempt < 2
-            ):
+            if automatic_fit and fit_attempt < 2:
                 # The router's data-space estimate cannot know the active
                 # font/DPI extents until this detached candidate has drawn.
                 # Feed the measured visible footprint back into the same
@@ -5224,8 +5503,16 @@ class HeritageTrackWidget(QWidget):
                     show_inbreeding=has_secondary_label,
                 )
                 if calibrated_scales is not None:
-                    self._pedigree_router.label_width_scale = calibrated_scales[0]
-                    self._pedigree_router.label_height_scale = calibrated_scales[1]
+                    (
+                        label_width_scale,
+                        label_height_scale,
+                        marker_half_width,
+                        marker_half_height,
+                    ) = calibrated_scales
+                    self._pedigree_router.label_width_scale = label_width_scale
+                    self._pedigree_router.label_height_scale = label_height_scale
+                    self._pedigree_router.marker_half_width = marker_half_width
+                    self._pedigree_router.marker_half_height = marker_half_height
                     rebuilt_entry = self._rebuild_render_entry_after_artist_collision(
                         engine=engine,
                         selected_animals=selected_animals,
@@ -5590,6 +5877,7 @@ class HeritageTrackWidget(QWidget):
 
     def closeEvent(self, event) -> None:
         '''Flush derived Heritage data before the window is closed.'''
+        self._end_pan(redraw=False)
         self.plugin.flush_pending_store()
         super().closeEvent(event)
 
@@ -5725,11 +6013,70 @@ class HeritageTrackWidget(QWidget):
         else:
             self.canvas.draw_idle()
 
+    @staticmethod
+    def _event_display_position(event) -> Optional[Tuple[float, float]]:
+        """Return a finite Matplotlib display position from an input event.
+
+        ``xdata``/``ydata`` are intentionally not used here.  Matplotlib
+        clears them as soon as the pointer crosses the Axes boundary, while
+        ``x``/``y`` remain valid canvas/display coordinates for the complete
+        gesture.
+        """
+        try:
+            x = float(getattr(event, "x"))
+            y = float(getattr(event, "y"))
+        except (AttributeError, TypeError, ValueError):
+            return None
+        if not math.isfinite(x) or not math.isfinite(y):
+            return None
+        return x, y
+
+    def _grab_pan_mouse(self) -> None:
+        """Keep receiving native motion/release events during a pan."""
+        grab_mouse = getattr(self.canvas, "grabMouse", None)
+        if not callable(grab_mouse):
+            return
+        try:
+            # A hidden/offscreen canvas cannot provide a useful native grab;
+            # synthetic/unit events still exercise the same coordinate path.
+            if not self.canvas.isVisible():
+                return
+            grab_mouse()
+            self._pan_mouse_grabbed = True
+        except (RuntimeError, TypeError):
+            # Native grabs are not available on every Qt backend/window
+            # configuration.  Matplotlib events remain sufficient while the
+            # pointer stays within the canvas.
+            self._pan_mouse_grabbed = False
+
+    def _release_pan_mouse(self) -> None:
+        if not self._pan_mouse_grabbed:
+            return
+        release_mouse = getattr(self.canvas, "releaseMouse", None)
+        try:
+            if callable(release_mouse):
+                release_mouse()
+        finally:
+            self._pan_mouse_grabbed = False
+
+    def _end_pan(self, *, redraw: bool) -> None:
+        was_active = self.pan_active
+        self.pan_active = False
+        self.pan_start = None
+        self._release_pan_mouse()
+        if redraw and was_active:
+            # The final release may be delivered outside the Axes.  All view
+            # limits were already accepted during motion, so only repaint.
+            self._redraw_current_view(synchronous=True)
+
     def _on_mouse_press(self, event) -> None:
         # Middle button (wheel press) starts panning.
-        if event.button == 2 and event.inaxes == self.ax and event.xdata is not None and event.ydata is not None:
+        display_position = self._event_display_position(event)
+        if event.button == 2 and event.inaxes == self.ax and display_position is not None:
+            self._end_pan(redraw=False)
             self.pan_active = True
-            self.pan_start = (event.xdata, event.ydata)
+            self.pan_start = display_position
+            self._grab_pan_mouse()
             return
 
         if event.inaxes != self.ax:
@@ -5834,11 +6181,26 @@ class HeritageTrackWidget(QWidget):
 
         # Pan with middle button held.
         if self.pan_active and self.pan_start is not None:
-            if event.inaxes != self.ax or event.xdata is None or event.ydata is None:
+            display_position = self._event_display_position(event)
+            if display_position is None:
                 return
 
-            dx = event.xdata - self.pan_start[0]
-            dy = event.ydata - self.pan_start[1]
+            # Both points must be interpreted under the same, pre-motion
+            # transform.  Using the prior event's xdata/ydata after changing
+            # the limits mixes two transforms and causes every other native
+            # motion to cancel out.  The display anchor remains valid even
+            # when event.inaxes is None at the boundary of the Axes/canvas.
+            try:
+                inverse_transform = self.ax.transData.inverted()
+                start_data = inverse_transform.transform(self.pan_start)
+                current_data = inverse_transform.transform(display_position)
+                dx = float(current_data[0] - start_data[0])
+                dy = float(current_data[1] - start_data[1])
+            except (AttributeError, TypeError, ValueError, OverflowError):
+                return
+            if not math.isfinite(dx) or not math.isfinite(dy):
+                return
+
             cur_xlim = self.ax.get_xlim()
             cur_ylim = self.ax.get_ylim()
             new_xlim = (cur_xlim[0] - dx, cur_xlim[1] - dx)
@@ -5848,7 +6210,7 @@ class HeritageTrackWidget(QWidget):
             self.ax.set_ylim(new_ylim)
             self.current_xlim = new_xlim
             self.current_ylim = new_ylim
-            self.pan_start = (event.xdata, event.ydata)
+            self.pan_start = display_position
             # A pre-pan background contains the old transform and cannot be
             # blitted as the new view. Draw the accepted artists at the new
             # limits so every motion event is visibly reflected immediately.
@@ -5979,12 +6341,7 @@ class HeritageTrackWidget(QWidget):
             return
 
         if event.button == 2:
-            self.pan_active = False
-            self.pan_start = None
-            # Release may occur outside the Axes. The limits were already
-            # accepted during motion; present that final view synchronously so
-            # no queued/unrelated event is required to reveal the pan.
-            self._redraw_current_view(synchronous=True)
+            self._end_pan(redraw=True)
             return
 
         if event.button == 1:

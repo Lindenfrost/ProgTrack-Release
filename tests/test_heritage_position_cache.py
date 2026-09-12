@@ -9,6 +9,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from PyQt6.QtCore import QPoint, Qt
+from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMessageBox
 
 from Plugins.Heritage_Track.heritage_store import HeritageStore
@@ -607,12 +609,147 @@ class HeritagePositionWidgetTest(unittest.TestCase):
             {"x": float(expected_family[0]), "y": float(expected_family[1])},
         )
         w._on_scroll(SimpleNamespace(inaxes=w.ax, xdata=start[0], ydata=start[1], button="up"))
-        w._on_mouse_press(SimpleNamespace(button=2, inaxes=w.ax, xdata=start[0], ydata=start[1]))
-        w._on_mouse_move(SimpleNamespace(button=2, inaxes=w.ax, xdata=start[0]+1, ydata=start[1]+1))
-        w._on_mouse_release(SimpleNamespace(button=2))
+        pan_px, pan_py = w.ax.transData.transform((start[0], start[1]))
+        w._on_mouse_press(SimpleNamespace(button=2, inaxes=w.ax, xdata=start[0], ydata=start[1],
+                                          x=pan_px, y=pan_py))
+        w._on_mouse_move(SimpleNamespace(button=2, inaxes=w.ax, xdata=start[0]+1, ydata=start[1]+1,
+                                         x=pan_px+20, y=pan_py+20))
+        w._on_mouse_release(SimpleNamespace(button=2, inaxes=None, x=pan_px+20, y=pan_py+20))
         self.assertEqual(self.saved(), saved)
         self.assertTrue(w.refresh_graph(keep_view=True))
         self.assertEqual(self.saved(), saved)
+
+    def test_repeated_pan_uses_display_anchor_across_axes_boundary(self):
+        """Every native motion must accumulate, including with no inaxes."""
+        w = self.widget
+        w.canvas.draw()
+        nodes_before = dict(w.node_positions)
+        families_before = dict(w.family_positions)
+        saved_before = self.saved()
+
+        bbox = w.ax.bbox
+        anchor = (float(bbox.x0 + bbox.width * 0.45), float(bbox.y0 + bbox.height * 0.55))
+        anchor_data = w.ax.transData.inverted().transform(anchor)
+        press = SimpleNamespace(
+            button=2,
+            inaxes=w.ax,
+            xdata=float(anchor_data[0]),
+            ydata=float(anchor_data[1]),
+            x=anchor[0],
+            y=anchor[1],
+        )
+        w._on_mouse_press(press)
+        self.assertTrue(w.pan_active)
+        self.assertEqual(w.pan_start, anchor)
+
+        positions = (
+            (anchor[0] + 18.0, anchor[1] + 7.0, w.ax),
+            (anchor[0] + 37.0, anchor[1] - 11.0, None),
+            (anchor[0] + 9.0, anchor[1] - 23.0, w.ax),
+            (anchor[0] - 14.0, anchor[1] + 19.0, None),
+        )
+        previous_position = anchor
+        for x, y, inaxes in positions:
+            inverse = w.ax.transData.inverted()
+            start_data = inverse.transform(previous_position)
+            current_data = inverse.transform((x, y))
+            dx = float(current_data[0] - start_data[0])
+            dy = float(current_data[1] - start_data[1])
+            expected_xlim, expected_ylim = w._apply_aspect_fill(
+                tuple(value - dx for value in w.ax.get_xlim()),
+                tuple(value - dy for value in w.ax.get_ylim()),
+            )
+            w._on_mouse_move(SimpleNamespace(
+                button=2,
+                inaxes=inaxes,
+                x=float(x),
+                y=float(y),
+                xdata=None,
+                ydata=None,
+            ))
+            self.assertAlmostEqual(w.ax.get_xlim()[0], expected_xlim[0])
+            self.assertAlmostEqual(w.ax.get_xlim()[1], expected_xlim[1])
+            self.assertAlmostEqual(w.ax.get_ylim()[0], expected_ylim[0])
+            self.assertAlmostEqual(w.ax.get_ylim()[1], expected_ylim[1])
+            self.assertEqual(tuple(w.current_xlim), tuple(w.ax.get_xlim()))
+            self.assertEqual(tuple(w.current_ylim), tuple(w.ax.get_ylim()))
+            previous_position = (x, y)
+
+        w._on_mouse_release(SimpleNamespace(
+            button=2,
+            inaxes=None,
+            x=previous_position[0],
+            y=previous_position[1],
+        ))
+        self.assertFalse(w.pan_active)
+        self.assertIsNone(w.pan_start)
+        self.assertFalse(w._pan_mouse_grabbed)
+        self.assertEqual(w.node_positions, nodes_before)
+        self.assertEqual(w.family_positions, families_before)
+        self.assertEqual(self.saved(), saved_before)
+
+    def test_native_repeated_pan_crosses_axes_boundary_and_releases_cleanly(self):
+        """Qt mouse events must keep panning through the surrounding canvas."""
+        w = self.widget
+        w.show()
+        self.qt.processEvents()
+        try:
+            w.canvas.draw()
+            bbox = w.ax.bbox
+            canvas_height = float(w.canvas.height())
+
+            def qt_point(display_position):
+                return QPoint(
+                    int(round(display_position[0])),
+                    int(round(canvas_height - display_position[1])),
+                )
+
+            anchor = (
+                float(bbox.x0 + bbox.width * 0.45),
+                float(bbox.y0 + bbox.height * 0.55),
+            )
+            first = (anchor[0] + 16.0, anchor[1] + 9.0)
+            outside_x = bbox.x0 - 8.0 if bbox.x0 > 8.0 else bbox.x1 + 8.0
+            outside = (float(outside_x), anchor[1] - 17.0)
+            final_inside = (anchor[0] - 21.0, anchor[1] - 13.0)
+            positions = (first, outside, final_inside)
+
+            nodes_before = dict(w.node_positions)
+            families_before = dict(w.family_positions)
+            saved_before = self.saved()
+            limits_before = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+
+            QTest.mousePress(
+                w.canvas,
+                Qt.MouseButton.MiddleButton,
+                Qt.KeyboardModifier.NoModifier,
+                qt_point(anchor),
+            )
+            self.qt.processEvents()
+            self.assertTrue(w.pan_active)
+
+            previous_limits = limits_before
+            for display_position in positions:
+                QTest.mouseMove(w.canvas, qt_point(display_position), delay=1)
+                self.qt.processEvents()
+                current_limits = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+                self.assertNotEqual(current_limits, previous_limits)
+                previous_limits = current_limits
+
+            QTest.mouseRelease(
+                w.canvas,
+                Qt.MouseButton.MiddleButton,
+                Qt.KeyboardModifier.NoModifier,
+                qt_point(outside),
+            )
+            self.qt.processEvents()
+            self.assertFalse(w.pan_active)
+            self.assertIsNone(w.pan_start)
+            self.assertEqual(w.node_positions, nodes_before)
+            self.assertEqual(w.family_positions, families_before)
+            self.assertEqual(self.saved(), saved_before)
+        finally:
+            w.hide()
 
 
 class HeritagePositionSQLiteTest(unittest.TestCase):

@@ -267,6 +267,11 @@ class PedigreeRouter:
         # the current widget's in-axes legend does not narrow this geometry.
         self.label_width_scale = 1.0
         self.label_height_scale = 1.0
+        # Standalone router callers use the conservative logical marker
+        # footprint. The live widget may replace these values after its
+        # renderer reports the actual point-sized marker bounds.
+        self.marker_half_width = _MARKER_RADIUS
+        self.marker_half_height = _MARKER_RADIUS
         # Highest conflict-free value in the current-seed terminal-sibling
         # sweep; it protects compact focused branches without forcing knots.
         self.focused_branch_weight = 512.0
@@ -615,12 +620,12 @@ class PedigreeRouter:
         plan.pixel_gap_revision += 1
         _assert_finite_route_plan(plan)
 
-    @staticmethod
     def marker_obstacles(
+        self,
         positions: Mapping[str, Point],
         *,
-        half_width: float = 0.30,
-        half_height: float = 0.30,
+        half_width: Optional[float] = None,
+        half_height: Optional[float] = None,
     ) -> Dict[str, Rect]:
         """Return marker-only route masks in data coordinates.
 
@@ -629,8 +634,14 @@ class PedigreeRouter:
         data units and pass the resulting half sizes.
         """
         _assert_finite_points(positions, kind="marker input")
-        width = max(0.02, float(half_width))
-        height = max(0.02, float(half_height))
+        width = max(
+            0.02,
+            float(self.marker_half_width if half_width is None else half_width),
+        )
+        height = max(
+            0.02,
+            float(self.marker_half_height if half_height is None else half_height),
+        )
         if not math.isfinite(width) or not math.isfinite(height):
             raise GeometryValidationError("non-finite marker dimensions")
         return {
@@ -696,6 +707,37 @@ class PedigreeRouter:
         # it (for example ``F: 0.0000``).  Keeping that real minimum here also
         # prevents two short partner names from visually merging.
         return max(1.56, width) * max(1.0, float(self.label_width_scale))
+
+    @staticmethod
+    def _single_child_axis_is_eligible(
+        parent_left: float,
+        parent_right: float,
+        child_x: float,
+    ) -> bool:
+        """Return whether a sole child may own the family's X axis.
+
+        Placement and validation must use the same boundary.  The child is
+        an owned endpoint, so its incoming line may use its X coordinate even
+        when the child is close to a parent edge and a full ``node_gap`` is
+        not available on both sides.  A strict open interval keeps the family
+        junction between the two parent endpoints; ``_EPSILON`` only avoids
+        treating an exact endpoint as an interior child.
+        """
+        left, right = sorted((float(parent_left), float(parent_right)))
+        child = float(child_x)
+        return left + _EPSILON < child < right - _EPSILON
+
+    def _single_child_leg_clearance(self) -> float:
+        """Return the minimum centre distance for a visible child leg.
+
+        A direct sole-child route runs from the family marker centre to the
+        animal marker centre.  The line is hidden underneath both markers, so
+        the centres must be separated by both marker half-heights plus a
+        small explicit visible margin.  Keeping this in one router helper
+        makes placement and validation agree in both vertical modes.
+        """
+        marker_margin = max(0.02, self.route_clearance * 0.25)
+        return _MARKER_RADIUS + self.junction_clearance + marker_margin
 
     def validate_plan(
         self,
@@ -790,8 +832,8 @@ class PedigreeRouter:
                 ]
                 if len(visible_children) == 1:
                     child_x = plan.animal_positions[visible_children[0]][0]
-                    child_axis_eligible = (
-                        parent_xs[0] + 0.08 < child_x < parent_xs[1] - 0.08
+                    child_axis_eligible = self._single_child_axis_is_eligible(
+                        parent_xs[0], parent_xs[1], child_x
                     )
                     child_inside_corridor = (
                         parent_xs[0] + self.node_gap
@@ -818,6 +860,11 @@ class PedigreeRouter:
                         allowed_shift = max(
                             allowed_shift,
                             abs(child_x - midpoint),
+                        )
+                    child_route = endpoint_routes.get(visible_children[0], [])
+                    if _path_length(child_route) < self._single_child_leg_clearance() - _EPSILON:
+                        problems.append(
+                            f"{family_id}: single-child route has no marker-clear leg"
                         )
                 if not parent_xs[0] < junction[0] < parent_xs[1]:
                     problems.append(
@@ -7302,7 +7349,9 @@ class PedigreeRouter:
                     # endpoint and may therefore overlap its own incoming
                     # line; requiring a full label-sized ``node_gap`` here
                     # needlessly displaced the family knot in dense frames.
-                    and parent_left + _EPSILON < child_x < parent_right - _EPSILON
+                    and self._single_child_axis_is_eligible(
+                        parent_left, parent_right, child_x
+                    )
                 )
                 child_inside_corridor = (
                     len(children) == 1
@@ -7829,16 +7878,16 @@ class PedigreeRouter:
                 # but lower/raise its child-facing edge by a small explicit
                 # marker margin before the free-point search.
                 child_y = positions[child][1]
-                marker_margin = max(0.02, self.route_clearance * 0.25)
+                child_leg_clearance = self._single_child_leg_clearance()
                 if child_y >= parent_y:
-                    child_side_limit = child_y - _MARKER_RADIUS - marker_margin
+                    child_side_limit = child_y - child_leg_clearance
                     y_bounds = (
                         y_bounds[0],
                         min(y_bounds[1], child_side_limit),
                     )
                     base = (base[0], min(base[1], child_side_limit))
                 else:
-                    child_side_limit = child_y + _MARKER_RADIUS + marker_margin
+                    child_side_limit = child_y + child_leg_clearance
                     y_bounds = (
                         max(y_bounds[0], child_side_limit),
                         y_bounds[1],
