@@ -9,6 +9,7 @@ from Plugins.Heritage_Track.heritage_store import HeritageStore
 from Plugins.Heritage_Track.heritage_track_widget import HeritageTrackPlugin, HeritageTrackWidget
 from Plugins.Heritage_Track.inbreeding import InbreedingCalculator
 from Plugins.Heritage_Track.pedigree_engine import PedigreeEngine
+from tests.heritage_test_support import reported_subtest
 
 
 class _MemoryRecords:
@@ -311,7 +312,7 @@ class HeritageFRevisionTest(unittest.TestCase):
             ('animal_id', 'CJ-0001\nF: unavailable (cyclic pedigree)'),
             ('inbreeding_f', 'F: unavailable (cyclic pedigree)'),
         ):
-            with self.subTest(mode=mode):
+            with reported_subtest(self, "malformed detail mode", mode=mode):
                 widget.settings = {'animal_label_detail': mode}
                 self.assertEqual(
                     widget._get_node_detail_text(

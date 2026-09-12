@@ -17,6 +17,7 @@ from Plugins.Heritage_Track.heritage_store import HeritageStore
 from Plugins.Heritage_Track.heritage_track_widget import HeritageTrackPlugin, HeritageTrackWidget
 from Plugins.Heritage_Track.pedigree_router import GeometryValidationError
 from Plugins.core.backend.errors import ConflictError
+from tests.heritage_test_support import reported_subtest
 
 
 class _Records:
@@ -49,7 +50,7 @@ class _Backend:
 
 
 class HeritagePositionCacheTest(unittest.TestCase):
-    def test_retired_family_display_preference_is_ignored(self):
+    def test_removed_collapse_state_is_not_loaded(self):
         backend = _Backend({"collapsed_families": ["legacy-family"]})
         store = HeritageStore("", backend)
 
@@ -302,6 +303,261 @@ class HeritagePositionWidgetTest(unittest.TestCase):
                 patch.object(self.widget, "_show_coefficients_dialog"):
             self.widget._on_refresh_clicked()
 
+    @staticmethod
+    def _free_plot_event(widget, display_position, *, button=3, inaxes=None):
+        """Build an event on free plot space, away from all hit-test artists."""
+        x, y = (float(display_position[0]), float(display_position[1]))
+        inverse = widget.ax.transData.inverted()
+        data = inverse.transform((x, y))
+        return SimpleNamespace(
+            button=button,
+            inaxes=widget.ax if inaxes is None else inaxes,
+            x=x,
+            y=y,
+            xdata=float(data[0]) if inaxes is not None else None,
+            ydata=float(data[1]) if inaxes is not None else None,
+            dblclick=False,
+        )
+
+    def _find_free_plot_event(self, widget, *, button=3):
+        renderer = widget.canvas.get_renderer()
+        axes_box = widget.ax.get_window_extent(renderer)
+        candidates = (
+            (axes_box.x0 + axes_box.width * 0.47, axes_box.y0 + axes_box.height * 0.52),
+            (axes_box.x0 + axes_box.width * 0.18, axes_box.y0 + axes_box.height * 0.82),
+            (axes_box.x0 + axes_box.width * 0.82, axes_box.y0 + axes_box.height * 0.18),
+            (axes_box.x0 + axes_box.width * 0.18, axes_box.y0 + axes_box.height * 0.18),
+        )
+        for display_position in candidates:
+            event = self._free_plot_event(widget, display_position, button=button, inaxes=widget.ax)
+            if widget._legend_hit(event):
+                continue
+            occupied = False
+            for meta in widget.node_meta.values():
+                for key in ("marker_artist", "label_artist", "f_artist", "undated_artist"):
+                    artist = meta.get(key)
+                    if artist is None or not artist.get_visible():
+                        continue
+                    try:
+                        if artist.get_window_extent(renderer).contains(event.x, event.y):
+                            occupied = True
+                            break
+                    except (AttributeError, RuntimeError, TypeError, ValueError):
+                        continue
+                if occupied:
+                    break
+            if not occupied:
+                return event
+        self.fail("could not find free plot space for the pan interaction")
+
+    def test_right_button_on_nodes_and_overlays_does_not_start_pan(self):
+        """Right-button actions must not start a pan on nodes or overlays."""
+        w = self.widget
+        w.settings["show_legend"] = True
+        self.assertTrue(w.refresh_graph(keep_view=True))
+        w.canvas.draw()
+        limits_before = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+
+        node_point = w.node_positions["C"]
+        node_x, node_y = w.ax.transData.transform(node_point)
+        node_event = SimpleNamespace(
+            button=3,
+            inaxes=w.ax,
+            x=float(node_x),
+            y=float(node_y),
+            xdata=float(node_point[0]),
+            ydata=float(node_point[1]),
+            dblclick=False,
+        )
+        with patch.object(w, "_show_coefficients_dialog"):
+            w._on_mouse_press(node_event)
+        self.assertFalse(w.pan_active)
+        self.assertEqual((tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim())), limits_before)
+
+        legend = w._legend_artist
+        self.assertIsNotNone(legend)
+        legend_box = legend.get_window_extent(w.canvas.get_renderer())
+        legend_x = (legend_box.x0 + legend_box.x1) / 2.0
+        legend_y = (legend_box.y0 + legend_box.y1) / 2.0
+        legend_data = w.ax.transData.inverted().transform((legend_x, legend_y))
+        w._on_mouse_press(SimpleNamespace(
+            button=3,
+            inaxes=w.ax,
+            x=float(legend_x),
+            y=float(legend_y),
+            xdata=float(legend_data[0]),
+            ydata=float(legend_data[1]),
+            dblclick=False,
+        ))
+        self.assertFalse(w.pan_active)
+        self.assertEqual((tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim())), limits_before)
+
+    def test_left_click_and_double_click_semantics_remain_separate_from_pan(self):
+        w = self.widget
+        node_point = w.node_positions["C"]
+        node_x, node_y = w.ax.transData.transform(node_point)
+
+        double_click = SimpleNamespace(
+            button=1,
+            inaxes=w.ax,
+            x=float(node_x),
+            y=float(node_y),
+            xdata=float(node_point[0]),
+            ydata=float(node_point[1]),
+            dblclick=True,
+        )
+        with patch.object(w, "_open_node_editor") as open_editor:
+            w._on_mouse_press(double_click)
+        open_editor.assert_called_once_with("C")
+        self.assertFalse(w.pan_active)
+
+        single_click = SimpleNamespace(
+            button=1,
+            inaxes=w.ax,
+            x=float(node_x),
+            y=float(node_y),
+            xdata=float(node_point[0]),
+            ydata=float(node_point[1]),
+            dblclick=False,
+        )
+        w._on_mouse_press(single_click)
+        w._on_mouse_release(single_click)
+        self.assertFalse(w.pan_active)
+        self.assertEqual(w._pending_selection, "C")
+        if w._pending_selection_timer is not None:
+            w._pending_selection_timer.stop()
+            w._pending_selection_timer = None
+        w._pending_selection = None
+
+    def test_left_free_space_drag_pans_view_only_and_releases_outside(self):
+        w = self.widget
+        w.canvas.draw()
+        start_event = self._find_free_plot_event(w, button=1)
+        start = (start_event.x, start_event.y)
+        limits_before = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+        positions_before = dict(w.node_positions)
+        families_before = dict(w.family_positions)
+        selection_before = set(w.selected_nodes)
+        cache_before = w._render_cache_entry
+        backend_before = copy.deepcopy(self.app.backend.records.values)
+
+        w._on_mouse_press(start_event)
+        self.assertFalse(w.pan_active)
+        self.assertTrue(w._pending_free_pan)
+        self.assertEqual(w.pan_button, 1)
+
+        def move_event(display_position, inaxes):
+            x, y = (float(display_position[0]), float(display_position[1]))
+            data = w.ax.transData.inverted().transform((x, y))
+            return SimpleNamespace(
+                inaxes=inaxes,
+                x=x,
+                y=y,
+                xdata=float(data[0]) if inaxes is w.ax else None,
+                ydata=float(data[1]) if inaxes is w.ax else None,
+            )
+
+        w._on_mouse_move(move_event((start[0] + 24.0, start[1] + 13.0), w.ax))
+        self.assertTrue(w.pan_active)
+        self.assertEqual(w.pan_button, 1)
+        limits_after_first_move = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+        self.assertNotEqual(limits_after_first_move, limits_before)
+
+        # The second event is outside the Axes.  Display coordinates remain
+        # valid, so the active gesture must continue and accumulate it.
+        w._on_mouse_move(move_event((start[0] + 57.0, start[1] - 19.0), None))
+        limits_after_second_move = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+        self.assertNotEqual(limits_after_second_move, limits_after_first_move)
+
+        # Release outside the Axes/canvas: no click or node action is allowed.
+        w._on_mouse_release(SimpleNamespace(button=1, inaxes=None, x=None, y=None))
+        self.assertFalse(w.pan_active)
+        self.assertFalse(w._pending_free_pan)
+        self.assertIsNone(w.pan_button)
+        self.assertIsNone(w.pan_start)
+        self.assertEqual((tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim())), limits_after_second_move)
+        self.assertEqual(w.node_positions, positions_before)
+        self.assertEqual(w.family_positions, families_before)
+        self.assertEqual(w.selected_nodes, selection_before)
+        self.assertIs(w._render_cache_entry, cache_before)
+        self.assertEqual(self.app.backend.records.values, backend_before)
+
+    def test_left_free_space_click_preserves_view_and_double_click_clears_selection(self):
+        w = self.widget
+        free_event = self._find_free_plot_event(w, button=1)
+        limits_before = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+
+        w._on_mouse_press(free_event)
+        w._on_mouse_release(free_event)
+        self.assertFalse(w.pan_active)
+        self.assertFalse(w._pending_free_pan)
+        self.assertEqual((tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim())), limits_before)
+
+        with patch.object(w, "_clear_filter_selection") as clear_selection:
+            w._on_mouse_press(free_event)
+            w._on_mouse_release(free_event)
+        clear_selection.assert_called_once_with()
+        self.assertFalse(w.pan_active)
+        self.assertEqual((tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim())), limits_before)
+
+    def test_middle_button_pan_remains_the_existing_pan_gesture(self):
+        w = self.widget
+        start_event = self._find_free_plot_event(w, button=2)
+        limits_before = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+        w._on_mouse_press(start_event)
+        self.assertTrue(w.pan_active)
+        self.assertEqual(w.pan_button, 2)
+
+        w._on_mouse_move(SimpleNamespace(
+            inaxes=w.ax,
+            x=start_event.x + 24.0,
+            y=start_event.y,
+            xdata=None,
+            ydata=None,
+        ))
+        self.assertNotEqual((tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim())), limits_before)
+        w._on_mouse_release(SimpleNamespace(button=2, inaxes=None, x=None, y=None))
+        self.assertFalse(w.pan_active)
+        self.assertIsNone(w.pan_button)
+
+    def test_right_button_free_space_is_a_noop(self):
+        w = self.widget
+        start_event = self._find_free_plot_event(w, button=3)
+        limits_before = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+        w._on_mouse_press(start_event)
+        w._on_mouse_move(SimpleNamespace(
+            inaxes=None,
+            x=start_event.x + 50.0,
+            y=start_event.y + 20.0,
+            xdata=None,
+            ydata=None,
+        ))
+        w._on_mouse_release(SimpleNamespace(button=3, inaxes=None, x=None, y=None))
+        self.assertFalse(w.pan_active)
+        self.assertIsNone(w.pan_button)
+        self.assertEqual((tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim())), limits_before)
+
+    def test_manual_position_can_leave_viewport_and_chronological_y_remains_date_driven(self):
+        """Manual X placement is authoritative; chronological Y remains fixed."""
+        w = self.widget
+        self.app.selected_animals = ["Other"]
+        w.settings["vertical_layout_mode"] = "chronological"
+        self.assertTrue(w.refresh_graph())
+        original = w.node_positions["Other"]
+        target_x = original[0] + 500.0
+        w.drag_active = w.is_dragging = True
+        w.drag_node = "Other"
+        w.drag_group_nodes = set()
+        w.temp_positions = {"Other": (target_x, original[1] + 100.0)}
+        w._on_mouse_release(SimpleNamespace(button=1))
+
+        self.assertEqual(w.node_positions["Other"][0], w._snap_to_grid(target_x, original[1] + 100.0)[0])
+        self.assertEqual(w.node_positions["Other"][1], original[1])
+        self.assertGreaterEqual(
+            abs(w.node_positions["Other"][0] - w.ax.get_xlim()[1]),
+            1.0,
+        )
+
     def test_drag_replaces_render_entry_and_survives_ordinary_update(self):
         expected = self.drag()
         self.assertEqual(self.widget.node_positions["C"], expected)
@@ -336,7 +592,7 @@ class HeritagePositionWidgetTest(unittest.TestCase):
 
     def test_selection_returns_restore_complete_context_for_overlapping_and_disjoint_maps(self):
         for other_selection in (["Other"], ["C", "M"]):
-            with self.subTest(selection=other_selection):
+            with reported_subtest(self, "restore selection context", selection=other_selection):
                 self.app.selected_animals = ["C"]
                 self.widget.refresh_graph()
                 a_key = self.widget._active_position_cache_key
@@ -430,7 +686,7 @@ class HeritagePositionWidgetTest(unittest.TestCase):
         registry = self.plugin._render_cache
         real_put = registry.put
         for after_install in (False, True):
-            with self.subTest(after_install=after_install):
+            with reported_subtest(self, "registry failure rollback", after_install=after_install):
                 old_entry, old_map, old_axes = self.widget._render_cache_entry, self.saved(), self.widget.ax
                 def fail(entry):
                     if after_install:
@@ -609,10 +865,10 @@ class HeritagePositionWidgetTest(unittest.TestCase):
             {"x": float(expected_family[0]), "y": float(expected_family[1])},
         )
         w._on_scroll(SimpleNamespace(inaxes=w.ax, xdata=start[0], ydata=start[1], button="up"))
-        pan_px, pan_py = w.ax.transData.transform((start[0], start[1]))
-        w._on_mouse_press(SimpleNamespace(button=2, inaxes=w.ax, xdata=start[0], ydata=start[1],
-                                          x=pan_px, y=pan_py))
-        w._on_mouse_move(SimpleNamespace(button=2, inaxes=w.ax, xdata=start[0]+1, ydata=start[1]+1,
+        pan_press = self._find_free_plot_event(w, button=2)
+        pan_px, pan_py = pan_press.x, pan_press.y
+        w._on_mouse_press(pan_press)
+        w._on_mouse_move(SimpleNamespace(button=2, inaxes=w.ax, xdata=None, ydata=None,
                                          x=pan_px+20, y=pan_py+20))
         w._on_mouse_release(SimpleNamespace(button=2, inaxes=None, x=pan_px+20, y=pan_py+20))
         self.assertEqual(self.saved(), saved)
@@ -627,17 +883,8 @@ class HeritagePositionWidgetTest(unittest.TestCase):
         families_before = dict(w.family_positions)
         saved_before = self.saved()
 
-        bbox = w.ax.bbox
-        anchor = (float(bbox.x0 + bbox.width * 0.45), float(bbox.y0 + bbox.height * 0.55))
-        anchor_data = w.ax.transData.inverted().transform(anchor)
-        press = SimpleNamespace(
-            button=2,
-            inaxes=w.ax,
-            xdata=float(anchor_data[0]),
-            ydata=float(anchor_data[1]),
-            x=anchor[0],
-            y=anchor[1],
-        )
+        press = self._find_free_plot_event(w, button=2)
+        anchor = (press.x, press.y)
         w._on_mouse_press(press)
         self.assertTrue(w.pan_active)
         self.assertEqual(w.pan_start, anchor)
@@ -676,7 +923,7 @@ class HeritagePositionWidgetTest(unittest.TestCase):
             previous_position = (x, y)
 
         w._on_mouse_release(SimpleNamespace(
-            button=2,
+                button=2,
             inaxes=None,
             x=previous_position[0],
             y=previous_position[1],
@@ -687,6 +934,93 @@ class HeritagePositionWidgetTest(unittest.TestCase):
         self.assertEqual(w.node_positions, nodes_before)
         self.assertEqual(w.family_positions, families_before)
         self.assertEqual(self.saved(), saved_before)
+
+    def test_left_button_free_space_pan_is_cumulative_and_view_only(self):
+        """The new left-button gesture pans without mutating graph state."""
+        w = self.widget
+        w.canvas.draw()
+        nodes_before = dict(w.node_positions)
+        families_before = dict(w.family_positions)
+        saved_before = self.saved()
+        pixels_before = bytes(w.canvas.buffer_rgba())
+
+        press = self._find_free_plot_event(w, button=1)
+        anchor = (press.x, press.y)
+        w._on_mouse_press(press)
+        self.assertFalse(w.pan_active)
+        self.assertTrue(w._pending_free_pan)
+        self.assertEqual(w.pan_start, anchor)
+
+        positions = (
+            (anchor[0] + 19.0, anchor[1] + 8.0, w.ax),
+            (anchor[0] + 41.0, anchor[1] - 13.0, None),
+            (anchor[0] + 7.0, anchor[1] - 27.0, w.ax),
+        )
+        previous_position = anchor
+        for index, (x, y, inaxes) in enumerate(positions, start=1):
+            inverse = w.ax.transData.inverted()
+            start_data = inverse.transform(previous_position)
+            current_data = inverse.transform((x, y))
+            dx = float(current_data[0] - start_data[0])
+            dy = float(current_data[1] - start_data[1])
+            expected_xlim, expected_ylim = w._apply_aspect_fill(
+                tuple(value - dx for value in w.ax.get_xlim()),
+                tuple(value - dy for value in w.ax.get_ylim()),
+            )
+            with reported_subtest(
+                self,
+                "left-button pan motion",
+                step=index,
+                inaxes=inaxes is not None,
+            ):
+                w._on_mouse_move(SimpleNamespace(
+                    button=1,
+                    inaxes=inaxes,
+                    x=float(x),
+                    y=float(y),
+                    xdata=None,
+                    ydata=None,
+                ))
+                self.assertAlmostEqual(w.ax.get_xlim()[0], expected_xlim[0])
+                self.assertAlmostEqual(w.ax.get_xlim()[1], expected_xlim[1])
+                self.assertAlmostEqual(w.ax.get_ylim()[0], expected_ylim[0])
+                self.assertAlmostEqual(w.ax.get_ylim()[1], expected_ylim[1])
+                self.assertEqual(tuple(w.current_xlim), tuple(w.ax.get_xlim()))
+                self.assertEqual(tuple(w.current_ylim), tuple(w.ax.get_ylim()))
+            previous_position = (x, y)
+
+        w._on_mouse_release(SimpleNamespace(
+            button=1,
+            inaxes=None,
+            x=previous_position[0],
+            y=previous_position[1],
+        ))
+        self.assertFalse(w.pan_active)
+        self.assertIsNone(w.pan_start)
+        self.assertFalse(w._pan_mouse_grabbed)
+        self.assertNotEqual(bytes(w.canvas.buffer_rgba()), pixels_before)
+        self.assertEqual(w.node_positions, nodes_before)
+        self.assertEqual(w.family_positions, families_before)
+        self.assertEqual(self.saved(), saved_before)
+
+    def test_right_button_click_without_motion_is_a_view_only_noop(self):
+        w = self.widget
+        w.canvas.draw()
+        before = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+        press = self._find_free_plot_event(w, button=3)
+        w._on_mouse_press(press)
+        w._on_mouse_release(SimpleNamespace(
+            button=3,
+            inaxes=w.ax,
+            x=press.x,
+            y=press.y,
+            xdata=press.xdata,
+            ydata=press.ydata,
+        ))
+        self.assertFalse(w.pan_active)
+        self.assertEqual((tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim())), before)
+        self.assertFalse(w.drag_active)
+        self.assertIsNone(w._pending_selection)
 
     def test_native_repeated_pan_crosses_axes_boundary_and_releases_cleanly(self):
         """Qt mouse events must keep panning through the surrounding canvas."""
@@ -704,10 +1038,8 @@ class HeritagePositionWidgetTest(unittest.TestCase):
                     int(round(canvas_height - display_position[1])),
                 )
 
-            anchor = (
-                float(bbox.x0 + bbox.width * 0.45),
-                float(bbox.y0 + bbox.height * 0.55),
-            )
+            anchor_event = self._find_free_plot_event(w)
+            anchor = (anchor_event.x, anchor_event.y)
             first = (anchor[0] + 16.0, anchor[1] + 9.0)
             outside_x = bbox.x0 - 8.0 if bbox.x0 > 8.0 else bbox.x1 + 8.0
             outside = (float(outside_x), anchor[1] - 17.0)
@@ -741,6 +1073,69 @@ class HeritagePositionWidgetTest(unittest.TestCase):
                 Qt.MouseButton.MiddleButton,
                 Qt.KeyboardModifier.NoModifier,
                 qt_point(outside),
+            )
+            self.qt.processEvents()
+            self.assertFalse(w.pan_active)
+            self.assertIsNone(w.pan_start)
+            self.assertEqual(w.node_positions, nodes_before)
+            self.assertEqual(w.family_positions, families_before)
+            self.assertEqual(self.saved(), saved_before)
+        finally:
+            w.hide()
+
+    def test_native_left_button_pan_crosses_axes_boundary_and_releases_cleanly(self):
+        """The native left-button gesture survives leaving the Axes."""
+        w = self.widget
+        w.show()
+        self.qt.processEvents()
+        try:
+            w.canvas.draw()
+            canvas_height = float(w.canvas.height())
+
+            def qt_point(display_position):
+                return QPoint(
+                    int(round(display_position[0])),
+                    int(round(canvas_height - display_position[1])),
+                )
+
+            anchor_event = self._find_free_plot_event(w, button=1)
+            anchor = (anchor_event.x, anchor_event.y)
+            bbox = w.ax.bbox
+            outside_x = bbox.x0 - 8.0 if bbox.x0 > 8.0 else bbox.x1 + 8.0
+            positions = (
+                (anchor[0] + 18.0, anchor[1] + 9.0),
+                (float(outside_x), anchor[1] - 16.0),
+                (anchor[0] - 21.0, anchor[1] - 12.0),
+            )
+            nodes_before = dict(w.node_positions)
+            families_before = dict(w.family_positions)
+            saved_before = self.saved()
+            limits_before = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+
+            QTest.mousePress(
+                w.canvas,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                qt_point(anchor),
+            )
+            self.qt.processEvents()
+            self.assertFalse(w.pan_active)
+            self.assertTrue(w._pending_free_pan)
+
+            previous_limits = limits_before
+            for step, display_position in enumerate(positions, start=1):
+                QTest.mouseMove(w.canvas, qt_point(display_position), delay=1)
+                self.qt.processEvents()
+                current_limits = (tuple(w.ax.get_xlim()), tuple(w.ax.get_ylim()))
+                with reported_subtest(self, "native left-button pan motion", step=step):
+                    self.assertNotEqual(current_limits, previous_limits)
+                previous_limits = current_limits
+
+            QTest.mouseRelease(
+                w.canvas,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                qt_point(positions[-1]),
             )
             self.qt.processEvents()
             self.assertFalse(w.pan_active)

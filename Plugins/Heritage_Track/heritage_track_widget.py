@@ -547,12 +547,15 @@ class HeritageTrackWidget(QWidget):
         self.current_xlim: Optional[Tuple[float, float]] = None
         self.current_ylim: Optional[Tuple[float, float]] = None
         self.pan_active = False
+        self.pan_button: Optional[int] = None
         # Panning anchors are Matplotlib display coordinates (pixels), not
         # data coordinates.  Data coordinates are recomputed from the
         # current transform for each motion; storing xdata/ydata after a
         # limit change makes the next native motion use a different frame.
         self.pan_start: Optional[Tuple[float, float]] = None
         self._pan_mouse_grabbed = False
+        self._pending_free_pan = False
+        self._pan_drag_threshold_px = 5.0
         self.drag_active = False
         self.drag_node: Optional[str] = None
         self.drag_group_nodes: Set[str] = set()
@@ -2419,6 +2422,33 @@ class HeritageTrackWidget(QWidget):
             return bool(bbox.contains(float(event.x), float(event.y)))
         except (AttributeError, TypeError, ValueError):
             return False
+
+    def _interactive_overlay_hit(self, event: Any) -> bool:
+        """Return whether ``event`` is on a non-node interactive overlay.
+
+        Free-space panning must not start on labels, detail/undated markers,
+        or the genotype legend.  Node hit testing intentionally remains the
+        authority for node/family interactions; this helper only covers
+        artists which are otherwise not represented by ``node_positions``.
+        """
+        if event.inaxes != self.ax:
+            return False
+        if self._legend_hit(event):
+            return True
+        try:
+            renderer = self.canvas.get_renderer()
+            for meta in self.node_meta.values():
+                for key in ("label_artist", "f_artist", "undated_artist"):
+                    artist = meta.get(key)
+                    if artist is None or not artist.get_visible():
+                        continue
+                    if artist.get_window_extent(renderer).contains(
+                        float(event.x), float(event.y)
+                    ):
+                        return True
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return False
+        return False
 
     def _legend_anchor_from_artist(self) -> Tuple[float, float]:
         """Recover the current lower-left anchor when no cached value exists."""
@@ -5902,6 +5932,11 @@ class HeritageTrackWidget(QWidget):
         self._legend_dragging = False
         self._legend_drag_start_px = None
         self._legend_drag_start_anchor = None
+        self.pan_active = False
+        self.pan_button = None
+        self.pan_start = None
+        self._pending_free_pan = False
+        self._release_pan_mouse()
         self._rendered_families = {}
         self._rendered_engine = None
         self.node_meta.clear()
@@ -6062,12 +6097,35 @@ class HeritageTrackWidget(QWidget):
     def _end_pan(self, *, redraw: bool) -> None:
         was_active = self.pan_active
         self.pan_active = False
+        self.pan_button = None
         self.pan_start = None
+        self._pending_free_pan = False
         self._release_pan_mouse()
         if redraw and was_active:
             # The final release may be delivered outside the Axes.  All view
             # limits were already accepted during motion, so only repaint.
             self._redraw_current_view(synchronous=True)
+
+    def _finish_free_space_click(self) -> None:
+        """Resolve a free-space left click after pan promotion was ruled out."""
+        self._pending_free_pan = False
+        self.pan_button = None
+        self.pan_start = None
+        self._release_pan_mouse()
+
+        current_time = time.time() * 1000
+        is_empty_double_click = (
+            current_time - self._last_empty_click_time
+        ) < self._double_click_threshold_ms
+        self._last_empty_click_time = 0.0 if is_empty_double_click else current_time
+        self._last_click_time = 0.0
+        self._last_click_node = None
+        if self._pending_selection_timer:
+            self._pending_selection_timer.stop()
+            self._pending_selection_timer = None
+        self._pending_selection = None
+        if is_empty_double_click:
+            self._clear_filter_selection()
 
     def _on_mouse_press(self, event) -> None:
         # Middle button (wheel press) starts panning.
@@ -6075,6 +6133,7 @@ class HeritageTrackWidget(QWidget):
         if event.button == 2 and event.inaxes == self.ax and display_position is not None:
             self._end_pan(redraw=False)
             self.pan_active = True
+            self.pan_button = 2
             self.pan_start = display_position
             self._grab_pan_mouse()
             return
@@ -6104,24 +6163,22 @@ class HeritageTrackWidget(QWidget):
         if event.button == 3 and node:
             return
 
-        # Left mouse button -> single click on node adds to selection (multi-select)
-        # Double-click on empty space clears filter-based selection and starts fresh
+        # Left mouse button -> click, double-click, node drag, or free-space pan.
         if event.button == 1:
             if not node:
-                current_time = time.time() * 1000
-                is_empty_double_click = (
-                    current_time - self._last_empty_click_time
-                ) < self._double_click_threshold_ms
-                self._last_empty_click_time = current_time
-                self._last_click_time = 0.0
-                self._last_click_node = None
+                if display_position is None or self._interactive_overlay_hit(event):
+                    return
                 if self._pending_selection_timer:
                     self._pending_selection_timer.stop()
                     self._pending_selection_timer = None
                 self._pending_selection = None
-                if is_empty_double_click:
-                    self._last_empty_click_time = 0.0
-                    self._clear_filter_selection()
+                self._last_click_time = 0.0
+                self._last_click_node = None
+                self._end_pan(redraw=False)
+                self._pending_free_pan = True
+                self.pan_button = 1
+                self.pan_start = display_position
+                self._grab_pan_mouse()
                 return
 
             # Check for double-click using timer-based detection (more reliable than event.dblclick)
@@ -6179,7 +6236,28 @@ class HeritageTrackWidget(QWidget):
         if self._legend_dragging:
             return
 
-        # Pan with middle button held.
+        # A free-space left press is a click until it moves far enough to be
+        # unambiguously a pan.  Classification is fixed at press time, so a
+        # later crossing over a node cannot turn a node drag into a pan.
+        if self._pending_free_pan and not self.pan_active:
+            display_position = self._event_display_position(event)
+            if display_position is None or self.pan_start is None:
+                return
+            dx_px = display_position[0] - self.pan_start[0]
+            dy_px = display_position[1] - self.pan_start[1]
+            if math.hypot(dx_px, dy_px) <= self._pan_drag_threshold_px:
+                return
+            self.pan_active = True
+            # Keep the original press anchor for the first pan step.  The
+            # common path below then advances it after applying the motion.
+            self._pending_free_pan = False
+            # The drag consumed the pending empty-space click sequence; it
+            # must not become the first half of a later double-click.
+            self._last_empty_click_time = 0.0
+            self._last_click_time = 0.0
+            self._last_click_node = None
+
+        # Pan with the active middle-button or promoted left-button gesture.
         if self.pan_active and self.pan_start is not None:
             display_position = self._event_display_position(event)
             if display_position is None:
@@ -6342,6 +6420,19 @@ class HeritageTrackWidget(QWidget):
 
         if event.button == 2:
             self._end_pan(redraw=True)
+            return
+
+        # A promoted left free-space gesture is view-only and must never be
+        # reinterpreted as a click or node action on release, including when
+        # the release event arrives outside the Axes/canvas.
+        if event.button == 1 and self.pan_active and self.pan_button == 1:
+            self._end_pan(redraw=True)
+            return
+
+        # A free-space left press which did not cross the pan threshold keeps
+        # the existing empty-space single-/double-click semantics.
+        if event.button == 1 and self._pending_free_pan:
+            self._finish_free_space_click()
             return
 
         if event.button == 1:
