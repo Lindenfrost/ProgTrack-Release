@@ -556,11 +556,13 @@ class HeritageTrackWidget(QWidget):
         self._pan_mouse_grabbed = False
         self._pending_free_pan = False
         self._pan_drag_threshold_px = 5.0
+        self._node_drag_threshold_px = 5.0
         self.drag_active = False
         self.drag_node: Optional[str] = None
         self.drag_group_nodes: Set[str] = set()
         self.drag_offset: Tuple[float, float] = (0.0, 0.0)
         self.click_start_pos: Optional[Tuple[float, float]] = None
+        self.drag_start_display: Optional[Tuple[float, float]] = None
         self.is_dragging = False
         self.drag_threshold = 0.05
         self._drag_background: Optional[Any] = None
@@ -1379,6 +1381,7 @@ class HeritageTrackWidget(QWidget):
         artist_scale: float = 1.0,
         chronological_undated_nodes: Optional[Set[str]] = None,
         cached_family_positions: Optional[Mapping[str, Tuple[float, float]]] = None,
+        manual_animal_position_override: bool = False,
     ) -> RenderCacheEntry:
         """Freeze one complete render transaction before any artists paint."""
         record_index = {
@@ -1484,71 +1487,69 @@ class HeritageTrackWidget(QWidget):
             locked_positions=locked_positions,
             bounds=bounds,
         )
-        # Singleton parking and other widget-level post-routing adjustments
-        # happen after the router's own placement pass.  Reuse the router's
-        # obstacle model as the final publication boundary. Overview frames
-        # keep the full label footprint clear; focused frames may remain dense
-        # because zoom is the explicit disambiguation mechanism. No label or
-        # node is removed from either frame.
-        fatal.extend(
-            item
-            for item in self._render_node_collision_diagnostics(
-                route_plan.animal_positions,
-                obstacle_labels,
-                show_inbreeding=bool(
-                    self.settings.get("animal_label_detail", "inbreeding_f")
-                    != "nothing"
-                    or self._malformed_f_nodes & set(route_plan.animal_positions)
-                ),
-                allow_dense_label_overlaps=display_mode == LAYOUT_MODE_FOCUSED,
+        if not manual_animal_position_override:
+            # Singleton parking and other widget-level post-routing
+            # adjustments happen after the router's own placement pass. Reuse
+            # the router's obstacle model as the final publication boundary.
+            # Overview frames keep the full label footprint clear; focused
+            # frames may remain dense because zoom is the explicit
+            # disambiguation mechanism. No label or node is removed from
+            # either frame.
+            fatal.extend(
+                item
+                for item in self._render_node_collision_diagnostics(
+                    route_plan.animal_positions,
+                    obstacle_labels,
+                    show_inbreeding=bool(
+                        self.settings.get("animal_label_detail", "inbreeding_f")
+                        != "nothing"
+                        or self._malformed_f_nodes & set(route_plan.animal_positions)
+                    ),
+                    allow_dense_label_overlaps=display_mode == LAYOUT_MODE_FOCUSED,
+                )
+                if item not in fatal
             )
-            if item not in fatal
-        )
-        # Route construction and the render cache share one publication
-        # boundary. A family junction, endpoint, parent-entry shape, foreign
-        # marker hit, or line crossing is invalid. Text labels may overlap a
-        # route because labels are painted above lines; focused text may also
-        # be dense and is disentangled through zoom. Run the router's complete
-        # validator here, after singleton parking has updated the plan, so the
-        # cache can never certify a partial or stale route plan as valid.
-        try:
-            plan_validation = self._pedigree_router.validate_plan(
-                route_plan,
-                families,
-                labels=obstacle_labels,
-                show_inbreeding=bool(
-                    self.settings.get("animal_label_detail", "inbreeding_f")
-                    != "nothing"
-                    or self._malformed_f_nodes & set(route_plan.animal_positions)
-                ),
+            # Automatic frames use the complete route validator as a
+            # publication boundary. A manual animal anchor is different: the
+            # user's finite coordinate is authoritative, so collisions,
+            # blocked corridors, and unsupported route-clearance shapes are
+            # diagnostics only and must not reject the complete frame.
+            try:
+                plan_validation = self._pedigree_router.validate_plan(
+                    route_plan,
+                    families,
+                    labels=obstacle_labels,
+                    show_inbreeding=bool(
+                        self.settings.get("animal_label_detail", "inbreeding_f")
+                        != "nothing"
+                        or self._malformed_f_nodes & set(route_plan.animal_positions)
+                    ),
+                )
+            except GeometryValidationError as exc:
+                plan_validation = [str(exc)]
+            fatal.extend(item for item in plan_validation if item not in fatal)
+            # Structural route diagnostics remain fatal for automatic frames.
+            fatal.extend(
+                item
+                for item in (
+                    list(route_plan.unresolved)
+                    + list(route_plan.line_crossing_problems)
+                )
+                if item and item not in fatal
             )
-        except GeometryValidationError as exc:
-            plan_validation = [str(exc)]
-        fatal.extend(item for item in plan_validation if item not in fatal)
-        # Structural route diagnostics remain fatal here.  ``route_obstacle_hits``
-        # is deliberately different: it is an internal record of a route that
-        # had to pass through an obstacle while preserving canonical topology.
-        # The gap recomputation and the validator below decide whether a
-        # foreign marker actually lacks the required mask.  Treating every
-        # conservative label/obstacle hit as fatal rejects otherwise valid
-        # dense pedigrees before their established gap/halo presentation can
-        # be published.
-        fatal.extend(
-            item
-            for item in (
-                list(route_plan.unresolved)
-                + list(route_plan.line_crossing_problems)
+            fatal.extend(
+                item
+                for item in getattr(route_plan, "layout_diagnostics", ())
+                if item not in fatal
             )
-            if item and item not in fatal
-        )
-        # A topology diagnostic is deliberately fatal for cache publication:
-        # an unresolved frame may be inspected locally, but must never replace
-        # the last accepted complete pedigree as a valid render transaction.
-        fatal.extend(
-            item
-            for item in getattr(route_plan, "layout_diagnostics", ())
-            if item not in fatal
-        )
+        else:
+            # Manual animal placement deliberately accepts finite but
+            # conflicting visual geometry.  The route plan and all gaps were
+            # still recomputed above; only non-finite geometry remains a hard
+            # publication error. Keep route diagnostics in the cache as
+            # observable information instead of hiding or repairing the
+            # user's anchor.
+            pass
         return RenderCacheEntry(
             cache_key=cache_key,
             core_projection_revision=core_revision,
@@ -2695,7 +2696,8 @@ class HeritageTrackWidget(QWidget):
         This adds animals to the selection list without limit.
         If the animal was a ghost node, it becomes a normal (solid) node.
         Heritage-only animals are also added to the selection.
-        Archived animals are included when exclude_archived is off.
+        Archived selection is retained independently; the display setting
+        controls whether it is rendered as an ordinary node.
         """
         if not hasattr(self.app, 'selected_animals'):
             return
@@ -2711,6 +2713,7 @@ class HeritageTrackWidget(QWidget):
 
         # Check if this is a heritage-only animal
         is_heritage_only = self.plugin.is_heritage_only(animal_name)
+        extend_selection = None
 
         # Heritage-only animals are kept in their dedicated compatibility list;
         # the canonical helper merges that list with Core selection exactly
@@ -2721,11 +2724,9 @@ class HeritageTrackWidget(QWidget):
             if animal_name not in self.app._selected_heritage_only:
                 self.app._selected_heritage_only.append(animal_name)
         else:
-            # Skip if already selected (avoid redundant work)
-            if animal_name in self.app.selected_animals:
-                return
-            # Add to selection (no limit on number of animals)
-            self.app.selected_animals.append(animal_name)
+            extend_selection = getattr(
+                self.app, "_extend_animal_selection_from_graph", None
+            )
 
         # Update the main list UI if accessible and animal exists there
         if in_main_list and hasattr(self.app, 'lst') and self.app.lst is not None:
@@ -2737,7 +2738,11 @@ class HeritageTrackWidget(QWidget):
                     if not item:
                         continue
                     user_data = item.data(Qt.ItemDataRole.UserRole)
-                    if user_data == animal_name:
+                    normalize = getattr(
+                        self.app, "_normalize_sidebar_selection_value", None
+                    )
+                    normalized = normalize(user_data) if callable(normalize) else user_data
+                    if normalized == animal_name:
                         item.setSelected(True)
                         self.app.lst.setCurrentItem(item)
                         break
@@ -2748,9 +2753,23 @@ class HeritageTrackWidget(QWidget):
         if hasattr(self, '_ghost_nodes') and animal_name in self._ghost_nodes:
             self._ghost_nodes.discard(animal_name)
 
-        # Trigger the app's selection update handler (only for main-list animals)
-        # Heritage-only animals are not in the main list, so _on_select would clear them
-        if not is_heritage_only and hasattr(self.app, '_on_select'):
+        # Commit Core selection after the optional sidebar projection has been
+        # applied.  This lets the canonical handler see a visible row when one
+        # exists, while a filtered-out animal remains hidden and unhighlighted.
+        # Heritage-only animals are not in the main list, so _on_select would
+        # clear their dedicated compatibility selection.
+        if not is_heritage_only and callable(extend_selection):
+            if not extend_selection(animal_name):
+                return
+        # Compatibility fallback for small plugin/test hosts that predate the
+        # shared graph-selection command.
+        if (
+            not is_heritage_only
+            and not callable(extend_selection)
+            and hasattr(self.app, '_on_select')
+        ):
+            if animal_name not in self.app.selected_animals:
+                self.app.selected_animals.append(animal_name)
             try:
                 self.app._on_select()
             except Exception:
@@ -4797,6 +4816,7 @@ class HeritageTrackWidget(QWidget):
         self, keep_view: bool = False, *, reset_positions: bool = False,
         position_candidate: Optional[Dict[str, Tuple[float, float]]] = None,
         family_position_candidate: Optional[Dict[str, Tuple[float, float]]] = None,
+        manual_animal_position_override: bool = False,
     ) -> bool:
         """Accept a frame and its complete map together, or retain the old frame.
 
@@ -4835,6 +4855,7 @@ class HeritageTrackWidget(QWidget):
                 keep_view,
                 position_candidate=position_candidate,
                 family_position_candidate=family_position_candidate,
+                manual_animal_position_override=manual_animal_position_override,
             ))
             return accepted
         except Exception as exc:
@@ -4872,6 +4893,7 @@ class HeritageTrackWidget(QWidget):
         self, keep_view: bool = False, *,
         position_candidate: Optional[Dict[str, Tuple[float, float]]] = None,
         family_position_candidate: Optional[Dict[str, Tuple[float, float]]] = None,
+        manual_animal_position_override: bool = False,
     ) -> bool:
         # Rendering is one read-only transaction.  Capture Core and the latest
         # Heritage backend record/revision before building the engine so every
@@ -5456,6 +5478,7 @@ class HeritageTrackWidget(QWidget):
             artist_scale=focused_artist_scale,
             chronological_undated_nodes=self._chronological_undated_nodes,
             cached_family_positions=cached_family_positions,
+            manual_animal_position_override=manual_animal_position_override,
         )
         if not render_entry.valid:
             raise GeometryValidationError("; ".join(render_entry.fatal_diagnostics))
@@ -5517,7 +5540,7 @@ class HeritageTrackWidget(QWidget):
             artist_fatal = self._render_artist_fatal_diagnostics(
                 final_renderer,
                 check_viewport=strict_artist_fit,
-                check_collisions=True,
+                check_collisions=not manual_animal_position_override,
                 allow_dense_label_overlaps=self.layout_mode == LAYOUT_MODE_FOCUSED,
             )
             if not artist_fatal:
@@ -6066,6 +6089,36 @@ class HeritageTrackWidget(QWidget):
             return None
         return x, y
 
+    def _event_data_position(self, event) -> Optional[Tuple[float, float]]:
+        """Return event data, falling back to the stable display transform.
+
+        Valid in-Axes ``xdata``/``ydata`` remain the compatibility path for
+        Matplotlib and synthetic events.  Matplotlib deliberately clears
+        them outside an Axes, however, while canvas/display coordinates remain
+        valid during a native drag, including while a zoomed-in pointer
+        crosses an Axes boundary.  The inverse transform is therefore the
+        continuous fallback for node placement at every zoom level.
+        """
+        try:
+            if getattr(event, "inaxes", None) is self.ax:
+                xdata = float(getattr(event, "xdata"))
+                ydata = float(getattr(event, "ydata"))
+                if math.isfinite(xdata) and math.isfinite(ydata):
+                    return xdata, ydata
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            pass
+        display_position = self._event_display_position(event)
+        if display_position is None:
+            return None
+        try:
+            point = self.ax.transData.inverted().transform(display_position)
+            x, y = float(point[0]), float(point[1])
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            return None
+        if not math.isfinite(x) or not math.isfinite(y):
+            return None
+        return x, y
+
     def _grab_pan_mouse(self) -> None:
         """Keep receiving native motion/release events during a pan."""
         grab_mouse = getattr(self.canvas, "grabMouse", None)
@@ -6207,6 +6260,8 @@ class HeritageTrackWidget(QWidget):
                 self.drag_active = False
                 self.drag_node = None
                 self.drag_group_nodes.clear()
+                self.drag_start_display = None
+                self._release_pan_mouse()
                 self._open_node_editor(node)
                 return
 
@@ -6214,21 +6269,25 @@ class HeritageTrackWidget(QWidget):
             self._last_click_time = current_time
             self._last_click_node = node
 
-            if event.xdata is None or event.ydata is None:
+            data_position = self._event_data_position(event)
+            if data_position is None or display_position is None:
                 return
 
             # Start drag mode for all draggable nodes (animals and family
             # junctions).  A no-drag release only adds an animal to selection;
             # family junctions are visual/group handles, not toggles.
-            node_x, node_y = self.node_positions.get(node, (event.xdata, event.ydata))
+            data_x, data_y = data_position
+            node_x, node_y = self.node_positions.get(node, (data_x, data_y))
             self.drag_active = True
             self.drag_node = node
             self.drag_group_nodes = set(self.family_members.get(node, set())) if node_kind == "family" else set()
-            self.drag_offset = (node_x - event.xdata, node_y - event.ydata)
-            self.click_start_pos = (event.xdata, event.ydata)
+            self.drag_offset = (node_x - data_x, node_y - data_y)
+            self.click_start_pos = data_position
+            self.drag_start_display = display_position
             self.is_dragging = False
             self._drag_background = None
             self._drag_artist_map.clear()
+            self._grab_pan_mouse()
 
     def _on_mouse_move(self, event) -> None:
         # Legend movement is committed on release, like CageTrack. Do not
@@ -6297,14 +6356,16 @@ class HeritageTrackWidget(QWidget):
 
         # Drag selected node while left mouse is held.
         if self.drag_active and self.drag_node is not None:
-            if event.xdata is None or event.ydata is None:
+            display_position = self._event_display_position(event)
+            data_position = self._event_data_position(event)
+            if display_position is None or data_position is None:
                 return
 
-            if not self.is_dragging and self.click_start_pos is not None:
-                dx = event.xdata - self.click_start_pos[0]
-                dy = event.ydata - self.click_start_pos[1]
-                distance = (dx * dx + dy * dy) ** 0.5
-                if distance > self.drag_threshold:
+            if not self.is_dragging and self.drag_start_display is not None:
+                dx = display_position[0] - self.drag_start_display[0]
+                dy = display_position[1] - self.drag_start_display[1]
+                distance = math.hypot(dx, dy)
+                if distance > self._node_drag_threshold_px:
                     self.is_dragging = True
                     self._begin_drag_blit()
                     # Cancel pending selection when drag starts (this is a drag, not a click)
@@ -6314,8 +6375,9 @@ class HeritageTrackWidget(QWidget):
                     self._pending_selection = None
 
             if self.is_dragging:
-                new_x = event.xdata + self.drag_offset[0]
-                new_y = event.ydata + self.drag_offset[1]
+                data_x, data_y = data_position
+                new_x = data_x + self.drag_offset[0]
+                new_y = data_y + self.drag_offset[1]
                 if self.drag_group_nodes:
                     current_x, current_y = self.node_positions.get(self.drag_node, (new_x, new_y))
                     delta_x = new_x - current_x
@@ -6484,6 +6546,9 @@ class HeritageTrackWidget(QWidget):
                         keep_view=True,
                         position_candidate=complete_positions,
                         family_position_candidate=family_position_candidate,
+                        manual_animal_position_override=not self._is_family_node(
+                            self.drag_node
+                        ),
                     )
                     if not accepted:
                         # The drag preview moved existing artists. Restore their
@@ -6510,7 +6575,9 @@ class HeritageTrackWidget(QWidget):
                     self.drag_group_nodes.clear()
                     self.drag_offset = (0.0, 0.0)
                     self.click_start_pos = None
+                    self.drag_start_display = None
                     self.is_dragging = False
+                    self._release_pan_mouse()
                     self._finish_drag_blit()
                     # Now setup pending selection
                     self._pending_selection = pending_node
@@ -6526,15 +6593,40 @@ class HeritageTrackWidget(QWidget):
             self.drag_group_nodes.clear()
             self.drag_offset = (0.0, 0.0)
             self.click_start_pos = None
+            self.drag_start_display = None
             self.is_dragging = False
+            self._release_pan_mouse()
             self._finish_drag_blit()
 
     def _commit_pending_selection(self) -> None:
         """Commit pending selection after double-click threshold passes (single click case)."""
-        if self._pending_selection:
-            self._add_animal_to_selection(self._pending_selection)
+        pending_node = self._pending_selection
         self._pending_selection = None
         self._pending_selection_timer = None
+        if pending_node and self._accepted_graph_animal_for_selection(pending_node):
+            self._add_animal_to_selection(pending_node)
+
+    def _accepted_graph_animal_for_selection(self, node: str) -> bool:
+        """Return whether ``node`` belongs to the currently accepted graph.
+
+        Delayed single-click commits may run after another refresh has
+        replaced the artists.  Selection must then fail closed instead of
+        promoting a stale family/animal key supplied by an old frame.
+        ``RenderCacheEntry`` is the same authorized, immutable frame used for
+        hit testing and painting; no sidebar projection is consulted here.
+        """
+        if not isinstance(node, str) or not node:
+            return False
+        entry = getattr(self, "_render_cache_entry", None)
+        if entry is None:
+            return False
+        try:
+            if node not in entry.display_nodes or node not in entry.positions:
+                return False
+            metadata = entry.node_metadata.get(node, {})
+            return str(metadata.get("kind", "animal")) == "animal"
+        except (AttributeError, TypeError):
+            return False
 
     def _on_scroll(self, event) -> None:
         if event.inaxes != self.ax or event.xdata is None or event.ydata is None:

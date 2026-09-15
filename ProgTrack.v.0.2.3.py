@@ -305,6 +305,8 @@ SCHEMA_VERSION = "4.0"
 # Display names are localized via messages_*.json
 EVENT_TYPES = [
     'surgery',           # Surgery/OP
+    'oocyte_retrieval',  # Oocyte retrieval after donor stimulation
+    'sperm_donation',    # Sperm collection/donation
     'embryo_transfer',   # Embryo transfer
     'pregnancy',
     'pregnancy_verification',         # Pregnancy
@@ -6980,12 +6982,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     elif not isinstance(d, str):
                         logging.warning(f"Invalid date type {type(d)} for sperm in {name}, skipping")
                         continue
-                    rec_copy['sperm'].append({
+                    sperm_payload = {
                         'datum':       d,
                         'motility':    s.get('motility'),
                         'progressive': s.get('progressive'),
                         'count':       s.get('count'),
-                    })
+                    }
+                    for sample_key in ('sample_id', 'probennummer'):
+                        sample_id = s.get(sample_key)
+                        if sample_id is not None and str(sample_id).strip():
+                            sperm_payload[sample_key] = str(sample_id).strip()
+                    rec_copy['sperm'].append(sperm_payload)
 
                 # --- PdG series + formula ---
                 rec_copy['pdg'] = []
@@ -7475,7 +7482,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Build a combined ID / Chip Nr. / Origin row.
 
         Returns (id_le, chip_le, origin_le).
-        Chip Nr. is gated by core.edit_animal_core; Origin by core.edit_animal_immutable.
+        The existing permission gates remain authoritative.  Denied ID and
+        chip controls also receive the explicit protected-field appearance so
+        a blocked input cannot look editable.
         """
         id_w = QWidget()
         id_layout = QHBoxLayout(id_w)
@@ -7485,15 +7494,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         id_le = QLineEdit(rec.get('id', ''))
         id_le.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         id_le.setMinimumWidth(50)
-        id_le.setStyleSheet("min-width: 0;")
+        can_edit_identity = bool(self._master_can('core.edit_animal_identity'))
+        protected_field_style = 'min-width: 0; background: #f0f0f0; color: #666;'
+        if not can_edit_identity:
+            id_le.setReadOnly(True)
+            id_le.setStyleSheet(protected_field_style)
+        else:
+            id_le.setStyleSheet("min-width: 0;")
 
         chip_le = QLineEdit(rec.get('chip_nr', ''))
         chip_le.setPlaceholderText(self.messages.get("dialog.field.chip_nr", "Chip Nr.:"))
         chip_le.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         chip_le.setMinimumWidth(50)
-        if not self._master_can('core.edit_animal_core'):
+        can_edit_chip = bool(self._master_can('core.edit_animal_core'))
+        if not can_edit_identity or not can_edit_chip:
             chip_le.setReadOnly(True)
-            chip_le.setStyleSheet('min-width: 0; background: #f0f0f0; color: #666;')
+            chip_le.setStyleSheet(protected_field_style)
         else:
             chip_le.setStyleSheet("min-width: 0;")
 
@@ -8184,6 +8200,66 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 value = str(widget or "").strip()
             result[canonical] = value
         return result
+
+    @staticmethod
+    def _core_parentage_record_values(
+        record: Optional[Mapping[str, Any]],
+    ) -> Dict[str, str]:
+        """Return normalized Core parentage values from an animal record.
+
+        Dialogs expose the canonical English slot names, while persisted Core
+        records historically use the German storage keys.  Comparing both
+        representations lets a non-parentage edit preserve an unchanged
+        parentage section without invoking the protected parentage command.
+        """
+        aliases = {
+            "egg_donor": ("egg_donor", "eizellspenderin"),
+            "sperm_donor": ("sperm_donor", "samenspender"),
+            "surrogate_mother": ("surrogate_mother", "ziehmutter"),
+            "surrogate_father": ("surrogate_father", "ziehvater"),
+        }
+        source = record if isinstance(record, Mapping) else {}
+        result: Dict[str, str] = {}
+        for canonical, keys in aliases.items():
+            value = ""
+            for key in keys:
+                candidate = source.get(key)
+                if candidate is not None and str(candidate).strip():
+                    value = str(candidate).strip()
+                    break
+            result[canonical] = value
+        return result
+
+    def _apply_core_parentage_if_changed(
+        self,
+        target_key: str,
+        target_record: Dict[str, Any],
+        original_record: Optional[Mapping[str, Any]],
+        parent_fields: Mapping[str, Any],
+        *,
+        expected_revision: Optional[str] = None,
+    ) -> bool:
+        """Apply parentage only when the dialog actually changed it.
+
+        All edit-animal dialogs render the shared parent selectors, including
+        for Vet and Researcher users who may edit measurements but not
+        parentage.  An unchanged disabled parent section must therefore not
+        call the parentage command.  If a caller does submit a changed value,
+        the normal permission, scope, cycle, and revision checks remain
+        authoritative in ``_apply_core_parentage``.
+        """
+        if not parent_fields:
+            return False
+        values = self._core_parentage_values(parent_fields)
+        if values == self._core_parentage_record_values(original_record):
+            return False
+        self._apply_core_parentage(
+            target_key,
+            target_record,
+            values,
+            expected_revision=expected_revision,
+        )
+        return True
 
     def _apply_core_parentage(
         self,
@@ -13067,6 +13143,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             'pgf': messages.get('plot.event.pgf', 'PGF'),
             'embryo_transfer': messages.get('plot.event.embryo_transfer', 'Embryo'),
             'surgery': messages.get('plot.event.operation', messages.get('daily.surgery', 'Surgery')),
+            'oocyte_retrieval': messages.get(
+                'plot.event.oocyte_retrieval', 'Oocyte retrieval'
+            ),
+            'sperm_donation': messages.get(
+                'plot.event.sperm_donation', 'Sperm donation'
+            ),
             'pregnancy': messages.get('plot.event.pregnancy', 'Pregnancy'),
             'pregnancy_verification': messages.get(
                 'plot.event.pregnancy_verification', 'Pregnancy verification'
@@ -14250,6 +14332,81 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return ""
         return raw
 
+    def _sidebar_projection_keys(self) -> set[str]:
+        """Return animal keys currently represented by sidebar rows.
+
+        The sidebar is a filtered projection of application selection.  This
+        set deliberately includes every current row, not only selected rows,
+        so selection handling can distinguish an intentional deselection from
+        an animal that is simply absent because a filter hides it.
+        """
+        lst = getattr(self, "lst", None)
+        if lst is None:
+            return set()
+        represented: set[str] = set()
+        if hasattr(lst, "count") and hasattr(lst, "item"):
+            items = (lst.item(index) for index in range(lst.count()))
+        else:
+            # Small non-Qt test doubles may expose only selectedItems().
+            items = iter(lst.selectedItems())
+        for item in items:
+            if item is None:
+                continue
+            key = self._normalize_sidebar_selection_value(
+                item.data(Qt.ItemDataRole.UserRole)
+            )
+            if key and (
+                key in getattr(self, "animals", {})
+                or key in getattr(self, "archived", {})
+            ):
+                represented.add(key)
+                continue
+            heritage_plugin = getattr(self, "heritage_plugin", None)
+            if (
+                key
+                and getattr(self, "has_heritage_plugin", False)
+                and heritage_plugin is not None
+                and heritage_plugin.store.is_heritage_only(key)
+            ):
+                represented.add(key)
+        return represented
+
+    def _extend_animal_selection_from_graph(self, animal_key: str) -> bool:
+        """Extend canonical application selection from an accepted graph node.
+
+        Graph selection must not depend on the currently filtered sidebar.  A
+        caller supplies a canonical Core animal key; the sidebar is updated
+        separately as an optional projection when its row is present.
+        """
+        key = self._normalize_sidebar_selection_value(animal_key)
+        if not key or not (
+            key in getattr(self, "animals", {})
+            or key in getattr(self, "archived", {})
+        ):
+            return False
+
+        selected = []
+        for value in getattr(self, "selected_animals", []) or []:
+            normalized = self._normalize_sidebar_selection_value(value)
+            if normalized and normalized not in selected:
+                selected.append(normalized)
+        if key not in selected:
+            selected.append(key)
+        self.selected_animals = selected
+
+        plot_order = []
+        for value in getattr(self, "_plot_selection_order", []) or []:
+            normalized = self._normalize_sidebar_selection_value(value)
+            if normalized and normalized not in plot_order:
+                plot_order.append(normalized)
+        if key not in plot_order:
+            plot_order.append(key)
+        self._plot_selection_order = plot_order
+        callback = getattr(self, "_on_select", None)
+        if callable(callback):
+            callback()
+        return True
+
     def _refresh_list(self, update_tab_visibility: bool = False, force_heritage_visible: bool = False) -> None:
         """Refresh the animal list based on current filter and selections.
         
@@ -14275,53 +14432,47 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if self.category_tab.currentIndex() != before_idx:
                     return
         
-        # Remember what was selected (use canonical keys, not display text).
-        # Archived rows use a UI-only sentinel; normalize it before handing
-        # selection to plots/plugins so the sentinel cannot become an animal
-        # identity or be lost during a list refresh.
+        # Canonical application selection is the source of truth.  The
+        # currently selected rows are only the visible part of that state and
+        # may omit animals hidden by the active sidebar projection.
         sel = [item.data(Qt.ItemDataRole.UserRole) for item in self.lst.selectedItems()]
-        normalized_pairs = [
-            (raw, self._normalize_sidebar_selection_value(raw)) for raw in sel
+        normalized_visible = [
+            self._normalize_sidebar_selection_value(value) for value in sel
         ]
-        normalized_sel = [value for _raw, value in normalized_pairs if value]
-        if not sel:
-            # Preserve the existing selection when a refresh is caused by a
-            # filter/settings change rather than a user deselection.  This
-            # mirrors the pre-existing active-row behavior while still
-            # normalizing any legacy archived sentinel that may be present.
-            normalized_sel = [
-                self._normalize_sidebar_selection_value(value)
-                for value in (getattr(self, "selected_animals", []) or [])
-            ]
-            normalized_sel = [value for value in normalized_sel if value]
-        preserved_selection = list(dict.fromkeys(normalized_sel))
-        preserved_archived_selection = list(dict.fromkeys(
-            value for raw, value in normalized_pairs
-            if isinstance(raw, str)
-            and raw.startswith(ARCHIVED_SELECTION_PREFIX)
-            and value
-        ))
-        if not sel:
-            preserved_archived_selection = list(dict.fromkeys(
-                value for value in (getattr(self, "_selected_archived", []) or [])
-                if self._normalize_sidebar_selection_value(value)
-            ))
-        self._selected_archived = preserved_archived_selection
-        self.selected_animals = [
+        normalized_visible = [value for value in normalized_visible if value]
+
+        preserved_selection = []
+        for value in list(getattr(self, "selected_animals", []) or []) + normalized_visible:
+            normalized = self._normalize_sidebar_selection_value(value)
+            if normalized and (
+                normalized in self.animals
+                or normalized in getattr(self, "archived", {})
+            ) and normalized not in preserved_selection:
+                preserved_selection.append(normalized)
+        self.selected_animals = preserved_selection
+
+        preserved_archived_selection = [
             value for value in preserved_selection
-            if value in self.animals or value in getattr(self, "archived", {})
+            if value in getattr(self, "archived", {})
         ]
-        # Track selected heritage-only animals separately
-        self._selected_heritage_only = []
-        if getattr(self, 'has_heritage_plugin', False):
-            heritage_plugin = getattr(self, 'heritage_plugin', None)
-            if heritage_plugin is not None:
-                self._selected_heritage_only = [
-                    n for n in normalized_sel
-                    if n not in self.animals
-                    and n not in getattr(self, "archived", {})
-                    and heritage_plugin.store.is_heritage_only(n)
-                ]
+        self._selected_archived = []
+
+        # Track Heritage-only selections separately while retaining keys whose
+        # rows are hidden by the current sidebar projection.
+        preserved_heritage_only = []
+        for value in list(getattr(self, "_selected_heritage_only", []) or []) + normalized_visible:
+            heritage_plugin = getattr(self, "heritage_plugin", None)
+            if (
+                value
+                and value not in self.animals
+                and value not in getattr(self, "archived", {})
+                and getattr(self, "has_heritage_plugin", False)
+                and heritage_plugin is not None
+                and heritage_plugin.store.is_heritage_only(value)
+                and value not in preserved_heritage_only
+            ):
+                preserved_heritage_only.append(value)
+        self._selected_heritage_only = preserved_heritage_only
 
         # rebuild list based on the current tab index
         idx = self.category_tab.currentIndex()
@@ -14649,14 +14800,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if arch_name in preserved_archived_selection:
                         arch_item.setSelected(True)
 
-        # Reassert the saved archive metadata after the list has been rebuilt.
-        # Some Qt versions emit a transient empty selection while ``clear()``
-        # runs; that signal must not make the archive actions forget the rows
-        # that are about to be reselected.
-        self._selected_archived = [
-            name for name in preserved_archived_selection
-            if name in getattr(self, "archived", {})
-        ]
+        # Archive actions are scoped to currently visible selected rows.  A
+        # canonical archived key hidden by a filter remains selected for
+        # Heritage, but must not enable Restore/Delete until its real row is
+        # visible again.
+        self._selected_archived = []
+        for item in self.lst.selectedItems():
+            raw_key = item.data(Qt.ItemDataRole.UserRole)
+            if isinstance(raw_key, str) and raw_key.startswith(ARCHIVED_SELECTION_PREFIX):
+                key = self._normalize_sidebar_selection_value(raw_key)
+                if key:
+                    self._selected_archived.append(key)
+        self._selected_archived = list(dict.fromkeys(self._selected_archived))
         # Reassert the canonical selection for the same reason: a transient
         # selectionChanged signal emitted by ``clear()`` must not erase it
         # before the rebuilt rows are selected again.
@@ -14792,6 +14947,23 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not hasattr(self, 'lst') or self.lst is None:
             return
 
+        represented_keys = self._sidebar_projection_keys()
+        previous_core_order = []
+        for source in (
+            getattr(self, "_plot_selection_order", []) or [],
+            getattr(self, "selected_animals", []) or [],
+        ):
+            for value in source:
+                key = self._normalize_sidebar_selection_value(value)
+                if key and (
+                    key in getattr(self, "animals", {})
+                    or key in getattr(self, "archived", {})
+                ) and key not in previous_core_order:
+                    previous_core_order.append(key)
+        previous_heritage_only = list(
+            dict.fromkeys(getattr(self, "_selected_heritage_only", []) or [])
+        )
+
         # Read real animal key from UserRole (display text may show _base_name)
         selected_names = []
         selected_heritage_only = []
@@ -14807,6 +14979,24 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if heritage_plugin is not None and heritage_plugin.store.is_heritage_only(key):
                         selected_heritage_only.append(key)
 
+        # Rows omitted by the current sidebar projection are not deselected.
+        # Only currently represented rows participate in deliberate row-level
+        # deselection.  This preserves graph-promoted animals while allowing a
+        # visible row to be unchecked normally.
+        hidden_core = [
+            key for key in previous_core_order if key not in represented_keys
+        ]
+        selected_names = hidden_core + [
+            key for key in selected_names if key not in hidden_core
+        ]
+        hidden_heritage_only = [
+            key for key in previous_heritage_only
+            if key not in represented_keys
+        ]
+        selected_heritage_only = hidden_heritage_only + [
+            key for key in selected_heritage_only
+            if key not in hidden_heritage_only
+        ]
         # Store heritage-only selections separately
         self._selected_heritage_only = selected_heritage_only
 
@@ -16308,7 +16498,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     evs += [('surgery',      dt) for dt in event_dates(a, 'surgery')]
                     evs += [(ev['typ'], ev['datum'])
                             for ev in a.get('events', [])
-                            if ev['typ'] in ('fsh', 'pgf', 'surgery')]
+                            if ev['typ'] in (
+                                'fsh', 'pgf', 'surgery',
+                                'oocyte_retrieval', 'sperm_donation'
+                            )]
 
                 # Backend event rows are canonical, but tolerate an older
                 # snapshot containing an exact duplicate (same type/date).
@@ -16351,6 +16544,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     'pgf': getattr(self, 'pgf_color', QColor('#FF0000')).name(), 
                     'embryo_transfer': getattr(self, 'embryo_color', QColor('#000000')).name(), 
                     'surgery': getattr(self, 'op_color', QColor('#0000FF')).name(),
+                    'oocyte_retrieval': getattr(
+                        self, 'op_color', QColor('#0000FF')
+                    ).name(),
+                    'sperm_donation': getattr(
+                        self, 'op_color', QColor('#0000FF')
+                    ).name(),
                     'pregnancy': getattr(self, 'pregnancy_color', QColor('#008000')).name(), 
                     'pregnancy_verification': getattr(
                         self, 'pregnancy_color', QColor('#008000')
@@ -16365,6 +16564,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     'pgf': self.messages.get('plot.event.pgf', 'PGF'),
                     'embryo_transfer': self.messages.get('plot.event.embryo_transfer', 'Embryo'),
                     'surgery': self.messages.get('plot.event.operation', 'OP'),
+                    'oocyte_retrieval': self.messages.get(
+                        'plot.event.oocyte_retrieval', 'Oocyte retrieval'
+                    ),
+                    'sperm_donation': self.messages.get(
+                        'plot.event.sperm_donation', 'Sperm donation'
+                    ),
                     'pregnancy': self.messages.get('plot.event.pregnancy', 'Pregnancy'),
                     'pregnancy_verification': self.messages.get(
                         'plot.event.pregnancy_verification',
@@ -17507,7 +17712,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self,
             title: str,
             items: List[Dict[str, Any]],
-            format_item: Callable[[Dict[str, Any]], Tuple[str, str]],
+            format_item: Callable[[Dict[str, Any]], Tuple[Any, ...]],
             add_default: Callable[[List[Any]], Tuple[str, str]],
             role_cb: Optional[QComboBox] = None
     ) -> Tuple[QScrollArea, List[Tuple[QLineEdit, QComboBox]]]:
@@ -17548,7 +17753,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # 7.20.1 Add Row to Reproduction Event List
         #     Insert a new event row (date & type) into the scrollable list.
         # ------------------------
-        def add_row(item_data: Tuple[str, str]) -> None:
+        def add_row(item_data: Tuple[Any, ...]) -> None:
+            source_event = (
+                copy.deepcopy(item_data[2])
+                if len(item_data) > 2 and isinstance(item_data[2], dict)
+                else {}
+            )
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(5)
@@ -17570,6 +17780,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             d_edit.textChanged.connect(validate_date_field)
             
             combo = QComboBox()
+            # Keep the original canonical payload attached to the row.  The
+            # editor exposes only date/type controls, but saving an unchanged
+            # event must not discard workflow links or scientific metadata.
+            combo._progtrack_source_event = source_event
             
             # Filter events based on role if role_cb is provided
             # Use the underlying role code from userData so this stays
@@ -17578,8 +17792,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             
             # Define all blocks using English identifiers
             all_blocks = [
-                ['surgery'],
-                ['embryo_transfer', 'pregnancy', 'abortion', 'birth'],
+                ['surgery', 'oocyte_retrieval', 'sperm_donation'],
+                [
+                    'embryo_transfer', 'pregnancy',
+                    'pregnancy_verification', 'abortion', 'birth'
+                ],
                 ['pgf', 'fsh', 'progesterone']
             ]
             
@@ -17587,13 +17804,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if current_role == Role.SPENDER.value:
                 # For Spenderin: hide embryo_transfer, pregnancy, abortion, birth
                 blocks = [
-                    ['surgery'],
+                    ['surgery', 'sperm_donation'],
                     ['pgf', 'fsh', 'progesterone']
                 ]
             elif current_role == Role.AMME.value:
                 # For Amme: hide fsh and surgery
                 blocks = [
-                    ['embryo_transfer', 'pregnancy', 'abortion', 'birth'],
+                    [
+                        'embryo_transfer', 'pregnancy',
+                        'pregnancy_verification', 'abortion', 'birth'
+                    ],
                     ['pgf', 'progesterone']
                 ]
             else:
@@ -17603,8 +17823,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Populate combo box with filtered blocks using localized names
             event_labels = {
                 'surgery': self.messages.get('event.surgery', 'Surgery'),
+                'oocyte_retrieval': self.messages.get(
+                    'event.oocyte_retrieval', 'Oocyte retrieval'),
+                'sperm_donation': self.messages.get(
+                    'event.sperm_donation', 'Sperm donation'),
                 'embryo_transfer': self.messages.get('event.embryo_transfer', 'Embryo Transfer'),
                 'pregnancy': self.messages.get('event.pregnancy', 'Pregnancy'),
+                'pregnancy_verification': self.messages.get(
+                    'event.pregnancy_verification', 'Pregnancy verification'),
                 'abortion': self.messages.get('event.abort', 'Abort'),
                 'birth': self.messages.get('event.birth', 'Birth'),
                 'pgf': self.messages.get('event.pgf', 'PGF'),
@@ -21751,12 +21977,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 old_severity=_old_severity,
             )
 
-            if heritage_parent_fields is not None:
+            if heritage_parent_fields:
                 try:
                     self._save_trace("partner.save.core_parentage.before", new_name=new_name)
-                    self._apply_core_parentage(
+                    self._apply_core_parentage_if_changed(
                         new_name, rec_obj,
-                        self._core_parentage_values(heritage_parent_fields),
+                        rec,
+                        heritage_parent_fields,
                         expected_revision=dlg.property("core_parentage_revision"),
                     )
                     self._save_trace("partner.save.core_parentage.after", new_name=new_name)
@@ -22106,6 +22333,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             row.setSpacing(5)
             date_le = QLineEdit(d['date'])
             date_le.setPlaceholderText(DATE_FORMAT)
+            date_le._progtrack_sperm_identifiers = {
+                sample_key: str(d[sample_key]).strip()
+                for sample_key in ('sample_id', 'probennummer')
+                if d.get(sample_key) is not None and str(d[sample_key]).strip()
+            }
             
             # Add real-time date validation styling
             def validate_sperm_date():
@@ -22184,7 +22416,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 'date': ent['datum'].strftime(DATE_FORMAT),
                 'motility': '' if ent.get('motility')   is None else str(ent['motility']),
                 'progressive': '' if ent.get('progressive') is None else str(ent['progressive']),
-                'count': '' if ent.get('count')       is None else str(ent['count'])
+                'count': '' if ent.get('count')       is None else str(ent['count']),
+                'sample_id': ent.get('sample_id'),
+                'probennummer': ent.get('probennummer'),
             })
         # put the add-row button *inside* the scroll area at the bottom
         row_layout.addWidget(btn_new_sperm)
@@ -22308,12 +22542,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     m_text = mot_le.text().strip()
                     p_text = prog_le.text().strip()
                     c_text = cnt_le.text().strip()
-                    new_sperm.append({
+                    sperm_entry = {
                         'datum':       dt,
                         'motility':    float(m_text) if m_text else None,
                         'progressive': float(p_text) if p_text else None,
                         'count':       float(c_text) if c_text else None
-                    })
+                    }
+                    for sample_key, sample_id in getattr(
+                        d_le, '_progtrack_sperm_identifiers', {}
+                    ).items():
+                        if sample_id:
+                            sperm_entry[sample_key] = sample_id
+                    new_sperm.append(sperm_entry)
             else:
                 new_sperm = list(rec.get('sperm', []))
             # construct or update record
@@ -22386,12 +22626,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 old_severity=_old_severity,
             )
 
-            if heritage_parent_fields is not None:
+            if heritage_parent_fields:
                 try:
                     self._save_trace("sperm_donor.save.core_parentage.before", new_name=new_name)
-                    self._apply_core_parentage(
+                    self._apply_core_parentage_if_changed(
                         new_name, rec_obj,
-                        self._core_parentage_values(heritage_parent_fields),
+                        rec,
+                        heritage_parent_fields,
                         expected_revision=dlg.property("core_parentage_revision"),
                     )
                     self._save_trace("sperm_donor.save.core_parentage.after", new_name=new_name)
@@ -22917,9 +23158,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec_obj.update(generated_id_meta)
             if offspring_parent_fields:
                 try:
-                    self._apply_core_parentage(
+                    self._apply_core_parentage_if_changed(
                         new_name, rec_obj,
-                        self._core_parentage_values(offspring_parent_fields),
+                        rec,
+                        offspring_parent_fields,
                         expected_revision=dlg.property("core_parentage_revision"),
                     )
                 except Exception as exc:
@@ -23601,9 +23843,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['max_geburten'] = maxb_sb.value()
             if zuchttier_parent_fields:
                 try:
-                    self._apply_core_parentage(
+                    self._apply_core_parentage_if_changed(
                         new_name, rec_obj,
-                        self._core_parentage_values(zuchttier_parent_fields),
+                        rec,
+                        zuchttier_parent_fields,
                         expected_revision=dlg.property("core_parentage_revision"),
                     )
                 except Exception as exc:
@@ -24210,9 +24453,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['max_measurements'] = max_meas_sb.value()
             if vt_parent_fields:
                 try:
-                    self._apply_core_parentage(
+                    self._apply_core_parentage_if_changed(
                         new_name, rec_obj,
-                        self._core_parentage_values(vt_parent_fields),
+                        rec,
+                        vt_parent_fields,
                         expected_revision=dlg.property("core_parentage_revision"),
                     )
                 except Exception as exc:
@@ -24843,9 +25087,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     return
             if parent_fields:
                 try:
-                    self._apply_core_parentage(
+                    self._apply_core_parentage_if_changed(
                         new_key, rec_obj,
-                        self._core_parentage_values(parent_fields),
+                        rec,
+                        parent_fields,
                         expected_revision=dlg.property("core_parentage_revision"),
                     )
                 except Exception as exc:
@@ -25367,7 +25612,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if steroid_active:
             # All role event rows are sourced from canonical backend events.
             ev_items = [
-                {"typ": str(event.get("typ") or ""), "datum": event.get("datum")}
+                copy.deepcopy(event)
                 for event in rec.get("events", []) or []
                 if isinstance(event, dict)
                 and event.get("typ")
@@ -25375,8 +25620,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and str(event.get("typ")).strip() in EVENT_TYPES
             ]
 
-            def fmt_ev(ev): 
-                return (ev['datum'].strftime(DATE_FORMAT), ev['typ'])
+            def fmt_ev(ev):
+                return (
+                    ev['datum'].strftime(DATE_FORMAT),
+                    ev['typ'],
+                    ev,
+                )
 
             def def_ev(widgets):
                 # Use the underlying role code to decide the default event
@@ -25715,10 +25964,26 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         key = (typ, dt)
                         if key not in seen_events:
                             seen_events.add(key)
-                            new_events.append({
+                            source_event = getattr(
+                                combo, "_progtrack_source_event", {}
+                            )
+                            if (
+                                isinstance(source_event, dict)
+                                and str(source_event.get("typ") or "")
+                                == typ
+                            ):
+                                event_payload = copy.deepcopy(source_event)
+                                event_payload.pop("event_type", None)
+                                event_payload.pop("date", None)
+                            else:
+                                event_payload = {}
+                            event_payload.update({
                                 "typ": typ,
-                                "datum": datetime.combine(dt, datetime.min.time()),
+                                "datum": datetime.combine(
+                                    dt, datetime.min.time()
+                                ),
                             })
+                            new_events.append(event_payload)
                     except Exception:
                         self._show_message(
                             self.messages.get("error.title", "Error"),
@@ -25749,12 +26014,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 record=self._save_trace_record_summary(rec),
             )
 
-            if heritage_parent_fields is not None:
+            if heritage_parent_fields:
                 try:
                     self._save_trace("female_like.save.core_parentage.before", new_name=new_name)
-                    self._apply_core_parentage(
+                    self._apply_core_parentage_if_changed(
                         new_name, rec,
-                        self._core_parentage_values(heritage_parent_fields),
+                        rec,
+                        heritage_parent_fields,
                         expected_revision=dlg.property("core_parentage_revision"),
                     )
                     self._save_trace("female_like.save.core_parentage.after", new_name=new_name)
@@ -26334,8 +26600,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec['events'] = []
                 for ev in orig_events:
                     try:
-                        datum = parse_date(ev.get('datum'))
-                        typ = ev.get('typ', '').strip().lower()
+                        if not isinstance(ev, dict):
+                            raise TypeError("Event must be an object")
+                        datum = parse_date(ev.get('datum') or ev.get('date'))
+                        typ = str(
+                            ev.get('typ') or ev.get('event_type') or ''
+                        ).strip().lower()
                         # Normalize legacy German identifiers to English
                         normalized_typ = typ
                         # Only include valid event types
@@ -26343,7 +26613,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             normalized_typ in EVENT_TYPES
                             or self._custom_event_definition_for_type(normalized_typ)
                         ):
-                            payload = {"typ": normalized_typ, "datum": datum}
+                            # Preserve the complete canonical event payload.
+                            # Workflow linkage and scientific provenance live
+                            # in fields such as course_id, result, offspring,
+                            # project, and sample_id. Rebuilding an event from
+                            # only typ/datum silently destroyed those fields on
+                            # the next save.
+                            payload = copy.deepcopy(ev)
+                            payload.pop("event_type", None)
+                            payload.pop("date", None)
+                            payload["typ"] = normalized_typ
+                            payload["datum"] = datum
                             snapshot = self._custom_event_snapshot(normalized_typ)
                             if snapshot.get("id") != normalized_typ:
                                 payload["custom_event_snapshot"] = snapshot
@@ -26408,9 +26688,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             'progressive': s.get('progressive'),
                             'count':       s.get('count'),
                         }
-                        probe = s.get('probennummer')
-                        if probe is not None and str(probe).strip():
-                            entry['probennummer'] = str(probe).strip()
+                        # Seed/domain records use sample_id for sperm
+                        # donations; older measurement imports use
+                        # probennummer. Preserve whichever canonical key was
+                        # present instead of dropping the identifier.
+                        for sample_key in ('sample_id', 'probennummer'):
+                            probe = s.get(sample_key)
+                            if probe is not None and str(probe).strip():
+                                entry[sample_key] = str(probe).strip()
                         rec['sperm'].append(entry)
                     except Exception:
                         logging.warning(f"Skipped invalid sperm entry: {s}")
