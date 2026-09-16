@@ -21147,7 +21147,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         groups: dict mapping permission_key → widget, or list/tuple of widgets.
         None entries are silently skipped.
-        Disabling a container (QGroupBox, QWidget) greys out all its children.
+        Data-tab containers are kept enabled so their read-only contents remain
+        inspectable and scrollable; ordinary field/group containers retain the
+        historical disabled-container behavior.
         """
         for perm, widgets in groups.items():
             if not self._master_can(perm):
@@ -21156,9 +21158,89 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 for w in widgets:
                     if w is not None:
                         try:
-                            w.setEnabled(False)
+                            if self._is_scrollable_data_tab_container(w):
+                                self._set_data_tab_read_only_preserving_scroll(w)
+                            else:
+                                w.setEnabled(False)
                         except Exception:
                             pass
+
+    @staticmethod
+    def _is_scrollable_data_tab_container(widget: QWidget) -> bool:
+        """Return whether *widget* is a data-page container with scrolling.
+
+        Permission maps pass complete tab pages for measurement/research
+        groups.  Detecting the structural scroll area instead of relying on a
+        translated tab title keeps the rule valid for every role builder and
+        plugin-provided data page.
+        """
+        if isinstance(widget, QScrollArea):
+            return True
+        try:
+            return bool(widget.findChildren(QScrollArea))
+        except (AttributeError, RuntimeError, TypeError):
+            return False
+
+    @staticmethod
+    def _set_data_tab_read_only_preserving_scroll(container: QWidget) -> None:
+        """Disable data mutation controls while preserving navigation.
+
+        A denied permission must not be implemented by disabling the tab page:
+        Qt propagates a disabled parent state to the page's QScrollArea,
+        viewport, and scrollbars.  Keep structural scroll widgets enabled and
+        disable only known editor/mutation controls below the page.
+        """
+        from PyQt6.QtWidgets import (
+            QCheckBox,
+            QComboBox,
+            QDateEdit,
+            QDoubleSpinBox,
+            QLineEdit,
+            QPushButton,
+            QRadioButton,
+            QScrollBar,
+            QScrollArea,
+            QSlider,
+            QSpinBox,
+            QTextEdit,
+            QPlainTextEdit,
+            QToolButton,
+        )
+
+        container.setEnabled(True)
+        scroll_areas = []
+        if isinstance(container, QScrollArea):
+            scroll_areas.append(container)
+        scroll_areas.extend(container.findChildren(QScrollArea))
+        for scroll in dict.fromkeys(scroll_areas):
+            scroll.setEnabled(True)
+            try:
+                scroll.viewport().setEnabled(True)
+                scroll.verticalScrollBar().setEnabled(True)
+                scroll.horizontalScrollBar().setEnabled(True)
+            except (RuntimeError, AttributeError):
+                pass
+
+        editor_types = (
+            QLineEdit,
+            QTextEdit,
+            QPlainTextEdit,
+            QSpinBox,
+            QDoubleSpinBox,
+            QComboBox,
+            QCheckBox,
+            QRadioButton,
+            QDateEdit,
+            QSlider,
+            QPushButton,
+            QToolButton,
+        )
+        preserved_scroll_widgets = set(scroll_areas)
+        for child in container.findChildren(QWidget):
+            if child in preserved_scroll_widgets or isinstance(child, QScrollBar):
+                continue
+            if isinstance(child, editor_types):
+                child.setEnabled(False)
 
     def _launch_op_planner(self):
         """
