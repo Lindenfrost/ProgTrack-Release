@@ -10207,6 +10207,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             tab_widget is getattr(self, 'medi_track_tab', None)
             or tab_widget is getattr(self, 'medi_track_tab_placeholder', None)
         )
+        # Reports and Medi Track both have single-animal representation
+        # semantics.  Normalize the shared selection before either tab is
+        # lazily built or receives a callback.  The helper uses widget
+        # identity, not localized tab text, so placeholder replacement cannot
+        # change the contract.
+        self._normalize_selection_for_single_animal_tab(tab_widget)
         pt_tab_selected = (
             getattr(self, '_pt_tab_needed', False) and (
                 tab_widget is getattr(self, 'project_track_tab', None)
@@ -10441,15 +10447,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             heritage_plugin = getattr(self, 'heritage_plugin', None)
             if heritage_plugin is not None and callable(getattr(heritage_plugin, 'on_tab_hidden', None)):
                 heritage_plugin.on_tab_hidden()
-            # Unselect ALL animals when leaving Heritage Track (as if empty space was clicked)
-            logging.info("Unselecting all animals when leaving Heritage Track")
-            self._selected_heritage_only = []
-            self.selected_animals = []
-            # Update UI to reflect the selection change
-            for i in range(self.lst.count()):
-                item = self.lst.item(i)
-                if item:
-                    item.setSelected(False)
+            # A single-animal destination has already normalized the shared
+            # selection above.  Do not erase that retained subject merely
+            # because the source context was Heritage Track.  Preserve the
+            # historical clear-on-leave behavior for multi-animal contexts.
+            leaving_to_single_animal_tab = (
+                self._single_animal_tab_kind(tab_widget) is not None
+            )
+            if not leaving_to_single_animal_tab:
+                logging.info("Unselecting all animals when leaving Heritage Track")
+                self._selected_heritage_only = []
+                self.selected_animals = []
+                # Update UI to reflect the selection change
+                for i in range(self.lst.count()):
+                    item = self.lst.item(i)
+                    if item:
+                        item.setSelected(False)
             # Re-enable all role tabs (0-6)
             if hasattr(self, 'category_tab'):
                 self.category_tab.setStyleSheet("")  # Clear custom styling
@@ -14941,6 +14954,112 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return value
         return None
 
+    def _single_animal_tab_kind(self, tab_widget=None) -> Optional[str]:
+        """Return the single-animal contract for a main-tab widget.
+
+        The contract is deliberately based on stable widget identity rather
+        than translated tab labels.  Both the lazy placeholder and the loaded
+        widget represent the same destination while the tab is being entered.
+        """
+        if tab_widget is None:
+            tabs = getattr(self, "main_tabs", None)
+            if tabs is None:
+                return None
+            try:
+                tab_widget = tabs.currentWidget()
+            except Exception:
+                return None
+
+        if getattr(self, "reports_enabled", False) and (
+            tab_widget is getattr(self, "reports_tab", None)
+            or tab_widget is getattr(self, "reports_tab_placeholder", None)
+        ):
+            return "reports"
+        if getattr(self, "has_medi_track_plugin", False) and (
+            tab_widget is getattr(self, "medi_track_tab", None)
+            or tab_widget is getattr(self, "medi_track_tab_placeholder", None)
+        ):
+            return "medi_track"
+        return None
+
+    def _normalize_selection_for_single_animal_tab(self, tab_widget=None) -> Optional[str]:
+        """Normalize canonical selection for a single-animal main tab.
+
+        ``selected_animals`` is the authoritative ordered selection.  The
+        last entry is the established display choice used by Reports and
+        Medi Track.  If that entry is not an active Core animal (for example
+        an archived or Heritage-only record), the destination has no valid
+        replacement and the selection is cleared rather than silently
+        falling back to another animal.
+
+        Only sidebar rows currently represented by the active projection are
+        touched.  Thus a valid retained animal hidden by a filter remains in
+        canonical state but is not reinserted or highlighted.
+        """
+        if ProgTrackApp._single_animal_tab_kind(self, tab_widget) is None:
+            return None
+
+        normalize = getattr(self, "_normalize_sidebar_selection_value", None)
+        if not callable(normalize):
+            normalize = lambda value: value if isinstance(value, str) else ""
+
+        canonical_order = []
+        for value in getattr(self, "selected_animals", []) or []:
+            key = normalize(value)
+            if key and key not in canonical_order:
+                canonical_order.append(key)
+
+        # Heritage-only selection is stored separately from Core selections.
+        # It is relevant when it is the only current selection, but it is not
+        # a valid Reports/Medi Track subject and must never become a guessed
+        # Core animal.
+        if not canonical_order:
+            for value in getattr(self, "_selected_heritage_only", []) or []:
+                key = normalize(value)
+                if key and key not in canonical_order:
+                    canonical_order.append(key)
+
+        retained = canonical_order[-1] if canonical_order else None
+        if retained is None or retained not in getattr(self, "animals", {}):
+            retained = None
+        normalized_selection = [retained] if retained else []
+
+        self.selected_animals = normalized_selection
+        self._plot_selection_order = list(normalized_selection)
+        self._edit_selection_order = list(normalized_selection)
+        self._selected_heritage_only = []
+        if hasattr(self, "_selected_archived"):
+            self._selected_archived = []
+
+        # Keep only currently represented rows synchronized.  A filtered-out
+        # retained animal has no row here and therefore remains unhighlighted
+        # while the canonical state still contains it.
+        lst = getattr(self, "lst", None)
+        if lst is not None and hasattr(lst, "count") and hasattr(lst, "item"):
+            previous_signal_state = None
+            block_signals = getattr(lst, "blockSignals", None)
+            if callable(block_signals):
+                previous_signal_state = block_signals(True)
+            try:
+                for row in range(lst.count()):
+                    item = lst.item(row)
+                    if item is None or not hasattr(item, "setSelected"):
+                        continue
+                    try:
+                        key = normalize(item.data(Qt.ItemDataRole.UserRole))
+                    except Exception:
+                        key = ""
+                    item.setSelected(bool(retained and key == retained))
+            finally:
+                if callable(block_signals):
+                    block_signals(previous_signal_state)
+
+        logging.info(
+            "Normalized single-animal tab selection: retained=%s",
+            retained or "none",
+        )
+        return retained
+
     def _on_select(self) -> None:
         """Handle list selection changes: update selection and replot."""
         # Check if UI is initialized
@@ -15000,20 +15119,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Store heritage-only selections separately
         self._selected_heritage_only = selected_heritage_only
 
-        # Enforce selection limit based on active tab
-        # Reports tab: only allow single selection
-        # Non-Heritage contexts: allow multiple selections up to MAX_SELECTED_ANIMALS
+        # Enforce the general multi-animal limit outside Heritage context.
+        # Single-animal destinations are normalized by the shared helper
+        # below, after the current list event has become canonical state.
         current_tab_widget = None
         if hasattr(self, 'main_tabs') and self.main_tabs is not None and self.main_tabs.count() > 0:
             current_tab_widget = self.main_tabs.currentWidget()
-        is_reports_tab = (
-            hasattr(self, 'reports_enabled')
-            and self.reports_enabled
-            and (
-                current_tab_widget is getattr(self, 'reports_tab', None)
-                or current_tab_widget is getattr(self, 'reports_tab_placeholder', None)
-            )
-        )
         _heritage_tab_widget = getattr(self, 'heritage_track_tab', None)
         _heritage_placeholder_widget = getattr(self, 'heritage_track_tab_placeholder', None)
         is_heritage_tab = (
@@ -15031,25 +15142,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 is_heritage_window_visible = False
         is_heritage_context = is_heritage_tab or is_heritage_window_visible
         
-        if is_reports_tab and len(selected_names) > 1:
-            # In Reports tab, keep only the last selected animal
-            selected_names = selected_names[-1:]
-            # Deselect all others in UI
-            for i in range(self.lst.count()):
-                it = self.lst.item(i)
-                widget = self.lst.itemWidget(it)
-                if widget:
-                    for child in widget.children():
-                        if isinstance(child, QLabel):
-                            t = child.text()
-                            if t and t in self.animals:
-                                it.setSelected(t in selected_names)
-                                break
-                else:
-                    txt = it.text()
-                    base = txt.rsplit(" (", 1)[0] if " (" in txt and txt.endswith(")") else txt
-                    it.setSelected(base in selected_names)
-        elif not is_heritage_context and len(selected_names) > MAX_SELECTED_ANIMALS:
+        if not is_heritage_context and len(selected_names) > MAX_SELECTED_ANIMALS:
             # Enforce MAX_SELECTED_ANIMALS outside Heritage Track context.
             selected_names = selected_names[:MAX_SELECTED_ANIMALS]
             # Keep UI in sync: deselect extras
@@ -15085,6 +15178,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         edit_order.extend(value for value in ordered_names if value not in edit_order)
         self._edit_selection_order = edit_order
         logging.info(f"Selected animals: {self.selected_animals}")
+
+        # Apply the same single-animal contract to direct list changes while
+        # Reports or Medi Track is already active.  This is intentionally
+        # after list selection has been read, so the user can still deselect
+        # the previously retained animal without the helper resurrecting it.
+        normalize_single_selection = getattr(
+            self, "_normalize_selection_for_single_animal_tab", None
+        )
+        if callable(normalize_single_selection):
+            normalize_single_selection(current_tab_widget)
+        else:
+            # Keep lightweight test/application harnesses that only expose
+            # the older selection surface compatible with this no-op path.
+            ProgTrackApp._normalize_selection_for_single_animal_tab(
+                self, current_tab_widget
+            )
 
         if hasattr(self, 'category_tab') and hasattr(self, 'btn_load_sperm'):
             self._apply_sidebar_button_visibility_for_category(self.category_tab.currentIndex())
@@ -17302,27 +17411,71 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         target based on the actual layout contents keeps the header, rows, and
         add button tight while preserving a scrollbar for longer histories.
         """
+        if scroll is None or frame is None:
+            return
         scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setMinimumHeight(0)
         scroll.setMaximumHeight(16777215)
 
         def apply_cap() -> None:
             try:
-                frame.adjustSize()
                 layout = frame.layout()
                 if layout is None:
                     return
-                items = [layout.itemAt(i) for i in range(layout.count())]
+                # A previous pass may have installed the full-content minimum
+                # height. Clear it before measuring again so row deletion can
+                # shrink the content instead of measuring the old minimum.
+                frame.setMinimumHeight(0)
+                layout.activate()
+                frame.adjustSize()
+                layout.activate()
+                items = []
+                for index in range(layout.count()):
+                    item = layout.itemAt(index)
+                    widget = item.widget() if item is not None else None
+                    # Some legacy/custom row paths detach a widget before
+                    # removing its QLayoutItem.  Do not count that orphan as
+                    # live history content during the recalculation.
+                    if widget is not None and widget.parentWidget() is None:
+                        continue
+                    if item is not None:
+                        items.append(item)
+                if not items:
+                    frame.setMinimumHeight(0)
+                    scroll.setFixedHeight(24)
+                    scroll.setProperty("_progtrack_viewport_target", 24)
+                    return
+
+                # Every Core history builder puts its column header first and
+                # its New button last.  Real rows are the intervening layout
+                # items.  Keep the supplied count as a compatibility fallback
+                # for simple/custom callers whose rows are direct widgets.
+                has_header_layout = items[0].layout() is not None
+                has_add_widget = items[-1].widget() is not None
+                row_items = items[1:-1] if has_header_layout and has_add_widget else (
+                    items[1:] if has_header_layout else items[:-1] if has_add_widget else items
+                )
+                effective_count = (
+                    len(row_items)
+                    if has_header_layout
+                    else max(0, int(row_count))
+                )
                 heights = [max(1, int(item.sizeHint().height())) for item in items]
-                # The first item is the column header and the final widget is
-                # the localized New button.  Rows are the intervening layouts.
-                header_h = heights[0] if heights else 0
-                add_h = heights[-1] if items and items[-1].widget() is not None else 0
-                row_items = items[1:-1] if add_h else items[1:]
+                header_h = heights[0] if has_header_layout else 0
+                add_h = heights[-1] if has_add_widget else 0
                 row_h = [max(1, int(item.sizeHint().height())) for item in row_items]
-                visible = min(5, max(0, int(row_count)))
-                if int(row_count) <= 5:
-                    content_h = max(1, int(frame.sizeHint().height()))
+
+                # Preserve the complete content height inside the scroll area.
+                # With widgetResizable=True, a growing frame can otherwise be
+                # negotiated back down to the viewport, leaving the scrollbar
+                # with a zero range even though rows exist below the fold.
+                complete_h = max(1, int(frame.sizeHint().height()))
+                frame.setMinimumHeight(complete_h)
+
+                visible = min(5, effective_count)
+                if effective_count <= 5:
+                    content_h = complete_h
                 else:
                     spacing = max(0, int(layout.spacing()))
                     content_h = header_h + add_h + sum(row_h[:visible])
@@ -17334,17 +17487,32 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 target = max(24, content_h + 2)
                 scroll.setFixedHeight(target)
                 scroll.setProperty("_progtrack_viewport_target", target)
-                recap = getattr(scroll, "_progtrack_recap", None)
-                if callable(recap) and recap is not apply_cap:
-                    scroll._progtrack_recap = apply_cap
+                scroll.setProperty("_progtrack_content_height", complete_h)
+                frame.updateGeometry()
+                scroll.updateGeometry()
                 fit = getattr(scroll.window(), "_progtrack_fit_animal_tabs", None)
                 if callable(fit):
                     QTimer.singleShot(0, fit)
             except (RuntimeError, AttributeError, TypeError):
                 return
 
-        scroll._progtrack_recap = apply_cap
-        QTimer.singleShot(0, apply_cap)
+        def request_cap() -> None:
+            """Coalesce row/layout changes into one settled geometry pass."""
+            if getattr(scroll, "_progtrack_recap_queued", False):
+                return
+            scroll._progtrack_recap_queued = True
+
+            def run() -> None:
+                try:
+                    scroll._progtrack_recap_queued = False
+                except RuntimeError:
+                    return
+                apply_cap()
+
+            QTimer.singleShot(0, run)
+
+        scroll._progtrack_recap = request_cap
+        request_cap()
 
     def _cap_table_viewport(self, table: QTableWidget, row_count: int) -> None:
         """Compact a table to its header plus at most five visible rows."""
@@ -17378,6 +17546,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         if tabs is not None:
             tabs.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        minimum_height_floor = max(0, int(dlg.minimumHeight()))
 
         def fit_dialog_width() -> None:
             try:
@@ -17460,10 +17629,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 tabs_visible = tabs is not None and not tabs.isHidden()
                 tab_height = 0
                 if tabs_visible:
-                    tab_height = max(
-                        int(tabs.height()),
-                        int(tabs.sizeHint().height()),
-                    )
+                    # QTabWidget.sizeHint() describes the largest page, not
+                    # necessarily the active page.  The active fit stores its
+                    # authoritative fixed height explicitly; using the stale
+                    # all-page hint here makes a short first page inherit a
+                    # taller inactive history page.
+                    active_height = tabs.property("_progtrack_active_tab_height")
+                    if active_height is None:
+                        active_height = tabs.height()
+                    tab_height = max(0, int(active_height))
 
                 # Sum fixed chrome (margins, save/action rows, etc.) while
                 # excluding the two independently sized vertical areas.  Do
@@ -17506,6 +17680,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 desired = max(260, fixed_height + tab_height + int(upper_target))
                 if max_height is not None:
                     desired = min(desired, max_height)
+                # Lower a minimum installed by a previous long tab before
+                # applying the current active-page result.  QDialog does not
+                # lower an old minimum when setMinimumHeight() is called with
+                # a smaller value unless the genuine shell floor is restored
+                # first.
+                dlg.setMinimumHeight(minimum_height_floor)
                 dlg.setMinimumHeight(int(desired))
                 dlg.updateGeometry()
                 dlg.adjustSize()
@@ -17522,11 +17702,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if tabs is not None and tabs.isHidden():
                     tabs.setMinimumHeight(0)
                     tabs.setMaximumHeight(0)
+                    tabs.setProperty("_progtrack_active_tab_height", 0)
                 elif tabs is not None:
                     tabs.setMaximumHeight(16777215)
                     page = tabs.currentWidget()
                     if page is None:
                         tabs.setFixedHeight(0)
+                        tabs.setProperty("_progtrack_active_tab_height", 0)
                     else:
                         page.ensurePolished()
                         if page.layout() is not None:
@@ -17536,25 +17718,44 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             int(page.minimumSizeHint().height()),
                         )
                         bar_h = max(1, int(tabs.tabBar().sizeHint().height()))
-                        tabs.setFixedHeight(max(32, page_h + bar_h + 6))
+                        active_height = max(32, page_h + bar_h + 6)
+                        tabs.setFixedHeight(active_height)
+                        tabs.setProperty("_progtrack_active_tab_height", active_height)
+                        tabs.updateGeometry()
                 fit_dialog_height()
                 fit_dialog_width()
             except (RuntimeError, AttributeError, TypeError):
                 return
 
+        fit_queued = False
+
+        def schedule_fit() -> None:
+            """Coalesce tab/section/content changes into one geometry pass."""
+            nonlocal fit_queued
+            if fit_queued:
+                return
+            fit_queued = True
+
+            def run_fit() -> None:
+                nonlocal fit_queued
+                fit_queued = False
+                fit_tabs()
+
+            QTimer.singleShot(0, run_fit)
+
         if tabs is not None:
-            tabs._progtrack_fit = fit_tabs
-        dlg._progtrack_fit_animal_tabs = fit_tabs
-        dlg._progtrack_refit_animal_dialog = fit_tabs
+            tabs._progtrack_fit = schedule_fit
+        dlg._progtrack_fit_animal_tabs = schedule_fit
+        dlg._progtrack_refit_animal_dialog = schedule_fit
         if tabs is not None:
-            tabs.currentChanged.connect(lambda _index: QTimer.singleShot(0, fit_tabs))
+            tabs.currentChanged.connect(lambda _index: schedule_fit())
         try:
             from Plugins.core.animal_dialog_sections import AnimalDialogSection
             for section in dlg.findChildren(AnimalDialogSection):
-                section.toggled.connect(lambda _expanded: QTimer.singleShot(0, fit_tabs))
+                section.toggled.connect(lambda _expanded: schedule_fit())
         except (ImportError, RuntimeError, AttributeError):
             pass
-        QTimer.singleShot(0, fit_tabs)
+        schedule_fit()
 
     @staticmethod
     def _request_animal_dialog_refit(dlg: QDialog) -> None:
@@ -21716,6 +21917,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         weights_outer.setContentsMargins(0, 0, 0, 0)
         weights_outer.addWidget(wt_scroll)
 
+        def refresh_weight_cap() -> None:
+            callback = getattr(wt_scroll, "_progtrack_recap", None)
+            if callable(callback):
+                callback()
+
         # existing weights
         existing_w = rec.get('gewicht', [])
         # Normalize to list of dicts {'datum': datetime, 'wert': float}
@@ -21804,7 +22010,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             itm = row.takeAt(0).widget()
                             if itm:
                                 itm.setParent(None)
+                        wt_layout.removeItem(row)
                         break
+                refresh_weight_cap()
 
             add_btn.clicked.connect(rm)
             row.addWidget(d_le, 1)
@@ -21820,6 +22028,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             else:
                 wt_layout.addLayout(row)
             wt_rows.append((d_le, v_le))
+            refresh_weight_cap()
 
         # seed with existing rows
         for w in sorted(norm_w, key=lambda t: t['datum'] or datetime.now()):
