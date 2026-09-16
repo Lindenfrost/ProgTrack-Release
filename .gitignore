@@ -29,6 +29,10 @@ matplotlib_cache/
 runtime_plot_test.*
 ProgTrackData/
 .windsurf/
+
+# Deployment-specific PostgreSQL CA/client certificate material.
+Plugins/core/backend/certificates/*
+!Plugins/core/backend/certificates/.gitkeep
 ProgTrack.v.0.1.0.zip
 progtrack_daten.lock
 tests/

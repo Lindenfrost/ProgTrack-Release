@@ -732,12 +732,11 @@ class PedigreeRouter:
 
         A direct sole-child route runs from the family marker centre to the
         animal marker centre.  The line is hidden underneath both markers, so
-        the centres must be separated by both marker half-heights plus a
-        small explicit visible margin.  Keeping this in one router helper
-        makes placement and validation agree in both vertical modes.
+        the centres must be separated by at least two data units.  Keeping
+        this fixed contract in one router helper makes placement and
+        validation agree in both vertical modes.
         """
-        marker_margin = max(0.02, self.route_clearance * 0.25)
-        return _MARKER_RADIUS + self.junction_clearance + marker_margin
+        return 2.0
 
     def validate_plan(
         self,
@@ -7279,6 +7278,13 @@ class PedigreeRouter:
                     (parent_y + child_y) / 2.0,
                 )
             return linear_junctions
+        # Family-junction recovery needs the same semantic distinction as the
+        # final validator: the marker is a hard geometry obstacle, while the
+        # rendered label is a soft presentation constraint. ``obstacles`` is
+        # intentionally still the complete node/label footprint for the
+        # initial candidate search; the separate marker map is used only by
+        # the late rail/marker recovery below.
+        marker_obstacles = self.marker_obstacles(positions)
         grouped: Dict[
             Tuple[float, float],
             List[Tuple[str, float, float, float, bool, float, float, float]],
@@ -7622,7 +7628,7 @@ class PedigreeRouter:
                 for candidate in (other_y - lane_gap, other_y + lane_gap):
                     if low_y <= candidate <= high_y:
                         candidate_ys.add(round(candidate, 7))
-            candidates: List[Point] = []
+            candidates: List[Tuple[Point, bool]] = []
             for candidate_y in sorted(candidate_ys):
                 candidate = (point[0], float(candidate_y))
                 if any(
@@ -7644,16 +7650,19 @@ class PedigreeRouter:
                     for other_id, other_point in nearby_lane_items
                 ):
                     continue
-                candidates.append(candidate)
+                candidates.append(
+                    (candidate, foreign_label_hit(candidate, excluded_node))
+                )
             if not candidates:
                 return point
             return min(
                 candidates,
-                key=lambda candidate: (
-                    abs(candidate[1] - point[1]),
-                    candidate[1],
+                key=lambda candidate_record: (
+                    candidate_record[1],
+                    abs(candidate_record[0][1] - point[1]),
+                    candidate_record[0][1],
                 ),
-            )
+            )[0]
 
         # Large pedigrees used to rescan every node obstacle and every placed
         # junction for every candidate point.  Keep the exact legacy scoring
@@ -7663,6 +7672,9 @@ class PedigreeRouter:
         obstacle_index: Optional[Dict[Tuple[int, int], List[Rect]]] = None
         placed_index: Optional[Dict[Tuple[int, int], List[Point]]] = None
         named_obstacle_index: Optional[
+            Dict[Tuple[int, int], List[Tuple[str, Rect]]]
+        ] = None
+        named_marker_index: Optional[
             Dict[Tuple[int, int], List[Tuple[str, Rect]]]
         ] = None
         if len(obstacles) > 256:
@@ -7679,6 +7691,10 @@ class PedigreeRouter:
                 obstacles,
                 cell_size=spatial_cell,
             )
+            named_marker_index = self._build_rect_spatial_index(
+                marker_obstacles,
+                cell_size=spatial_cell,
+            )
             placed_index = defaultdict(list)
 
         def foreign_obstacle_candidates(
@@ -7693,10 +7709,10 @@ class PedigreeRouter:
             The same exact rectangle predicate is retained, but large graphs
             use the already calibrated broad-phase index.
             """
-            if named_obstacle_index is None:
+            if named_marker_index is None:
                 return tuple(
                     (name, rect)
-                    for name, rect in obstacles.items()
+                    for name, rect in marker_obstacles.items()
                     if name != excluded_node
                 )
             radius = 0.04
@@ -7707,10 +7723,25 @@ class PedigreeRouter:
             found: Dict[str, Rect] = {}
             for ix in range(ix0, ix1 + 1):
                 for iy in range(iy0, iy1 + 1):
-                    for name, rect in named_obstacle_index.get((ix, iy), ()):
+                    for name, rect in named_marker_index.get((ix, iy), ()):
                         if name != excluded_node:
                             found[name] = rect
             return tuple(found.items())
+
+        def foreign_label_hit(
+            candidate: Point,
+            excluded_node: Optional[str],
+        ) -> bool:
+            """Return whether a candidate intersects a foreign label box.
+
+            Labels are not semantic obstacles for a family rail. They still
+            participate in deterministic candidate ranking so a label-clear
+            lane is preferred whenever one exists.
+            """
+            return any(
+                name != excluded_node and rect.contains(candidate, margin=0.04)
+                for name, rect in obstacles.items()
+            )
 
         def escape_foreign_junction_obstacles(
             family_id: str,
@@ -7720,20 +7751,19 @@ class PedigreeRouter:
             x_bounds: Optional[Tuple[float, float]],
             chronological_layout: bool,
         ) -> Point:
-            """Move a knot out of an unavoidable foreign label footprint.
+            """Move a knot out of an unavoidable foreign marker footprint.
 
             The node solver deliberately models the complete rendered label
-            rectangle. A family knot is a line anchor, however, and labels
-            are painted above lines. When a dense focused frame leaves no
-            collision-free point inside the normal vertical interpolation
-            corridor, keep the canonical X corridor and move the knot to the
-            nearest clear edge of the blocking label. This is only a
-            presentation fallback: animal Y coordinates stay untouched in a
-            chronological layout, and the topology/route shape is unchanged.
+            rectangle for its initial candidate search. A family knot is a
+            line anchor, however, and labels are painted above lines. Only a
+            foreign animal marker is a hard obstacle here; label overlap is
+            handled as a presentation preference by rail recovery. Animal Y
+            coordinates stay untouched in a chronological layout, and the
+            topology/route shape is unchanged.
             """
             _parents, _y_bounds, excluded_node = raw_metadata[family_id]
 
-            def foreign_hits(candidate: Point) -> bool:
+            def foreign_marker_hits(candidate: Point) -> bool:
                 return any(
                     rect.contains(candidate, margin=0.04)
                     for _name, rect in foreign_obstacle_candidates(
@@ -7741,7 +7771,7 @@ class PedigreeRouter:
                     )
                 )
 
-            if not foreign_hits(point):
+            if not foreign_marker_hits(point):
                 return point
 
             # Chronological animal rows are the hard date geometry. A
@@ -7782,7 +7812,7 @@ class PedigreeRouter:
                     <= x_bounds[1] + _EPSILON
                 ):
                     return False
-                if foreign_hits(candidate):
+                if foreign_marker_hits(candidate):
                     return False
                 return not any(
                     abs(candidate[0] - other[0]) < self.junction_clearance * 2.0
@@ -8720,12 +8750,14 @@ class PedigreeRouter:
     ) -> bool:
         """Allow canonical parent rails to meet at one shared animal port.
 
-        Multiple mating families may enter the same parent.  Their horizontal
-        shoulders can therefore meet the common vertical entry at the port
-        above that animal.  This is a bounded topological join, not a generic
-        crossing: both routes must be the canonical two-segment parent-entry
-        shape, the endpoint identity must match, and the intersection must be
-        the exact outer end of both terminal vertical entries.
+        Multiple mating families may enter the same parent. Their horizontal
+        shoulders may meet the common vertical entry at one exact port, and
+        their terminal vertical entries may merge into the shared marker. A
+        positive-length horizontal shoulder overlap is never such a join. This
+        is a bounded topological exception, not a generic crossing: both
+        routes must be the canonical two-segment parent-entry shape, the
+        endpoint identity must match, and an overlap must be terminal vertical
+        geometry that reaches the shared marker.
         """
         if relation == "none":
             return False
@@ -8764,19 +8796,19 @@ class PedigreeRouter:
         other_port = port_for(other_segments)
         if other_port is None:
             return False
-        if not _points_equal(current_port, other_port):
-            # Date-lane parents can enter one shared animal at different
-            # heights. Their terminal vertical entries may therefore overlap
-            # from the shared marker to the lower of the two ports even though
-            # the port coordinates are not identical. This is still one
-            # semantic parent connection, provided both complete routes keep
-            # the canonical two-segment shape and the overlap reaches only the
-            # shared marker. Arbitrary horizontal/child-route overlap remains
-            # invalid because it does not satisfy these structural predicates.
-            if relation != "overlap" or len(other_segments) != 2:
+        if relation == "overlap":
+            # ``_segment_relation`` has no single point for a collinear
+            # overlap. Only the terminal vertical entries may share a
+            # positive-length segment, and that shared segment must reach the
+            # real animal marker. In particular, never exempt horizontal
+            # parent shoulders merely because their complete routes terminate
+            # at the same endpoint.
+            if current.index != len(current_segments) - 1:
                 return False
-            other_terminal = other_segments[-1]
+            if not other_route or other.index != len(other_segments) - 1:
+                return False
             current_terminal = current_segments[-1]
+            other_terminal = other_segments[-1]
             if not (
                 abs(current_terminal[0][0] - current_terminal[1][0]) <= _EPSILON
                 and abs(other_terminal[0][0] - other_terminal[1][0]) <= _EPSILON
@@ -8789,22 +8821,14 @@ class PedigreeRouter:
             overlap = _segment_overlap(current.segment, other.segment)
             if overlap is None:
                 return False
-            if not any(
+            return any(
                 math.hypot(
                     overlap_point[0] - endpoint_position[0],
                     overlap_point[1] - endpoint_position[1],
                 )
                 <= _MARKER_TOLERANCE + _EPSILON
                 for overlap_point in overlap
-            ):
-                return False
-        if relation == "overlap":
-            # ``_segment_relation`` has no single point for a collinear
-            # overlap.  Once both complete canonical parent-entry routes
-            # terminate at the same shared animal port, their common
-            # horizontal shoulder or vertical terminal stub is one semantic
-            # connection and is safe to retain.
-            return _segment_overlap(current.segment, other.segment) is not None
+            )
         if point is None:
             return False
         return _points_equal(point, current_port)
