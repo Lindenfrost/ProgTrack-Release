@@ -83,7 +83,7 @@ RINGBEARER_SURGERY_DATES = {
 # this list in one place so Core and every domain payload are pruned by the
 # same rule.
 REMOVED_ANIMAL_NAMES = frozenset({
-    "Lindir", "Dana", "Bobby", "Echo",
+    "Lindir", "Dana", "Bobby", "Echo", "Kronar", "Fredi", "Cindy",
     "Andy", "Betta", "RoleProbe", "Test",
 })
 

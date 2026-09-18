@@ -394,7 +394,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QComboBox, QScrollArea, QFormLayout, QFrame, QDateEdit,
     QCheckBox, QWidget, QRadioButton, QButtonGroup, QSizePolicy, QSpacerItem,
     QTextEdit, QTextBrowser, QSplitter, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
-    QDialogButtonBox, QTabBar, QColorDialog, QMenuBar, QStyledItemDelegate, QStyleOptionViewItem,
+    QDialogButtonBox, QTabBar, QColorDialog, QMenu, QMenuBar, QStyledItemDelegate, QStyleOptionViewItem,
     QSpinBox, QProgressBar, QProgressDialog, QInputDialog, QWidgetAction, QToolButton
 )
 import math
@@ -4425,6 +4425,99 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         "steroid_track": "steroid_track_action",
     }
 
+    # Stable product ordering for the lower, checkable Tools-menu actions.
+    # These are plugin keys, never localized labels; the latter may change
+    # during a language rebuild.
+    _CHECKED_PLUGIN_MENU_GROUPS = (
+        ("animal_reports", "medi_track", "projects_track"),
+        ("cage_track", "heritage_track"),
+        ("flow_track", "steroid_track"),
+    )
+
+    _CHECKED_PLUGIN_MENU_LABELS = {
+        "animal_reports": ("menu.tools.animal_reports", "Animal Reports"),
+        "medi_track": ("menu.tools.medi_track", "Medi Track"),
+        "projects_track": ("menu.tools.projects_track", "Project Track"),
+        "cage_track": ("menu.tools.cage_track", "Cage Track"),
+        "heritage_track": ("menu.tools.heritage_track", "Heritage Track"),
+        "flow_track": ("menu.tools.flow_track", "Flow Track"),
+        "steroid_track": ("menu.tools.steroid_track", "Steroid Track"),
+    }
+
+    def _checked_plugin_menu_available(self, plugin_key: str) -> bool:
+        """Return whether a checked lower-menu plugin is installed/available."""
+        availability = {
+            "animal_reports": getattr(self, "reports_enabled", False),
+            "medi_track": getattr(self, "has_medi_track_plugin", False),
+            "projects_track": getattr(self, "has_projects_plugin", False),
+            "cage_track": getattr(self, "has_cage_track_plugin", False),
+            "heritage_track": getattr(self, "has_heritage_plugin", False),
+            "flow_track": getattr(self, "flow_track_enabled", False),
+            "steroid_track": getattr(self, "has_steroid_track_plugin", False),
+        }
+        return bool(availability.get(plugin_key, False))
+
+    def _ensure_checked_plugin_menu_action(self, plugin_key: str) -> QAction:
+        """Create or refresh one checked plugin action by stable plugin key."""
+        attr = self._PLUGIN_ACTION_ATTRS[plugin_key]
+        action = getattr(self, attr, None)
+        label_key, fallback = self._CHECKED_PLUGIN_MENU_LABELS[plugin_key]
+        label = self.messages.get(label_key, fallback)
+        if action is None:
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.toggled.connect(
+                lambda checked, key=plugin_key: self._toggle_plugin_enabled(key, checked)
+            )
+            setattr(self, attr, action)
+        else:
+            action.setText(label)
+            action.setCheckable(True)
+
+        desired_checked = plugin_key not in getattr(self, "_disabled_plugins", set())
+        if action.isChecked() != desired_checked:
+            action.blockSignals(True)
+            action.setChecked(desired_checked)
+            action.blockSignals(False)
+        self._style_plugin_action(plugin_key, desired_checked)
+        return action
+
+    def _rebuild_checked_plugin_menu(self, tools_menu: QMenu) -> None:
+        """Render the lower checked-plugin section in its canonical groups.
+
+        The helper is safe for both initial construction and a later rebuild:
+        existing QAction objects are detached and reused, while only the
+        section-owned separators are replaced.  The separator above this
+        section belongs to the utility/menu boundary and is intentionally
+        left untouched.
+        """
+        previous_menu = getattr(self, "_checked_plugin_menu", None)
+        if previous_menu is tools_menu:
+            for action in getattr(self, "_checked_plugin_menu_actions", []):
+                tools_menu.removeAction(action)
+            for separator in getattr(self, "_checked_plugin_menu_separators", []):
+                tools_menu.removeAction(separator)
+
+        actions = []
+        separators = []
+        for group in self._CHECKED_PLUGIN_MENU_GROUPS:
+            available = [
+                key for key in group
+                if self._checked_plugin_menu_available(key)
+            ]
+            if not available:
+                continue
+            if actions:
+                separators.append(tools_menu.addSeparator())
+            for plugin_key in available:
+                action = self._ensure_checked_plugin_menu_action(plugin_key)
+                tools_menu.addAction(action)
+                actions.append(action)
+
+        self._checked_plugin_menu = tools_menu
+        self._checked_plugin_menu_actions = actions
+        self._checked_plugin_menu_separators = separators
+
     def _detect_steroid_track_plugin(self) -> bool:
         """Steroid_track is considered installed when its __init__.py exists."""
         try:
@@ -4831,27 +4924,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.main_tabs.addTab(self.medi_track_tab_placeholder,
                               self.messages.get("tab.medi_track", "Medi Track"))
 
-        # Add to Tools menu if not already there
+        # Add to the canonical Tools-menu group if not already present.  The
+        # shared rebuild also handles a late Medi Track load without appending
+        # a duplicate action or losing the group separators.
         mb = self.menuBar()
         if mb:
             for action in mb.actions():
                 if action.text() == self.messages.get("menu.tools", "Tools"):
                     tools_menu = action.menu()
                     if tools_menu:
-                        # Check if already added
-                        already_added = any(
-                            a.text() == self.messages.get("menu.tools.medi_track", "Medi Track")
-                            for a in tools_menu.actions()
-                        )
-                        if not already_added:
-                            self.medi_track_action = QAction(
-                                self.messages.get("menu.tools.medi_track", "Medi Track"), self)
-                            self.medi_track_action.setCheckable(True)
-                            self.medi_track_action.setChecked(True)
-                            self.medi_track_action.toggled.connect(
-                                lambda c: self._toggle_plugin_enabled("medi_track", c))
-                            self._style_plugin_action("medi_track", True)
-                            tools_menu.addAction(self.medi_track_action)
+                        self._rebuild_checked_plugin_menu(tools_menu)
+                        self._refresh_role_restricted_tool_states()
                     break
 
         # Add File menu export option
@@ -6061,7 +6144,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         # ── Database section ─────────────────────────────────────────────────
         file_menu.addSection(self.messages.get("menu.file.section.database", "Database"))
-        save_db_action = QAction(self.messages.get("menu.file.save_database", "Save Database"), self)
+        save_db_action = QAction(self.messages.get("menu.file.save_database", "Save Backup"), self)
         save_db_action.triggered.connect(self._save_database)
         file_menu.addAction(save_db_action)
 
@@ -6162,62 +6245,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         tools_menu.addSeparator()
 
         # --- Bottom group: tab-based plugins with enable/disable toggle ---
-        # Italic = disabled, normal = enabled.
-        if self.reports_enabled:
-            self.animal_reports_action = QAction(self.messages.get("menu.tools.animal_reports", "Animal Reports"), self)
-            self.animal_reports_action.setCheckable(True)
-            self.animal_reports_action.setChecked("animal_reports" not in self._disabled_plugins)
-            self.animal_reports_action.toggled.connect(lambda c: self._toggle_plugin_enabled("animal_reports", c))
-            self._style_plugin_action("animal_reports", "animal_reports" not in self._disabled_plugins)
-            tools_menu.addAction(self.animal_reports_action)
-
-        if self.flow_track_enabled:
-            self.flow_track_action = QAction(self.messages.get("menu.tools.flow_track", "Flow Track"), self)
-            self.flow_track_action.setCheckable(True)
-            self.flow_track_action.setChecked("flow_track" not in self._disabled_plugins)
-            self.flow_track_action.toggled.connect(lambda c: self._toggle_plugin_enabled("flow_track", c))
-            self._style_plugin_action("flow_track", "flow_track" not in self._disabled_plugins)
-            tools_menu.addAction(self.flow_track_action)
-
-        if self.has_projects_plugin:
-            self.projects_track_action = QAction(self.messages.get("menu.tools.projects_track", "Project Track"), self)
-            self.projects_track_action.setCheckable(True)
-            self.projects_track_action.setChecked("projects_track" not in self._disabled_plugins)
-            self.projects_track_action.toggled.connect(lambda c: self._toggle_plugin_enabled("projects_track", c))
-            self._style_plugin_action("projects_track", "projects_track" not in self._disabled_plugins)
-            tools_menu.addAction(self.projects_track_action)
-
-        if self.has_heritage_plugin:
-            self.heritage_track_action = QAction(self.messages.get("menu.tools.heritage_track", "Heritage Track"), self)
-            self.heritage_track_action.setCheckable(True)
-            self.heritage_track_action.setChecked("heritage_track" not in self._disabled_plugins)
-            self.heritage_track_action.toggled.connect(lambda c: self._toggle_plugin_enabled("heritage_track", c))
-            self._style_plugin_action("heritage_track", "heritage_track" not in self._disabled_plugins)
-            tools_menu.addAction(self.heritage_track_action)
-
-        if getattr(self, 'has_cage_track_plugin', False):
-            self.cage_track_action = QAction(self.messages.get("menu.tools.cage_track", "Cage Track"), self)
-            self.cage_track_action.setCheckable(True)
-            self.cage_track_action.setChecked("cage_track" not in self._disabled_plugins)
-            self.cage_track_action.toggled.connect(lambda c: self._toggle_plugin_enabled("cage_track", c))
-            self._style_plugin_action("cage_track", "cage_track" not in self._disabled_plugins)
-            tools_menu.addAction(self.cage_track_action)
-
-        if getattr(self, 'has_medi_track_plugin', False):
-            self.medi_track_action = QAction(self.messages.get("menu.tools.medi_track", "Medi Track"), self)
-            self.medi_track_action.setCheckable(True)
-            self.medi_track_action.setChecked("medi_track" not in self._disabled_plugins)
-            self.medi_track_action.toggled.connect(lambda c: self._toggle_plugin_enabled("medi_track", c))
-            self._style_plugin_action("medi_track", "medi_track" not in self._disabled_plugins)
-            tools_menu.addAction(self.medi_track_action)
-
-        if getattr(self, 'has_steroid_track_plugin', False):
-            self.steroid_track_action = QAction(self.messages.get("menu.tools.steroid_track", "Steroid Track"), self)
-            self.steroid_track_action.setCheckable(True)
-            self.steroid_track_action.setChecked("steroid_track" not in self._disabled_plugins)
-            self.steroid_track_action.toggled.connect(lambda c: self._toggle_plugin_enabled("steroid_track", c))
-            self._style_plugin_action("steroid_track", "steroid_track" not in self._disabled_plugins)
-            tools_menu.addAction(self.steroid_track_action)
+        self._rebuild_checked_plugin_menu(tools_menu)
 
         self.setMenuBar(menubar)
         self._refresh_role_restricted_tool_states()
@@ -9362,12 +9390,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         ][:1]
         if not selected:
             return
-        self._dlg_change_sort(selected[0])
+        self._open_animal_editor_with_lease(
+            selected[0],
+            lambda animal, read_only=False: self._dlg_change_sort(
+                animal, read_only=read_only
+            ),
+            False,
+        )
 
     # ------------------------------------------------------------
     # New: Minimal dialog to change animal's 'sort' (role/category)
     # ------------------------------------------------------------
-    def _dlg_change_sort(self, animal_name: str):
+    def _dlg_change_sort(self, animal_name: str, read_only: bool = False):
         if not self._master_can('core.edit_animal_role'):
             self._show_permission_denied()
             return
@@ -9418,10 +9452,24 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         lay.addWidget(btns)
         btns.accepted.connect(dlg.accept)
         btns.rejected.connect(dlg.reject)
+        if read_only:
+            cmb.setEnabled(False)
+            ok_button = btns.button(QDialogButtonBox.StandardButton.Ok)
+            if ok_button is not None:
+                ok_button.setEnabled(False)
         # finalize width so constants take effect
         self._apply_dialog_width(dlg, width=360, minimum_height=0)
 
         if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        if read_only:
+            return
+
+        # Re-check authorization at the command boundary after the modal
+        # interaction, before mutating the in-memory record or persisting it.
+        if not self._master_can('core.edit_animal_role'):
+            self._show_permission_denied()
             return
 
         # Get the selected role code (stored as userData in the combobox)
@@ -15745,6 +15793,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._plot_x_viewport = None
         self._on_select()
 
+    @staticmethod
+    def _plot_empty_double_click(event, is_empty: bool) -> bool:
+        """Return whether an empty Plots surface received a left double-click."""
+        return bool(
+            is_empty
+            and getattr(event, "button", None) == 1
+            and bool(getattr(event, "dblclick", False))
+            and getattr(event, "inaxes", None) is not None
+        )
+
     def _sync_plot_action_button_widths(self) -> None:
         """Keep the right-aligned plot action stack equally wide."""
         buttons = [
@@ -16873,6 +16931,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             artists += list(getattr(axis, "collections", ()))
             artists += list(getattr(axis, "patches", ()))
             artists += list(getattr(axis, "texts", ()))
+            # Tooltip/highlight overlays live on the figure or are created as
+            # temporary scatter artists, so they are not necessarily present
+            # in the axes artist collections above.
+            for overlay in (
+                getattr(self, "_annotation", None),
+                getattr(self, "_highlight_scatter", None),
+                *(getattr(self, "sperm_overlay_dots", []) or []),
+            ):
+                if overlay is not None:
+                    artists.append(overlay)
             legend = axis.get_legend() if hasattr(axis, "get_legend") else None
             if legend is not None:
                 artists.append(legend)
@@ -17129,6 +17197,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # 7.18.13 Click handler for tooltips/annotations
         # ------------------------
         def on_click(event):
+            nonlocal _pan_active, _pan_start_x, _pan_axis, _pan_button
+            empty_double_click = self._plot_empty_double_click(
+                event, _plot_press_is_empty(event)
+            )
             # Accept clicks even when they fall just outside the axes.
             # FSH/Prog triangles are drawn with ax.get_xaxis_transform() at TRI_Y<0,
             # so event.inaxes can be None when clicking them.
@@ -17153,6 +17225,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception as exc:
                     logging.debug("Failed to remove sperm overlay dot: %s", exc)
             self.sperm_overlay_dots.clear()
+
+            # Match Heritage Track's empty-space deselection gesture.  The
+            # press must be classified against the complete artist set before
+            # clearing selection, so markers, lines, legends, annotations,
+            # and overlays keep their existing click behavior.
+            if empty_double_click:
+                _pan_active = False
+                _pan_start_x = None
+                _pan_axis = None
+                _pan_button = None
+                self._unselect_all_plots()
+                return
 
             closest = None
             min_px = float('inf')
@@ -17213,7 +17297,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and event.inaxes
                 and _plot_press_is_empty(event)
             ):
-                nonlocal _pan_active, _pan_start_x, _pan_axis, _pan_button
                 _pan_active = True
                 _pan_start_x = event.xdata
                 _pan_axis = event.inaxes
@@ -19611,7 +19694,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             target_root = QFileDialog.getExistingDirectory(
                 self,
-                self.messages.get("file_dialog.save_database.title", "Save Database"),
+                self.messages.get("file_dialog.save_database.title", "Save Backup"),
                 "",
                 QFileDialog.Option.ShowDirsOnly,
             )
@@ -19653,7 +19736,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         except Exception as e:
             # Handle errors
             self._show_message("error.save_database.failed", error=str(e))
-            logging.error(f"Failed to save database: {e}")
+            logging.error(f"Failed to save backup: {e}")
 
     def _iter_installed_plugin_dirs(self) -> List[Path]:
         """Return all installed plugin directories (manifest.json at top level)."""
@@ -20161,7 +20244,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             file_menu.addAction(medi_export_action)
 
         file_menu.addSection(self.messages.get("menu.file.section.database", "Database"))
-        save_db_action = QAction(self.messages.get("menu.file.save_database", "Save Database"), self)
+        save_db_action = QAction(self.messages.get("menu.file.save_database", "Save Backup"), self)
         save_db_action.triggered.connect(self._save_database)
         file_menu.addAction(save_db_action)
 
@@ -20310,84 +20393,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         tools_menu.addSeparator()
 
         # --- Bottom group: tab-based plugins with enable/disable toggle ---
-        # Italic = disabled, normal = enabled.
-        if self.reports_enabled:
-            if hasattr(self, "animal_reports_action"):
-                action = self.animal_reports_action
-                action.setText(self.messages.get("menu.tools.animal_reports", "Animal Reports"))
-            else:
-                action = QAction(self.messages.get("menu.tools.animal_reports", "Animal Reports"), self)
-                action.setCheckable(True)
-                action.setChecked("animal_reports" not in self._disabled_plugins)
-                action.toggled.connect(lambda c: self._toggle_plugin_enabled("animal_reports", c))
-                self.animal_reports_action = action
-            self._style_plugin_action("animal_reports", "animal_reports" not in self._disabled_plugins)
-            tools_menu.addAction(action)
-
-        if self.flow_track_enabled:
-            if hasattr(self, "flow_track_action"):
-                action = self.flow_track_action
-                action.setText(self.messages.get("menu.tools.flow_track", "Flow Track"))
-            else:
-                action = QAction(self.messages.get("menu.tools.flow_track", "Flow Track"), self)
-                action.setCheckable(True)
-                action.setChecked("flow_track" not in self._disabled_plugins)
-                action.toggled.connect(lambda c: self._toggle_plugin_enabled("flow_track", c))
-                self.flow_track_action = action
-            self._style_plugin_action("flow_track", "flow_track" not in self._disabled_plugins)
-            tools_menu.addAction(action)
-
-        if self.has_projects_plugin:
-            if hasattr(self, "projects_track_action"):
-                action = self.projects_track_action
-                action.setText(self.messages.get("menu.tools.projects_track", "Project Track"))
-            else:
-                action = QAction(self.messages.get("menu.tools.projects_track", "Project Track"), self)
-                action.setCheckable(True)
-                action.setChecked("projects_track" not in self._disabled_plugins)
-                action.toggled.connect(lambda c: self._toggle_plugin_enabled("projects_track", c))
-                self.projects_track_action = action
-            self._style_plugin_action("projects_track", "projects_track" not in self._disabled_plugins)
-            tools_menu.addAction(action)
-
-        if self.has_heritage_plugin:
-            if hasattr(self, "heritage_track_action"):
-                action = self.heritage_track_action
-                action.setText(self.messages.get("menu.tools.heritage_track", "Heritage Track"))
-            else:
-                action = QAction(self.messages.get("menu.tools.heritage_track", "Heritage Track"), self)
-                action.setCheckable(True)
-                action.setChecked("heritage_track" not in self._disabled_plugins)
-                action.toggled.connect(lambda c: self._toggle_plugin_enabled("heritage_track", c))
-                self.heritage_track_action = action
-            self._style_plugin_action("heritage_track", "heritage_track" not in self._disabled_plugins)
-            tools_menu.addAction(action)
-
-        if getattr(self, 'has_cage_track_plugin', False):
-            if hasattr(self, "cage_track_action"):
-                action = self.cage_track_action
-                action.setText(self.messages.get("menu.tools.cage_track", "Cage Track"))
-            else:
-                action = QAction(self.messages.get("menu.tools.cage_track", "Cage Track"), self)
-                action.setCheckable(True)
-                action.setChecked("cage_track" not in self._disabled_plugins)
-                action.toggled.connect(lambda c: self._toggle_plugin_enabled("cage_track", c))
-                self.cage_track_action = action
-            self._style_plugin_action("cage_track", "cage_track" not in self._disabled_plugins)
-            tools_menu.addAction(action)
-
-        if getattr(self, 'has_steroid_track_plugin', False):
-            if hasattr(self, "steroid_track_action"):
-                action = self.steroid_track_action
-                action.setText(self.messages.get("menu.tools.steroid_track", "Steroid Track"))
-            else:
-                action = QAction(self.messages.get("menu.tools.steroid_track", "Steroid Track"), self)
-                action.setCheckable(True)
-                action.setChecked("steroid_track" not in self._disabled_plugins)
-                action.toggled.connect(lambda c: self._toggle_plugin_enabled("steroid_track", c))
-                self.steroid_track_action = action
-            self._style_plugin_action("steroid_track", "steroid_track" not in self._disabled_plugins)
-            tools_menu.addAction(action)
+        self._rebuild_checked_plugin_menu(tools_menu)
 
         self._refresh_role_restricted_tool_states()
 
@@ -26008,8 +26014,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # storage and logic stay independent of the localized label.
             role_code = role_cb.currentData() or Role.SPENDER.value
             self._save_trace("female_like.save.role_read", new_name=new_name, role_code=role_code)
+            role_changed = (
+                not creating
+                and canonical_role_value(
+                    self._animal_role_value(rec), default=Role.UNKNOWN.value
+                )
+                != canonical_role_value(role_code, default=Role.UNKNOWN.value)
+            )
+            if role_changed and not self._master_can('core.edit_animal_role'):
+                # Keep the command boundary authoritative even if a caller
+                # changes the combo's userData or invokes the save callback
+                # directly. The dialog remains open and no role-transition
+                # cleanup or persistence is reached.
+                self._show_permission_denied()
+                return
             # role change cleanups
-            if not creating and self._animal_role_value(rec) != role_code:
+            if role_changed:
                 if role_code == Role.AMME.value and event_entries(rec, 'surgery'):
                     self._show_message(
                         self.messages.get('warning.title', 'Warning'),
@@ -26412,8 +26432,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             ],
             'core.edit_animal_housing': [_cage_addr_group, _heritage_group],
             'core.edit_animal_measurements': [gewicht_tab, _events_tab],
+            ('core.edit_animal_research_data' if creating
+             else 'core.edit_animal_role'): [role_cb],
             'core.edit_animal_research_data': [
-                _prog_tab, role_cb, genotype_le, ref_w_le,
+                _prog_tab, role_cb if creating else None, genotype_le, ref_w_le,
                 maxop_le, maxe_le, rec_le, maxpr_le, maxb_le,
                 maxm_le, maxp_le, maxfsh_le,
             ] + _pdg_extra,
@@ -26439,9 +26461,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
           5 = Versuchstier (💡)
           6 = Alle (Sortierung ändern)
         """
-        can_edit     = self._master_can('core.edit_animal_core')
+        can_edit = self._master_can('core.edit_animal_core')
+        can_role_edit = self._master_can('core.edit_animal_role')
         can_readonly = self._master_can('core.open_readonly_dialogs')
-        if not can_edit and not can_readonly:
+        if not can_edit and not can_role_edit and not can_readonly:
             self._show_permission_denied()
             return
         read_only = not can_edit
@@ -26483,10 +26506,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         all_idx = self._all_category_tab_index()
         if idx == all_idx:
             self._open_animal_editor_with_lease(
-                name, lambda animal, read_only=False: self._dlg_change_sort(animal),
+                name,
+                lambda animal, read_only=False: self._dlg_change_sort(
+                    animal, read_only=read_only
+                ),
                 read_only,
             )
             return
+        # A role-only account may enter the female editor because it is the
+        # current Edit Animal path that exposes the persisted role selector.
+        # Other category editors have no role selector and must remain
+        # read-only for such an account; their field-level permissions are not
+        # widened by the role-change permission.
+        if not can_edit and can_role_edit and idx != 0:
+            read_only = True
         custom_idx = idx - 6
         custom_values = getattr(self, "_category_custom_role_values", [])
         if 0 <= custom_idx < len(custom_values):

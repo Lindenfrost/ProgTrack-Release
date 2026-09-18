@@ -52,3 +52,6 @@ Plugins/Master_Track/sessions/*.json
 
 # Local immutable release backups (never package or commit).
 archive/
+
+# Generated seed scenario coverage report.
+Resources/Seed/SCENARIO_COVERAGE.md

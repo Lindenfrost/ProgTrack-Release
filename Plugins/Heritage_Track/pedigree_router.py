@@ -175,6 +175,11 @@ class RoutePlan:
     # makes the decision observable and prevents downstream consumers from
     # inferring a second mode from a differently shaped focus set.
     display_mode: str = LAYOUT_MODE_OVERVIEW
+    # Vertical layout semantics are part of the accepted geometry contract.
+    # They must survive the immutable render-cache round trip so validation of
+    # a Chronological frame does not silently fall back to the
+    # Partner-normalized clearance rules.
+    vertical_layout_mode: str = "partner_normalized"
     # Family junctions supplied by the user are authoritative anchors. Their
     # coordinates must survive automatic placement/recovery unchanged; route
     # gaps are still recomputed from the resulting geometry.
@@ -491,6 +496,9 @@ class PedigreeRouter:
             unresolved=sorted(set(unresolved)),
             route_obstacle_hits=sorted(set(route_obstacle_hits)),
             display_mode=layout_mode,
+            vertical_layout_mode=(
+                "chronological" if chronological else "partner_normalized"
+            ),
             manual_family_ids={
                 str(family_id)
                 for family_id in (manual_family_positions or {})
@@ -727,16 +735,18 @@ class PedigreeRouter:
         child = float(child_x)
         return left + _EPSILON < child < right - _EPSILON
 
-    def _single_child_leg_clearance(self) -> float:
+    def _single_child_leg_clearance(self, *, chronological: bool = False) -> float:
         """Return the minimum centre distance for a visible child leg.
 
         A direct sole-child route runs from the family marker centre to the
         animal marker centre.  The line is hidden underneath both markers, so
-        the centres must be separated by at least two data units.  Keeping
-        this fixed contract in one router helper makes placement and
-        validation agree in both vertical modes.
+        the centres must be separated by a mode-specific automatic floor.
+        Chronological Y coordinates are fixed by birth date; its floor is
+        therefore 1.0 data unit, while Partner-normalized geometry retains
+        the 2.0-unit floor.  Keeping this contract in one router helper makes
+        placement and validation agree in both vertical modes.
         """
-        return 2.0
+        return 1.0 if chronological else 2.0
 
     def validate_plan(
         self,
@@ -861,7 +871,11 @@ class PedigreeRouter:
                             abs(child_x - midpoint),
                         )
                     child_route = endpoint_routes.get(visible_children[0], [])
-                    if _path_length(child_route) < self._single_child_leg_clearance() - _EPSILON:
+                    if _path_length(child_route) < self._single_child_leg_clearance(
+                        chronological=str(
+                            getattr(plan, "vertical_layout_mode", "partner_normalized")
+                        ).strip().casefold() == "chronological"
+                    ) - _EPSILON:
                         problems.append(
                             f"{family_id}: single-child route has no marker-clear leg"
                         )
@@ -7908,7 +7922,9 @@ class PedigreeRouter:
                 # but lower/raise its child-facing edge by a small explicit
                 # marker margin before the free-point search.
                 child_y = positions[child][1]
-                child_leg_clearance = self._single_child_leg_clearance()
+                child_leg_clearance = self._single_child_leg_clearance(
+                    chronological=chronological
+                )
                 if child_y >= parent_y:
                     child_side_limit = child_y - child_leg_clearance
                     y_bounds = (
@@ -8903,6 +8919,12 @@ def _path_length(path: Sequence[Point]) -> float:
 
 
 def _has_parent_entry_shape(segments: Sequence[Segment]) -> bool:
+    if len(segments) == 1:
+        # A fixed chronological Y coordinate can put the family junction and
+        # a parent on the same row.  The zero-length vertical leg is removed
+        # by path simplification, leaving one valid horizontal parent route.
+        segment = segments[0]
+        return abs(segment[0][1] - segment[1][1]) <= _EPSILON
     if len(segments) < 2:
         return False
     first, last = segments[0], segments[-1]

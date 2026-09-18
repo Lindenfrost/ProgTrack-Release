@@ -153,6 +153,7 @@ class FrozenRoutePlan:
     last_junction_gap_obstacles: Mapping[str, Any] = field(default_factory=dict)
     route_obstacle_hits: Tuple[str, ...] = ()
     layout_diagnostics: Tuple[str, ...] = ()
+    vertical_layout_mode: str = "partner_normalized"
     manual_family_ids: FrozenSet[str] = frozenset()
 
     def __post_init__(self) -> None:
@@ -210,6 +211,9 @@ class FrozenRoutePlan:
             last_junction_gap_obstacles=dict(getattr(plan, "last_junction_gap_obstacles", {})),
             route_obstacle_hits=tuple(plan.route_obstacle_hits),
             layout_diagnostics=tuple(getattr(plan, "layout_diagnostics", ())),
+            vertical_layout_mode=str(
+                getattr(plan, "vertical_layout_mode", "partner_normalized")
+            ),
             manual_family_ids=frozenset(
                 getattr(plan, "manual_family_ids", set())
             ),
@@ -285,6 +289,7 @@ class FrozenRoutePlan:
             last_junction_gap_obstacles=dict(self.last_junction_gap_obstacles),
             route_obstacle_hits=list(self.route_obstacle_hits),
             layout_diagnostics=list(self.layout_diagnostics),
+            vertical_layout_mode=self.vertical_layout_mode,
             manual_family_ids=set(self.manual_family_ids),
         )
 
