@@ -165,7 +165,7 @@ class AnimalReportsWidget(QMainWindow):
         """Initialize the user interface with the new layout."""
         try:
             # Set window properties
-            self.setWindowTitle(self._get_message('plugin.animal_reports.title', 'Animal Report'))
+            self.setWindowTitle(self._get_message('plugin.animal_reports.title', 'Animal Reports'))
             self.setMinimumSize(1200, 800)
             
             # Create main widget and layout
@@ -1346,7 +1346,7 @@ class AnimalReportsWidget(QMainWindow):
             logger.debug(f"Updating details for animal: {animal_name}")
             
             # Update the window title to show the current animal
-            self.setWindowTitle(f"{self._get_message('plugin.animal_reports.title', 'Animal Report')} - {animal_name}")
+            self.setWindowTitle(f"{self._get_message('plugin.animal_reports.title', 'Animal Reports')} - {animal_name}")
             
             # Get the animal data
             animals_dict = self._get_animals_dict(self.data)
@@ -1474,7 +1474,7 @@ class AnimalReportsWidget(QMainWindow):
         try:
             # Update window title
             display_name = self._display_animal_name(self.animal_name, self.current_animal_data)
-            self.setWindowTitle(f"{self._get_message('plugin.animal_reports.title', 'Animal Report')} - {display_name}")
+            self.setWindowTitle(f"{self._get_message('plugin.animal_reports.title', 'Animal Reports')} - {display_name}")
             
             # Update details table
             if hasattr(self, 'details_table') and self._is_widget_valid(self.details_table):

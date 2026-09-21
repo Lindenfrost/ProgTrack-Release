@@ -6,6 +6,7 @@ import copy
 import json
 from datetime import datetime
 from typing import Any, Mapping
+from uuid import uuid4
 
 from ..animal_identity import (
     animal_base_name,
@@ -105,7 +106,7 @@ class AnimalService:
         with self.adapter.transaction() as connection:
             rows = _fetchall(
                 connection,
-                "SELECT ipid,archived,record_json FROM animals ORDER BY ipid",
+                "SELECT ipid,archived,role_id,record_json FROM animals ORDER BY ipid",
             )
             settings_row = _fetchone(
                 connection,
@@ -120,11 +121,13 @@ class AnimalService:
             )
             event_rows = _fetchall(
                 connection,
-                "SELECT animal_ipid,payload_json FROM animal_events "
+                "SELECT event_id,animal_ipid,event_type,occurred_at,payload_json "
+                "FROM animal_events "
                 "ORDER BY animal_ipid,occurred_at,event_id",
             )
         animals: dict[str, Any] = {}
         archived: dict[str, Any] = {}
+        animal_roles: dict[str, str] = {}
         for row in rows:
             data = self.adapter.row_to_dict(row)
             payload = data["record_json"]
@@ -132,6 +135,9 @@ class AnimalService:
             for field in MEASUREMENT_FIELDS.values():
                 record.setdefault(field, [])
             record.setdefault("events", [])
+            animal_roles[str(data["ipid"])] = str(
+                record.get("rolle") or data.get("role_id") or "unknown"
+            )
             (archived if bool(data["archived"]) else animals)[data["ipid"]] = record
         all_records = {**animals, **archived}
         for row in measurement_rows:
@@ -148,9 +154,23 @@ class AnimalService:
             record = all_records.get(str(data["animal_ipid"]))
             if record is not None:
                 payload = data["payload_json"]
-                record["events"].append(
+                event = dict(
                     payload if isinstance(payload, dict) else loads(payload, {})
                 )
+                # The normalized table is authoritative for both identity and
+                # type. Keep these in the canonical animal snapshot so every
+                # editor, import/update path, and plot sees the same record.
+                event["event_id"] = str(data["event_id"])
+                event["typ"] = str(data["event_type"])
+                event.setdefault(
+                    "recorded_role",
+                    animal_roles.get(str(data["animal_ipid"]), "unknown"),
+                )
+                event.pop("event_type", None)
+                event.pop("date", None)
+                if "datum" not in event:
+                    event["datum"] = data.get("occurred_at")
+                record["events"].append(event)
         settings: dict[str, Any] = {}
         if settings_row is not None:
             raw = (
@@ -239,7 +259,8 @@ class AnimalService:
                     )
             existing_rows = _fetchall(
                 connection,
-                "SELECT ipid,name,species,birth_date,origin,revision FROM animals",
+                "SELECT ipid,name,species,birth_date,origin,role_id,record_json,revision "
+                "FROM animals",
             )
             existing = {
                 self.adapter.row_to_dict(row)["ipid"]: self.adapter.row_to_dict(row)
@@ -263,7 +284,19 @@ class AnimalService:
                 events = list(record.pop("events", []) or [])
                 role_id = str(record.get("rolle") or record.get("role_id") or "unknown")
                 previous = existing.get(ipid)
+                previous_role = ""
                 if previous:
+                    previous_payload = previous.get("record_json")
+                    previous_record = (
+                        previous_payload
+                        if isinstance(previous_payload, Mapping)
+                        else loads(previous_payload or "{}", {})
+                    )
+                    previous_role = str(
+                        (previous_record.get("rolle") if isinstance(previous_record, Mapping) else "")
+                        or previous.get("role_id")
+                        or "unknown"
+                    )
                     for field in IDENTITY_FIELDS:
                         previous_value = str(previous[field])
                         new_value = str(identity[field])
@@ -346,11 +379,18 @@ class AnimalService:
                                 timestamp,
                             ),
                         )
-                _execute(
+                existing_event_rows = _fetchall(
                     connection,
-                    f"DELETE FROM animal_events WHERE animal_ipid={mark}",
+                    "SELECT event_id,event_type,created_at,payload_json FROM animal_events "
+                    f"WHERE animal_ipid={mark}",
                     (ipid,),
                 )
+                existing_events = {
+                    str(self.adapter.row_to_dict(row)["event_id"]):
+                    self.adapter.row_to_dict(row)
+                    for row in existing_event_rows
+                }
+                incoming_event_ids: set[str] = set()
                 for index, event in enumerate(events):
                     if not isinstance(event, Mapping):
                         continue
@@ -360,26 +400,109 @@ class AnimalService:
                     if not occurred_at:
                         continue
                     event_type = str(
-                        event.get("typ") or event.get("type") or "event"
-                    )
-                    event_id = deterministic_record_id(
-                        "event", ipid, event_type, occurred_at, dumps(event), index
-                    )
+                        event.get("typ") or event.get("event_type")
+                        or event.get("type") or ""
+                    ).strip()
+                    if not event_type:
+                        raise ValidationError("Animal event type cannot be empty.")
+                    event_id = str(event.get("event_id") or "").strip()
+                    if not event_id:
+                        event_id = uuid4().hex
+                    if event_id in incoming_event_ids:
+                        raise ValidationError(
+                            f"Duplicate event identity in animal {ipid}: {event_id}"
+                        )
+                    incoming_event_ids.add(event_id)
+
+                    previous_event = existing_events.get(event_id)
+                    payload = dict(event)
+                    if previous_event is not None:
+                        previous_type = str(previous_event["event_type"] or "")
+                        if previous_type.casefold() != event_type.casefold():
+                            raise ConflictError(
+                                "A saved animal event's type is immutable; "
+                                f"event {event_id} is {previous_type!r}, not {event_type!r}."
+                            )
+                        previous_payload = previous_event.get("payload_json")
+                        previous_event_payload = (
+                            previous_payload
+                            if isinstance(previous_payload, Mapping)
+                            else loads(previous_payload or "{}", {})
+                        )
+                        previous_recorded_role = str(
+                            previous_event_payload.get("recorded_role")
+                            if isinstance(previous_event_payload, Mapping) else ""
+                        ).strip() or previous_role
+                        submitted_recorded_role = str(
+                            payload.get("recorded_role") or ""
+                        ).strip()
+                        if (
+                            submitted_recorded_role
+                            and previous_recorded_role
+                            and submitted_recorded_role.casefold()
+                            != previous_recorded_role.casefold()
+                        ):
+                            raise ConflictError(
+                                "A saved animal event's recording role is immutable; "
+                                f"event {event_id} belongs to {previous_recorded_role!r}."
+                            )
+                        payload["recorded_role"] = (
+                            previous_recorded_role or submitted_recorded_role or role_id
+                        )
+                    else:
+                        owner = _fetchone(
+                            connection,
+                            "SELECT animal_ipid FROM animal_events "
+                            f"WHERE event_id={mark}",
+                            (event_id,),
+                        )
+                        if owner is not None:
+                            owner_data = self.adapter.row_to_dict(owner)
+                            raise ConflictError(
+                                f"Event identity {event_id} already belongs to "
+                                f"animal {owner_data['animal_ipid']}."
+                            )
+                        payload["recorded_role"] = str(
+                            payload.get("recorded_role") or role_id
+                        )
+
+                    payload["event_id"] = event_id
+                    payload["typ"] = event_type
+                    payload.pop("event_type", None)
+                    payload.pop("type", None)
+                    payload.pop("date", None)
+                    payload_json = dumps(payload)
+                    if previous_event is not None:
+                        _execute(
+                            connection,
+                            "UPDATE animal_events SET occurred_at="
+                            f"{mark},payload_json={json_mark} WHERE event_id={mark} "
+                            f"AND animal_ipid={mark}",
+                            (occurred_at, payload_json, event_id, ipid),
+                        )
+                    else:
+                        _execute(
+                            connection,
+                            "INSERT INTO animal_events("
+                            "event_id,animal_ipid,event_type,occurred_at,payload_json,"
+                            "created_at) VALUES("
+                            + ",".join([mark] * 4 + [json_mark, mark])
+                            + ")",
+                            (
+                                event_id,
+                                ipid,
+                                event_type,
+                                occurred_at,
+                                payload_json,
+                                timestamp,
+                            ),
+                        )
+                for removed_event_id in set(existing_events) - incoming_event_ids:
                     _execute(
                         connection,
-                        "INSERT INTO animal_events("
-                        "event_id,animal_ipid,event_type,occurred_at,payload_json,"
-                        "created_at) VALUES("
-                        + ",".join([mark] * 4 + [json_mark, mark])
-                        + ")",
-                        (
-                            event_id,
-                            ipid,
-                            event_type,
-                            occurred_at,
-                            dumps(dict(event)),
-                            timestamp,
-                        ),
+                        "DELETE FROM animal_events WHERE event_id="
+                        f"{mark} AND animal_ipid={mark}",
+                        (removed_event_id, ipid),
                     )
             settings = dumps(snapshot.get("settings", {}))
             if self.adapter.dialect == "sqlite":

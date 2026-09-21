@@ -361,13 +361,13 @@ The Version column below is taken from each shipped plugin's `manifest.json`; th
 | Animal Reports | `0.2.1` | Main tab | Monthly reports, locked/manual lines, signatures, and PDF/XLSX export. |
 | Medi Track | `0.2.1` | Main tab | Medical history, status filters, treatment/observation records, documents, and PDF/XLSX exports. Multi-animal File-menu export shows determinate progress, supports cancellation between atomic outputs, and reports exactly which valid files remain. |
 | Surgery Planner (OP Planner) | `0.2.1` | Dialog | Surgery and embryo-transfer planning, recovery rules, blocked days, and export. |
-| Embryo Tracker | `0.2.1` | Dialog | Gestation-day prediction from ultrasound measurements. |
+| Embryo Track | `0.2.1` | Dialog | Gestation-day prediction from ultrasound measurements. |
 | PdG to Progesterone Converter | `0.2.1` | Dialog | Per-animal PdG-to-progesterone model fitting. |
 | Flow Track | `0.2.1` | Main tab | Embryo flow between donors, surrogates, and freezer inventory. |
 | Heritage Track | `0.2.3` | Main tab | Pedigree graphs, family nodes, kinship, inbreeding, genotype annotations, complex-family routing, and selection-scoped layout persistence. |
 | Cage Track | `0.2.1` | Main tab | Building → Unit → Room → Cage hierarchy, placement, movements, inspections, and PDF export. It projects the complete animal-list selection into one deterministic building, highlights matching occupants, and remembers each signed-in user's inspection-table sort. |
 | Sample Track | `0.2.1` | Window | Organ/biological samples, aliquots, linked files, filters, and PDF export. |
-| Projects Track | `0.2.1` | Sidebar and tab | Project/species visibility, project history, IACUC/AWO assignment, documents/SOPs, and experiment state. Each project has a localized `Draft`, `Active`, or `Closed` lifecycle state; lifecycle and archive state are independent. |
+| Project Track | `0.2.1` | Sidebar and tab | Project/species visibility, project history, IACUC/AWO assignment, documents/SOPs, and experiment state. Each project has a localized `Draft`, `Active`, or `Closed` lifecycle state; lifecycle and archive state are independent. |
 | Network Track | `0.2.1` | Window | Backend-backed team chat with polling and optional notification sounds. |
 
 ### Heritage Track

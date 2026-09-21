@@ -142,7 +142,7 @@
   "embryo_track.diagnostics.button.close": "Close",
   "embryo_track.error.diagnostics_failed": "Failed to show diagnostics: {error}",
   "embryo_track.error.load_reference": "Failed to load reference data: {error}",
-  "embryo_track.error.missing_scipy": "The 'scipy' library is required for Embryo Tracker predictions.\n\nPlease install it using:\npip install scipy",
+  "embryo_track.error.missing_scipy": "The 'scipy' library is required for Embryo Track predictions.\n\nPlease install it using:\npip install scipy",
   "embryo_track.warn.no_measurements": "Please enter at least one measurement (COL or TTL)",
   "embryo_track.error.no_baseline_model": "No baseline model available (need twin/2 embryo reference data)",
   "embryo_track.warn.col_too_small": "COL measurement ({value} mm) is very small.\nEarly-stage embryos cannot be reliably measured via ultrasound.\nPrediction accuracy is LOW.",

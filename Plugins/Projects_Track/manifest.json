@@ -1,6 +1,6 @@
 {
   "name": "Projects_Track",
-  "display_name": "Projects Track",
+  "display_name": "Project Track",
   "version": "0.2.1",
   "description": "Project-based animal filtering plugin. Adds sidebar tabs that group animals by their project assignment, enabling quick switching between project views. Caches project assignments for fast startup and updates automatically when animal data changes.",
   "author": "DLL",

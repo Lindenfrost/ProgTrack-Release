@@ -54,6 +54,7 @@ import platform
 import calendar
 import html
 import shutil
+from uuid import uuid4
 from datetime import date, datetime, timedelta
 from enum import Enum
 from pathlib import Path
@@ -333,6 +334,171 @@ def event_entries(record: Dict[str, Any], event_type: str) -> List[Dict[str, Any
         actual = str(event.get("typ") or event.get("event_type") or "").strip().casefold()
         if actual == wanted:
             result.append(event)
+    return result
+
+
+def event_matches_recording_role(
+    event: Dict[str, Any], role: str, *, fallback_role: Optional[str] = None
+) -> bool:
+    """Whether an event belongs in a role-specific quota/statistic.
+
+    Historical event rendering deliberately ignores this predicate.  It is
+    only for counters whose meaning is tied to the animal's current role.
+    Older records are attributed to their stored role until persistence binds
+    an explicit ``recorded_role`` value.
+    """
+    if not isinstance(event, dict):
+        return False
+    recorded_role = str(event.get("recorded_role") or "").strip()
+    if not recorded_role:
+        recorded_role = str(fallback_role or "").strip()
+    target_role = str(role or "").strip()
+    recorded_role = canonical_role_value(recorded_role, default=recorded_role)
+    target_role = canonical_role_value(target_role, default=target_role)
+    return bool(recorded_role and target_role) and (
+        recorded_role.casefold() == target_role.casefold()
+    )
+
+
+def restore_event_combo_selection(
+    combo: Any,
+    event_type: str,
+    label: Optional[str] = None,
+    *,
+    persisted: bool = False,
+) -> bool:
+    """Restore an existing event without making its saved type editable.
+
+    Role-specific editors deliberately constrain the choices available for
+    new/retagged events.  An event recorded under an earlier role still needs
+    to remain visible, though: append its current value as a disabled item
+    rather than letting QComboBox silently retain its first option. Every
+    persisted row is then disabled, whether its type is normally supported by
+    this role or is historical-only.
+
+    Returns ``True`` when the value is a normal choice for this editor and
+    ``False`` when it had to be restored as a historical-only value.
+    """
+    value = str(event_type or "").strip()
+    if not value:
+        return False
+    index = combo.findData(value)
+    supported = index >= 0
+    if not supported:
+        combo.addItem(label or value, value)
+        index = combo.count() - 1
+        model = combo.model()
+        item_getter = getattr(model, "item", None)
+        item = item_getter(index) if callable(item_getter) else None
+        if item is not None:
+            item.setEnabled(False)
+    combo.setCurrentIndex(index)
+    if persisted:
+        # A saved event's type is immutable; disable the entire control so it
+        # is visibly greyed regardless of whether this role normally offers it.
+        combo.setEnabled(False)
+    return supported
+
+
+def ensure_event_record_id(event: Dict[str, Any]) -> str:
+    """Assign an opaque stable identity to a persisted event lacking one."""
+    event_id = str(event.get("event_id") or "").strip()
+    if not event_id:
+        event_id = uuid4().hex
+        event["event_id"] = event_id
+    return event_id
+
+
+def event_payload_from_editor_row(
+    combo: Any,
+    event_type: str,
+    event_date: datetime,
+    *,
+    recording_role: Optional[str] = None,
+    legacy_recording_role: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build a payload without changing a persisted event's historical role/type."""
+    value = str(event_type or "").strip()
+    source_event = getattr(combo, "_progtrack_source_event", {})
+    if not isinstance(source_event, dict):
+        source_event = {}
+    source_type = str(
+        source_event.get("typ") or source_event.get("event_type") or ""
+    ).strip().casefold()
+    if source_event:
+        if not value or source_type != value.casefold():
+            raise ValueError("A persisted animal event's type cannot be changed.")
+        payload = copy.deepcopy(source_event)
+        ensure_event_record_id(payload)
+        if not payload.get("recorded_role"):
+            historical_role = str(
+                legacy_recording_role or recording_role or ""
+            ).strip()
+            if historical_role:
+                payload["recorded_role"] = historical_role
+        payload.pop("event_type", None)
+        payload.pop("date", None)
+        old_date = source_event.get("datum") or source_event.get("date")
+        if isinstance(old_date, datetime) and old_date.date() == event_date.date():
+            # The editor exposes a calendar date, not a time.  Avoid changing
+            # an existing timestamp when the user left its date untouched.
+            event_date = old_date
+        elif isinstance(old_date, date) and not isinstance(old_date, datetime):
+            if old_date == event_date.date():
+                event_date = datetime.combine(old_date, datetime.min.time())
+    else:
+        # A new, unsaved row receives its stable identity when it is first
+        # committed by the persistence layer.
+        payload = {}
+        current_role = str(recording_role or "").strip()
+        if current_role:
+            payload["recorded_role"] = current_role
+    payload.update({"typ": value, "datum": event_date})
+    return payload
+
+
+def historical_event_label(
+    messages: Dict[str, str],
+    event_type: str,
+    source_event: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Produce a readable label for an event that is no longer a role choice."""
+    snapshot = (source_event or {}).get("custom_event_snapshot", {})
+    if isinstance(snapshot, dict):
+        snapshot_label = str(snapshot.get("name") or snapshot.get("label") or "").strip()
+        if snapshot_label:
+            return snapshot_label
+    return str(
+        messages.get(f"event.{event_type}")
+        or messages.get(f"plot.event.{event_type}")
+        or str(event_type).replace("_", " ").strip().capitalize()
+    )
+
+
+def plot_event_entries(record: Dict[str, Any]) -> List[Tuple[str, Any, Dict[str, Any]]]:
+    """Return every persisted event for plotting, independent of current role.
+
+    Only repeated copies of the same stable record are suppressed. Distinct
+    event IDs on the same date and type remain distinct plot entries.
+    """
+    result: List[Tuple[str, Any, Dict[str, Any]]] = []
+    seen_ids: set[str] = set()
+    events = record.get("events", []) if isinstance(record, dict) else []
+    for event in events or []:
+        if not isinstance(event, dict):
+            continue
+        event_type = str(
+            event.get("typ") or event.get("event_type") or event.get("type") or ""
+        ).strip()
+        event_date = event.get("datum") or event.get("date")
+        if not event_type or event_date is None:
+            continue
+        event_id = str(event.get("event_id") or "").strip()
+        if event_id and event_id in seen_ids:
+            continue
+        if event_id:
+            seen_ids.add(event_id)
+        result.append((event_type, event_date, event))
     return result
 
 
@@ -7045,6 +7211,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if not isinstance(event, dict):
                         logging.warning("Invalid event in %s, skipping: %r", name, event)
                         continue
+                    # Bind a new event ID in the live record before writing,
+                    # so subsequent saves in this session update this same
+                    # row instead of manufacturing a replacement identity.
+                    ensure_event_record_id(event)
                     event_type = str(event.get("typ") or "").strip()
                     event_date = event.get("datum")
                     if not event_type or event_date is None:
@@ -8861,6 +9031,56 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return f"role:{values[custom_index]}"
         return f"index:{index}"
 
+    def _sync_heritage_category_tab_state(self) -> None:
+        """Keep role-category availability derived from the active main page."""
+        category_tab = getattr(self, "category_tab", None)
+        main_tabs = getattr(self, "main_tabs", None)
+        if category_tab is None or main_tabs is None or category_tab.count() == 0:
+            return
+
+        # Preserve any non-Heritage styling that was already applied to this
+        # tab bar; the Heritage context adds only its disabled-tab treatment.
+        if not hasattr(self, "_category_tab_base_stylesheet"):
+            self._category_tab_base_stylesheet = category_tab.styleSheet()
+        base_stylesheet = self._category_tab_base_stylesheet
+
+        active_widget = main_tabs.currentWidget()
+        heritage_active = active_widget is not None and (
+            active_widget is getattr(self, "heritage_track_tab", None)
+            or active_widget is getattr(self, "heritage_track_tab_placeholder", None)
+        )
+
+        if heritage_active:
+            all_index = self._all_category_tab_index()
+            if not 0 <= all_index < category_tab.count():
+                return
+            for index in range(category_tab.count()):
+                category_tab.setTabEnabled(index, index == all_index)
+            if category_tab.currentIndex() != all_index:
+                category_tab.setCurrentIndex(all_index)
+
+            heritage_style = """
+                QTabBar::tab:disabled {
+                    color: grey !important;
+                    background-color: #e0e0e0 !important;
+                }
+            """
+            category_tab.setStyleSheet(
+                f"{base_stylesheet}\n{heritage_style}" if base_stylesheet else heritage_style
+            )
+            category_tab.style().unpolish(category_tab)
+            category_tab.style().polish(category_tab)
+            category_tab.update()
+            return
+
+        for index in range(category_tab.count()):
+            category_tab.setTabEnabled(index, True)
+        if category_tab.styleSheet() != base_stylesheet:
+            category_tab.setStyleSheet(base_stylesheet)
+            category_tab.style().unpolish(category_tab)
+            category_tab.style().polish(category_tab)
+            category_tab.update()
+
     def _rebuild_category_tabs(self) -> None:
         tab = getattr(self, "category_tab", None)
         if tab is None:
@@ -8922,6 +9142,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 break
         tab.setCurrentIndex(min(max(target_idx, 0), max(tab.count() - 1, 0)))
         tab.blockSignals(False)
+        self._sync_heritage_category_tab_state()
 
     def _build_sidebar(self) -> QVBoxLayout:
         """Build the sidebar layout."""
@@ -10213,6 +10434,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             tabs.setUpdatesEnabled(True)
             tabs.blockSignals(previous_signal_state)
             tabs.update()
+        self._sync_heritage_category_tab_state()
 
     def _on_tab_changed(self, index: int) -> None:
         """Handle tab changes and lazy load Reports/Flow/Heritage tabs if needed."""
@@ -10229,6 +10451,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Determine which tab we're switching to
         tab_text = self.main_tabs.tabText(index)
         tab_widget = self.main_tabs.widget(index)
+        self._sync_heritage_category_tab_state()
 
         reports_selected = self.reports_enabled and (
             tab_widget is getattr(self, 'reports_tab', None)
@@ -10433,25 +10656,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if hasattr(self, 'heritage_track_widget') and self.heritage_track_widget is not None:
                 if hasattr(self.heritage_track_widget, 'refresh_graph'):
                     self.heritage_track_widget.refresh_graph()
-            # Disable role tabs (0-5), enable only "All" tab (6), and auto-select it
-            if hasattr(self, 'category_tab'):
-                all_idx = self._all_category_tab_index()
-                # Then disable role tabs and keep All available for Heritage context.
-                for i in range(self.category_tab.count()):
-                    self.category_tab.setTabEnabled(i, False)
-                self.category_tab.setTabEnabled(all_idx, True)
-                self.category_tab.setCurrentIndex(all_idx)
-                # Apply stylesheet for disabled tab styling with !important to override Windows defaults
-                self.category_tab.setStyleSheet("""
-                    QTabBar::tab:disabled {
-                        color: grey !important;
-                        background-color: #e0e0e0 !important;
-                    }
-                """)
-                # Force complete refresh
-                self.category_tab.style().unpolish(self.category_tab)
-                self.category_tab.style().polish(self.category_tab)
-                self.category_tab.repaint()
             self._refresh_list(force_heritage_visible=True)
 
         # Refresh content when switching to already-loaded tabs
@@ -10511,15 +10715,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     item = self.lst.item(i)
                     if item:
                         item.setSelected(False)
-            # Re-enable all role tabs (0-6)
-            if hasattr(self, 'category_tab'):
-                self.category_tab.setStyleSheet("")  # Clear custom styling
-                for i in range(self.category_tab.count()):
-                    self.category_tab.setTabEnabled(i, True)
-                # Force style refresh to restore normal appearance
-                self.category_tab.style().unpolish(self.category_tab)
-                self.category_tab.style().polish(self.category_tab)
-                self.category_tab.repaint()
             self._refresh_list()
         self._prev_tab_was_heritage = heritage_selected
         self._prev_tab_was_reports = reports_selected
@@ -11175,6 +11370,30 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         fallback = Role.UNKNOWN.value if default is None else default
         return canonical_role_value((record or {}).get("rolle"), default=fallback)
 
+    def _events_recorded_in_role(
+        self,
+        animal_data: Dict[str, Any],
+        role_value: Optional[str] = None,
+        *,
+        legacy_role: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return only event history attributed to the requested role."""
+        if not isinstance(animal_data, dict):
+            return []
+        role = str(
+            role_value or self._animal_role_value(animal_data)
+        ).strip()
+        fallback = str(
+            legacy_role or animal_data.get("rolle") or role
+        ).strip()
+        return [
+            event for event in (animal_data.get("events", []) or [])
+            if isinstance(event, dict)
+            and event_matches_recording_role(
+                event, role, fallback_role=fallback
+            )
+        ]
+
     def _role_dialog_blocks(self, role_value: str, mode: str = "edit") -> List[str]:
         registry = getattr(self, "animal_role_registry", None)
         if registry is None:
@@ -11282,9 +11501,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self, record: Dict[str, Any]
     ) -> List[str]:
         violations = []
-        events = record.get("events", []) if isinstance(record, dict) else []
-        if not isinstance(events, list):
-            events = []
+        role = self._animal_role_value(record)
+        events = self._events_recorded_in_role(record, role)
         for block in self._custom_experimental_block_definitions(include_retired=False):
             if str(block.get("kind") or "limiting") != "limiting":
                 continue
@@ -11329,8 +11547,29 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _custom_event_limit_additions_allowed(
         self, previous: Dict[str, Any], candidate: Dict[str, Any]
     ) -> List[str]:
-        previous_events = previous.get("events", []) if isinstance(previous, dict) else []
-        candidate_events = candidate.get("events", []) if isinstance(candidate, dict) else []
+        previous_role = self._animal_role_value(previous)
+        candidate_role = self._animal_role_value(candidate)
+        previous_events = self._events_recorded_in_role(previous, previous_role)
+        candidate_events = []
+        previous_ids = {
+            str(event.get("event_id") or "")
+            for event in (previous.get("events", []) if isinstance(previous, dict) else [])
+            if isinstance(event, dict) and event.get("event_id")
+        }
+        for event in (candidate.get("events", []) if isinstance(candidate, dict) else []):
+            if not isinstance(event, dict):
+                continue
+            # Legacy carried-forward rows without an explicit role belong to
+            # the prior role; unpersisted rows belong to the role being saved.
+            fallback_role = (
+                previous_role
+                if str(event.get("event_id") or "") in previous_ids
+                else candidate_role
+            )
+            if event_matches_recording_role(
+                event, candidate_role, fallback_role=fallback_role
+            ):
+                candidate_events.append(event)
         violations = []
         for block in self._custom_experimental_block_definitions(include_retired=False):
             if str(block.get("kind") or "limiting") != "limiting":
@@ -13325,10 +13564,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Return statistics for dynamic event/limit blocks stored in the backend."""
         if not isinstance(animal_data, dict):
             return []
-        events = [
-            event for event in (animal_data.get("events", []) or [])
-            if isinstance(event, dict)
-        ]
+        events = self._events_recorded_in_role(animal_data)
         limits = animal_data.get("experimental_limits", {})
         if not isinstance(limits, dict):
             limits = {}
@@ -13391,6 +13627,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _get_event_statistics(self, animal_data: Dict[str, Any]) -> str:
         """Get event statistics showing all items with defined maximums for the role."""
         role = self._animal_role_value(animal_data)
+        events = self._events_recorded_in_role(animal_data, role)
         stats = []
         
         if role == Role.SAMENSP.value:
@@ -13405,7 +13642,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         elif role == Role.OFFSPRING.value:
             # Offspring: show special measurements and OPs
-            events = animal_data.get('events', [])
             sonder_count = sum(1 for ev in events if ev.get('typ') == 'special_measurement')
             op_count = sum(1 for ev in events if ev.get('typ') == 'surgery')
             max_special = self._experimental_limit_value(animal_data, 'max_special', 0)
@@ -13419,7 +13655,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         elif role in {Role.EXPERIMENTAL.value, ROLE_VALUE_EXPERIMENTAL_OFFSPRING}:
             # Experimental animal: show surgeries and measurements
-            events = animal_data.get('events', [])
             op_count   = sum(1 for ev in events if ev.get('typ') == 'surgery')
             meas_count = sum(1 for ev in events if ev.get('typ') == 'measurement')
             max_op   = self._experimental_limit_value(animal_data, 'max_op', 0)
@@ -13435,9 +13670,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Female donor: show all relevant maximums
             # Each progesterone measurement ('daten') represents one blood sample
             prog_count = len(animal_data.get('daten', []))
-            pgf_count = len(event_dates(animal_data, 'pgf'))
-            op_count = len(event_dates(animal_data, 'surgery'))
-            fsh_count = sum(1 for ev in animal_data.get('events', []) if ev.get('typ') == 'fsh')
+            pgf_count = len(event_dates({"events": events}, 'pgf'))
+            op_count = len(event_dates({"events": events}, 'surgery'))
+            fsh_count = sum(1 for ev in events if ev.get('typ') == 'fsh')
             
             max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
             max_pgf = self._experimental_limit_value(animal_data, 'max_pgf', 0)
@@ -13462,12 +13697,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Surrogate: show blood samples (progesterone measurements), PGF, embryo transfers, pregnancies, births
             # Each progesterone measurement ('daten') represents one blood sample
             prog_count = len(animal_data.get('daten', []))
-            pgf_count = len(event_dates(animal_data, 'pgf'))
-            embryo_count = sum(1 for ev in animal_data.get('events', []) 
+            pgf_count = len(event_dates({"events": events}, 'pgf'))
+            embryo_count = sum(1 for ev in events
                              if ev.get('typ') == 'embryo_transfer')
-            pregnancy_count = sum(1 for ev in animal_data.get('events', []) 
+            pregnancy_count = sum(1 for ev in events
                                 if ev.get('typ') == 'pregnancy')
-            birth_count = sum(1 for ev in animal_data.get('events', []) 
+            birth_count = sum(1 for ev in events
                             if ev.get('typ') == 'birth')
             
             max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
@@ -13498,7 +13733,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if str(animal_data.get('sex') or '').strip().casefold() != 'female':
                 stats.extend(self._custom_event_statistics(animal_data, self.messages))
                 return ', '.join(stats) if stats else '-'
-            events = animal_data.get('events', [])
             pregnancy_count = sum(1 for ev in events if ev.get('typ') == 'pregnancy')
             birth_count = sum(1 for ev in events if ev.get('typ') == 'birth')
             
@@ -13519,6 +13753,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _get_event_statistics_localized(self, animal_data: Dict[str, Any], messages: dict) -> str:
         """Get event statistics with localized labels."""
         role = self._animal_role_value(animal_data)
+        events = self._events_recorded_in_role(animal_data, role)
         stats = []
         
         if role == Role.SAMENSP.value:
@@ -13532,7 +13767,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         elif role == Role.OFFSPRING.value:
             # Offspring: show special measurements and OPs
-            events = animal_data.get('events', [])
             sonder_count = sum(1 for ev in events if ev.get('typ') == 'special_measurement')
             op_count = sum(1 for ev in events if ev.get('typ') == 'surgery')
             max_special = self._experimental_limit_value(animal_data, 'max_special', 0)
@@ -13544,7 +13778,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         elif role in {Role.EXPERIMENTAL.value, ROLE_VALUE_EXPERIMENTAL_OFFSPRING}:
             # Experimental animal: show surgeries and measurements
-            events = animal_data.get('events', [])
             op_count   = sum(1 for ev in events if ev.get('typ') == 'surgery')
             meas_count = sum(1 for ev in events if ev.get('typ') == 'measurement')
             max_op   = self._experimental_limit_value(animal_data, 'max_op', 0)
@@ -13557,9 +13790,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         elif role == Role.SPENDER.value:
             # Female donor: show all relevant maximums
             prog_count = len(animal_data.get('daten', []))
-            pgf_count = len(event_dates(animal_data, 'pgf'))
-            op_count = len(event_dates(animal_data, 'surgery'))
-            fsh_count = sum(1 for ev in animal_data.get('events', []) if ev.get('typ') == 'fsh')
+            pgf_count = len(event_dates({"events": events}, 'pgf'))
+            op_count = len(event_dates({"events": events}, 'surgery'))
+            fsh_count = sum(1 for ev in events if ev.get('typ') == 'fsh')
             
             max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
             max_pgf = self._experimental_limit_value(animal_data, 'max_pgf', 0)
@@ -13578,12 +13811,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         elif role == Role.AMME.value:
             # Surrogate: show blood samples, PGF, embryo transfers, pregnancies, births
             prog_count = len(animal_data.get('daten', []))
-            pgf_count = len(event_dates(animal_data, 'pgf'))
-            embryo_count = sum(1 for ev in animal_data.get('events', []) 
+            pgf_count = len(event_dates({"events": events}, 'pgf'))
+            embryo_count = sum(1 for ev in events
                              if ev.get('typ') == 'embryo_transfer')
-            pregnancy_count = sum(1 for ev in animal_data.get('events', []) 
+            pregnancy_count = sum(1 for ev in events
                                 if ev.get('typ') == 'pregnancy')
-            birth_count = sum(1 for ev in animal_data.get('events', []) 
+            birth_count = sum(1 for ev in events
                             if ev.get('typ') == 'birth')
             
             max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
@@ -13608,7 +13841,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if str(animal_data.get('sex') or '').strip().casefold() != 'female':
                 stats.extend(self._custom_event_statistics(animal_data, messages))
                 return ', '.join(stats) if stats else '-'
-            events = animal_data.get('events', [])
             pregnancy_count = sum(1 for ev in events if ev.get('typ') == 'pregnancy')
             birth_count = sum(1 for ev in events if ev.get('typ') == 'birth')
             
@@ -15794,14 +16026,28 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._on_select()
 
     @staticmethod
-    def _plot_empty_double_click(event, is_empty: bool) -> bool:
-        """Return whether an empty Plots surface received a left double-click."""
+    def _plot_double_click_clears_selection(event) -> bool:
+        """Return whether a left double-click occurred inside a plot axes.
+
+        The gesture deliberately does not depend on artist hit-testing. Dense
+        data, markers, overlays, or line segments must not make a plotted area
+        ineligible for clearing the shared selection.
+        """
         return bool(
-            is_empty
-            and getattr(event, "button", None) == 1
+            getattr(event, "button", None) == 1
             and bool(getattr(event, "dblclick", False))
             and getattr(event, "inaxes", None) is not None
         )
+
+    @staticmethod
+    def _queue_plot_selection_clear(clear_selection) -> None:
+        """Defer clearing until Matplotlib finishes dispatching the mouse event.
+
+        Clearing selection rebuilds the Plots canvas. Destroying that canvas
+        synchronously from one of its own Matplotlib callbacks can interrupt
+        Qt's double-click event dispatch before the replacement view is shown.
+        """
+        QTimer.singleShot(0, clear_selection)
 
     def _sync_plot_action_button_widths(self) -> None:
         """Keep the right-aligned plot action stack equally wide."""
@@ -16639,72 +16885,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
 
             if steroid_active:
-                # Plot all reproductive events (PGF as line; FSH & Progesterone as triangles; Surgery, embryo, etc. as before)
-                evs = []
-                evs += [('pgf',       dt) for dt in event_dates(a, 'pgf')]
-                # special case: offspring should plot all its surgery/special_measurement events
-                if rolle == Role.OFFSPRING.value:
-                    evs += [(ev['typ'], ev['datum']) for ev in a.get('events', [])]
-                # surrogates show all their events
-                elif rolle == Role.AMME.value:
-                    # surrogates: all events (including 'progesterone')
-                    evs += [(ev['typ'], ev['datum']) for ev in a.get('events', [])]
-                # female Zuchttiere show pregnancy events (same as surrogates)
-                elif rolle == Role.ZUCHTTIER.value and a.get('sex', '').lower() in ('female', 'weiblich'):
-                    # female Zuchttiere: pregnancy-related events
-                    evs += [(ev['typ'], ev['datum']) for ev in a.get('events', [])]
-                # male Zuchttiere (breeding animals) show all events
-                elif rolle == Role.ZUCHTTIER.value:
-                    evs += [(ev['typ'], ev['datum']) for ev in a.get('events', [])]
-                # Experimental animals and experimental offspring show all
-                # recorded procedure/measurement events.
-                elif rolle in {Role.EXPERIMENTAL.value, ROLE_VALUE_EXPERIMENTAL_OFFSPRING}:
-                    evs += [(ev['typ'], ev['datum']) for ev in a.get('events', [])]
-                else:
-                    # donors: Surgery, PGF, and FSH (from both legacy arrays and events)
-                    evs += [('surgery',      dt) for dt in event_dates(a, 'surgery')]
-                    evs += [(ev['typ'], ev['datum'])
-                            for ev in a.get('events', [])
-                            if ev['typ'] in (
-                                'fsh', 'pgf', 'surgery',
-                                'oocyte_retrieval', 'sperm_donation'
-                            )]
-
-                # Backend event rows are canonical, but tolerate an older
-                # snapshot containing an exact duplicate (same type/date).
-                # A duplicate must not render as a second birth/OP marker or
-                # inflate the visible 1/X count.  Distinct dates remain
-                # independent events, including the four Ringbearer surgeries.
-                unique_evs = []
-                seen_plot_events = set()
-                for event_type, event_date in evs:
-                    event_key = (
-                        str(event_type or "").strip().casefold(),
-                        event_date.isoformat()
-                        if hasattr(event_date, "isoformat")
-                        else str(event_date or "").strip(),
-                    )
-                    if event_key in seen_plot_events:
-                        continue
-                    seen_plot_events.add(event_key)
-                    unique_evs.append((event_type, event_date))
-                evs = unique_evs
-
-                # Custom events are admitted only when the active role recipe
-                # contains their block. Keep built-in role filtering unchanged.
-                custom_types = self._custom_event_types_for_role(rolle, mode='edit')
-                if custom_types:
-                    existing_custom = {
-                        (str(typ), dt) for typ, dt in evs
-                    }
-                    for custom_event in a.get('events', []) or []:
-                        event_type = str(custom_event.get('typ') or '')
-                        event_date = custom_event.get('datum')
-                        if (
-                            event_type in custom_types
-                            and (event_type, event_date) not in existing_custom
-                        ):
-                            evs.append((event_type, event_date))
+                # Current role recipes govern which new event types can be
+                # created, not which already-saved history is visible.
+                # Stable IDs suppress only duplicate copies of the same row;
+                # separate same-day events remain separate plot occurrences.
+                evs = plot_event_entries(a)
 
                 # styling maps
                 colors = {
@@ -16757,9 +16942,27 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             definition.get("name") or definition.get("label") or event_type
                         )
 
+                # A stored snapshot keeps a retired or renamed custom event
+                # readable and visually consistent after its role association
+                # or active definition has changed.
+                for event_type, _event_date, event_record in evs:
+                    snapshot = event_record.get("custom_event_snapshot", {})
+                    if not isinstance(snapshot, dict):
+                        snapshot = {}
+                    snapshot_label = str(
+                        snapshot.get("label") or snapshot.get("name") or ""
+                    ).strip()
+                    labels[event_type] = snapshot_label or labels.get(
+                        event_type,
+                        historical_event_label(self.messages, event_type, event_record),
+                    )
+                    snapshot_color = str(snapshot.get("color") or "").strip()
+                    if snapshot_color and QColor(snapshot_color).isValid():
+                        colors[event_type] = QColor(snapshot_color).name()
+
                 # how many of each type we have now
                 counts = {}
-                for typ, _ in evs:
+                for typ, _event_date, _event_record in evs:
                     counts[typ] = counts.get(typ, 0) + 1
                 idxs = {typ: 0 for typ in counts}
 
@@ -16782,14 +16985,30 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
                 # constant y‐offset for all event triangles so only the tip touches the axis
 
-                for typ, dt_raw in evs:
+                for typ, dt_raw, event_record in evs:
                     idxs[typ] += 1
                     col = colors.get(typ, 'black')
                     custom_definition = self._custom_event_definition_for_type(typ)
-                    custom_appearance = self._custom_event_appearance(typ) if custom_definition else {}
+                    snapshot = event_record.get("custom_event_snapshot", {})
+                    if not isinstance(snapshot, dict):
+                        snapshot = {}
+                    custom_appearance = (
+                        self._custom_event_appearance(typ) if custom_definition else {}
+                    )
+                    if snapshot:
+                        snapshot_mode = str(snapshot.get("render_mode") or "line").casefold()
+                        custom_appearance.update({
+                            "color": col,
+                            "marker": str(snapshot.get("marker") or "o"),
+                            "render_mode": snapshot_mode if snapshot_mode in {"line", "symbol"} else "line",
+                        })
+                    is_custom_symbol = (
+                        bool(custom_appearance)
+                        and custom_appearance.get("render_mode") == "symbol"
+                    )
                     # Symbol custom events use the same clipped event layer as FSH,
                     # while line events continue through the standard vertical-line path.
-                    if custom_definition and custom_appearance.get("render_mode") == "symbol":
+                    if is_custom_symbol:
                         dt = _to_py_datetime(dt_raw)
                         dt_num = _safe_date2num(dt)
                         if dt_num is None:
@@ -16827,7 +17046,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         tri.set_visible(events_chk is not None and events_chk.isChecked())
                         self.ev_lines.append(tri)
                         self.hover_data.append((dt, TRI_Y, ax, typ, name, tri))
-                    elif not (custom_definition and custom_appearance.get("render_mode") == "symbol"):
+                    elif not is_custom_symbol:
                         # All line event labels use weight axis for placement
                         if 'weight_ax' in locals():
                             axis_plot = weight_ax
@@ -17198,9 +17417,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ------------------------
         def on_click(event):
             nonlocal _pan_active, _pan_start_x, _pan_axis, _pan_button
-            empty_double_click = self._plot_empty_double_click(
-                event, _plot_press_is_empty(event)
-            )
+            if self._plot_double_click_clears_selection(event):
+                _pan_active = False
+                _pan_start_x = None
+                _pan_axis = None
+                _pan_button = None
+                self._queue_plot_selection_clear(self._unselect_all_plots)
+                return
+            empty_press = _plot_press_is_empty(event)
             # Accept clicks even when they fall just outside the axes.
             # FSH/Prog triangles are drawn with ax.get_xaxis_transform() at TRI_Y<0,
             # so event.inaxes can be None when clicking them.
@@ -17225,18 +17449,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except Exception as exc:
                     logging.debug("Failed to remove sperm overlay dot: %s", exc)
             self.sperm_overlay_dots.clear()
-
-            # Match Heritage Track's empty-space deselection gesture.  The
-            # press must be classified against the complete artist set before
-            # clearing selection, so markers, lines, legends, annotations,
-            # and overlays keep their existing click behavior.
-            if empty_double_click:
-                _pan_active = False
-                _pan_start_x = None
-                _pan_axis = None
-                _pan_button = None
-                self._unselect_all_plots()
-                return
 
             closest = None
             min_px = float('inf')
@@ -18038,11 +18250,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         #     Insert a new event row (date & type) into the scrollable list.
         # ------------------------
         def add_row(item_data: Tuple[Any, ...]) -> None:
+            persisted_event = (
+                len(item_data) > 2 and isinstance(item_data[2], dict)
+            )
             source_event = (
                 copy.deepcopy(item_data[2])
-                if len(item_data) > 2 and isinstance(item_data[2], dict)
+                if persisted_event
                 else {}
             )
+            if persisted_event:
+                ensure_event_record_id(source_event)
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(5)
@@ -18088,9 +18305,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if current_role == Role.SPENDER.value:
                 # For Spenderin: hide embryo_transfer, pregnancy, abortion, birth
                 blocks = [
-                    ['surgery', 'sperm_donation'],
+                    ['surgery', 'oocyte_retrieval'],
                     ['pgf', 'fsh', 'progesterone']
                 ]
+            elif current_role == Role.SAMENSP.value:
+                # Sperm donors can record collection/donation events, but not
+                # egg retrieval or female pregnancy workflows.
+                blocks = [['surgery', 'sperm_donation']]
             elif current_role == Role.AMME.value:
                 # For Amme: hide fsh and surgery
                 blocks = [
@@ -18140,12 +18361,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         event_type,
                     )
             
-            # set current selection by matching the stored type
-            stored_type = item_data[1].lower()
-            for i in range(combo.count()):
-                if combo.itemData(i) == stored_type:
-                    combo.setCurrentIndex(i)
-                    break
+            # Restore unsupported historical types as disabled display-only
+            # entries. They remain visible, but cannot be chosen for new or
+            # retagged events under this role.
+            stored_type = str(item_data[1] or "").strip().lower()
+            restore_event_combo_selection(
+                combo,
+                stored_type,
+                historical_event_label(self.messages, stored_type, source_event),
+                persisted=persisted_event,
+            )
             del_btn = QPushButton('×')
             del_btn.setFixedWidth(50)  # Fixed width for delete button
 
@@ -20820,8 +21045,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Restore category
         cat_idx = session.get("last_category_index", 0)
         cat_tab = getattr(self, 'category_tab', None)
-        if cat_tab is not None and 0 <= cat_idx < cat_tab.count():
+        # Apply the page context before restoring the category. In Heritage,
+        # a saved role category is disabled and must not trigger a transient
+        # category change/list refresh during session restoration.
+        self._sync_heritage_category_tab_state()
+        if (
+            cat_tab is not None
+            and 0 <= cat_idx < cat_tab.count()
+            and cat_tab.isTabEnabled(cat_idx)
+        ):
             cat_tab.setCurrentIndex(cat_idx)
+        # Session restoration applies the saved category after changing the
+        # main page. Re-derive the final state after it as a guard for any
+        # state changes caused by category callbacks.
+        self._sync_heritage_category_tab_state()
         # Restore geometry
         geo = session.get("window_geometry")
         if geo and isinstance(geo, dict):
@@ -23270,7 +23507,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             flayout.addWidget(add_ev_btn)
 
             # function to add event row
-            def add_ev_row(data: Optional[Tuple[str, str]] = None) -> None:
+            def add_ev_row(data: Optional[Tuple[Any, ...]] = None) -> None:
+                source_event = (
+                    copy.deepcopy(data[2])
+                    if data and len(data) > 2 and isinstance(data[2], dict)
+                    else {}
+                )
                 row = QHBoxLayout()
                 row.setSpacing(5)
                 # Default date: today
@@ -23296,6 +23538,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 date_le.textChanged.connect(validate_event_date)
 
                 combo = QComboBox()
+                combo._progtrack_source_event = source_event
                 # Store canonical event types as data for proper persistence
                 combo.addItem(
                     self.messages.get("dialog.offspring.combo.special_measurement", "Special Measurement"),
@@ -23316,12 +23559,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         )
 
                 if data:
-                    # Map the stored values to the combo data (canonical event types)
-                    stored_type = data[1].lower()
-                    for i in range(combo.count()):
-                        if combo.itemData(i) == stored_type:
-                            combo.setCurrentIndex(i)
-                            break
+                    stored_type = str(data[1] or "").strip().lower()
+                    if source_event:
+                        ensure_event_record_id(source_event)
+                    restore_event_combo_selection(
+                        combo,
+                        stored_type,
+                        historical_event_label(
+                            self.messages, stored_type, source_event
+                        ),
+                        persisted=True,
+                    )
 
                 del_btn = QPushButton("×")
                 del_btn.setFixedWidth(50)
@@ -23364,7 +23612,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # populate existing events (sorted chronologically)
             sorted_events = sorted(rec.get('events', []), key=lambda x: x['datum'])
             for ev in sorted_events:
-                add_ev_row((ev['datum'].strftime(DATE_FORMAT), ev['typ']))
+                add_ev_row((ev['datum'].strftime(DATE_FORMAT), ev['typ'], ev))
 
             ev_sc = QScrollArea()
             ev_sc.setWidgetResizable(True)
@@ -23506,7 +23754,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         # Use currentData() to get canonical event type, not translated display text
                         typ = combo.currentData()
                         if typ:  # Ensure we have valid data
-                            events_list.append({'datum': dt, 'typ': typ})
+                            events_list.append(
+                                event_payload_from_editor_row(combo, typ, dt)
+                            )
                     except Exception:
                         pass
                 rec_obj['events'] = events_list
@@ -23904,7 +24154,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             flayout.addWidget(add_ev_btn)
 
             # Function to add event row
-            def add_ev_row(data: Optional[Tuple[str, str]] = None) -> None:
+            def add_ev_row(data: Optional[Tuple[Any, ...]] = None) -> None:
+                source_event = (
+                    copy.deepcopy(data[2])
+                    if data and len(data) > 2 and isinstance(data[2], dict)
+                    else {}
+                )
                 row = QHBoxLayout()
                 row.setSpacing(5)
                 # Default date: today
@@ -23930,6 +24185,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 date_le.textChanged.connect(validate_event_date)
 
                 combo = QComboBox()
+                combo._progtrack_source_event = source_event
                 # Event types for Zuchttiere (females can have pregnancy events)
                 combo.addItem(
                     self.messages.get("dialog.zuchttier.event.pregnant", "Pregnant"),
@@ -23954,12 +24210,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         )
 
                 if data:
-                    # Map the stored values to the combo data
-                    stored_type = data[1].lower()
-                    for i in range(combo.count()):
-                        if combo.itemData(i) == stored_type:
-                            combo.setCurrentIndex(i)
-                            break
+                    stored_type = str(data[1] or "").strip().lower()
+                    if source_event:
+                        ensure_event_record_id(source_event)
+                    restore_event_combo_selection(
+                        combo,
+                        stored_type,
+                        historical_event_label(
+                            self.messages, stored_type, source_event
+                        ),
+                        persisted=True,
+                    )
 
                 del_btn = QPushButton("×")
                 del_btn.setFixedWidth(50)
@@ -24002,7 +24263,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Populate existing events (sorted chronologically)
             sorted_events = sorted(rec.get('events', []), key=lambda x: x['datum'])
             for ev in sorted_events:
-                add_ev_row((ev['datum'].strftime(DATE_FORMAT), ev['typ']))
+                add_ev_row((ev['datum'].strftime(DATE_FORMAT), ev['typ'], ev))
 
             ev_sc = QScrollArea()
             ev_sc.setWidgetResizable(True)
@@ -24169,7 +24430,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         dt = datetime.strptime(date_le.text(), DATE_FORMAT)
                         typ = combo.currentData()
                         if typ:
-                            events_list.append({'datum': dt, 'typ': typ})
+                            events_list.append(
+                                event_payload_from_editor_row(combo, typ, dt)
+                            )
                     except Exception:
                         pass
                 rec_obj['events'] = events_list
@@ -24569,7 +24832,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if callable(callback):
                 QTimer.singleShot(0, callback)
 
-        def add_ev_row_vt(data: Optional[Tuple[str, str]] = None) -> None:
+        def add_ev_row_vt(data: Optional[Tuple[Any, ...]] = None) -> None:
+            source_event = (
+                copy.deepcopy(data[2])
+                if data and len(data) > 2 and isinstance(data[2], dict)
+                else {}
+            )
             row = QHBoxLayout()
             row.setSpacing(5)
             default_date = data[0] if data else datetime.now().date().strftime(DATE_FORMAT)
@@ -24590,6 +24858,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             ev_date_le.textChanged.connect(_val_ev_date)
 
             ev_combo = QComboBox()
+            ev_combo._progtrack_source_event = source_event
             ev_combo.addItem(
                 self.messages.get('dialog.versuchstier.event.surgery',     'Surgery'),
                 'surgery')
@@ -24597,11 +24866,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self.messages.get('dialog.versuchstier.event.measurement', 'Measurement'),
                 'measurement')
             if data:
-                stored = data[1].lower()
-                for i in range(ev_combo.count()):
-                    if ev_combo.itemData(i) == stored:
-                        ev_combo.setCurrentIndex(i)
-                        break
+                stored = str(data[1] or "").strip().lower()
+                if source_event:
+                    ensure_event_record_id(source_event)
+                restore_event_combo_selection(
+                    ev_combo,
+                    stored,
+                    historical_event_label(self.messages, stored, source_event),
+                    persisted=True,
+                )
 
             del_btn_ev = QPushButton('×')
             del_btn_ev.setFixedWidth(50)
@@ -24640,7 +24913,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         sorted_events = sorted(rec.get('events', []), key=lambda x: x['datum'])
         for ev in sorted_events:
-            add_ev_row_vt((ev['datum'].strftime(DATE_FORMAT), ev['typ']))
+            add_ev_row_vt((ev['datum'].strftime(DATE_FORMAT), ev['typ'], ev))
 
         ev_sc = QScrollArea()
         ev_sc.setWidgetResizable(True)
@@ -24714,7 +24987,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     dt  = datetime.strptime(ev_d.text(), DATE_FORMAT)
                     typ = ev_c.currentData()
                     if typ:
-                        events_list.append({'datum': dt, 'typ': typ})
+                        events_list.append(
+                            event_payload_from_editor_row(ev_c, typ, dt)
+                        )
                 except Exception:
                     pass
 
@@ -25086,7 +25361,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         active_custom_events = self._active_custom_event_definitions_for_role(
             role_value, mode=dialog_mode
         )
-        if active_custom_events:
+        existing_custom_role_events = [
+            event for event in (rec.get("events", []) or [])
+            if isinstance(event, dict)
+            and str(event.get("typ") or event.get("event_type") or "").strip()
+            and (event.get("datum") is not None or event.get("date") is not None)
+        ]
+        if active_custom_events or existing_custom_role_events:
             custom_event_tab = QWidget()
             custom_event_layout = QVBoxLayout(custom_event_tab)
             custom_event_layout.setContentsMargins(0, 0, 0, 0)
@@ -25114,27 +25395,26 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             custom_event_rows_layout.addWidget(add_custom_event)
             custom_event_scroll = None
 
-            active_event_ids = {
-                str(value).strip()
-                for definition in active_custom_events
-                for value in (
-                    definition.get("id"), definition.get("stable_id"),
-                    definition.get("event_type"),
-                ) if str(value or "").strip()
-            }
-
             def add_custom_event_row(data=None):
+                source_event = (
+                    copy.deepcopy(data) if isinstance(data, dict) else {}
+                )
+                if source_event:
+                    ensure_event_record_id(source_event)
                 row = QHBoxLayout()
                 date_edit = QLineEdit(
-                    str(data.get("datum", "")) if isinstance(data, dict) else
+                    str((data.get("datum") or data.get("date") or ""))
+                    if isinstance(data, dict) else
                     datetime.now().date().strftime(DATE_FORMAT)
                 )
-                if isinstance(data, dict) and isinstance(data.get("datum"), datetime):
-                    date_edit.setText(data["datum"].strftime(DATE_FORMAT))
+                existing_date = source_event.get("datum") or source_event.get("date")
+                if isinstance(existing_date, (datetime, date)):
+                    date_edit.setText(existing_date.strftime(DATE_FORMAT))
                 date_edit.setPlaceholderText(self.messages.get(
                     "form.placeholder.date", "DD.MM.YYYY"
                 ))
                 event_combo = QComboBox()
+                event_combo._progtrack_source_event = source_event
                 for definition in active_custom_events:
                     event_type = str(definition.get("event_type") or "").strip()
                     if not event_type:
@@ -25144,10 +25424,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         event_type,
                     )
                 if isinstance(data, dict):
-                    stored_type = str(data.get("typ") or "")
-                    idx = event_combo.findData(stored_type)
-                    if idx >= 0:
-                        event_combo.setCurrentIndex(idx)
+                    stored_type = str(
+                        data.get("typ") or data.get("event_type") or data.get("type") or ""
+                    ).strip()
+                    restore_event_combo_selection(
+                        event_combo,
+                        stored_type,
+                        historical_event_label(
+                            self.messages, stored_type, source_event
+                        ),
+                        persisted=True,
+                    )
                 delete_button = QPushButton("×")
                 delete_button.setFixedWidth(50)
                 row.addWidget(date_edit, 1)
@@ -25191,10 +25478,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         ),
                     )
 
+            add_custom_event.setEnabled(bool(active_custom_events))
             add_custom_event.clicked.connect(lambda: add_custom_event_row())
-            for event in rec.get("events", []) or []:
-                if isinstance(event, dict) and str(event.get("typ") or "") in active_event_ids:
-                    add_custom_event_row(event)
+            for event in existing_custom_role_events:
+                add_custom_event_row(event)
             custom_event_scroll = QScrollArea()
             custom_event_scroll.setWidgetResizable(True)
             custom_event_scroll.setWidget(custom_event_frame)
@@ -25347,11 +25634,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         existing_experimental_limits[block_id] = int(widget.value())
             rec_obj["experimental_limits"] = existing_experimental_limits
             if custom_event_widgets:
-                retained_events = [
-                    event for event in rec_obj.get("events", []) or []
-                    if not isinstance(event, dict)
-                    or str(event.get("typ") or "") not in active_event_ids
-                ]
+                represented_event_ids = {
+                    str(getattr(combo, "_progtrack_source_event", {}).get("event_id") or "")
+                    for _date_edit, combo, _row in custom_event_widgets
+                    if str(getattr(combo, "_progtrack_source_event", {}).get("event_id") or "")
+                }
+                retained_events = []
+                for event in rec_obj.get("events", []) or []:
+                    if not isinstance(event, dict):
+                        retained_events.append(event)
+                        continue
+                    if not event.get("event_id"):
+                        ensure_event_record_id(event)
+                    if str(event.get("event_id")) not in represented_event_ids:
+                        retained_events.append(event)
                 for date_edit, event_combo, _row in custom_event_widgets:
                     try:
                         event_date = datetime.strptime(
@@ -25368,8 +25664,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     event_type = str(event_combo.currentData() or "").strip()
                     if not event_type:
                         continue
-                    entry = {"datum": event_date, "typ": event_type}
-                    entry["custom_event_snapshot"] = self._custom_event_snapshot(event_type)
+                    entry = event_payload_from_editor_row(
+                        event_combo,
+                        event_type,
+                        event_date,
+                        recording_role=role_value,
+                    )
+                    if not entry.get("custom_event_snapshot"):
+                        snapshot = self._custom_event_snapshot(event_type)
+                        if snapshot.get("id") != event_type or self._custom_event_definition_for_type(event_type):
+                            entry["custom_event_snapshot"] = snapshot
                     retained_events.append(entry)
                 rec_obj["events"] = retained_events
                 violations = self._custom_event_limit_additions_allowed(rec, rec_obj)
@@ -25912,15 +26216,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 copy.deepcopy(event)
                 for event in rec.get("events", []) or []
                 if isinstance(event, dict)
-                and event.get("typ")
-                and event.get("datum") is not None
-                and str(event.get("typ")).strip() in EVENT_TYPES
+                and (event.get("typ") or event.get("event_type"))
+                and (event.get("datum") is not None or event.get("date") is not None)
             ]
 
             def fmt_ev(ev):
                 return (
-                    ev['datum'].strftime(DATE_FORMAT),
-                    ev['typ'],
+                    (ev.get('datum') or ev.get('date')).strftime(DATE_FORMAT),
+                    str(ev.get('typ') or ev.get('event_type') or ''),
                     ev,
                 )
 
@@ -26028,18 +26331,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 # cleanup or persistence is reached.
                 self._show_permission_denied()
                 return
-            # role change cleanups
-            if role_changed:
-                if role_code == Role.AMME.value and event_entries(rec, 'surgery'):
-                    self._show_message(
-                        self.messages.get('warning.title', 'Warning'),
-                        self.messages.get('warning.role_change_surrogate', 'Switching to Surrogate role will remove surgery events.'),
-                        'warning'
-                    )
-                    rec['events'] = [ev for ev in rec.get('events', []) if ev.get('typ') != 'surgery']
-                if role_code == Role.SPENDER.value:
-                    # remove surrogate-only events
-                    rec['events'] = [ev for ev in rec.get('events', []) if ev.get('typ') != 'embryo_transfer']
+            # Role changes affect which event types may be newly entered; they
+            # do not rewrite or delete previously recorded scientific history.
 
             # Scalars
             try:
@@ -26270,31 +26563,37 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         dt = datetime.strptime(date_text, DATE_FORMAT).date()
                         typ = str(combo.currentData() or "").strip()
                         allowed_types = set(EVENT_TYPES) | self._custom_event_types_for_role(role_code)
-                        if not typ or typ not in allowed_types:
+                        source_event = getattr(
+                            combo, "_progtrack_source_event", {}
+                        )
+                        source_type = str(
+                            source_event.get("typ")
+                            or source_event.get("event_type")
+                            or ""
+                        ).strip().casefold() if isinstance(source_event, dict) else ""
+                        unchanged_historical_type = (
+                            bool(typ) and source_type == typ.casefold()
+                        )
+                        if not typ or (
+                            typ not in allowed_types and not unchanged_historical_type
+                        ):
                             raise ValueError
                         key = (typ, dt)
-                        if key not in seen_events:
+                        # Existing records are history, not new duplicates to
+                        # normalize away. Preserve repeated persisted events;
+                        # duplicate suppression remains for newly entered or
+                        # retagged rows.
+                        if key not in seen_events or unchanged_historical_type:
                             seen_events.add(key)
-                            source_event = getattr(
-                                combo, "_progtrack_source_event", {}
+                            new_events.append(
+                                event_payload_from_editor_row(
+                                    combo,
+                                    typ,
+                                    datetime.combine(dt, datetime.min.time()),
+                                    recording_role=role_code,
+                                    legacy_recording_role=role_now,
+                                )
                             )
-                            if (
-                                isinstance(source_event, dict)
-                                and str(source_event.get("typ") or "")
-                                == typ
-                            ):
-                                event_payload = copy.deepcopy(source_event)
-                                event_payload.pop("event_type", None)
-                                event_payload.pop("date", None)
-                            else:
-                                event_payload = {}
-                            event_payload.update({
-                                "typ": typ,
-                                "datum": datetime.combine(
-                                    dt, datetime.min.time()
-                                ),
-                            })
-                            new_events.append(event_payload)
                     except Exception:
                         self._show_message(
                             self.messages.get("error.title", "Error"),
@@ -26932,24 +27231,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         ).strip().lower()
                         # Normalize legacy German identifiers to English
                         normalized_typ = typ
-                        # Only include valid event types
-                        if datum and (
-                            normalized_typ in EVENT_TYPES
-                            or self._custom_event_definition_for_type(normalized_typ)
-                        ):
-                            # Preserve the complete canonical event payload.
-                            # Workflow linkage and scientific provenance live
-                            # in fields such as course_id, result, offspring,
-                            # project, and sample_id. Rebuilding an event from
-                            # only typ/datum silently destroyed those fields on
-                            # the next save.
+                        # Saved historical types must survive role changes and
+                        # retired/unknown definitions. The current catalog
+                        # constrains new rows; it must not erase old records.
+                        if datum and normalized_typ:
                             payload = copy.deepcopy(ev)
                             payload.pop("event_type", None)
                             payload.pop("date", None)
                             payload["typ"] = normalized_typ
                             payload["datum"] = datum
+                            ensure_event_record_id(payload)
                             snapshot = self._custom_event_snapshot(normalized_typ)
-                            if snapshot.get("id") != normalized_typ:
+                            if (
+                                not payload.get("custom_event_snapshot")
+                                and snapshot.get("id") != normalized_typ
+                            ):
                                 payload["custom_event_snapshot"] = snapshot
                             rec['events'].append(payload)
                     except Exception:
