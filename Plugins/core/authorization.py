@@ -27,6 +27,7 @@ PROTECTED_WRITE_ACTIONS = frozenset({
     "medi_track.add_docs", "medi_track.delete_document",
     "flow_track.edit", "flow_track.create", "flow_track.delete",
     "heritage.edit", "reports.export",
+    "core.manage_institution_settings",
 })
 
 def normalize_unit_id(value: Any) -> str:
@@ -80,8 +81,25 @@ class CanonicalUnitService:
     namespace = UNIT_NAMESPACE
     record_id = UNIT_RECORD_ID
 
-    def __init__(self, backend: Any):
+    def __init__(self, backend: Any, authorization: Any = None):
         self.backend = backend
+        self.authorization = authorization
+
+    def _require_manage_permission(self, authorized: bool = False) -> None:
+        policy = self.authorization
+        if policy is not None:
+            if not bool(policy.can("core.manage_institution_settings", write=True)):
+                raise PermissionError(
+                    "Managing organizational units requires institution-settings permission."
+                )
+            return
+        # Seed/bootstrap callers do not have a live policy object.  They must
+        # opt in explicitly; an arbitrary direct caller cannot mutate the
+        # backend by omitting the authorization assertion.
+        if not authorized:
+            raise PermissionError(
+                "Managing organizational units requires institution-settings permission."
+            )
 
     def load(self) -> dict[str, OrganizationUnit]:
         raw = self.backend.records.get(self.namespace, self.record_id, default={})
@@ -98,18 +116,183 @@ class CanonicalUnitService:
             result[unit.unit_id] = unit
         return result
 
-    def save(self, units: Iterable[OrganizationUnit], *, expected_revision: int | None = None) -> int:
+    def load_with_revision(self) -> tuple[dict[str, OrganizationUnit], int]:
+        """Load the catalog together with its backend revision.
+
+        The revision belongs to the backend record, not to a client-side
+        cache.  This keeps concurrent administrators from silently overwriting
+        one another and gives callers a stable value for optimistic writes.
+        """
+        getter = getattr(self.backend.records, "get_with_revision", None)
+        if callable(getter):
+            raw, revision = getter(self.namespace, self.record_id, default={})
+        else:
+            raw, revision = (
+                self.backend.records.get(self.namespace, self.record_id, default={}),
+                0,
+            )
+        if not isinstance(raw, Mapping):
+            return {}, int(revision or 0)
+        result: dict[str, OrganizationUnit] = {}
+        items = raw.get("units", [])
+        for item in items if isinstance(items, list) else []:
+            if not isinstance(item, Mapping):
+                continue
+            try:
+                unit = OrganizationUnit.from_record(item)
+            except (TypeError, ValueError):
+                continue
+            result[unit.unit_id] = unit
+        return result, int(revision or 0)
+
+    def _audit(self, *, actor: str, action: str, unit_id: str, payload: Mapping[str, Any]) -> None:
+        if not actor:
+            return
+        audit = getattr(self.backend, "audit", None)
+        append = getattr(audit, "append", None)
+        if callable(append):
+            append(
+                actor_login=str(actor),
+                category="security",
+                action=action,
+                entity_type="organization_unit",
+                entity_id=str(unit_id),
+                payload=dict(payload),
+            )
+
+    @staticmethod
+    def _payload(units: Iterable[OrganizationUnit]) -> dict[str, Any]:
         normalized = list(units)
         ids = [normalize_unit_id(unit.unit_id) for unit in normalized]
         if len(ids) != len(set(ids)):
             raise ValueError("Organizational unit IDs must be unique.")
-        payload = {
+        return {
             "schema_version": 1,
-            "units": [unit.as_record() for unit in sorted(normalized, key=lambda x: x.unit_id)],
+            "units": [
+                unit.as_record()
+                for unit in sorted(normalized, key=lambda value: value.unit_id)
+            ],
         }
+
+    def save(self, units: Iterable[OrganizationUnit], *, expected_revision: int | None = None) -> int:
+        payload = self._payload(units)
         return self.backend.records.put(
             self.namespace, self.record_id, payload, expected_revision=expected_revision
         )
+
+    def create(
+        self, unit_id: Any, display_name: Any, *, actor: str = "", authorized: bool = False
+    ) -> OrganizationUnit:
+        self._require_manage_permission(authorized)
+        units, revision = self.load_with_revision()
+        key = normalize_unit_id(unit_id)
+        if key in units:
+            raise ValueError("An organizational unit with this ID already exists.")
+        label = str(display_name or "").strip()
+        if not label:
+            raise ValueError("The organizational unit name cannot be empty.")
+        unit = OrganizationUnit(unit_id=key, display_name=label)
+        units[key] = unit
+        self.save(units.values(), expected_revision=revision)
+        self._audit(actor=actor, action="organization_unit_create", unit_id=key,
+                    payload=unit.as_record())
+        return unit
+
+    def update(
+        self, unit_id: Any, display_name: Any, *, actor: str = "", authorized: bool = False
+    ) -> OrganizationUnit:
+        self._require_manage_permission(authorized)
+        units, revision = self.load_with_revision()
+        key = normalize_unit_id(unit_id)
+        current = units.get(key)
+        if current is None:
+            raise ValueError("Unknown organizational unit.")
+        label = str(display_name or "").strip()
+        if not label:
+            raise ValueError("The organizational unit name cannot be empty.")
+        unit = OrganizationUnit(
+            unit_id=key,
+            display_name=label,
+            active=current.active,
+            archived=current.archived,
+            revision=current.revision + 1,
+            facility_ref=current.facility_ref,
+        )
+        units[key] = unit
+        self.save(units.values(), expected_revision=revision)
+        self._audit(actor=actor, action="organization_unit_update", unit_id=key,
+                    payload={"before": current.as_record(), "after": unit.as_record()})
+        return unit
+
+    def set_archived(
+        self, unit_id: Any, archived: bool, *, actor: str = "", authorized: bool = False
+    ) -> OrganizationUnit:
+        self._require_manage_permission(authorized)
+        units, revision = self.load_with_revision()
+        key = normalize_unit_id(unit_id)
+        current = units.get(key)
+        if current is None:
+            raise ValueError("Unknown organizational unit.")
+        unit = OrganizationUnit(
+            unit_id=key,
+            display_name=current.display_name,
+            active=not bool(archived),
+            archived=bool(archived),
+            revision=current.revision + 1,
+            facility_ref=current.facility_ref,
+        )
+        units[key] = unit
+        self.save(units.values(), expected_revision=revision)
+        self._audit(actor=actor, action=(
+            "organization_unit_archive" if archived else "organization_unit_restore"
+        ), unit_id=key, payload=unit.as_record())
+        return unit
+
+    def delete(self, unit_id: Any, *, actor: str = "", authorized: bool = False) -> bool:
+        """Delete a unit and clear all user assignments in one backend write."""
+        self._require_manage_permission(authorized)
+        units, catalog_revision = self.load_with_revision()
+        key = normalize_unit_id(unit_id)
+        current = units.pop(key, None)
+        if current is None:
+            return False
+
+        users, users_revision = self.backend.records.get_with_revision(
+            "security", "users", default=[]
+        )
+        if not isinstance(users, list):
+            users = []
+        cleaned_users = []
+        for user in users:
+            if not isinstance(user, dict):
+                cleaned_users.append(user)
+                continue
+            copied = dict(user)
+            if str(copied.get("unit_id") or "").strip().casefold() == key:
+                copied["unit_id"] = ""
+                copied["unit"] = ""
+            cleaned_users.append(copied)
+
+        catalog_payload = self._payload(units.values())
+        put_many = getattr(self.backend.records, "put_many", None)
+        if callable(put_many):
+            put_many(
+                [
+                    (self.namespace, self.record_id, catalog_payload),
+                    ("security", "users", cleaned_users),
+                ],
+                expected_revisions={
+                    (self.namespace, self.record_id): catalog_revision,
+                    ("security", "users"): users_revision,
+                },
+            )
+        else:
+            self.save(units.values(), expected_revision=catalog_revision)
+            self.backend.records.put("security", "users", cleaned_users,
+                                     expected_revision=users_revision)
+        self._audit(actor=actor, action="organization_unit_delete", unit_id=key,
+                    payload={"unit": current.as_record(), "users_unassigned": True})
+        return True
 
     def ensure_seed(self, units: Iterable[OrganizationUnit]) -> dict[str, OrganizationUnit]:
         current = self.load()

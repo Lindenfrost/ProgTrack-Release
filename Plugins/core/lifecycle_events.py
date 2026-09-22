@@ -48,7 +48,7 @@ def canonical_event_entries(record: Mapping[str, Any], event_type: str) -> list[
     for event in record.get("events", []) or []:
         if not isinstance(event, Mapping):
             continue
-        actual = str(event.get("typ") or "").strip().casefold()
+        actual = str(event.get("event_type") or "").strip().casefold()
         if actual == wanted:
             result.append(dict(event))
     return result

@@ -64,9 +64,9 @@ class PlannerSnapshot:
                 event for event in raw.get("events", ()) or ()
                 if isinstance(event, dict)
             ]
-            performed_ops = sum(1 for event in canonical_events if event.get("typ") == "surgery")
+            performed_ops = sum(1 for event in canonical_events if event.get("event_type") == "surgery")
             performed_transfers = sum(
-                1 for event in canonical_events if event.get("typ") == "embryo_transfer"
+                1 for event in canonical_events if event.get("event_type") == "embryo_transfer"
             )
             rows.append(PlannerAnimal(
                 ipid, str(raw.get("rolle") or raw.get("role") or "").strip(),

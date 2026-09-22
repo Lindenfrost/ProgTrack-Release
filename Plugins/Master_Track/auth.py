@@ -58,6 +58,7 @@ class UserDB:
         self.backend = backend
         self._users: List[Dict[str, Any]] = []
         self._loaded = False
+        self._users_revision: Optional[int] = None
 
     # -- persistence --------------------------------------------------------
 
@@ -65,7 +66,13 @@ class UserDB:
         return bool(self.backend.records.get("security", "users", default=[]))
 
     def load(self) -> List[Dict[str, Any]]:
-        value = self.backend.records.get("security", "users", default=[])
+        getter = getattr(self.backend.records, "get_with_revision", None)
+        if callable(getter):
+            value, revision = getter("security", "users", default=[])
+            self._users_revision = int(revision or 0)
+        else:
+            value = self.backend.records.get("security", "users", default=[])
+            self._users_revision = None
         self._users = value if isinstance(value, list) else []
         self._loaded = True
         changed = False
@@ -81,12 +88,21 @@ class UserDB:
     def save(self) -> None:
         for user in self._users:
             self._ensure_user_defaults(user)
-        self.backend.records.put("security", "users", self._users)
+        self._users_revision = self.backend.records.put(
+            "security", "users", self._users,
+            expected_revision=self._users_revision,
+        )
 
     @property
     def users(self) -> List[Dict[str, Any]]:
         if not self._loaded:
             self.load()
+        else:
+            getter = getattr(self.backend.records, "get_with_revision", None)
+            if callable(getter):
+                _unused_value, revision = getter("security", "users", default=[])
+                if int(revision or 0) != self._users_revision:
+                    self.load()
         return self._users
 
     # -- queries ------------------------------------------------------------

@@ -468,41 +468,32 @@ def complete_record(record: dict[str, Any], *, name: str, species: str,
         result.get("rolle") or "breeding_animal", default="unknown"
     )
     result.setdefault("sex", "Unknown")
-    # Convert archived authoring aliases to the single backend event stream.
-    # This is seed-build normalization only; runtime never reads these aliases.
+    # Authoring records already use the single canonical backend event stream.
+    # Legacy event keys are rejected here rather than silently converted.
     canonical_events: list[dict[str, Any]] = []
     for item in result.get("events", []) or []:
         if not isinstance(item, dict):
             continue
-        event_type = str(item.get("typ") or item.get("event_type") or "").strip()
-        event_date = item.get("datum") or item.get("date")
+        legacy_keys = sorted(key for key in ("typ", "type", "date") if key in item)
+        if legacy_keys:
+            raise ValueError(
+                f"Non-canonical event keys in {name}: {', '.join(legacy_keys)}"
+            )
+        event_type = str(item.get("event_type") or "").strip()
+        event_date = item.get("datum")
         if hasattr(event_date, "isoformat"):
             event_date = event_date.isoformat()
         if not event_type or not event_date:
             continue
         event = copy.deepcopy(item)
-        event.pop("event_type", None)
-        event.pop("date", None)
-        event["typ"] = event_type
+        event["event_type"] = event_type
         event["datum"] = str(event_date)
         canonical_events.append(event)
-    for alias, event_type in (("op", "surgery"), ("pgf", "pgf"), ("embryo", "embryo_transfer")):
-        for item in result.pop(alias, []) or []:
-            if isinstance(item, dict):
-                event_date = item.get("datum") or item.get("date")
-                event = copy.deepcopy(item)
-                event.pop("event_type", None)
-                event.pop("date", None)
-            else:
-                event_date = item
-                event = {}
-            if hasattr(event_date, "isoformat"):
-                event_date = event_date.isoformat()
-            if not event_date:
-                continue
-            event["typ"] = event_type
-            event["datum"] = str(event_date)
-            canonical_events.append(event)
+    legacy_sections = [key for key in ("op", "pgf", "embryo") if key in result]
+    if legacy_sections:
+        raise ValueError(
+            f"Legacy event arrays in {name}: {', '.join(legacy_sections)}"
+        )
     # Authoring inputs can contain the same lifecycle event more than once
     # (for example when an old domain export and the animal record are both
     # merged).  Retain distinct same-day events with different payloads, but
@@ -510,7 +501,7 @@ def complete_record(record: dict[str, Any], *, name: str, species: str,
     unique_events: list[dict[str, Any]] = []
     seen_event_keys: set[tuple[str, str, str]] = set()
     for event in canonical_events:
-        event_type = str(event.get("typ") or "").strip()
+        event_type = str(event.get("event_type") or "").strip()
         event_date = str(event.get("datum") or "").strip()
         sample_id = str(event.get("sample_id") or "").strip()
         payload_key = sample_id or json.dumps(
@@ -528,7 +519,7 @@ def complete_record(record: dict[str, Any], *, name: str, species: str,
     if species == "Mus musculus":
         unique_events = [
             event for event in unique_events
-            if str(event.get("typ") or "").strip().casefold() != "birth"
+            if str(event.get("event_type") or "").strip().casefold() != "birth"
         ]
     result["events"] = unique_events
     result.setdefault("daten", [])
@@ -795,7 +786,7 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
         surgery_date = RINGBEARER_SURGERY_DATES.get(name)
         if surgery_date:
             core["animals"][child_keys[name]]["events"].append({
-                "typ": "surgery",
+                "event_type": "surgery",
                 "datum": surgery_date,
             })
 
@@ -933,7 +924,7 @@ def monitoring(start: date, prefix: str, *, donor: bool) -> tuple[list, list, li
             sample += 1
         if donor:
             pgf_date = cycle_start + timedelta(days=24)
-            events.append({"typ": "pgf", "datum": pgf_date.isoformat()})
+            events.append({"event_type": "pgf", "datum": pgf_date.isoformat()})
             blood.append({"datum": (pgf_date + timedelta(days=3)).isoformat(), "wert": 4.0})
             urine.append({"datum": (pgf_date + timedelta(days=3)).isoformat(), "wert": 5.0})
     return blood, urine, events
@@ -988,14 +979,14 @@ def add_reproduction_scenarios(core: dict[str, Any], key_map: dict[str, str]) ->
         stimulation_start = retrieval_date - timedelta(days=10)
         core["animals"][donor]["events"].extend(
             {
-                "typ": "fsh",
+                "event_type": "fsh",
                 "datum": (stimulation_start + timedelta(days=day)).isoformat(),
                 "course_id": f"FSH-{retrieval_date.isoformat()}",
             }
             for day in range(9)
         )
         core["animals"][donor]["events"].append({
-            "typ": "oocyte_retrieval",
+            "event_type": "oocyte_retrieval",
             "datum": retrieval_date.isoformat(),
             "course_id": f"FSH-{retrieval_date.isoformat()}",
         })
@@ -1010,7 +1001,7 @@ def add_reproduction_scenarios(core: dict[str, Any], key_map: dict[str, str]) ->
         "count": 1_240_000_000.0,
     }]
     core["animals"][denethor]["events"].append({
-        "typ": "sperm_donation",
+        "event_type": "sperm_donation",
         "datum": donation_date.isoformat(),
         "sample_id": donation_sample,
         "project": "OTOF-",
@@ -1020,13 +1011,13 @@ def add_reproduction_scenarios(core: dict[str, Any], key_map: dict[str, str]) ->
         surrogate = surrogates[surrogate_index]
         course_id = f"ET-{surrogate_index + 1}-{transfer_date.isoformat()}"
         core["animals"][surrogate]["events"].append({
-            "typ": "embryo_transfer",
+            "event_type": "embryo_transfer",
             "datum": transfer_date.isoformat(),
             "course_id": course_id,
         })
         result = "negative" if outcome == "not-pregnant" else "positive"
         core["animals"][surrogate]["events"].append({
-            "typ": "pregnancy_verification",
+            "event_type": "pregnancy_verification",
             "datum": (transfer_date + timedelta(days=28)).isoformat(),
             "result": result,
             "course_id": course_id,
@@ -1039,14 +1030,14 @@ def add_reproduction_scenarios(core: dict[str, Any], key_map: dict[str, str]) ->
                 "%d.%m.%Y",
             ).date()
             core["animals"][surrogate]["events"].append({
-                "typ": "birth",
+                "event_type": "birth",
                 "datum": birth_date.isoformat(),
                 "course_id": course_id,
                 "offspring": boromir if offspring_key == "boromir" else faramir,
             })
         elif outcome == "abortion":
             core["animals"][surrogate]["events"].append({
-                "typ": "abortion",
+                "event_type": "abortion",
                 "datum": (transfer_date + timedelta(days=63)).isoformat(),
                 "course_id": course_id,
             })
@@ -1235,7 +1226,7 @@ def complete_scientific_histories(core: dict[str, Any]) -> None:
         events = animal.setdefault("events", [])
         existing_event_keys = {
             (
-                str(event.get("typ") or event.get("type") or ""),
+                str(event.get("event_type") or ""),
                 str(event.get("datum") or event.get("date") or ""),
                 str(event.get("sample_id") or ""),
             )
@@ -1267,7 +1258,7 @@ def complete_scientific_histories(core: dict[str, Any]) -> None:
             key = ("sperm_donation", stamp, sample_id)
             if key not in existing_event_keys:
                 events.append({
-                    "typ": "sperm_donation",
+                    "event_type": "sperm_donation",
                     "datum": stamp,
                     "sample_id": sample_id,
                 })
@@ -1275,7 +1266,7 @@ def complete_scientific_histories(core: dict[str, Any]) -> None:
 
         events.sort(key=lambda event: (
             str(event.get("datum") or event.get("date") or ""),
-            str(event.get("typ") or event.get("type") or ""),
+            str(event.get("event_type") or ""),
         ))
         extend_weights_through_latest_data(ipid, animal)
 
@@ -2052,12 +2043,12 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         birth_dates = [
             parse_record_date(event.get("datum") or event.get("date"))
             for event in events
-            if str(event.get("typ") or event.get("type") or "").strip().casefold() == "birth"
+            if str(event.get("event_type") or "").strip().casefold() == "birth"
         ]
         surgery_dates = [
             parse_record_date(event.get("datum") or event.get("date"))
             for event in events
-            if str(event.get("typ") or event.get("type") or "").strip().casefold() == "surgery"
+            if str(event.get("event_type") or "").strip().casefold() == "surgery"
         ]
         if birth_dates:
             errors.append(f"Mouse birth event must not be present: {name}")
@@ -2068,7 +2059,7 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
             continue
         if any(
             isinstance(event, dict)
-            and str(event.get("typ") or event.get("type") or "").strip().casefold() == "birth"
+            and str(event.get("event_type") or "").strip().casefold() == "birth"
             for event in record.get("events", []) or []
         ):
             errors.append(f"Mouse birth event must not be present: {ipid}")
@@ -2181,7 +2172,7 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
             "embryo_transfer", "pregnancy_verification", "birth", "abortion"
         }
         if any(
-            isinstance(event, dict) and event.get("typ") in incompatible
+                isinstance(event, dict) and event.get("event_type") in incompatible
             for event in record.get("events", []) or []
         ):
             errors.append(f"incompatible reproductive event on male {offspring}")
@@ -2193,7 +2184,7 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
                 event
                 for event in all_animals[surrogate].get("events", []) or []
                 if isinstance(event, dict)
-                and event.get("typ") == "birth"
+                and event.get("event_type") == "birth"
                 and event.get("offspring") == scenario[offspring]
             ]
             if len(maternal_births) != 1:
@@ -2220,11 +2211,11 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         course_id = f"FSH-{retrieval_date.isoformat()}"
         fsh = [
             event for event in events
-            if event.get("typ") == "fsh" and event.get("course_id") == course_id
+            if event.get("event_type") == "fsh" and event.get("course_id") == course_id
         ]
         retrievals = [
             event for event in events
-            if event.get("typ") == "oocyte_retrieval"
+            if event.get("event_type") == "oocyte_retrieval"
             and event.get("course_id") == course_id
         ]
         if len(fsh) != 9 or len(retrievals) != 1:
@@ -2323,10 +2314,10 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
             event for event in all_animals[surrogate].get("events", [])
             if event.get("course_id") == course_id
         ]
-        transfers = [event for event in events if event.get("typ") == "embryo_transfer"]
+        transfers = [event for event in events if event.get("event_type") == "embryo_transfer"]
         verifications = [
             event for event in events
-            if event.get("typ") == "pregnancy_verification"
+            if event.get("event_type") == "pregnancy_verification"
         ]
         expected_result = "negative" if outcome == "not-pregnant" else "positive"
         if len(transfers) != 1 or len(verifications) != 1:
@@ -2334,11 +2325,11 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         elif verifications[0].get("result") != expected_result:
             errors.append(f"pregnancy result mismatch: {course_id}")
         if outcome == "birth" and not any(
-            event.get("typ") == "birth" for event in events
+            event.get("event_type") == "birth" for event in events
         ):
             errors.append(f"birth event missing: {course_id}")
         if outcome == "abortion" and not any(
-            event.get("typ") == "abortion" for event in events
+            event.get("event_type") == "abortion" for event in events
         ):
             errors.append(f"abortion event missing: {course_id}")
     for ipid, record in all_animals.items():
@@ -2348,7 +2339,7 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
                 str(event.get("sample_id") or ""),
             )
             for event in record.get("events", [])
-            if isinstance(event, dict) and event.get("typ") == "sperm_donation"
+            if isinstance(event, dict) and event.get("event_type") == "sperm_donation"
         }
         for sample in record.get("sperm", []) or []:
             if not isinstance(sample, dict):
@@ -2526,13 +2517,13 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
                 for value in all_animals.values()
             ),
             "sperm_donation_events": sum(
-                event.get("typ") == "sperm_donation"
+                event.get("event_type") == "sperm_donation"
                 for value in all_animals.values()
                 for event in value.get("events", [])
                 if isinstance(event, dict)
             ),
             "pregnancy_verifications": sum(
-                event.get("typ") == "pregnancy_verification"
+                event.get("event_type") == "pregnancy_verification"
                 for value in all_animals.values()
                 for event in value.get("events", [])
                 if isinstance(event, dict)

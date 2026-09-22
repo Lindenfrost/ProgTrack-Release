@@ -58,6 +58,7 @@ from PyQt6.QtWidgets import (
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_status import status_summary_with_death_priority
 from Plugins.core.lifecycle_events import ever_in_experiment
+from Plugins.core.project_periods import event_counts_by_period, ensure_project_periods
 from Plugins.core.platform_helpers import open_local_path
 from Plugins.core.ui_icons import apply_icon
 from Plugins.core.resource_catalogs import (
@@ -1415,6 +1416,7 @@ class MediTrackWidget(QWidget):
         self._lbl_origin = _lbl()
         self._lbl_genotype = _lbl()
         self._lbl_project = _lbl()
+        self._lbl_project_usage = _lbl()
         self._lbl_status = _lbl()
         self._lbl_birth = _lbl()
         self._lbl_death = _lbl()
@@ -1426,6 +1428,10 @@ class MediTrackWidget(QWidget):
         hdr_layout.addRow(_msg(self.messages, "reports.header.origin", "Origin:"), self._lbl_origin)
         hdr_layout.addRow(_msg(self.messages, "reports.header.genotype", "Genotype:"), self._lbl_genotype)
         hdr_layout.addRow(_msg(self.messages, "report.header.project", "Project:"), self._lbl_project)
+        hdr_layout.addRow(
+            _msg(self.messages, "medi_track.header.project_usage", "Project event usage:"),
+            self._lbl_project_usage,
+        )
         hdr_layout.addRow(_msg(self.messages, "report.header.status", "Status:"), self._lbl_status)
         hdr_layout.addRow(_msg(self.messages, "report.header.birth_date", "Birth Date:"), self._lbl_birth)
         hdr_layout.addRow(_msg(self.messages, "report.header.death_date", "Death Date:"), self._lbl_death)
@@ -2612,6 +2618,42 @@ class MediTrackWidget(QWidget):
             if _fmr_items:
                 _proj_parts.append(f"{_fmr_lbl}: {', '.join(_fmr_items)}")
         self._lbl_project.setText('\n'.join(_proj_parts) if _proj_parts else '\u2013')
+
+        # Use the same period attribution as Core/Plots/Reports.  Medi Track
+        # does not maintain a second event counter; it only presents the
+        # shared period projection alongside its existing current/former
+        # project header.
+        usage_parts: List[str] = []
+        if isinstance(rec, dict) and (rec.get("project") or rec.get("project_history")):
+            periods = ensure_project_periods(rec)
+            counts_by_period = event_counts_by_period(rec)
+            max_fn = getattr(self.app, "_get_report_event_max", None)
+            for period in sorted(
+                periods,
+                key=lambda item: (not bool(item.get("current")), item.get("entry_date") or ""),
+            ):
+                period_counts = counts_by_period.get(period["period_id"], {})
+                if not period_counts:
+                    continue
+                labels = []
+                for event_type, count in sorted(period_counts.items()):
+                    event_label = _msg(
+                        self.messages,
+                        f"event.{event_type}",
+                        event_type.replace("_", " ").capitalize(),
+                    )
+                    maximum = max_fn(event_type, rec) if callable(max_fn) else None
+                    labels.append(
+                        f"{event_label} {count}/{maximum}"
+                        if maximum not in (None, "", 0)
+                        else f"{event_label} {count}"
+                    )
+                if labels:
+                    period_label = period.get("project") or _msg(
+                        self.messages, "project.unassigned", "Unassigned"
+                    )
+                    usage_parts.append(f"{period_label}: {', '.join(labels)}")
+        self._lbl_project_usage.setText('\n'.join(usage_parts) if usage_parts else '\u2013')
 
         self._lbl_status.setText(status_summary_with_death_priority(
             rec,

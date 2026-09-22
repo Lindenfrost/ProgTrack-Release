@@ -1319,7 +1319,7 @@ class FlowTrackWidget:
             if rolle == Role.SPENDER.value:
                 # From unified events
                 for ev in rec.get('events', []):
-                    if ev.get('typ') == 'surgery':
+                    if ev.get('event_type') == 'surgery':
                         event_date = _flow_datetime(ev.get('datum'))
                         if event_date is None:
                             continue
@@ -1356,7 +1356,7 @@ class FlowTrackWidget:
             if rolle == Role.AMME.value:
                 # From unified events
                 for ev in rec.get('events', []):
-                    if ev.get('typ') == 'embryo_transfer':
+                    if ev.get('event_type') == 'embryo_transfer':
                         event_date = _flow_datetime(ev.get('datum'))
                         if event_date is None:
                             continue
@@ -1814,7 +1814,7 @@ class FlowTrackWidget:
                             donor_data = self.parent_app.animals.get(egg_donor, {})
                             surgeries = []
                             for ev in donor_data.get('events', []):
-                                if ev.get('typ') == 'surgery':
+                                if ev.get('event_type') == 'surgery':
                                     event_date = _flow_datetime(ev.get('datum'))
                                     if event_date is not None:
                                         surgeries.append(event_date)
@@ -1877,7 +1877,7 @@ class FlowTrackWidget:
                                     donor_data = self.parent_app.animals.get(egg_donor, {})
                                     surgeries = []
                                     for ev in donor_data.get('events', []):
-                                        if ev.get('typ') == 'surgery':
+                                        if ev.get('event_type') == 'surgery':
                                             event_date = _flow_datetime(ev.get('datum'))
                                             if event_date is not None:
                                                 surgeries.append(event_date)
@@ -3382,7 +3382,7 @@ class FlowTrackWidget:
         # Get surgeries from ProgTrack
         surgeries = []
         for event in animal_data.get('events', []):
-            if event.get('typ') == 'surgery':
+            if event.get('event_type') == 'surgery':
                 date_obj = event.get('datum')
                 if hasattr(date_obj, 'date'):
                     surgery_id = date_obj.date().isoformat()
@@ -4478,7 +4478,7 @@ class FlowTrackWidget:
         # Get transfers - use same ID format as _populate_events_from_progtrack
         transfers = []
         for event in animal_data.get('events', []):
-            if event.get('typ') == 'embryo_transfer':
+            if event.get('event_type') == 'embryo_transfer':
                 date_str = event.get('datum').isoformat() if hasattr(event.get('datum'), 'isoformat') else str(event.get('datum'))
                 transfers.append({
                     'date': event.get('datum'),
@@ -4712,7 +4712,7 @@ class FlowTrackWidget:
                 
                 # Collect all surgery dates
                 for event in animal_data.get('events', []):
-                    if event.get('typ') == 'surgery':
+                    if event.get('event_type') == 'surgery':
                         surgery_dates.append(event.get('datum'))
                 
                 # Sort by date, most recent first
@@ -5391,7 +5391,7 @@ class FlowTrackWidget:
                     # Count unique surgery days from unified + legacy fields
                     surgery_date_keys = set()
                     for event in animal_data.get('events', []):
-                        if event.get('typ') != 'surgery':
+                        if event.get('event_type') != 'surgery':
                             continue
                         date_key = self._to_date_key(event.get('datum'))
                         if date_key:
@@ -5426,7 +5426,7 @@ class FlowTrackWidget:
                     # Count unique transfer days from unified + legacy fields
                     transfer_date_keys = set()
                     for event in animal_data.get('events', []):
-                        if event.get('typ') != 'embryo_transfer':
+                        if event.get('event_type') != 'embryo_transfer':
                             continue
                         date_key = self._to_date_key(event.get('datum'))
                         if date_key:

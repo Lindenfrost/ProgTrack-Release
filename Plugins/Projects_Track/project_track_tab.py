@@ -32,6 +32,7 @@ from Plugins.core.animal_roles import (
 )
 from Plugins.core.project_visibility import diff_project_associated_users
 from Plugins.core.project_species import remove_mismatched_assignments
+from Plugins.core.project_periods import ensure_project_periods, make_project_period_id
 from Plugins.core.platform_helpers import open_local_path
 from Plugins.core.backend_store import BackendJsonStore
 from Plugins.core.project_lifecycle import (
@@ -1413,12 +1414,22 @@ class ProjectTrackTab(QWidget):
                     animals, name, new_species)
                 for animal_id in removed_animals:
                     animal = animals.get(animal_id, {})
-                    animal.setdefault("project_history", []).append({
+                    ensure_project_periods(animal)
+                    old_entry_date = animal.get("project_entry_date", "")
+                    old_period_id = str(animal.get("project_period_id") or "").strip()
+                    history = animal.setdefault("project_history", [])
+                    leave_date = datetime.now().strftime("%d.%m.%Y")
+                    history.append({
                         "project": name,
-                        "leave_date": datetime.now().strftime("%d.%m.%Y"),
+                        "entry_date": old_entry_date,
+                        "leave_date": leave_date,
+                        "period_id": old_period_id or make_project_period_id(
+                            name, old_entry_date, leave_date, len(history)
+                        ),
                         "reason": "project_species_changed",
                         "actor": sig,
                     })
+                    animal.pop("project_period_id", None)
         iacuc_d = {k: v.text().strip() for k, v in self._iacuc_fields.items()}
         iacuc_d['pi_login']      = self._iacuc_pi.get_login() or ''
         iacuc_d['di_login']      = self._iacuc_di.get_login() or ''

@@ -89,7 +89,7 @@ def _animal_identity_display(animal: Dict[str, Any]) -> tuple[str, str, str]:
 def _canonical_event_count(animal: Dict[str, Any], event_type: str) -> int:
     return sum(
         1 for event in animal.get("events", []) or []
-        if isinstance(event, dict) and event.get("typ") == event_type
+        if isinstance(event, dict) and event.get("event_type") == event_type
     )
 
 
@@ -98,7 +98,7 @@ def _canonical_event_dates(animal: Dict[str, Any], event_type: str) -> list[Any]
         event.get("datum")
         for event in animal.get("events", []) or []
         if isinstance(event, dict)
-        and event.get("typ") == event_type
+        and event.get("event_type") == event_type
         and event.get("datum") is not None
     ]
 
@@ -1422,7 +1422,7 @@ class GanttWidget(QDialog):
             if role == ROLE_VALUE_SPENDER:
                 performed = sum(
                     1 for event in a.get('events', []) or []
-                    if isinstance(event, dict) and event.get('typ') == 'surgery'
+                    if isinstance(event, dict) and event.get('event_type') == 'surgery'
                 )
                 allowed   = int(a.get('OP_max', 0))
                 label_txt = f"{performed}/{allowed} {tr(self.messages, 'surgery_planner.label.operations_short', 'OPs')}"
@@ -1430,7 +1430,7 @@ class GanttWidget(QDialog):
             else:
                 performed = sum(
                     1 for event in a.get('events', []) or []
-                    if isinstance(event, dict) and event.get('typ') == 'embryo_transfer'
+                    if isinstance(event, dict) and event.get('event_type') == 'embryo_transfer'
                 )
                 allowed   = int(a.get('Embryo_max', 0))
                 label_txt = f"{performed}/{allowed} {tr(self.messages, 'surgery_planner.label.embryo_transfers_short', 'ETs')}"

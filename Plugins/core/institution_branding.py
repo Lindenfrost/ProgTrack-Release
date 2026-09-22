@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QGridLayout,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -26,9 +27,13 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QRadioButton,
     QSizePolicy,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
+
+from Plugins.core.ui_icons import apply_icon
 
 
 CONFIG_NAMESPACE = "configuration"
@@ -46,8 +51,9 @@ def normalize_branding_position(value: object) -> str:
 
 
 class InstitutionBrandingService:
-    def __init__(self, backend: Any):
+    def __init__(self, backend: Any, authorization: Any = None):
         self.backend = backend
+        self.authorization = authorization
 
     def load(self) -> dict[str, Any]:
         value = self.backend.records.get(
@@ -82,9 +88,14 @@ class InstitutionBrandingService:
         authorized: bool = False,
         remove_logo: bool = False,
     ) -> dict[str, Any]:
+        policy = self.authorization
+        if policy is not None:
+            authorized = bool(
+                policy.can("core.manage_institution_settings", write=True)
+            )
         if not authorized:
             raise PermissionError(
-                "Institution branding requires Lord, Master, or Manager authority."
+                "Institution branding requires institution-settings permission."
             )
         current = self.load()
         logo_id = str(current.get("logo_document_id", ""))
@@ -391,6 +402,214 @@ class _BrandingPreview(QWidget):
         painter.end()
 
 
+class _OrganizationalUnitsEditor(QWidget):
+    """Backend-backed editor embedded below the institution preview."""
+
+    def __init__(self, service: Any, actor: str, *, authorized: bool,
+                 messages: dict[str, Any], user_db: Any = None, parent=None):
+        super().__init__(parent)
+        self.service = service
+        self.actor = str(actor or "")
+        self.authorized = bool(authorized)
+        self.messages = messages
+        self.user_db = user_db
+        self._selected_id = ""
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 6, 0, 0)
+        outer.setSpacing(4)
+        self.toggle = QPushButton(self._text("units.title", "Organizational Units"), self)
+        self.toggle.setCheckable(True)
+        self.toggle.setChecked(False)
+        self.toggle.setFlat(True)
+        self.toggle.setFixedHeight(30)
+        self.toggle.setIconSize(QSize(18, 18))
+        self.toggle.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.toggle.setStyleSheet(
+            "QPushButton { text-align: left; font-weight: bold; border: none; padding: 4px; }"
+        )
+        self.toggle.toggled.connect(self._set_expanded)
+        outer.addWidget(self.toggle)
+
+        self.content = QWidget(self)
+        content_layout = QVBoxLayout(self.content)
+        content_layout.setContentsMargins(12, 4, 4, 6)
+        content_layout.setSpacing(5)
+        self.table = QTableWidget(0, 3, self.content)
+        self.table.setHorizontalHeaderLabels([
+            self._text("units.id", "ID"),
+            self._text("units.display_name", "Display name"),
+            self._text("units.status", "Status"),
+        ])
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.verticalHeader().setVisible(False)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.itemSelectionChanged.connect(self._select_current)
+        content_layout.addWidget(self.table)
+
+        form = QFormLayout()
+        self.id_edit = QLineEdit(self.content)
+        self.id_edit.setPlaceholderText("unit-id")
+        self.name_edit = QLineEdit(self.content)
+        form.addRow(self._text("units.id", "ID:"), self.id_edit)
+        form.addRow(self._text("units.display_name", "Display name:"), self.name_edit)
+        content_layout.addLayout(form)
+
+        buttons = QHBoxLayout()
+        self.new_button = QPushButton(self._text("units.new", "New"), self.content)
+        self.save_button = QPushButton(self._text("units.save", "Save"), self.content)
+        self.archive_button = QPushButton(self._text("units.archive", "Archive"), self.content)
+        self.delete_button = QPushButton(self._text("units.delete", "Delete"), self.content)
+        for button in (self.new_button, self.save_button, self.archive_button, self.delete_button):
+            buttons.addWidget(button)
+        buttons.addStretch()
+        content_layout.addLayout(buttons)
+        outer.addWidget(self.content)
+        self.content.setVisible(False)
+
+        self.new_button.clicked.connect(self._new)
+        self.save_button.clicked.connect(self._save)
+        self.archive_button.clicked.connect(self._toggle_archive)
+        self.delete_button.clicked.connect(self._delete)
+        for button in (self.new_button, self.save_button, self.archive_button, self.delete_button):
+            button.setEnabled(self.authorized)
+        self._update_icon(False)
+        self.refresh()
+
+    def _text(self, key: str, fallback: str) -> str:
+        return str(self.messages.get(key, fallback))
+
+    def _update_icon(self, expanded: bool) -> None:
+        apply_icon(
+            self.toggle,
+            "toggle.collapse" if expanded else "toggle.expand",
+            fallback=self.toggle.text(),
+        )
+
+    def _set_expanded(self, expanded: bool) -> None:
+        self.content.setVisible(bool(expanded))
+        self._update_icon(bool(expanded))
+        self.updateGeometry()
+        parent = self.parentWidget()
+        if parent is not None:
+            parent.updateGeometry()
+
+    def refresh(self) -> None:
+        try:
+            units = self.service.load()
+        except Exception:
+            units = {}
+        self.table.blockSignals(True)
+        self.table.setRowCount(0)
+        for unit_id, unit in sorted(units.items(), key=lambda item: item[0]):
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(unit_id))
+            self.table.setItem(row, 1, QTableWidgetItem(unit.display_name))
+            status = self._text("units.archived", "Archived") if unit.archived else self._text("units.active", "Active")
+            self.table.setItem(row, 2, QTableWidgetItem(status))
+            if unit_id == self._selected_id:
+                self.table.selectRow(row)
+        self.table.blockSignals(False)
+        if not self._selected_id:
+            self._new()
+
+    def _select_current(self) -> None:
+        rows = self.table.selectionModel().selectedRows()
+        if not rows:
+            return
+        row = rows[0].row()
+        self._selected_id = str(self.table.item(row, 0).text())
+        self.id_edit.setText(self._selected_id)
+        self.id_edit.setReadOnly(True)
+        self.name_edit.setText(str(self.table.item(row, 1).text()))
+        unit = self.service.get(self._selected_id)
+        self.archive_button.setText(
+            self._text("units.restore", "Restore") if unit and unit.archived
+            else self._text("units.archive", "Archive")
+        )
+
+    def _new(self) -> None:
+        self._selected_id = ""
+        self.table.clearSelection()
+        self.id_edit.clear()
+        self.id_edit.setReadOnly(False)
+        self.name_edit.clear()
+        self.archive_button.setText(self._text("units.archive", "Archive"))
+
+    def _save(self) -> None:
+        try:
+            if self._selected_id:
+                self.service.update(
+                    self._selected_id,
+                    self.name_edit.text(),
+                    actor=self.actor,
+                    authorized=self.authorized,
+                )
+            else:
+                created = self.service.create(
+                    self.id_edit.text(),
+                    self.name_edit.text(),
+                    actor=self.actor,
+                    authorized=self.authorized,
+                )
+                self._selected_id = created.unit_id
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self, self._text("units.save_failed.title", "Cannot save organizational unit"), str(exc))
+            return
+        if self.user_db is not None:
+            self.user_db.load()
+        self.refresh()
+
+    def _toggle_archive(self) -> None:
+        if not self._selected_id:
+            return
+        current = self.service.get(self._selected_id)
+        if current is None:
+            return
+        try:
+            self.service.set_archived(
+                self._selected_id,
+                not current.archived,
+                actor=self.actor,
+                authorized=self.authorized,
+            )
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self, self._text("units.save_failed.title", "Cannot save organizational unit"), str(exc))
+            return
+        if self.user_db is not None:
+            self.user_db.load()
+        self.refresh()
+
+    def _delete(self) -> None:
+        if not self._selected_id:
+            return
+        answer = QMessageBox.question(
+            self,
+            self._text("units.delete.title", "Delete organizational unit"),
+            self._text("units.delete.confirm", "Delete this unit and unassign its users?"),
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.service.delete(
+                self._selected_id,
+                actor=self.actor,
+                authorized=self.authorized,
+            )
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self, self._text("units.save_failed.title", "Cannot save organizational unit"), str(exc))
+            return
+        if self.user_db is not None:
+            self.user_db.load()
+        self._new()
+        self.refresh()
+
+
 class InstitutionBrandingDialog(QDialog):
     def __init__(
         self,
@@ -400,6 +619,10 @@ class InstitutionBrandingDialog(QDialog):
         authorized: bool = False,
         messages: dict[str, Any] | None = None,
         embedded: bool = False,
+        units_service: Any = None,
+        units_authorized: bool | None = None,
+        user_db: Any = None,
+        authorization: Any = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -408,10 +631,15 @@ class InstitutionBrandingDialog(QDialog):
         self.authorized = authorized
         self.messages = messages or {}
         self.embedded = bool(embedded)
+        self.units_service = units_service
+        self.units_authorized = self.authorized if units_authorized is None else bool(units_authorized)
+        self.user_db = user_db
+        if authorization is not None:
+            self.service.authorization = authorization
         self._remove_logo = False
         self._logo_source_path: Path | None = None
         self._logo_controls_compact: bool | None = None
-        self.setWindowTitle(self._text("branding.title", "Institution branding"))
+        self.setWindowTitle(self._text("branding.title", "Institution"))
         if self.embedded:
             self.setWindowFlags(Qt.WindowType.Widget)
         else:
@@ -488,6 +716,16 @@ class InstitutionBrandingDialog(QDialog):
         outer.addLayout(form)
         self.preview = _BrandingPreview(self)
         outer.addWidget(self.preview, 1)
+        if self.units_service is not None:
+            self.units_editor = _OrganizationalUnitsEditor(
+                self.units_service,
+                self.actor,
+                authorized=self.units_authorized,
+                messages=self.messages,
+                user_db=self.user_db,
+                parent=self,
+            )
+            outer.addWidget(self.units_editor)
         self.name.textChanged.connect(self._refresh_preview)
         self.enabled.toggled.connect(self._refresh_preview)
         self.position_left.toggled.connect(self._refresh_preview)

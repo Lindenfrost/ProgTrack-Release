@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import copy
 import json
 import os
 import shutil
@@ -29,6 +30,41 @@ def _sha256_bytes(value: bytes) -> str:
 
 def _safe_member(name: str) -> PurePosixPath:
     return safe_relative_path(name)
+
+
+def _canonicalize_animal_payload(payload: Any) -> Any:
+    """Validate and copy an export payload with canonical event keys.
+
+    Interchange is a persistence boundary, not a legacy converter. Old event
+    keys must be migrated before export and are rejected here with an
+    actionable error.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    result = copy.deepcopy(payload)
+    events = result.get("events")
+    if not isinstance(events, list):
+        return result
+    canonical_events: list[Any] = []
+    for item in events:
+        if not isinstance(item, dict):
+            canonical_events.append(item)
+            continue
+        event = dict(item)
+        legacy_keys = sorted(key for key in ("typ", "type") if key in event)
+        if legacy_keys:
+            raise ValidationError(
+                "Animal event uses obsolete field(s) "
+                + ", ".join(legacy_keys)
+                + "; migrate the payload to event_type before export."
+            )
+        event_type = str(event.get("event_type") or "").strip()
+        if not event_type:
+            raise ValidationError("Animal event is missing canonical event_type.")
+        event["event_type"] = event_type
+        canonical_events.append(event)
+    result["events"] = canonical_events
+    return result
 
 
 @dataclass
@@ -72,7 +108,7 @@ class InterchangeService:
                     "type": "animal",
                     "ipid": ipid,
                     "archived": archived,
-                    "payload": payload,
+                    "payload": _canonicalize_animal_payload(payload),
                 }))
         records_lines = [
             dumps({

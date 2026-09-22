@@ -12,6 +12,13 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
+from Plugins.core.project_periods import (
+    UNASSIGNED_PERIOD_ID,
+    current_period_id,
+    ensure_project_periods,
+    has_project_context,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +52,11 @@ _REVISION_FIELDS = (
     "sperm",
     "events",
     "edits",
+    "project",
+    "project_entry_date",
+    "project_severity",
+    "project_period_id",
+    "project_history",
 )
 
 
@@ -138,6 +150,12 @@ class AnimalReportIndex:
         date_format: str,
     ) -> None:
         self.animal_data = animal_data
+        if isinstance(animal_data, dict):
+            ensure_project_periods(animal_data)
+        self.project_scoped = has_project_context(animal_data)
+        self.active_project_period_id = (
+            current_period_id(animal_data) if self.project_scoped else ""
+        )
         self.normalize_event_type = normalize_event_type
         self.records_by_kind: Dict[str, Dict[date, List[Mapping[str, Any]]]] = {}
         self.years = set()
@@ -215,6 +233,10 @@ class AnimalReportIndex:
         exact_event_datetimes: Dict[str, List[datetime]] = defaultdict(list)
         ordered_occurrences: Dict[date, List[str]] = defaultdict(list)
         occurrence_notes: Dict[date, Dict[str, str]] = defaultdict(dict)
+        occurrence_period_ids: Dict[date, Dict[str, str]] = defaultdict(dict)
+        event_records_by_type: Dict[
+            str, List[Tuple[datetime, str]]
+        ] = defaultdict(list)
 
         for event in animal_data.get("events", []) or []:
             if not isinstance(event, Mapping):
@@ -223,17 +245,26 @@ class AnimalReportIndex:
             if not isinstance(timestamp, datetime):
                 continue
             self.years.add(timestamp.year)
-            raw_type = str(event.get("typ", "") or "").strip()
+            raw_type = str(event.get("event_type", "") or "").strip()
             normalized_type = normalize_event_type(raw_type)
             day = timestamp.date()
             if normalized_type:
                 unified_dates_by_type[normalized_type].add(day)
                 event_dates_by_type[normalized_type].append(day)
                 exact_event_datetimes[normalized_type].append(timestamp)
+                event_records_by_type[normalized_type].append(
+                    (
+                        timestamp,
+                        str(event.get("project_period_id") or UNASSIGNED_PERIOD_ID),
+                    )
+                )
             note = str(event.get("notiz", "") or "").strip()
             if normalized_type not in occurrence_notes[day]:
                 ordered_occurrences[day].append(normalized_type)
                 occurrence_notes[day][normalized_type] = note
+                occurrence_period_ids[day][normalized_type] = str(
+                    event.get("project_period_id") or UNASSIGNED_PERIOD_ID
+                )
             elif not occurrence_notes[day][normalized_type] and note:
                 occurrence_notes[day][normalized_type] = note
 
@@ -251,6 +282,13 @@ class AnimalReportIndex:
                 for event_type in event_types
             ]
             for day, event_types in ordered_occurrences.items()
+        }
+        self.occurrence_period_ids = {
+            day: dict(values) for day, values in occurrence_period_ids.items()
+        }
+        self.event_records_by_type = {
+            event_type: sorted(values)
+            for event_type, values in event_records_by_type.items()
         }
 
         donor_recovery = [
@@ -312,14 +350,55 @@ class AnimalReportIndex:
             )
         return False
 
-    def event_counts_through(self, day: date) -> Dict[str, Tuple[int, int]]:
-        return {
-            event_type: (bisect_right(days, day), len(days))
-            for event_type, days in self.event_dates_by_type.items()
-        }
+    def event_counts_through(
+        self,
+        day: date,
+        project_period_id: Optional[str] = None,
+    ) -> Dict[str, Tuple[int, int]]:
+        """Return event counts, optionally scoped to one membership period.
+
+        Existing records without project context retain the historic lifetime
+        behavior.  For project-aware records, omitting the argument means the
+        active period; Reports can pass a historical period explicitly for a
+        row rendered from an earlier project assignment.
+        """
+        scope = project_period_id
+        if scope is None and self.project_scoped:
+            scope = self.active_project_period_id
+        if scope is None:
+            return {
+                event_type: (bisect_right(days, day), len(days))
+                for event_type, days in self.event_dates_by_type.items()
+            }
+
+        result: Dict[str, Tuple[int, int]] = {}
+        for event_type, values in self.event_records_by_type.items():
+            scoped = [timestamp for timestamp, period_id in values if period_id == scope]
+            result[event_type] = (
+                sum(1 for timestamp in scoped if timestamp.date() <= day),
+                len(scoped),
+            )
+        return result
 
     def occurrences_on(self, day: date) -> List[Tuple[str, str]]:
         return self.occurrences_by_date.get(day, [])
+
+    def event_period_id_for_occurrence(
+        self,
+        day: date,
+        event_type: str,
+        note: str = "",
+    ) -> str:
+        """Return the stored period for a rendered event occurrence."""
+        wanted = str(event_type or "").strip()
+        wanted_note = str(note or "").strip()
+        candidates = self.occurrences_by_date.get(day, [])
+        for current_type, current_note in candidates:
+            if current_type == wanted and str(current_note or "").strip() == wanted_note:
+                return self.occurrence_period_ids.get(day, {}).get(
+                    current_type, UNASSIGNED_PERIOD_ID
+                )
+        return UNASSIGNED_PERIOD_ID
 
     def latest_exact_event_before(
         self, event_type: str, check_datetime: datetime

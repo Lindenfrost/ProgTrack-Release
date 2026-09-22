@@ -93,7 +93,7 @@ from Plugins.core.ui_icons import (
 )
 from Plugins.core.dialog_geometry import install_dialog_geometry_guard
 from Plugins.core.animal_dialog_sections import AnimalDialogSection
-from Plugins.core.authorization import AuthorizationService
+from Plugins.core.authorization import AuthorizationService, CanonicalUnitService
 from Plugins.core.plugin_manager import PluginManager
 from Plugins.core.animal_identity import (
     animal_base_name,
@@ -176,6 +176,14 @@ from Plugins.core.animal_status import (
     compact_status_with_death_priority,
     has_death_date,
     status_summary_with_death_priority,
+)
+from Plugins.core.project_periods import (
+    current_period_id,
+    current_period_records,
+    ensure_project_periods,
+    event_period_id,
+    has_project_context,
+    make_project_period_id,
 )
 from Plugins.Animal_Reports.report_index import (
     AnimalReportIndex,
@@ -319,6 +327,111 @@ EVENT_TYPES = [
     'special_measurement' # Special measurement (offspring-specific)
 ]
 
+# The visual-style catalog is deliberately separate from the role/event
+# registry. Role Setup decides which event types are available; this table
+# supplies only canonical appearance metadata. User overrides are stored by
+# canonical ``event_type`` in the existing ``custom_events`` style-settings
+# map.
+EVENT_STYLE_METADATA: Dict[str, Dict[str, Any]] = {
+    "surgery": {
+        "label_keys": ("event.surgery", "plot.event.operation"),
+        "default_color": "#0000FF",
+        "render_mode": "line", "default_marker": "o",
+    },
+    "oocyte_retrieval": {
+        "label_keys": ("event.oocyte_retrieval", "plot.event.oocyte_retrieval"),
+        "default_color": "#0000FF",
+        "render_mode": "line", "default_marker": "o",
+    },
+    "sperm_donation": {
+        "label_keys": ("event.sperm_donation", "plot.event.sperm_donation"),
+        "default_color": "#0000FF",
+        "render_mode": "line", "default_marker": "o",
+    },
+    "embryo_transfer": {
+        "label_keys": ("event.embryo_transfer", "plot.event.embryo_transfer"),
+        "default_color": "#000000",
+        "render_mode": "line", "default_marker": "o",
+    },
+    "pregnancy": {
+        "label_keys": ("event.pregnancy", "plot.event.pregnancy"),
+        "default_color": "#008000",
+        "render_mode": "line", "default_marker": "o",
+    },
+    "pregnancy_verification": {
+        "label_keys": ("event.pregnancy_verification", "plot.event.pregnancy_verification"),
+        "default_color": "#008000",
+        "render_mode": "line", "default_marker": "o",
+    },
+    "abortion": {
+        "label_keys": ("event.abort", "plot.event.abort"),
+        "default_color": "#FF00FF",
+        "render_mode": "line", "default_marker": "o",
+    },
+    "birth": {
+        "label_keys": ("event.birth", "plot.event.birth"),
+        "default_color": "#000000",
+        "render_mode": "line", "default_marker": "o",
+    },
+    "pgf": {
+        "label_keys": ("event.pgf", "plot.event.pgf"),
+        "default_color": "#FF0000",
+        "render_mode": "line", "default_marker": "o",
+    },
+    "fsh": {
+        "label_keys": ("event.fsh", "plot.event.fsh"),
+        "default_color": "#000000", "default_marker": "v",
+        "render_mode": "symbol",
+    },
+    "progesterone": {
+        "label_keys": ("event.progesterone", "plot.event.progesterone_short"),
+        "default_color": "#008000", "default_marker": "v",
+        "render_mode": "symbol",
+    },
+    "special_measurement": {
+        "label_keys": ("event.special_measurement", "plot.event.special_measurement"),
+        "default_color": "#FFA500",
+        "render_mode": "line", "default_marker": "o",
+    },
+    "measurement": {
+        "label_keys": ("event.measurement", "plot.event.measurement"),
+        "default_color": "#FFA500",
+        "render_mode": "line", "default_marker": "o",
+    },
+}
+
+
+def event_style_metadata(
+    event_type: Any,
+    definition: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Return normalized appearance metadata for one canonical event type."""
+    key = str(event_type or "").strip()
+    base = dict(EVENT_STYLE_METADATA.get(key, {}))
+    base.setdefault("label_keys", (f"event.{key}", f"plot.event.{key}"))
+    base.setdefault("default_color", "#4C78A8")
+    base.setdefault("default_marker", "o")
+    base.setdefault("render_mode", "line")
+    base["event_type"] = key
+    if isinstance(definition, dict):
+        base["definition"] = definition
+        base["label"] = str(
+            definition.get("name") or definition.get("label") or key
+        ).strip() or key
+        base["default_color"] = str(
+            definition.get("default_color") or definition.get("color")
+            or base["default_color"]
+        )
+        base["default_marker"] = str(
+            definition.get("default_marker") or definition.get("marker")
+            or base["default_marker"]
+        )
+        mode = str(definition.get("render_mode") or base["render_mode"]).casefold()
+        base["render_mode"] = mode if mode in {"line", "symbol"} else "line"
+    else:
+        base["label"] = key.replace("_", " ").strip().capitalize()
+    return base
+
 def event_entries(record: Dict[str, Any], event_type: str) -> List[Dict[str, Any]]:
     """Return canonical event entries of one type from an animal record.
 
@@ -331,7 +444,7 @@ def event_entries(record: Dict[str, Any], event_type: str) -> List[Dict[str, Any
     for event in record.get("events", []) or []:
         if not isinstance(event, dict):
             continue
-        actual = str(event.get("typ") or event.get("event_type") or "").strip().casefold()
+        actual = str(event.get("event_type") or "").strip().casefold()
         if actual == wanted:
             result.append(event)
     return result
@@ -422,9 +535,7 @@ def event_payload_from_editor_row(
     source_event = getattr(combo, "_progtrack_source_event", {})
     if not isinstance(source_event, dict):
         source_event = {}
-    source_type = str(
-        source_event.get("typ") or source_event.get("event_type") or ""
-    ).strip().casefold()
+    source_type = str(source_event.get("event_type") or "").strip().casefold()
     if source_event:
         if not value or source_type != value.casefold():
             raise ValueError("A persisted animal event's type cannot be changed.")
@@ -436,7 +547,6 @@ def event_payload_from_editor_row(
             ).strip()
             if historical_role:
                 payload["recorded_role"] = historical_role
-        payload.pop("event_type", None)
         payload.pop("date", None)
         old_date = source_event.get("datum") or source_event.get("date")
         if isinstance(old_date, datetime) and old_date.date() == event_date.date():
@@ -453,7 +563,7 @@ def event_payload_from_editor_row(
         current_role = str(recording_role or "").strip()
         if current_role:
             payload["recorded_role"] = current_role
-    payload.update({"typ": value, "datum": event_date})
+    payload.update({"event_type": value, "datum": event_date})
     return payload
 
 
@@ -487,9 +597,7 @@ def plot_event_entries(record: Dict[str, Any]) -> List[Tuple[str, Any, Dict[str,
     for event in events or []:
         if not isinstance(event, dict):
             continue
-        event_type = str(
-            event.get("typ") or event.get("event_type") or event.get("type") or ""
-        ).strip()
+        event_type = str(event.get("event_type") or "").strip()
         event_date = event.get("datum") or event.get("date")
         if not event_type or event_date is None:
             continue
@@ -1463,6 +1571,7 @@ class StyleSettingsDialog(QDialog):
             self._role_block_preset_registry.event_definitions()
         )
         self._import_legacy_role_block_presets()
+        self._event_style_catalog_entries = self._build_event_style_catalog()
         
         self._init_ui()
         self._load_current_settings()
@@ -1567,6 +1676,101 @@ class StyleSettingsDialog(QDialog):
         self._custom_role_block_presets.sort(
             key=lambda preset: str(preset.get("name") or "").casefold()
         )
+
+    def _build_event_style_catalog(self) -> List[Dict[str, Any]]:
+        """Build the deduplicated Visual Style catalog from Role Setup.
+
+        The role registry is the source of truth for available event types.
+        Custom definitions are resolved by canonical ``event_type`` so that a
+        definition ID or localized label can never create a second style row.
+        """
+        definitions: Dict[str, Dict[str, Any]] = {}
+        event_types: Set[str] = set()
+
+        for role in self._role_definitions:
+            if not isinstance(role, dict):
+                continue
+            recipe = role.get("event_recipe", {})
+            if isinstance(recipe, dict):
+                for value in recipe.get("available_events", []) or []:
+                    token = str(value or "").strip()
+                    if token:
+                        event_types.add(token)
+
+            # Custom event definitions are attached to role dialog blocks.
+            # Resolve them through the same role-scoped helper used by the
+            # editor, with a harmless fallback for lightweight test hosts.
+            role_value = str(role.get("value") or role.get("role_id") or "").strip()
+            resolver = getattr(
+                self.parent_app,
+                "_active_custom_event_definitions_for_role",
+                None,
+            )
+            if role_value and callable(resolver):
+                try:
+                    scoped = resolver(role_value, mode="edit")
+                except Exception:
+                    scoped = []
+                for definition in scoped or []:
+                    if not isinstance(definition, dict):
+                        continue
+                    event_type = str(definition.get("event_type") or "").strip()
+                    if event_type:
+                        event_types.add(event_type)
+                        definitions.setdefault(event_type, dict(definition))
+
+        # The event-definition registry is itself part of Role Setup.  Keep
+        # active entries visible even when a custom block is temporarily not
+        # selected by a role; this avoids silently hiding a registered style.
+        for definition in self._custom_event_definitions:
+            if not isinstance(definition, dict) or not bool(definition.get("active", True)):
+                continue
+            event_type = str(definition.get("event_type") or "").strip()
+            if event_type:
+                event_types.add(event_type)
+                definitions.setdefault(event_type, dict(definition))
+
+        catalog: List[Dict[str, Any]] = []
+        for event_type in sorted(event_types, key=str.casefold):
+            entry = event_style_metadata(event_type, definitions.get(event_type))
+            if not definitions.get(event_type):
+                entry["definition"] = {"event_type": event_type}
+            label = ""
+            for key in entry.get("label_keys", ()):
+                value = str(self.messages.get(key, "") or "").strip()
+                if value:
+                    label = value.rstrip(":")
+                    break
+            entry["label"] = str(entry.get("label") or label or event_type)
+            catalog.append(entry)
+        return catalog
+
+    def _event_style_entry(self, event_type: str) -> Optional[Dict[str, Any]]:
+        token = str(event_type or "").strip()
+        return next(
+            (
+                entry for entry in self._event_style_catalog_entries
+                if str(entry.get("event_type") or "") == token
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _marker_options() -> List[Tuple[str, str]]:
+        return [
+            ("o", "●"), ("^", "▲"), ("v", "▼"), ("s", "■"),
+            ("D", "◆"), ("*", "★"), ("+", "✚"), ("x", "✖"),
+            ("P", "✚"), ("X", "✖"), (".", "·"), ("<", "◀"),
+            (">", "▶"),
+        ]
+
+    def _make_marker_combo(self, default: str = "o") -> QComboBox:
+        combo = QComboBox()
+        for value, label in self._marker_options():
+            combo.addItem(label, value)
+        index = combo.findData(str(default or "o"))
+        combo.setCurrentIndex(index if index >= 0 else 0)
+        return combo
     
     def _init_ui(self):
         """Initialize the dialog UI."""
@@ -1661,96 +1865,44 @@ class StyleSettingsDialog(QDialog):
                 self.color_buttons['sperm_progressive']
             )
         
-        # FSH injection color
-        if self._steroid_track_active():
-            self.color_buttons['fsh'] = self._create_color_button(
-                getattr(self.parent_app, 'fsh_color', QColor('#000000')).name()
-            )
-            colors_layout.addRow(
-                self.messages.get("style.fsh_color", "FSH Injection:"),
-                self.color_buttons['fsh']
-            )
-        
         colors_group.setLayout(colors_layout)
         colors_container_layout.addWidget(colors_group, 0, 0)
         
         # ===== Event Colors Section =====
         events_group = QGroupBox(self.messages.get("style.event_colors", "Event Colors"))
         events_layout = QFormLayout()
-        
-        # PGF event color
-        if self._steroid_track_active():
-            self.color_buttons['pgf'] = self._create_color_button(
-                getattr(self.parent_app, 'pgf_color', QColor('#FF0000')).name()
-            )
-            events_layout.addRow(
-                self.messages.get("style.pgf_color", "PGF:"),
-                self.color_buttons['pgf']
-            )
-        
-        # Embryo transfer color
-        if self._steroid_track_active():
-            self.color_buttons['embryo'] = self._create_color_button(
-                getattr(self.parent_app, 'embryo_color', QColor('#000000')).name()
-            )
-            events_layout.addRow(
-                self.messages.get("style.embryo_color", "Embryo Transfer:"),
-                self.color_buttons['embryo']
-            )
-        
-        # OP color
-        if self._steroid_track_active():
-            self.color_buttons['op'] = self._create_color_button(
-                getattr(self.parent_app, 'op_color', QColor('#0000FF')).name()
-            )
-            events_layout.addRow(
-                self.messages.get("style.op_color", "OP:"),
-                self.color_buttons['op']
-            )
-        
-        # Pregnancy color
-        if self._steroid_track_active():
-            self.color_buttons['pregnancy'] = self._create_color_button(
-                getattr(self.parent_app, 'pregnancy_color', QColor('#008000')).name()
-            )
-            events_layout.addRow(
-                self.messages.get("style.pregnancy_color", "Pregnancy:"),
-                self.color_buttons['pregnancy']
-            )
-        
-        # Abort color
-        if self._steroid_track_active():
-            self.color_buttons['abort'] = self._create_color_button(
-                getattr(self.parent_app, 'abort_color', QColor('#FF00FF')).name()
-            )
-            events_layout.addRow(
-                self.messages.get("style.abort_color", "Abort:"),
-                self.color_buttons['abort']
-            )
-        
-        # Birth color
-        if self._steroid_track_active():
-            self.color_buttons['birth'] = self._create_color_button(
-                getattr(self.parent_app, 'birth_color', QColor('#000000')).name()
-            )
-            events_layout.addRow(
-                self.messages.get("style.birth_color", "Birth:"),
-                self.color_buttons['birth']
-            )
-        
-        # Special measurement color
-        if self._steroid_track_active():
-            self.color_buttons['special'] = self._create_color_button(
-                getattr(self.parent_app, 'special_color', QColor('#FFA500')).name()
-            )
-            events_layout.addRow(
-                self.messages.get("style.special_color", "Special Measurement:"),
-                self.color_buttons['special']
+        if not self._event_style_catalog_entries:
+            events_layout.addRow(QLabel(
+                self.messages.get(
+                    "style.event_colors.empty",
+                    "No event types are registered in Role Setup.",
+                )
+            ))
+        for entry in self._event_style_catalog_entries:
+            event_type = str(entry.get("event_type") or "")
+            if not event_type:
+                continue
+            catalog_default_color = str(entry.get("default_color") or "#4C78A8")
+            color_button = self._create_color_button(catalog_default_color)
+            color_button.setToolTip(event_type)
+            self.color_buttons[event_type] = color_button
+            events_layout.addRow(str(entry.get("label") or event_type) + ":", color_button)
+            definition = dict(entry.get("definition") or {})
+            definition.update({
+                "event_type": event_type,
+                "default_color": catalog_default_color,
+                "default_marker": str(entry.get("default_marker") or "o"),
+                "render_mode": str(entry.get("render_mode") or "line"),
+            })
+            self._custom_event_style_controls[event_type] = (
+                definition, color_button, None
             )
         
         events_group.setLayout(events_layout)
         colors_container_layout.addWidget(events_group, 0, 1)
-        events_group.setVisible(steroid_active)
+        # Role Setup is the source of the catalog; plugin activation must not
+        # hide configured event styles.
+        events_group.setVisible(True)
         self._visual_colors_layout = colors_container_layout
         self._visual_color_groups = (colors_group, events_group)
         self._visual_compact = False
@@ -1763,16 +1915,7 @@ class StyleSettingsDialog(QDialog):
         markers_layout = QFormLayout()
         
         # Marker options
-        marker_options = [
-            ('o', '●'),  # circle
-            ('^', '▲'),
-            ('v', '▼'),
-            ('s', '■'),
-            ('D', '◆'),
-            ('*', '★'),
-            ('+', '✚'),
-            ('x', '✖'),
-        ]
+        marker_options = self._marker_options()
         
         # Combined (converted) marker - conditional on plugin
         if self.parent_app.has_pdg_plugin and self._steroid_track_active():
@@ -1813,8 +1956,10 @@ class StyleSettingsDialog(QDialog):
             self.marker_combos['weight']
         )
         
-        # FSH injection marker
-        if self._steroid_track_active():
+        # FSH is an event symbol.  It uses the same canonical event-style
+        # control as every other symbol event, rather than a plugin-only row.
+        fsh_entry = self._event_style_entry("fsh")
+        if fsh_entry is not None and fsh_entry.get("render_mode") == "symbol":
             self.marker_combos['fsh'] = QComboBox()
             for value, label in marker_options:
                 self.marker_combos['fsh'].addItem(label, value)
@@ -1851,55 +1996,30 @@ class StyleSettingsDialog(QDialog):
                 self.marker_combos['sperm_progressive']
             )
         
-        markers_group.setLayout(markers_layout)
-        scroll_layout.addWidget(markers_group)
-
-        # Facility-defined events are rendered beside the built-in controls.
-        # Their defaults are shared registry data; edits are kept as per-user
-        # style overrides and never mutate the registry.
-        custom_defs = []
-        try:
-            custom_defs = self.parent_app._custom_event_definitions(include_retired=False)
-        except Exception:
-            custom_defs = []
-        if custom_defs:
-            custom_group = QGroupBox(
-                self.messages.get("style.custom_events", "Custom events")
-            )
-            custom_layout = QFormLayout(custom_group)
-            marker_options_custom = [
-                ("o", "●"), ("^", "▲"), ("v", "▼"), ("s", "■"),
-                ("D", "◆"), ("*", "★"), ("+", "✚"), ("x", "✖")
-            ]
-            for definition in custom_defs:
-                event_id = str(definition.get("id") or definition.get("event_type") or "")
-                event_type = str(definition.get("event_type") or event_id)
-                if not event_id:
-                    continue
-                label = str(definition.get("name") or definition.get("label") or event_type)
-                key = event_id
-                color_button = self._create_color_button(
-                    str(definition.get("default_color") or definition.get("color") or "#4C78A8")
+        # Add one marker selector for every symbol event in the same canonical
+        # catalog.  Line events intentionally receive no marker selector.
+        for entry in self._event_style_catalog_entries:
+            event_type = str(entry.get("event_type") or "")
+            if str(entry.get("render_mode") or "line") != "symbol":
+                continue
+            if event_type == "fsh":
+                marker_combo = self.marker_combos.get("fsh")
+            else:
+                marker_combo = self._make_marker_combo(entry.get("default_marker", "o"))
+                self.marker_combos[event_type] = marker_combo
+                markers_layout.addRow(
+                    self.messages.get("style.custom_event_marker", "Symbol")
+                    + " " + str(entry.get("label") or event_type) + ":",
+                    marker_combo,
                 )
-                color_button.setToolTip(label)
-                custom_layout.addRow(label + ":", color_button)
-                marker_combo = None
-                if str(definition.get("render_mode") or "line") == "symbol":
-                    marker_combo = QComboBox()
-                    for value, marker_label in marker_options_custom:
-                        marker_combo.addItem(marker_label, value)
-                    custom_layout.addRow(
-                        self.messages.get("style.custom_event_marker", "Symbol") + " " + label + ":",
-                        marker_combo,
-                    )
-                self._custom_event_style_controls[key] = (
+            if event_type in self._custom_event_style_controls:
+                definition, color_button, _unused = self._custom_event_style_controls[event_type]
+                self._custom_event_style_controls[event_type] = (
                     definition, color_button, marker_combo
                 )
-            custom_group.setLayout(custom_layout)
-            scroll_layout.addWidget(custom_group)
-            self._custom_event_style_group = custom_group
-        else:
-            self._custom_event_style_group = None
+        markers_group.setLayout(markers_layout)
+        scroll_layout.addWidget(markers_group)
+        self._custom_event_style_group = None
         
         scroll_layout.addStretch()
         scroll.setWidget(scroll_widget)
@@ -1922,8 +2042,8 @@ class StyleSettingsDialog(QDialog):
         tabs.addTab(
             self._branding_editor,
             self.messages.get(
-                "settings.tab.institution_branding",
-                "Institution branding",
+                "settings.tab.institution",
+                "Institution",
             ),
         )
         layout.addWidget(tabs)
@@ -3808,10 +3928,25 @@ class StyleSettingsDialog(QDialog):
         actor = str(
             getattr(mt, "current_username", "") or "installation-admin"
         )
+        permission_checker = getattr(
+            self.parent_app,
+            "_can_manage_institution_settings",
+            self.parent_app._can_manage_institution_branding,
+        )
+        authorized = bool(permission_checker())
         return InstitutionBrandingDialog(
             self.parent_app.backend.branding,
             actor,
-            authorized=self.parent_app._can_manage_institution_branding(),
+            authorized=authorized,
+            units_authorized=authorized,
+            units_service=CanonicalUnitService(
+                self.parent_app.backend,
+                getattr(self.parent_app, "authorization", None),
+            ),
+            # Branding and Unit mutations share one backend permission
+            # boundary; the UI flag only controls presentation.
+            user_db=getattr(mt, "user_db", None),
+            authorization=getattr(self.parent_app, "authorization", None),
             messages=self.messages,
             embedded=True,
             parent=self,
@@ -3886,7 +4021,11 @@ class StyleSettingsDialog(QDialog):
             self.parent_app._save_identity_conventions(conventions)
         if (
             hasattr(self, "_branding_editor")
-            and self.parent_app._can_manage_institution_branding()
+            and bool(getattr(
+                self.parent_app,
+                "_can_manage_institution_settings",
+                self.parent_app._can_manage_institution_branding,
+            )())
             and not self._branding_editor.save_embedded()
         ):
             return
@@ -3981,11 +4120,6 @@ class StyleSettingsDialog(QDialog):
             if idx >= 0:
                 self.marker_combos['weight'].setCurrentIndex(idx)
         
-        if hasattr(self.parent_app, 'fsh_marker') and 'fsh' in self.marker_combos:
-            idx = self.marker_combos['fsh'].findData(self.parent_app.fsh_marker)
-            if idx >= 0:
-                self.marker_combos['fsh'].setCurrentIndex(idx)
-        
         if hasattr(self.parent_app, 'sperm_total_marker') and 'sperm_total' in self.marker_combos:
             idx = self.marker_combos['sperm_total'].findData(self.parent_app.sperm_total_marker)
             if idx >= 0:
@@ -4009,12 +4143,22 @@ class StyleSettingsDialog(QDialog):
         for key, (definition, color_button, marker_combo) in self._custom_event_style_controls.items():
             override = overrides.get(key, {}) if isinstance(overrides, dict) else {}
             default_color = str(definition.get("default_color") or definition.get("color") or "#4C78A8")
-            color = str(override.get("color") or default_color)
+            color = str(
+                override.get("color")
+                or color_button.property("color")
+                or default_color
+            )
             if QColor(color).isValid():
                 color_button.setStyleSheet(f"background-color: {color}; border: 1px solid #000;")
                 color_button.setProperty("color", color)
             if marker_combo is not None:
-                marker = str(override.get("marker") or definition.get("default_marker") or definition.get("marker") or "o")
+                marker = str(
+                    override.get("marker")
+                    or marker_combo.currentData()
+                    or definition.get("default_marker")
+                    or definition.get("marker")
+                    or "o"
+                )
                 idx = marker_combo.findData(marker)
                 if idx >= 0:
                     marker_combo.setCurrentIndex(idx)
@@ -4022,27 +4166,32 @@ class StyleSettingsDialog(QDialog):
     def _reset_to_defaults(self):
         """Reset all settings to default values."""
         defaults = self.parent_app._get_default_style_settings()
-        
-        # Reset colors
-        for key in ['combined', 'blood', 'urine', 'weight', 'pdg', 'sperm_total', 'sperm_motile', 'sperm_progressive', 'fsh', 
-                    'pgf', 'embryo', 'op', 'pregnancy', 'abort', 'birth', 'special']:
-            color_key = f'{key}_color'
-            if color_key in defaults and key in self.color_buttons:
-                self.color_buttons[key].setStyleSheet(
-                    f"background-color: {defaults[color_key]}; border: 1px solid #000;"
+
+        for key in (
+            "combined", "blood", "urine", "weight", "pdg",
+            "sperm_total", "sperm_motile", "sperm_progressive",
+        ):
+            color_key = f"{key}_color"
+            button = self.color_buttons.get(key)
+            if button is not None and color_key in defaults:
+                color = str(defaults[color_key])
+                button.setStyleSheet(
+                    f"background-color: {color}; border: 1px solid #000;"
                 )
-                self.color_buttons[key].setProperty('color', defaults[color_key])
-        
-        # Reset markers
-        for key in ['combined', 'blood', 'urine', 'weight', 'fsh', 'sperm_total', 'sperm_motile', 'sperm_progressive']:
-            marker_key = f'{key}_marker'
-            if marker_key in defaults and key in self.marker_combos:
-                idx = self.marker_combos[key].findData(defaults[marker_key])
-                if idx >= 0:
-                    self.marker_combos[key].setCurrentIndex(idx)
+                button.setProperty("color", color)
+            marker_key = f"{key}_marker"
+            combo = self.marker_combos.get(key)
+            if combo is not None and marker_key in defaults:
+                index = combo.findData(defaults[marker_key])
+                if index >= 0:
+                    combo.setCurrentIndex(index)
 
         for definition, color_button, marker_combo in self._custom_event_style_controls.values():
-            color = str(definition.get("default_color") or definition.get("color") or "#4C78A8")
+            color = str(
+                definition.get("default_color")
+                or definition.get("color")
+                or "#4C78A8"
+            )
             color_button.setStyleSheet(f"background-color: {color}; border: 1px solid #000;")
             color_button.setProperty("color", color)
             if marker_combo is not None:
@@ -4053,71 +4202,64 @@ class StyleSettingsDialog(QDialog):
     
     def get_settings(self):
         """Get the current settings from the dialog."""
-        def _color_or_parent(key: str, parent_attr: str, fallback: str) -> str:
-            if key in self.color_buttons:
-                return self.color_buttons[key].property('color')
-            parent_val = getattr(self.parent_app, parent_attr, QColor(fallback))
-            return parent_val.name() if hasattr(parent_val, 'name') else str(parent_val)
+        def _series_color(key: str, parent_attr: str, fallback: str) -> str:
+            button = self.color_buttons.get(key)
+            if button is not None:
+                return str(button.property("color") or fallback)
+            value = getattr(self.parent_app, parent_attr, fallback)
+            return str(value.name() if hasattr(value, "name") else value or fallback)
 
-        def _marker_or_parent(key: str, parent_attr: str, fallback: str) -> str:
-            if key in self.marker_combos:
-                return self.marker_combos[key].currentData()
-            return getattr(self.parent_app, parent_attr, fallback)
+        def _series_marker(key: str, parent_attr: str, fallback: str) -> str:
+            combo = self.marker_combos.get(key)
+            if combo is not None:
+                return str(combo.currentData() or fallback)
+            return str(getattr(self.parent_app, parent_attr, fallback) or fallback)
+
+        custom_events: Dict[str, Dict[str, str]] = {}
+        for event_type, (definition, color_button, marker_combo) in (
+            self._custom_event_style_controls.items()
+        ):
+            default_color = str(
+                definition.get("default_color")
+                or definition.get("color")
+                or "#4C78A8"
+            )
+            override: Dict[str, str] = {}
+            color = str(color_button.property("color") or default_color)
+            if color.casefold() != default_color.casefold():
+                override["color"] = color
+            if marker_combo is not None:
+                default_marker = str(
+                    definition.get("default_marker")
+                    or definition.get("marker")
+                    or "o"
+                )
+                marker = str(marker_combo.currentData() or default_marker)
+                if marker != default_marker:
+                    override["marker"] = marker
+            if override:
+                custom_events[str(event_type)] = override
 
         return {
-            'combined_color': _color_or_parent('combined', 'combined_color', '#8B0000'),
-            'blood_color': _color_or_parent('blood', 'blood_color', '#ff0000'),
-            'urine_color': _color_or_parent('urine', 'urine_color', '#FF8C00'),
-            'weight_color': _color_or_parent('weight', 'weight_color', '#800080'),
-            'pdg_color': _color_or_parent('pdg', 'pdg_color', '#008000'),
-            'sperm_total_color': _color_or_parent('sperm_total', 'sperm_total_color', '#D55E00'),
-            'sperm_motile_color': _color_or_parent('sperm_motile', 'sperm_motile_color', '#0072B2'),
-            'sperm_progressive_color': _color_or_parent('sperm_progressive', 'sperm_progressive_color', '#009E73'),
-            'fsh_color': _color_or_parent('fsh', 'fsh_color', '#000000'),
-            'pgf_color': _color_or_parent('pgf', 'pgf_color', '#FF0000'),
-            'embryo_color': _color_or_parent('embryo', 'embryo_color', '#000000'),
-            'op_color': _color_or_parent('op', 'op_color', '#0000FF'),
-            'pregnancy_color': _color_or_parent('pregnancy', 'pregnancy_color', '#008000'),
-            'abort_color': _color_or_parent('abort', 'abort_color', '#FF00FF'),
-            'birth_color': _color_or_parent('birth', 'birth_color', '#000000'),
-            'special_color': _color_or_parent('special', 'special_color', '#FFA500'),
-            'combined_marker': _marker_or_parent('combined', 'combined_marker', 'o'),
-            'blood_marker': _marker_or_parent('blood', 'blood_marker', 'o'),
-            'weight_marker': _marker_or_parent('weight', 'weight_marker', '^'),
-            'fsh_marker': _marker_or_parent('fsh', 'fsh_marker', 'v'),
-            'sperm_total_marker': _marker_or_parent('sperm_total', 'sperm_total_marker', 'o'),
-            'sperm_motile_marker': _marker_or_parent('sperm_motile', 'sperm_motile_marker', 's'),
-            'sperm_progressive_marker': _marker_or_parent('sperm_progressive', 'sperm_progressive_marker', '^'),
-            'custom_events': {
-                key: {
-                    item_key: value
-                    for item_key, value in (
-                        [
-                            ("color", str(color_button.property("color"))),
-                            *(
-                                [("marker", str(marker_combo.currentData()))]
-                                if marker_combo is not None else []
-                            ),
-                        ]
-                    )
-                    if value not in (
-                        str(definition.get("default_color") or definition.get("color") or "#4C78A8")
-                        if item_key == "color"
-                        else str(definition.get("default_marker") or definition.get("marker") or "o")
-                    )
-                }
-                for key, (definition, color_button, marker_combo)
-                in self._custom_event_style_controls.items()
-                if (
-                    str(color_button.property("color"))
-                    != str(definition.get("default_color") or definition.get("color") or "#4C78A8")
-                    or (
-                        marker_combo is not None
-                        and str(marker_combo.currentData())
-                        != str(definition.get("default_marker") or definition.get("marker") or "o")
-                    )
-                )
-            }
+            "prog_color": _series_color("prog", "prog_color", "#DC143C"),
+            "blood_color": _series_color("blood", "blood_color", "#ff0000"),
+            "urine_color": _series_color("urine", "urine_color", "#FF8C00"),
+            "combined_color": _series_color("combined", "combined_color", "#8B0000"),
+            "weight_color": _series_color("weight", "weight_color", "#800080"),
+            "pdg_color": _series_color("pdg", "pdg_color", "#008000"),
+            "sperm_total_color": _series_color("sperm_total", "sperm_total_color", "#D55E00"),
+            "sperm_motile_color": _series_color("sperm_motile", "sperm_motile_color", "#0072B2"),
+            "sperm_progressive_color": _series_color("sperm_progressive", "sperm_progressive_color", "#009E73"),
+            "combined_marker": _series_marker("combined", "combined_marker", "o"),
+            "blood_marker": _series_marker("blood", "blood_marker", "o"),
+            "urine_marker": _series_marker("urine", "urine_marker", "s"),
+            "prog_marker": _series_marker("prog", "prog_marker", "o"),
+            "weight_marker": _series_marker("weight", "weight_marker", "^"),
+            "pdg_marker": _series_marker("pdg", "pdg_marker", "s"),
+            "sperm_total_marker": _series_marker("sperm_total", "sperm_total_marker", "o"),
+            "sperm_motile_marker": _series_marker("sperm_motile", "sperm_motile_marker", "s"),
+            "sperm_progressive_marker": _series_marker("sperm_progressive", "sperm_progressive_marker", "^"),
+            "custom_events": custom_events,
         }
 
     def get_role_definitions(self):
@@ -5768,40 +5910,118 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # 7.0 Language persistence & bundle‐loading
     # ——————————————————————————————————————————————
     def _normalize_style_settings(self, settings):
-        """Return a safe, complete style snapshot without dropping extensions.
+        """Return a complete canonical style snapshot.
 
-        Backend records may be partial or may contain future/plugin-owned keys.
-        Known colour and marker values are validated before they are applied;
-        unknown keys (including custom event definitions) are preserved.
+        The only legacy reads in the application are concentrated here at the
+        settings migration boundary. The returned snapshot contains no legacy
+        event colour/marker fields and all event overrides are keyed by
+        ``event_type``.
         """
         defaults = self._get_default_style_settings()
         source = settings if isinstance(settings, dict) else {}
         normalized = dict(defaults)
-        valid_markers = {"o", "s", "^", "v", "D", "*", "P", "X", "+", "x", ".", "<", ">"}
+        valid_markers = {
+            "o", "s", "^", "v", "D", "*", "P", "X", "+", "x", ".", "<", ">"
+        }
+        legacy_fields = {
+            "op_color", "pgf_color", "embryo_color", "pregnancy_color",
+            "abort_color", "birth_color", "fsh_color", "progesterone_color",
+            "special_color", "measurement_color", "fsh_marker",
+            "progesterone_marker",
+        }
+
         for key, value in source.items():
             if key in defaults and key.endswith("_color"):
                 candidate = str(value).strip()
                 if QColor(candidate).isValid():
-                    normalized[key] = candidate
+                    normalized[key] = QColor(candidate).name()
             elif key in defaults and key.endswith("_marker"):
                 candidate = str(value).strip()
                 if candidate in valid_markers:
                     normalized[key] = candidate
-            elif key == "custom_events":
-                if isinstance(value, dict):
-                    normalized[key] = {
-                        str(event_id): {
-                            field: str(field_value)
-                            for field, field_value in override.items()
-                            if field in {"color", "marker"} and (
-                                field != "color" or QColor(str(field_value)).isValid()
-                            )
-                        }
-                        for event_id, override in value.items()
-                        if isinstance(override, dict)
-                    }
-            else:
+            elif key not in {"custom_events", *legacy_fields}:
+                # Preserve unrelated/plugin-owned settings, but never copy
+                # obsolete event fields into the canonical record.
                 normalized[key] = value
+
+        aliases: Dict[str, str] = {}
+        try:
+            definitions = self._custom_event_definitions(include_retired=True)
+        except Exception:
+            definitions = []
+        for definition in definitions or []:
+            if not isinstance(definition, dict):
+                continue
+            event_type = str(definition.get("event_type") or "").strip()
+            if not event_type:
+                continue
+            for alias in (
+                definition.get("id"),
+                definition.get("stable_id"),
+                definition.get("event_type"),
+            ):
+                token = str(alias or "").strip()
+                if token:
+                    aliases[token.casefold()] = event_type
+
+        migrated: Dict[str, Dict[str, str]] = {}
+        canonical_keys: Set[str] = set()
+        raw_custom = source.get("custom_events", {})
+        if isinstance(raw_custom, dict):
+            for raw_key, override in raw_custom.items():
+                if not isinstance(override, dict):
+                    continue
+                key = str(raw_key or "").strip()
+                if not key:
+                    continue
+                canonical = aliases.get(key.casefold(), key)
+                safe: Dict[str, str] = {}
+                for field, field_value in override.items():
+                    if field == "color" and QColor(str(field_value)).isValid():
+                        safe[field] = QColor(str(field_value)).name()
+                    elif field == "marker" and str(field_value) in valid_markers:
+                        safe[field] = str(field_value)
+                if not safe:
+                    continue
+                folded = canonical.casefold()
+                if key.casefold() == folded:
+                    migrated[canonical] = safe
+                    canonical_keys.add(folded)
+                elif folded not in canonical_keys:
+                    migrated.setdefault(canonical, safe)
+
+        # One-time conversion of the former built-in appearance fields. A
+        # canonical event_type override always wins over these old shared
+        # values, and the old keys are omitted from the returned snapshot.
+        legacy_colors = {
+            "op_color": ("surgery", "oocyte_retrieval", "sperm_donation"),
+            "pgf_color": ("pgf",),
+            "embryo_color": ("embryo_transfer",),
+            "pregnancy_color": ("pregnancy", "pregnancy_verification"),
+            "abort_color": ("abortion",),
+            "birth_color": ("birth",),
+            "fsh_color": ("fsh",),
+            "progesterone_color": ("progesterone",),
+            "special_color": ("special_measurement",),
+            "measurement_color": ("measurement",),
+        }
+        for field, event_types in legacy_colors.items():
+            value = source.get(field)
+            if value is None or not QColor(str(value)).isValid():
+                continue
+            color = QColor(str(value)).name()
+            for event_type in event_types:
+                migrated.setdefault(event_type, {}).setdefault("color", color)
+        for field, event_type in {
+            "fsh_marker": "fsh",
+            "progesterone_marker": "progesterone",
+        }.items():
+            marker = str(source.get(field) or "")
+            if marker in valid_markers:
+                migrated.setdefault(event_type, {}).setdefault("marker", marker)
+
+        normalized["custom_events"] = migrated
+        normalized["style_schema_version"] = 2
         return normalized
 
     def _load_user_style_settings(self, username=None):
@@ -5815,16 +6035,26 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         mt = getattr(self, "master_track", None)
         if mt and mt.is_logged_in:
             session = mt.load_session()
-            return self._normalize_style_settings(
-                session.get("style_settings", {}) if isinstance(session, dict) else {}
-            )
+            raw = session.get("style_settings", {}) if isinstance(session, dict) else {}
+            normalized = self._normalize_style_settings(raw)
+            if isinstance(raw, dict) and raw != normalized:
+                mt.save_session({"style_settings": normalized})
+            return normalized
         if mt and not mt.is_logged_in:
             return self._normalize_style_settings({})
         identity = str(username or "default_user").strip() or "default_user"
         stored = self.backend.records.get(
             "preferences", f"style:{identity}", default=None
         )
-        return self._normalize_style_settings(stored)
+        normalized = self._normalize_style_settings(stored)
+        if isinstance(stored, dict) and stored != normalized:
+            try:
+                self.backend.records.put(
+                    "preferences", f"style:{identity}", normalized
+                )
+            except Exception as exc:
+                logging.warning("Could not persist migrated style settings: %s", exc)
+        return normalized
 
     def _save_user_style_settings(self, settings, username=None):
         """Save a normalized style snapshot for the active identity."""
@@ -7205,17 +7435,24 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             entry['probennummer'] = probe_text
                     rec_copy['pdg'].append(entry)
 
-                # --- unified events (canonical typ + datum) ---
+                # --- unified events (canonical event_type + datum) ---
                 rec_copy["events"] = []
                 for event in rec.get("events", []) or []:
                     if not isinstance(event, dict):
                         logging.warning("Invalid event in %s, skipping: %r", name, event)
                         continue
+                    legacy_keys = sorted(
+                        key for key in ("typ", "type", "date") if key in event
+                    )
+                    if legacy_keys:
+                        raise ValueError(
+                            f"Non-canonical event keys in {name}: {', '.join(legacy_keys)}"
+                        )
                     # Bind a new event ID in the live record before writing,
                     # so subsequent saves in this session update this same
                     # row instead of manufacturing a replacement identity.
                     ensure_event_record_id(event)
-                    event_type = str(event.get("typ") or "").strip()
+                    event_type = str(event.get("event_type") or "").strip()
                     event_date = event.get("datum")
                     if not event_type or event_date is None:
                         logging.warning("Invalid event in %s, skipping: %r", name, event)
@@ -7226,10 +7463,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         logging.warning("Invalid event date in %s, skipping: %r", name, event)
                         continue
                     payload = dict(event)
-                    payload["typ"] = event_type
+                    payload["event_type"] = event_type
                     payload["datum"] = event_date
-                    payload.pop("event_type", None)
-                    payload.pop("date", None)
                     rec_copy["events"].append(payload)
                 for legacy_field in ("op", "pgf", "embryo"):
                     rec_copy.pop(legacy_field, None)
@@ -11394,6 +11629,27 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
         ]
 
+    def _events_in_current_project_period(
+        self,
+        animal_data: Dict[str, Any],
+        role_value: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return role-compatible events charged to the active project period.
+
+        Records without project context intentionally retain the historical
+        lifetime behavior.  They are common in older non-project animals and
+        must not be silently changed by this migration.
+        """
+        events = self._events_recorded_in_role(animal_data, role_value)
+        if not has_project_context(animal_data):
+            return events
+        ensure_project_periods(animal_data)
+        active_id = current_period_id(animal_data)
+        return [
+            event for event in events
+            if str(event.get("project_period_id") or "") == active_id
+        ]
+
     def _role_dialog_blocks(self, role_value: str, mode: str = "edit") -> List[str]:
         registry = getattr(self, "animal_role_registry", None)
         if registry is None:
@@ -11422,13 +11678,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return None
         folded = token.casefold()
         for definition in self._custom_event_definitions(include_retired=True):
-            values = (
-                definition.get("id"),
-                definition.get("stable_id"),
-                definition.get("event_type"),
-                definition.get("typ"),
-            )
-            if any(str(value or "").strip().casefold() == folded for value in values):
+            value = str(definition.get("event_type") or "").strip()
+            if value and value.casefold() == folded:
                 return definition
         return None
 
@@ -11449,39 +11700,40 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _custom_event_types_for_role(self, role_value: str, mode: str = "edit") -> set[str]:
         values = set()
         for definition in self._active_custom_event_definitions_for_role(role_value, mode):
-            for value in (
-                definition.get("id"),
-                definition.get("stable_id"),
-                definition.get("event_type"),
-            ):
-                if str(value or "").strip():
-                    values.add(str(value).strip())
+            value = str(definition.get("event_type") or "").strip()
+            if value:
+                values.add(value)
         return values
 
     def _custom_event_appearance(self, event_type: str) -> Dict[str, Any]:
+        event_type = str(event_type or "").strip()
         definition = self._custom_event_definition_for_type(event_type) or {}
-        key = str(definition.get("id") or definition.get("stable_id") or event_type)
-        override = getattr(self, "custom_event_styles", {}).get(key, {})
+        active_definition = (
+            definition if bool(definition.get("active", True)) else None
+        )
+        metadata = event_style_metadata(event_type, active_definition)
+        styles = getattr(self, "custom_event_styles", {})
+        override = styles.get(event_type, {}) if isinstance(styles, dict) else {}
         color = str(
-            override.get("color")
-            or definition.get("default_color")
-            or definition.get("color")
+            (override or {}).get("color")
+            or metadata.get("default_color")
             or "#4C78A8"
         )
         if not QColor(color).isValid():
-            color = "#4C78A8"
+            color = str(metadata.get("default_color") or "#4C78A8")
         marker = str(
-            override.get("marker")
-            or definition.get("default_marker")
-            or definition.get("marker")
+            (override or {}).get("marker")
+            or metadata.get("default_marker")
             or "o"
         )
-        render_mode = str(definition.get("render_mode") or "line").casefold()
+        render_mode = str(metadata.get("render_mode") or "line").casefold()
         return {
             "definition": definition,
+            "metadata": metadata,
             "color": color,
             "marker": marker,
             "render_mode": render_mode if render_mode in {"line", "symbol"} else "line",
+            "configured": bool(event_type in EVENT_STYLE_METADATA or active_definition),
         }
 
     def _custom_event_snapshot(self, event_type: str) -> Dict[str, Any]:
@@ -11508,24 +11760,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 continue
             block_id = str(block.get("id") or block.get("stable_id") or "")
             event_ids = {
-                str(value) for value in (block.get("event_ids") or [])
+                str(value) for value in (block.get("event_types") or [])
                 if str(value).strip()
             }
             fallback_type = str(block.get("event_type") or "")
-            event_ids.update({fallback_type, block_id})
+            event_ids.add(fallback_type)
             for _definition in self._custom_event_definitions(include_retired=True):
                 if str(_definition.get("block_id") or _definition.get("limit_block") or "") == block_id:
-                    event_ids.update(
-                        str(value) for value in (
-                            _definition.get("id"),
-                            _definition.get("stable_id"),
-                            _definition.get("event_type"),
-                        ) if str(value or "").strip()
-                    )
+                    event_type = str(_definition.get("event_type") or "").strip()
+                    if event_type:
+                        event_ids.add(event_type)
             count = sum(
                 1 for event in events
                 if isinstance(event, dict)
-                and str(event.get("typ") or "") in event_ids
+                and str(event.get("event_type") or "") in event_ids
             )
             limits = record.get("experimental_limits", {})
             value = limits.get(block_id) if isinstance(limits, dict) else None
@@ -11575,23 +11823,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if str(block.get("kind") or "limiting") != "limiting":
                 continue
             block_id = str(block.get("id") or block.get("stable_id") or "")
-            event_ids = {str(block.get("event_type") or ""), block_id}
+            event_ids = {str(block.get("event_type") or "")}
             for definition in self._custom_event_definitions(include_retired=True):
                 if str(definition.get("block_id") or definition.get("limit_block") or "") == block_id:
-                    event_ids.update(
-                        str(value) for value in (
-                            definition.get("id"),
-                            definition.get("stable_id"),
-                            definition.get("event_type"),
-                        ) if str(value or "").strip()
-                    )
+                    event_type = str(definition.get("event_type") or "").strip()
+                    if event_type:
+                        event_ids.add(event_type)
             old_count = sum(
                 1 for event in previous_events
-                if isinstance(event, dict) and str(event.get("typ") or "") in event_ids
+                if isinstance(event, dict) and str(event.get("event_type") or "") in event_ids
             )
             new_count = sum(
                 1 for event in candidate_events
-                if isinstance(event, dict) and str(event.get("typ") or "") in event_ids
+                if isinstance(event, dict) and str(event.get("event_type") or "") in event_ids
             )
             if new_count <= old_count:
                 continue
@@ -12344,7 +12588,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # For Amme: check recovery after embryo transfer
         elif role == Role.AMME.value:
             embryo_dates = [ev['datum'] for ev in animal_data.get('events', []) 
-                           if ev.get('typ') == 'embryo_transfer' and isinstance(ev.get('datum'), datetime)]
+                           if ev.get('event_type') == 'embryo_transfer' and isinstance(ev.get('datum'), datetime)]
             recovery_days = animal_data.get('recovery_time', DEFAULT_RECOVERY_TIME)
             
             for embryo_date in embryo_dates:
@@ -12500,14 +12744,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 lines.append(f"{sperm_label}: {motile_label} {mot}%, {progressive_label} {prog}%, {count} {sperm_unit}")
         
         # Count events for this animal (normalized) and render events for this date
-        event_counts = report_index.event_counts_through(date)
-
         # Unified and legacy occurrences retain their original ordering and
         # deduplication rules in the precomputed index.
         for typ_lower, note in report_index.occurrences_on(date):
             label = self._get_report_event_label(typ_lower, messages)
             max_allowed = self._get_report_event_max(typ_lower, animal_data)
-            cur = event_counts.get(typ_lower, (None, None))[0]
+            occurrence_period = report_index.event_period_id_for_occurrence(
+                date, typ_lower, note
+            )
+            scoped_counts = report_index.event_counts_through(
+                date,
+                project_period_id=(occurrence_period if report_index.project_scoped else None),
+            )
+            cur = scoped_counts.get(typ_lower, (None, None))[0]
 
             suffix = ''
             if typ_lower == 'abort':
@@ -12822,6 +13071,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     f"{asgn_lbl}: {_proj_sev(new_project, new_sv_lbl)}")
 
         animal_data = self.animals.get(animal_name, {})
+        # Freeze the old period's attribution before changing the current
+        # project.  Otherwise a later load could charge historical events to
+        # the newly selected project.
+        ensure_project_periods(animal_data)
+        old_period_id = str(animal_data.get('project_period_id') or '').strip()
         today_iso = datetime.now().strftime('%Y-%m-%d')
         today_fmt = datetime.now().strftime('%d.%m.%Y')
         animal_data.setdefault('edits', {}).setdefault(today_iso, {})
@@ -12838,10 +13092,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 'entry_date': old_entry_date,
                 'leave_date': today_fmt,
                 'severity':   old_sv or '',
+                'period_id':  old_period_id or make_project_period_id(
+                    old_project, old_entry_date, today_fmt, len(hist)
+                ),
             })
         if new_project:
             animal_data['project_entry_date'] = today_fmt
             animal_data['project_severity']   = new_sv or ''
+            animal_data['project_period_id'] = make_project_period_id(
+                new_project, today_fmt, '', len(animal_data.get('project_history') or [])
+            )
+        else:
+            animal_data.pop('project_period_id', None)
 
         medi = getattr(self, 'medi_track_plugin', None)
         if getattr(self, 'has_medi_track_plugin', False) and medi:
@@ -13416,7 +13678,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             value = event.get("datum") or event.get("date")
             if not isinstance(value, (datetime, date)):
                 continue
-            typ = self._normalize_report_event_type(event.get("typ", ""))
+            typ = self._normalize_report_event_type(event.get("event_type", ""))
             if not typ:
                 continue
             event_date = value.date() if isinstance(value, datetime) else value
@@ -13532,11 +13794,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return ''
         
         preg_dates = [ev['datum'].date() for ev in animal_data.get('events', []) 
-                     if ev.get('typ') == 'pregnancy' and isinstance(ev.get('datum'), datetime)]
+                     if ev.get('event_type') == 'pregnancy' and isinstance(ev.get('datum'), datetime)]
         birth_dates = [ev['datum'].date() for ev in animal_data.get('events', []) 
-                      if ev.get('typ') == 'birth' and isinstance(ev.get('datum'), datetime)]
+                      if ev.get('event_type') == 'birth' and isinstance(ev.get('datum'), datetime)]
         abort_dates = [ev['datum'].date() for ev in animal_data.get('events', []) 
-                      if ev.get('typ') == 'abortion' and isinstance(ev.get('datum'), datetime)]
+                      if ev.get('event_type') == 'abortion' and isinstance(ev.get('datum'), datetime)]
         
         # Check if has children
         if birth_dates:
@@ -13564,28 +13826,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Return statistics for dynamic event/limit blocks stored in the backend."""
         if not isinstance(animal_data, dict):
             return []
-        events = self._events_recorded_in_role(animal_data)
+        events = self._events_in_current_project_period(animal_data)
         limits = animal_data.get("experimental_limits", {})
         if not isinstance(limits, dict):
             limits = {}
         result: List[str] = []
         for definition in self._custom_event_definitions(include_retired=True):
             event_type = str(definition.get("event_type") or "").strip()
-            identifiers = {
-                str(value).strip().casefold()
-                for value in (
-                    definition.get("id"),
-                    definition.get("stable_id"),
-                    definition.get("event_type"),
-                    definition.get("typ"),
-                )
-                if str(value or "").strip()
-            }
+            identifiers = {event_type.casefold()} if event_type else set()
             if not identifiers:
                 continue
             count = 0
             for event in events:
-                raw = str(event.get("typ") or "").strip().casefold()
+                raw = str(event.get("event_type") or "").strip().casefold()
                 normalized = self._normalize_report_event_type(raw)
                 if raw in identifiers or normalized.casefold() in identifiers:
                     count += 1
@@ -13627,12 +13880,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _get_event_statistics(self, animal_data: Dict[str, Any]) -> str:
         """Get event statistics showing all items with defined maximums for the role."""
         role = self._animal_role_value(animal_data)
-        events = self._events_recorded_in_role(animal_data, role)
+        events = self._events_in_current_project_period(animal_data, role)
+        scoped_sperm = (
+            current_period_records(animal_data, "sperm")
+            if has_project_context(animal_data)
+            else [item for item in animal_data.get("sperm", []) if isinstance(item, dict)]
+        )
+        scoped_daten = (
+            current_period_records(animal_data, "daten")
+            if has_project_context(animal_data)
+            else [item for item in animal_data.get("daten", []) if isinstance(item, dict)]
+        )
         stats = []
         
         if role == Role.SAMENSP.value:
             # Sperm donor: show sperm samples
-            sperm_count = len(set(s['datum'].date() for s in animal_data.get('sperm', []) 
+            sperm_count = len(set(s['datum'].date() for s in scoped_sperm
                                 if isinstance(s.get('datum'), datetime)))
             max_sperm = self._experimental_limit_value(
                 animal_data, 'max_spermaproben', DEFAULT_MAX_SPERM_SAMPLES
@@ -13642,8 +13905,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         elif role == Role.OFFSPRING.value:
             # Offspring: show special measurements and OPs
-            sonder_count = sum(1 for ev in events if ev.get('typ') == 'special_measurement')
-            op_count = sum(1 for ev in events if ev.get('typ') == 'surgery')
+            sonder_count = sum(1 for ev in events if ev.get('event_type') == 'special_measurement')
+            op_count = sum(1 for ev in events if ev.get('event_type') == 'surgery')
             max_special = self._experimental_limit_value(animal_data, 'max_special', 0)
             max_op = self._experimental_limit_value(animal_data, 'max_op', 0)
             if max_special > 0:
@@ -13655,8 +13918,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         elif role in {Role.EXPERIMENTAL.value, ROLE_VALUE_EXPERIMENTAL_OFFSPRING}:
             # Experimental animal: show surgeries and measurements
-            op_count   = sum(1 for ev in events if ev.get('typ') == 'surgery')
-            meas_count = sum(1 for ev in events if ev.get('typ') == 'measurement')
+            op_count   = sum(1 for ev in events if ev.get('event_type') == 'surgery')
+            meas_count = sum(1 for ev in events if ev.get('event_type') == 'measurement')
             max_op   = self._experimental_limit_value(animal_data, 'max_op', 0)
             max_meas = self._experimental_limit_value(animal_data, 'max_measurements', 0)
             label_op   = self.messages.get('stats.surgery',     'Surgery')
@@ -13669,10 +13932,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         elif role == Role.SPENDER.value:
             # Female donor: show all relevant maximums
             # Each progesterone measurement ('daten') represents one blood sample
-            prog_count = len(animal_data.get('daten', []))
+            prog_count = len(scoped_daten)
             pgf_count = len(event_dates({"events": events}, 'pgf'))
             op_count = len(event_dates({"events": events}, 'surgery'))
-            fsh_count = sum(1 for ev in events if ev.get('typ') == 'fsh')
+            fsh_count = sum(1 for ev in events if ev.get('event_type') == 'fsh')
             
             max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
             max_pgf = self._experimental_limit_value(animal_data, 'max_pgf', 0)
@@ -13696,14 +13959,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         elif role == Role.AMME.value:
             # Surrogate: show blood samples (progesterone measurements), PGF, embryo transfers, pregnancies, births
             # Each progesterone measurement ('daten') represents one blood sample
-            prog_count = len(animal_data.get('daten', []))
+            prog_count = len(scoped_daten)
             pgf_count = len(event_dates({"events": events}, 'pgf'))
             embryo_count = sum(1 for ev in events
-                             if ev.get('typ') == 'embryo_transfer')
+                             if ev.get('event_type') == 'embryo_transfer')
             pregnancy_count = sum(1 for ev in events
-                                if ev.get('typ') == 'pregnancy')
+                                if ev.get('event_type') == 'pregnancy')
             birth_count = sum(1 for ev in events
-                            if ev.get('typ') == 'birth')
+                            if ev.get('event_type') == 'birth')
             
             max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
             max_pgf = self._experimental_limit_value(animal_data, 'max_pgf', 0)
@@ -13733,8 +13996,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if str(animal_data.get('sex') or '').strip().casefold() != 'female':
                 stats.extend(self._custom_event_statistics(animal_data, self.messages))
                 return ', '.join(stats) if stats else '-'
-            pregnancy_count = sum(1 for ev in events if ev.get('typ') == 'pregnancy')
-            birth_count = sum(1 for ev in events if ev.get('typ') == 'birth')
+            pregnancy_count = sum(1 for ev in events if ev.get('event_type') == 'pregnancy')
+            birth_count = sum(1 for ev in events if ev.get('event_type') == 'birth')
             
             max_pregnancies = self._experimental_limit_value(animal_data, 'max_pregnancies', 0)
             max_geburten = self._experimental_limit_value(animal_data, 'max_geburten', 0)
@@ -13753,12 +14016,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _get_event_statistics_localized(self, animal_data: Dict[str, Any], messages: dict) -> str:
         """Get event statistics with localized labels."""
         role = self._animal_role_value(animal_data)
-        events = self._events_recorded_in_role(animal_data, role)
+        events = self._events_in_current_project_period(animal_data, role)
+        scoped_sperm = (
+            current_period_records(animal_data, "sperm")
+            if has_project_context(animal_data)
+            else [item for item in animal_data.get("sperm", []) if isinstance(item, dict)]
+        )
+        scoped_daten = (
+            current_period_records(animal_data, "daten")
+            if has_project_context(animal_data)
+            else [item for item in animal_data.get("daten", []) if isinstance(item, dict)]
+        )
         stats = []
         
         if role == Role.SAMENSP.value:
             # Sperm donor: show sperm samples
-            sperm_count = len(set(s['datum'].date() for s in animal_data.get('sperm', []) 
+            sperm_count = len(set(s['datum'].date() for s in scoped_sperm
                                 if isinstance(s.get('datum'), datetime)))
             max_sperm = self._experimental_limit_value(
                 animal_data, 'max_spermaproben', DEFAULT_MAX_SPERM_SAMPLES
@@ -13767,8 +14040,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         elif role == Role.OFFSPRING.value:
             # Offspring: show special measurements and OPs
-            sonder_count = sum(1 for ev in events if ev.get('typ') == 'special_measurement')
-            op_count = sum(1 for ev in events if ev.get('typ') == 'surgery')
+            sonder_count = sum(1 for ev in events if ev.get('event_type') == 'special_measurement')
+            op_count = sum(1 for ev in events if ev.get('event_type') == 'surgery')
             max_special = self._experimental_limit_value(animal_data, 'max_special', 0)
             max_op = self._experimental_limit_value(animal_data, 'max_op', 0)
             if max_special > 0:
@@ -13778,8 +14051,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         elif role in {Role.EXPERIMENTAL.value, ROLE_VALUE_EXPERIMENTAL_OFFSPRING}:
             # Experimental animal: show surgeries and measurements
-            op_count   = sum(1 for ev in events if ev.get('typ') == 'surgery')
-            meas_count = sum(1 for ev in events if ev.get('typ') == 'measurement')
+            op_count   = sum(1 for ev in events if ev.get('event_type') == 'surgery')
+            meas_count = sum(1 for ev in events if ev.get('event_type') == 'measurement')
             max_op   = self._experimental_limit_value(animal_data, 'max_op', 0)
             max_meas = self._experimental_limit_value(animal_data, 'max_measurements', 0)
             if max_op > 0:
@@ -13789,10 +14062,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         elif role == Role.SPENDER.value:
             # Female donor: show all relevant maximums
-            prog_count = len(animal_data.get('daten', []))
+            prog_count = len(scoped_daten)
             pgf_count = len(event_dates({"events": events}, 'pgf'))
             op_count = len(event_dates({"events": events}, 'surgery'))
-            fsh_count = sum(1 for ev in events if ev.get('typ') == 'fsh')
+            fsh_count = sum(1 for ev in events if ev.get('event_type') == 'fsh')
             
             max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
             max_pgf = self._experimental_limit_value(animal_data, 'max_pgf', 0)
@@ -13810,14 +14083,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         elif role == Role.AMME.value:
             # Surrogate: show blood samples, PGF, embryo transfers, pregnancies, births
-            prog_count = len(animal_data.get('daten', []))
+            prog_count = len(scoped_daten)
             pgf_count = len(event_dates({"events": events}, 'pgf'))
             embryo_count = sum(1 for ev in events
-                             if ev.get('typ') == 'embryo_transfer')
+                             if ev.get('event_type') == 'embryo_transfer')
             pregnancy_count = sum(1 for ev in events
-                                if ev.get('typ') == 'pregnancy')
+                                if ev.get('event_type') == 'pregnancy')
             birth_count = sum(1 for ev in events
-                            if ev.get('typ') == 'birth')
+                            if ev.get('event_type') == 'birth')
             
             max_messungen = self._experimental_limit_value(animal_data, 'max_messungen', 0)
             max_pgf = self._experimental_limit_value(animal_data, 'max_pgf', 0)
@@ -13841,8 +14114,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if str(animal_data.get('sex') or '').strip().casefold() != 'female':
                 stats.extend(self._custom_event_statistics(animal_data, messages))
                 return ', '.join(stats) if stats else '-'
-            pregnancy_count = sum(1 for ev in events if ev.get('typ') == 'pregnancy')
-            birth_count = sum(1 for ev in events if ev.get('typ') == 'birth')
+            pregnancy_count = sum(1 for ev in events if ev.get('event_type') == 'pregnancy')
+            birth_count = sum(1 for ev in events if ev.get('event_type') == 'birth')
             
             max_pregnancies = self._experimental_limit_value(animal_data, 'max_pregnancies', 0)
             max_geburten = self._experimental_limit_value(animal_data, 'max_geburten', 0)
@@ -13936,10 +14209,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # Surrogate-specific status logic
         elif role == Role.AMME.value:
-            preg_dates   = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'pregnancy']
-            birth_dates  = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'birth']
-            abort_dates  = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'abortion']
-            embryo_dates = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'embryo_transfer']
+            preg_dates   = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'pregnancy']
+            birth_dates  = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'birth']
+            abort_dates  = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'abortion']
+            embryo_dates = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'embryo_transfer']
             
             last_preg   = max(preg_dates)   if preg_dates   else None
             last_birth  = max(birth_dates)  if birth_dates  else None
@@ -13981,9 +14254,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             is_female = 'female' in sex or 'weiblich' in sex
             
             if is_female:
-                preg_dates   = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'pregnancy']
-                birth_dates  = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'birth']
-                abort_dates  = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'abortion']
+                preg_dates   = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'pregnancy']
+                birth_dates  = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'birth']
+                abort_dates  = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'abortion']
                 
                 last_preg  = max(preg_dates)  if preg_dates  else None
                 last_birth = max(birth_dates) if birth_dates else None
@@ -15766,10 +16039,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     status = markers
             elif role == Role.AMME.value:
                 # Surrogate-specific status logic (☉, ☉?, Oo, O)
-                preg_dates   = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'pregnancy']
-                birth_dates  = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'birth']
-                abort_dates  = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'abortion']
-                embryo_dates = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'embryo_transfer']
+                preg_dates   = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'pregnancy']
+                birth_dates  = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'birth']
+                abort_dates  = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'abortion']
+                embryo_dates = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'embryo_transfer']
 
                 last_preg   = max(preg_dates)   if preg_dates   else None
                 last_birth  = max(birth_dates)  if birth_dates  else None
@@ -15826,9 +16099,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 
                 if is_female:
                     # Female Zuchttiere: same pregnancy logic as surrogates
-                    preg_dates   = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'pregnancy']
-                    birth_dates  = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'birth']
-                    abort_dates  = [ev['datum'] for ev in a.get('events', []) if ev['typ'] == 'abortion']
+                    preg_dates   = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'pregnancy']
+                    birth_dates  = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'birth']
+                    abort_dates  = [ev['datum'] for ev in a.get('events', []) if ev['event_type'] == 'abortion']
                     
                     last_preg  = max(preg_dates)  if preg_dates  else None
                     last_birth = max(birth_dates) if birth_dates else None
@@ -15873,9 +16146,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             injections = []
             for ev in a.get('events', []):
                 if ev.get('datum') and ev['datum'].date() == today:
-                    if ev.get('typ') == 'fsh':
+                    if ev.get('event_type') == 'fsh':
                         injections.append('FSH')
-                    elif ev.get('typ') == 'progesterone':
+                    elif ev.get('event_type') == 'progesterone':
                         injections.append('Prog.')
             if injections:
                 status = (status + ' ' + ' '.join(injections)).strip()
@@ -16889,58 +17162,29 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 # created, not which already-saved history is visible.
                 # Stable IDs suppress only duplicate copies of the same row;
                 # separate same-day events remain separate plot occurrences.
+                ensure_project_periods(a)
                 evs = plot_event_entries(a)
+                scoped_plot = has_project_context(a)
+                active_period = current_period_id(a) if scoped_plot else ""
 
-                # styling maps
-                colors = {
-                    'pgf': getattr(self, 'pgf_color', QColor('#FF0000')).name(), 
-                    'embryo_transfer': getattr(self, 'embryo_color', QColor('#000000')).name(), 
-                    'surgery': getattr(self, 'op_color', QColor('#0000FF')).name(),
-                    'oocyte_retrieval': getattr(
-                        self, 'op_color', QColor('#0000FF')
-                    ).name(),
-                    'sperm_donation': getattr(
-                        self, 'op_color', QColor('#0000FF')
-                    ).name(),
-                    'pregnancy': getattr(self, 'pregnancy_color', QColor('#008000')).name(), 
-                    'pregnancy_verification': getattr(
-                        self, 'pregnancy_color', QColor('#008000')
-                    ).name(),
-                    'abortion': getattr(self, 'abort_color', QColor('#FF00FF')).name(), 
-                    'birth': getattr(self, 'birth_color', QColor('#000000')).name(),
-                    'fsh': getattr(self, 'fsh_color', QColor('#000000')).name(), 
-                    'progesterone': 'green',
-                    'special_measurement': getattr(self, 'special_color', QColor('#FFA500')).name()
-                }
-                labels = {
-                    'pgf': self.messages.get('plot.event.pgf', 'PGF'),
-                    'embryo_transfer': self.messages.get('plot.event.embryo_transfer', 'Embryo'),
-                    'surgery': self.messages.get('plot.event.operation', 'OP'),
-                    'oocyte_retrieval': self.messages.get(
-                        'plot.event.oocyte_retrieval', 'Oocyte retrieval'
-                    ),
-                    'sperm_donation': self.messages.get(
-                        'plot.event.sperm_donation', 'Sperm donation'
-                    ),
-                    'pregnancy': self.messages.get('plot.event.pregnancy', 'Pregnancy'),
-                    'pregnancy_verification': self.messages.get(
-                        'plot.event.pregnancy_verification',
-                        'Pregnancy verification',
-                    ),
-                    'abortion': self.messages.get('plot.event.abort', 'Abort'),
-                    'birth': self.messages.get('plot.event.birth', 'Birth'),
-                    'fsh': self.messages.get('plot.event.fsh', 'FSH'),
-                    'progesterone': self.messages.get('plot.event.progesterone_short', 'Prog.'),
-                    'special_measurement': self.messages.get('plot.event.special_measurement', 'Special measurement')
-                }
-                for definition in self._custom_event_definitions(include_retired=True):
-                    event_type = str(definition.get("event_type") or "")
-                    if event_type:
-                        appearance = self._custom_event_appearance(event_type)
-                        colors[event_type] = appearance["color"]
-                        labels[event_type] = str(
-                            definition.get("name") or definition.get("label") or event_type
-                        )
+                # Resolve every plotted event through the same canonical
+                # appearance resolver used by Visual Style.  This removes the
+                # old split between hard-coded built-ins and custom IDs.
+                appearances = {}
+                colors = {}
+                labels = {}
+                for event_type, _event_date, _event_record in evs:
+                    appearance = self._custom_event_appearance(event_type)
+                    appearances[event_type] = appearance
+                    colors[event_type] = appearance["color"]
+                    metadata = appearance.get("metadata", {})
+                    label = str(metadata.get("label") or event_type)
+                    for key in metadata.get("label_keys", ()):
+                        localized = str(self.messages.get(key, "") or "").strip()
+                        if localized:
+                            label = localized.rstrip(":")
+                            break
+                    labels[event_type] = label
 
                 # A stored snapshot keeps a retired or renamed custom event
                 # readable and visually consistent after its role association
@@ -16957,12 +17201,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         historical_event_label(self.messages, event_type, event_record),
                     )
                     snapshot_color = str(snapshot.get("color") or "").strip()
-                    if snapshot_color and QColor(snapshot_color).isValid():
+                    if (
+                        snapshot_color
+                        and QColor(snapshot_color).isValid()
+                        and not appearances.get(event_type, {}).get("configured", False)
+                    ):
                         colors[event_type] = QColor(snapshot_color).name()
 
-                # how many of each type we have now
+                # Only the active project period contributes to the current
+                # used/max annotation.  Historical events remain plotted,
+                # but are never presented as current-project usage.
                 counts = {}
                 for typ, _event_date, _event_record in evs:
+                    if scoped_plot and event_period_id(a, _event_record) != active_period:
+                        continue
                     counts[typ] = counts.get(typ, 0) + 1
                 idxs = {typ: 0 for typ in counts}
 
@@ -16986,38 +17238,42 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 # constant y‐offset for all event triangles so only the tip touches the axis
 
                 for typ, dt_raw, event_record in evs:
-                    idxs[typ] += 1
+                    is_current_period = (
+                        not scoped_plot
+                        or event_period_id(a, event_record) == active_period
+                    )
+                    if is_current_period:
+                        idxs[typ] = idxs.get(typ, 0) + 1
                     col = colors.get(typ, 'black')
-                    custom_definition = self._custom_event_definition_for_type(typ)
                     snapshot = event_record.get("custom_event_snapshot", {})
                     if not isinstance(snapshot, dict):
                         snapshot = {}
-                    custom_appearance = (
-                        self._custom_event_appearance(typ) if custom_definition else {}
-                    )
-                    if snapshot:
+                    appearance = appearances.get(typ) or self._custom_event_appearance(typ)
+                    if (
+                        snapshot
+                        and not appearance.get("configured", False)
+                    ):
                         snapshot_mode = str(snapshot.get("render_mode") or "line").casefold()
-                        custom_appearance.update({
+                        appearance = dict(appearance)
+                        appearance.update({
                             "color": col,
                             "marker": str(snapshot.get("marker") or "o"),
                             "render_mode": snapshot_mode if snapshot_mode in {"line", "symbol"} else "line",
                         })
-                    is_custom_symbol = (
-                        bool(custom_appearance)
-                        and custom_appearance.get("render_mode") == "symbol"
-                    )
-                    # Symbol custom events use the same clipped event layer as FSH,
-                    # while line events continue through the standard vertical-line path.
-                    if is_custom_symbol:
+                    # Every symbol event uses the same clipped event layer;
+                    # line events continue through the standard vertical-line
+                    # path.  The configured render mode wins over historical
+                    # snapshots for active event types.
+                    if appearance.get("render_mode") == "symbol":
                         dt = _to_py_datetime(dt_raw)
                         dt_num = _safe_date2num(dt)
                         if dt_num is None:
-                            logging.warning(f"Skipping invalid custom event date: {dt_raw!r}")
+                            logging.warning(f"Skipping invalid event date: {dt_raw!r}")
                             continue
                         symbol = ax.scatter(
                             dt_num, TRI_Y,
-                            marker=custom_appearance.get("marker", "o"),
-                            s=30, color=custom_appearance.get("color", "#4C78A8"),
+                            marker=appearance.get("marker", "o"),
+                            s=30, color=appearance.get("color", "#4C78A8"),
                             transform=ax.get_xaxis_transform(),
                             clip_on=True, picker=10, zorder=3
                         )
@@ -17025,28 +17281,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         symbol.set_visible(events_chk is not None and events_chk.isChecked())
                         self.ev_lines.append(symbol)
                         self.hover_data.append((dt, TRI_Y, ax, typ, name, symbol))
-                    # FSH and Progesterone: tiny triangles inside the axes, clipped by y-limits
-                    elif typ in ('fsh', 'progesterone'):
-                        # strict normalization to avoid invalid ordinals
-                        dt = _to_py_datetime(dt_raw)
-                        dt_num = _safe_date2num(dt)
-                        if dt_num is None:
-                            logging.warning(f"Skipping invalid {typ} event date: {dt_raw!r}")
-                            continue
-                        # Use custom marker for FSH, default 'v' for progesteron
-                        marker = getattr(self, 'fsh_marker', 'v') if typ == 'fsh' else 'v'
-                        tri = ax.scatter(
-                            dt_num, TRI_Y,
-                            marker=marker, s=30, color=col,
-                            transform=ax.get_xaxis_transform(),  # x=data, y=axes-fraction
-                            clip_on=True, picker=10, zorder=3
-                        )
-                        # Respect events checkbox state (use appropriate checkbox for current tab)
-                        events_chk = self._get_current_events_checkbox()
-                        tri.set_visible(events_chk is not None and events_chk.isChecked())
-                        self.ev_lines.append(tri)
-                        self.hover_data.append((dt, TRI_Y, ax, typ, name, tri))
-                    elif not is_custom_symbol:
+                    else:
                         # All line event labels use weight axis for placement
                         if 'weight_ax' in locals():
                             axis_plot = weight_ax
@@ -17065,15 +17300,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             continue
                         lab = labels.get(typ, typ)
                         line = axis_plot.axvline(dt, linestyle='dashed', color=col)
-                        # Respect events checkbox state (use appropriate checkbox for current tab)
+                    # Respect events checkbox state (use appropriate checkbox for current tab)
                         events_chk = self._get_current_events_checkbox()
                         line.set_visible(events_chk is not None and events_chk.isChecked())
                         self.ev_lines.append(line)
-                        denom = max_allowed.get(typ, counts.get(typ, '?'))
-                        if typ.lower() == 'abortion':
-                            txt = f"{lab} ({idxs[typ]})"
+                        if not is_current_period:
+                            historical_suffix = self.messages.get(
+                                "plot.event.historical", "historical"
+                            )
+                            txt = f"{lab} ({historical_suffix})"
                         else:
-                            txt = f"{lab} ({idxs[typ]}/{denom})"
+                            denom = max_allowed.get(typ, counts.get(typ, '?'))
+                            if typ.lower() == 'abortion':
+                                txt = f"{lab} ({idxs[typ]})"
+                            else:
+                                txt = f"{lab} ({idxs[typ]}/{denom})"
                         ev_text = axis_plot.text(
                             dt + timedelta(days=0.1),
                             y_pos,
@@ -19116,9 +19357,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         # Include canonical reproductive events for Spenderin and Amme.
                         if role in (Role.SPENDER.value, Role.AMME.value):
                             repro_events = [
-                                (ev.get('typ'), ev.get('datum'))
+                                (ev.get('event_type'), ev.get('datum'))
                                 for ev in animal.get('events', []) or []
-                                if isinstance(ev, dict) and ev.get('typ') and ev.get('datum')
+                                if isinstance(ev, dict) and ev.get('event_type') and ev.get('datum')
                             ]
                             for typ, dt in repro_events:
                                 if isinstance(dt, datetime) and von <= dt.date() <= bis:
@@ -19132,7 +19373,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                     })
                         elif is_sperm_role:
                             # For Samenspender, include events with sperm columns
-                            repro_events += [(ev['typ'], ev['datum']) for ev in animal.get('events', [])]
+                            repro_events += [(ev['event_type'], ev['datum']) for ev in animal.get('events', [])]
                             for typ, dt in repro_events:
                                 if isinstance(dt, datetime) and von <= dt.date() <= bis:
                                     data.append({
@@ -20140,20 +20381,29 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if hasattr(self, 'selected_animals') and self.selected_animals:
                 self._plot_selected()
 
-    def _can_manage_institution_branding(self) -> bool:
+    def _can_manage_institution_settings(self) -> bool:
         mt = getattr(self, "master_track", None)
-        role = str(getattr(mt, "current_role", "") or "")
+        if not mt or not getattr(mt, "is_logged_in", False):
+            return False
+        checker = getattr(mt, "can", None)
+        if callable(checker):
+            return bool(checker("core.manage_institution_settings"))
+        # Compatibility for test doubles and older embedded Master Track
+        # objects.  The real plugin always takes the canonical permission path
+        # above; this fallback never grants access without the old equivalent
+        # role/job context.
+        role = str(getattr(mt, "current_role", "") or "").casefold()
         jobs = set(getattr(mt, "get_assigned_jobs", lambda: [])() or [])
-        return bool(
-            mt
-            and getattr(mt, "is_logged_in", False)
-            and (role in {"lord", "master"} or "manager" in jobs)
-        )
+        return role in {"lord", "master"} or "manager" in jobs
+
+    def _can_manage_institution_branding(self) -> bool:
+        """Compatibility alias for callers using the former helper name."""
+        return self._can_manage_institution_settings()
 
     def _show_institution_branding(self):
         """Compatibility entry point; branding now lives in Conventions."""
         mt = getattr(self, "master_track", None)
-        permitted = self._can_manage_institution_branding()
+        permitted = self._can_manage_institution_settings()
         if not permitted:
             QMessageBox.warning(
                 self,
@@ -20169,10 +20419,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         actor = str(
             getattr(mt, "current_username", "") or "installation-admin"
         )
+        try:
+            app_authorization = object.__getattribute__(self, "__dict__").get(
+                "authorization"
+            )
+        except Exception:
+            app_authorization = None
         InstitutionBrandingDialog(
             self.backend.branding,
             actor,
             authorized=True,
+            units_authorized=True,
+            units_service=CanonicalUnitService(self.backend),
+            user_db=getattr(mt, "user_db", None),
+            authorization=app_authorization,
             messages=self.messages,
             parent=self,
         ).exec()
@@ -20279,21 +20539,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.sperm_total_color = QColor(settings.get('sperm_total_color', '#D55E00'))
         self.sperm_motile_color = QColor(settings.get('sperm_motile_color', '#0072B2'))
         self.sperm_progressive_color = QColor(settings.get('sperm_progressive_color', '#009E73'))
-        self.fsh_color = QColor(settings.get('fsh_color', '#000000'))
         custom_events = settings.get("custom_events", {})
         self.custom_event_styles = (
             {str(k): dict(v) for k, v in custom_events.items() if isinstance(v, dict)}
             if isinstance(custom_events, dict) else {}
         )
-        
-        # Event colors
-        self.pgf_color = QColor(settings.get('pgf_color', '#FF0000'))
-        self.embryo_color = QColor(settings.get('embryo_color', '#000000'))
-        self.op_color = QColor(settings.get('op_color', '#0000FF'))
-        self.pregnancy_color = QColor(settings.get('pregnancy_color', '#008000'))
-        self.abort_color = QColor(settings.get('abort_color', '#FF00FF'))
-        self.birth_color = QColor(settings.get('birth_color', '#000000'))
-        self.special_color = QColor(settings.get('special_color', '#FFA500'))
         
         # Markers
         self.combined_marker = settings.get('combined_marker', 'o')
@@ -20302,7 +20552,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.prog_marker = settings.get('prog_marker', 'o')
         self.weight_marker = settings.get('weight_marker', '^')
         self.pdg_marker = settings.get('pdg_marker', 's')
-        self.fsh_marker = settings.get('fsh_marker', 'v')
         self.sperm_total_marker = settings.get('sperm_total_marker', 'o')
         self.sperm_motile_marker = settings.get('sperm_motile_marker', 's')
         self.sperm_progressive_marker = settings.get('sperm_progressive_marker', '^')
@@ -20319,21 +20568,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             'sperm_total_color': '#D55E00',
             'sperm_motile_color': '#0072B2',
             'sperm_progressive_color': '#009E73',
-            'fsh_color': '#000000',  # black
-            'pgf_color': '#FF0000',  # red
-            'embryo_color': '#000000',  # black
-            'op_color': '#0000FF',  # blue
-            'pregnancy_color': '#008000',  # green
-            'abort_color': '#FF00FF',  # magenta
-            'birth_color': '#000000',  # black
-            'special_color': '#FFA500',  # orange
             'combined_marker': 'o',  # circle for combined/converted values (rendered empty by plotting code)
             'blood_marker': 'o',  # filled circle for blood progesterone
             'urine_marker': 's',  # square for urine PdG
             'prog_marker': 'o',
             'weight_marker': '^',
             'pdg_marker': 's',
-            'fsh_marker': 'v',  # triangle down
             'sperm_total_marker': 'o',  # circle
             'sperm_motile_marker': 's',  # square
             'sperm_progressive_marker': '^',  # triangle up
@@ -23612,7 +23852,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # populate existing events (sorted chronologically)
             sorted_events = sorted(rec.get('events', []), key=lambda x: x['datum'])
             for ev in sorted_events:
-                add_ev_row((ev['datum'].strftime(DATE_FORMAT), ev['typ'], ev))
+                add_ev_row((ev['datum'].strftime(DATE_FORMAT), ev['event_type'], ev))
 
             ev_sc = QScrollArea()
             ev_sc.setWidgetResizable(True)
@@ -24263,7 +24503,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Populate existing events (sorted chronologically)
             sorted_events = sorted(rec.get('events', []), key=lambda x: x['datum'])
             for ev in sorted_events:
-                add_ev_row((ev['datum'].strftime(DATE_FORMAT), ev['typ'], ev))
+                add_ev_row((ev['datum'].strftime(DATE_FORMAT), ev['event_type'], ev))
 
             ev_sc = QScrollArea()
             ev_sc.setWidgetResizable(True)
@@ -24913,7 +25153,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         sorted_events = sorted(rec.get('events', []), key=lambda x: x['datum'])
         for ev in sorted_events:
-            add_ev_row_vt((ev['datum'].strftime(DATE_FORMAT), ev['typ'], ev))
+            add_ev_row_vt((ev['datum'].strftime(DATE_FORMAT), ev['event_type'], ev))
 
         ev_sc = QScrollArea()
         ev_sc.setWidgetResizable(True)
@@ -25364,7 +25604,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         existing_custom_role_events = [
             event for event in (rec.get("events", []) or [])
             if isinstance(event, dict)
-            and str(event.get("typ") or event.get("event_type") or "").strip()
+            and str(event.get("event_type") or "").strip()
             and (event.get("datum") is not None or event.get("date") is not None)
         ]
         if active_custom_events or existing_custom_role_events:
@@ -25425,7 +25665,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     )
                 if isinstance(data, dict):
                     stored_type = str(
-                        data.get("typ") or data.get("event_type") or data.get("type") or ""
+                        data.get("event_type") or ""
                     ).strip()
                     restore_event_combo_selection(
                         event_combo,
@@ -26216,14 +26456,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 copy.deepcopy(event)
                 for event in rec.get("events", []) or []
                 if isinstance(event, dict)
-                and (event.get("typ") or event.get("event_type"))
+                and event.get("event_type")
                 and (event.get("datum") is not None or event.get("date") is not None)
             ]
 
             def fmt_ev(ev):
                 return (
                     (ev.get('datum') or ev.get('date')).strftime(DATE_FORMAT),
-                    str(ev.get('typ') or ev.get('event_type') or ''),
+                    str(ev.get('event_type') or ''),
                     ev,
                 )
 
@@ -26567,9 +26807,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             combo, "_progtrack_source_event", {}
                         )
                         source_type = str(
-                            source_event.get("typ")
-                            or source_event.get("event_type")
-                            or ""
+                            source_event.get("event_type") or ""
                         ).strip().casefold() if isinstance(source_event, dict) else ""
                         unchanged_historical_type = (
                             bool(typ) and source_type == typ.casefold()
@@ -27096,7 +27334,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 matching = [
                     event for event in events
                     if isinstance(event, dict)
-                    and event.get("typ") == evt
+                    and event.get("event_type") == evt
                     and event.get("datum") == datum
                 ]
                 if matching:
@@ -27108,13 +27346,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     maximum = int(a.get(limit_field, 0) or 0)
                     current_count = sum(
                         1 for event in events
-                        if isinstance(event, dict) and event.get("typ") == evt
+                        if isinstance(event, dict) and event.get("event_type") == evt
                     )
                     if maximum and current_count >= maximum:
                         logging.warning("Event skipped for %s: %s limit reached", name, evt)
                         skipped += 1
                         continue
-                events.append({"typ": evt, "datum": datum})
+                events.append({"event_type": evt, "datum": datum})
                 evt_added += 1
 
         finally:
@@ -27225,26 +27463,27 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     try:
                         if not isinstance(ev, dict):
                             raise TypeError("Event must be an object")
-                        datum = parse_date(ev.get('datum') or ev.get('date'))
-                        typ = str(
-                            ev.get('typ') or ev.get('event_type') or ''
-                        ).strip().lower()
-                        # Normalize legacy German identifiers to English
-                        normalized_typ = typ
+                        legacy_keys = sorted(
+                            key for key in ("typ", "type", "date") if key in ev
+                        )
+                        if legacy_keys:
+                            raise ValueError(
+                                "Non-canonical event keys: " + ", ".join(legacy_keys)
+                            )
+                        datum = parse_date(ev.get('datum'))
+                        event_type = str(ev.get('event_type') or '').strip().lower()
                         # Saved historical types must survive role changes and
                         # retired/unknown definitions. The current catalog
                         # constrains new rows; it must not erase old records.
-                        if datum and normalized_typ:
+                        if datum and event_type:
                             payload = copy.deepcopy(ev)
-                            payload.pop("event_type", None)
-                            payload.pop("date", None)
-                            payload["typ"] = normalized_typ
+                            payload["event_type"] = event_type
                             payload["datum"] = datum
                             ensure_event_record_id(payload)
-                            snapshot = self._custom_event_snapshot(normalized_typ)
+                            snapshot = self._custom_event_snapshot(event_type)
                             if (
                                 not payload.get("custom_event_snapshot")
-                                and snapshot.get("id") != normalized_typ
+                                and snapshot.get("id") != event_type
                             ):
                                 payload["custom_event_snapshot"] = snapshot
                             rec['events'].append(payload)
@@ -27359,6 +27598,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     rec['sick_start_date'] = None
                 if 'sick_end_date' not in rec:
                     rec['sick_end_date'] = None
+
+                # Normalize project membership periods only after all dated
+                # records have been parsed.  This makes the migration
+                # deterministic and preserves the event's original period
+                # across later project changes.
+                ensure_project_periods(rec)
 
                 # ------------------------
                 # 7.27.1.6 After processing all entries:
@@ -27726,6 +27971,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Persist backend data after enriching dynamic event snapshots."""
         for _record in list(self.animals.values()) + list(self.archived.values()):
             if isinstance(_record, dict):
+                ensure_project_periods(_record)
                 synchronize_experimental_limits(
                     _record,
                     self._animal_role_value(_record, default=Role.UNKNOWN.value),
@@ -27733,7 +27979,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     prune_unsupported=True,
                 )
             for _event in _record.get("events", []) if isinstance(_record, dict) else []:
-                _event_type = str(_event.get("typ") or "") if isinstance(_event, dict) else ""
+                _event_type = str(_event.get("event_type") or "") if isinstance(_event, dict) else ""
                 if _event_type and self._custom_event_definition_for_type(_event_type):
                     if isinstance(_event, dict) and not _event.get("custom_event_snapshot"):
                         _event["custom_event_snapshot"] = self._custom_event_snapshot(_event_type)

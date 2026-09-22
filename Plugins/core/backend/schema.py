@@ -5,7 +5,7 @@ the application UI is cut over incrementally. Animal identity and measurement
 records are normalized; plugin-owned records use stable typed namespaces.
 """
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SQLITE_MIGRATIONS = {
     1: """
@@ -120,6 +120,22 @@ SQLITE_MIGRATIONS = {
         updated_at TEXT NOT NULL,
         CHECK (state IN ('staged','pending','active','quarantined','deleted'))
     );
+    """,
+    2: """
+    -- Animal-event payloads were historically stored with the runtime alias
+    -- ``typ``.  The normalized event_type column is already authoritative;
+    -- make the JSON payload use the same canonical key as well.
+    UPDATE animal_events
+    SET payload_json = json_remove(
+        json_set(payload_json, '$.event_type', json_extract(payload_json, '$.typ')),
+        '$.typ'
+    )
+    WHERE json_type(payload_json, '$.typ') IS NOT NULL
+      AND json_type(payload_json, '$.event_type') IS NULL;
+    UPDATE animal_events
+    SET payload_json = json_remove(payload_json, '$.typ')
+    WHERE json_type(payload_json, '$.typ') IS NOT NULL
+      AND json_type(payload_json, '$.event_type') IS NOT NULL;
     """,
 }
 
@@ -240,5 +256,19 @@ POSTGRESQL_MIGRATIONS = {
         updated_at TIMESTAMPTZ NOT NULL,
         CHECK (state IN ('staged','pending','active','quarantined','deleted'))
     );
+    """,
+    2: """
+    -- Animal-event payloads were historically stored with the runtime alias
+    -- ``typ``.  The normalized event_type column is already authoritative;
+    -- make the JSON payload use the same canonical key as well.
+    UPDATE animal_events
+    SET payload_json = (payload_json - 'typ')
+                       || jsonb_build_object('event_type', payload_json->'typ')
+    WHERE payload_json ? 'typ'
+      AND NOT (payload_json ? 'event_type');
+    UPDATE animal_events
+    SET payload_json = payload_json - 'typ'
+    WHERE payload_json ? 'typ'
+      AND payload_json ? 'event_type';
     """,
 }

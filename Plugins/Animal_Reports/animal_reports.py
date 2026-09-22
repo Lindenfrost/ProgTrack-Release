@@ -33,6 +33,8 @@ except Exception:  # pragma: no cover - standalone plugin fallback
                     return value
         return str(key or "").split(" - ")[0].strip()
 
+from Plugins.core.project_periods import ensure_project_periods
+
 @dataclass
 class LockedEntry:
     """Class to represent a locked timeline entry."""
@@ -362,6 +364,7 @@ class AnimalReportsWidget(QMainWindow):
             animal_data = section_data.get(animal_name)
             if not isinstance(animal_data, dict):
                 continue
+            ensure_project_periods(animal_data)
 
             for data_type in measurement_types:
                 items = animal_data.get(data_type, [])
@@ -445,7 +448,7 @@ class AnimalReportsWidget(QMainWindow):
                     item_date = str(item_date or "").split("T")[0].split(" ")[0]
                 if item_date != date_str:
                     continue
-                event_type = str(item.get("typ") or "").replace("_", " ").strip()
+                event_type = str(item.get("event_type") or "").replace("_", " ").strip()
                 if not event_type:
                     continue
                 value = item.get("wert") or item.get("value", "")
@@ -455,6 +458,11 @@ class AnimalReportsWidget(QMainWindow):
                 if note:
                     details.append(str(note))
                 label = event_type.capitalize()
+                period_project = str(
+                    item.get("project_period_project") or ""
+                ).strip()
+                if period_project:
+                    label = f"{label} [{period_project}]"
                 events.append(f"{label}: {', '.join(details)}" if details else label)
 
         return events
@@ -923,6 +931,7 @@ class AnimalReportsWidget(QMainWindow):
             Dictionary with aggregated data for the backend report record
         """
         logger.debug(f"Aggregating data for animal: {animal_name}")
+        ensure_project_periods(animal_data)
         
         # Initialize the result structure
         display_name = self._display_animal_name(animal_name, animal_data)
@@ -934,6 +943,7 @@ class AnimalReportsWidget(QMainWindow):
                                              animal_data.get('referenzgewicht', 0)),
             'species': animal_data.get('species', ''),
             'project': animal_data.get('project', ''),
+            'project_history': animal_data.get('project_history', []),
             'birth_date': animal_data.get('birth_date', ''),
             'notes': '',
             'measurements': [],
@@ -1016,7 +1026,11 @@ class AnimalReportsWidget(QMainWindow):
                 
             date_entries[date_str].append({
                 'type': 'event',
-                'event_type': event.get('typ', ''),
+                'event_type': event.get('event_type', ''),
+                'project_period_id': event.get('project_period_id', ''),
+                'project_period_project': event.get('project_period_project', ''),
+                'project_period_start': event.get('project_period_start', ''),
+                'project_period_end': event.get('project_period_end', ''),
                 'notes': event.get('notiz', '')
             })
         

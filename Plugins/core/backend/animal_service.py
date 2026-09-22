@@ -161,12 +161,12 @@ class AnimalService:
                 # type. Keep these in the canonical animal snapshot so every
                 # editor, import/update path, and plot sees the same record.
                 event["event_id"] = str(data["event_id"])
-                event["typ"] = str(data["event_type"])
+                event_type = str(data["event_type"])
+                event["event_type"] = event_type
                 event.setdefault(
                     "recorded_role",
                     animal_roles.get(str(data["animal_ipid"]), "unknown"),
                 )
-                event.pop("event_type", None)
                 event.pop("date", None)
                 if "datum" not in event:
                     event["datum"] = data.get("occurred_at")
@@ -399,10 +399,16 @@ class AnimalService:
                     )
                     if not occurred_at:
                         continue
-                    event_type = str(
-                        event.get("typ") or event.get("event_type")
-                        or event.get("type") or ""
-                    ).strip()
+                    legacy_keys = sorted(
+                        key for key in ("typ", "type") if key in event
+                    )
+                    if legacy_keys:
+                        raise ValidationError(
+                            "Animal event uses obsolete field(s) "
+                            + ", ".join(legacy_keys)
+                            + "; migrate the payload to event_type first."
+                        )
+                    event_type = str(event.get("event_type") or "").strip()
                     if not event_type:
                         raise ValidationError("Animal event type cannot be empty.")
                     event_id = str(event.get("event_id") or "").strip()
@@ -467,9 +473,7 @@ class AnimalService:
                         )
 
                     payload["event_id"] = event_id
-                    payload["typ"] = event_type
-                    payload.pop("event_type", None)
-                    payload.pop("type", None)
+                    payload["event_type"] = event_type
                     payload.pop("date", None)
                     payload_json = dumps(payload)
                     if previous_event is not None:

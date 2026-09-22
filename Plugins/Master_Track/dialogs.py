@@ -46,6 +46,7 @@ from PyQt6.QtWidgets import (
 
 from .auth import UserDB
 from Plugins.core.ui_icons import apply_icon
+from Plugins.core.authorization import CanonicalUnitService
 from .permissions import (
     ALL_PERMISSIONS,
     DEFAULT_JOB_BUNDLES,
@@ -109,25 +110,37 @@ def _organization_unit_combo(user_db: UserDB, current_id: str = "") -> QComboBox
     combo = QComboBox()
     combo.addItem("Unassigned", "")
     try:
-        raw = user_db.backend.records.get(
-            "security", "organization-units", default={}
-        )
+        units = CanonicalUnitService(user_db.backend).load()
     except Exception:
-        raw = {}
-    items = raw.get("units", []) if isinstance(raw, dict) else []
-    for item in items if isinstance(items, list) else []:
-        if not isinstance(item, dict):
-            continue
-        unit_id = str(item.get("unit_id") or "").strip().casefold()
-        if not unit_id:
-            continue
-        label = str(item.get("display_name") or unit_id)
-        if bool(item.get("archived", False)) or not bool(item.get("active", True)):
-            continue
+        units = {}
+    current_key = str(current_id or "").strip().casefold()
+    for unit_id, unit in sorted(units.items(), key=lambda item: item[0]):
+        if unit.archived or not unit.active:
+            # Keep an already assigned archived unit visible while editing an
+            # existing user, but never offer it for a new assignment.
+            if unit_id != current_key:
+                continue
+            label = f"{unit.display_name} (archived)"
+        else:
+            label = unit.display_name
         combo.addItem(label, unit_id)
-    index = combo.findData(str(current_id or "").strip().casefold())
+    index = combo.findData(current_key)
     combo.setCurrentIndex(index if index >= 0 else 0)
     return combo
+
+
+def _organization_unit_display(user_db: UserDB, user: Dict[str, Any], messages: Dict[str, Any]) -> str:
+    """Resolve a user's current label from the canonical Unit catalog."""
+    key = str(user.get("unit_id") or "").strip().casefold()
+    if not key:
+        return _msg(messages, "cage_track.unassigned", "Unassigned")
+    try:
+        unit = CanonicalUnitService(user_db.backend).get(key)
+    except Exception:
+        unit = None
+    return unit.display_name if unit is not None else _msg(
+        messages, "cage_track.unassigned", "Unassigned"
+    )
 
 
 def _strength(pw: str) -> int:
@@ -588,7 +601,7 @@ class ManageUsersDialog(QDialog):
                 has_override = bool(perms.get("granted") or perms.get("revoked"))
                 effective_label = jobs_str if not has_override else jobs_str
             _profile_parts = []
-            for _pf, _pk in [(u.get("unit", ""), "unit"),
+            for _pf, _pk in [(_organization_unit_display(self.user_db, u, self.messages), "unit"),
                               (u.get("profession", ""), "profession"),
                               (u.get("email", ""), "email")]:
                 if _pf:
