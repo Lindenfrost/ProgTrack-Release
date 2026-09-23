@@ -308,7 +308,8 @@ class _BrandingPreview(QWidget):
         super().__init__(parent)
         self.setObjectName("institutionBrandingPreview")
         self.setMinimumSize(420, 176)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setFixedHeight(self.sizeHint().height())
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._enabled = False
         self._facility_name = ""
         self._logo_path: Path | None = None
@@ -432,6 +433,9 @@ class _OrganizationalUnitsEditor(QWidget):
         outer.addWidget(self.toggle)
 
         self.content = QWidget(self)
+        self.content.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         content_layout = QVBoxLayout(self.content)
         content_layout.setContentsMargins(12, 4, 4, 6)
         content_layout.setSpacing(5)
@@ -448,8 +452,15 @@ class _OrganizationalUnitsEditor(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self._minimum_visible_unit_rows = 3
+        self.table.setMinimumHeight(
+            self.table.horizontalHeader().sizeHint().height()
+            + self._minimum_visible_unit_rows
+            * self.table.verticalHeader().defaultSectionSize()
+            + 2 * self.table.frameWidth()
+        )
         self.table.itemSelectionChanged.connect(self._select_current)
-        content_layout.addWidget(self.table)
+        content_layout.addWidget(self.table, 1)
 
         form = QFormLayout()
         self.id_edit = QLineEdit(self.content)
@@ -498,11 +509,22 @@ class _OrganizationalUnitsEditor(QWidget):
         if parent is not None:
             parent.updateGeometry()
 
-    def refresh(self) -> None:
+    def refresh(self) -> bool:
         try:
             units = self.service.load()
-        except Exception:
-            units = {}
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                self._text(
+                    "units.refresh_failed.title",
+                    "Cannot refresh organizational units",
+                ),
+                self._text(
+                    "units.refresh_failed.message",
+                    "The Unit list could not be refreshed. The displayed list may be out of date. Details: {error}",
+                ).format(error=str(exc)),
+            )
+            return False
         self.table.blockSignals(True)
         self.table.setRowCount(0)
         for unit_id, unit in sorted(units.items(), key=lambda item: item[0]):
@@ -517,6 +539,7 @@ class _OrganizationalUnitsEditor(QWidget):
         self.table.blockSignals(False)
         if not self._selected_id:
             self._new()
+        return True
 
     def _select_current(self) -> None:
         rows = self.table.selectionModel().selectedRows()
@@ -588,6 +611,7 @@ class _OrganizationalUnitsEditor(QWidget):
     def _delete(self) -> None:
         if not self._selected_id:
             return
+        unit_id = self._selected_id
         answer = QMessageBox.question(
             self,
             self._text("units.delete.title", "Delete organizational unit"),
@@ -596,18 +620,59 @@ class _OrganizationalUnitsEditor(QWidget):
         if answer != QMessageBox.StandardButton.Yes:
             return
         try:
-            self.service.delete(
-                self._selected_id,
+            deleted = self.service.delete(
+                unit_id,
                 actor=self.actor,
                 authorized=self.authorized,
             )
-        except (ValueError, OSError) as exc:
-            QMessageBox.warning(self, self._text("units.save_failed.title", "Cannot save organizational unit"), str(exc))
+            if not deleted:
+                raise ValueError(
+                    self._text(
+                        "units.delete.not_deleted",
+                        "The selected organizational unit was not deleted because it no longer exists in the current catalogue.",
+                    )
+                )
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                self._text(
+                    "units.delete_failed.title",
+                    "Cannot delete organizational unit",
+                ),
+                str(exc),
+            )
+            self.refresh()
             return
-        if self.user_db is not None:
-            self.user_db.load()
+
+        # The backend commit succeeded, so remove this row immediately even if
+        # a subsequent catalogue refresh is temporarily unavailable.
+        self._selected_id = ""
         self._new()
-        self.refresh()
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if item is not None and str(item.text()) == unit_id:
+                self.table.removeRow(row)
+                break
+
+        user_load_error = None
+        if self.user_db is not None:
+            try:
+                self.user_db.load()
+            except Exception as exc:
+                user_load_error = exc
+        refreshed = self.refresh()
+        if user_load_error is not None and refreshed:
+            QMessageBox.warning(
+                self,
+                self._text(
+                    "units.refresh_failed.title",
+                    "Cannot refresh organizational units",
+                ),
+                self._text(
+                    "units.refresh_failed.message",
+                    "The Unit list could not be refreshed. The displayed list may be out of date. Details: {error}",
+                ).format(error=str(user_load_error)),
+            )
 
 
 class InstitutionBrandingDialog(QDialog):
@@ -639,6 +704,8 @@ class InstitutionBrandingDialog(QDialog):
         self._remove_logo = False
         self._logo_source_path: Path | None = None
         self._logo_controls_compact: bool | None = None
+        self._units_collapsed_height: int | None = None
+        self._units_collapsed_minimum_height: int | None = None
         self.setWindowTitle(self._text("branding.title", "Institution"))
         if self.embedded:
             self.setWindowFlags(Qt.WindowType.Widget)
@@ -715,7 +782,8 @@ class InstitutionBrandingDialog(QDialog):
         )
         outer.addLayout(form)
         self.preview = _BrandingPreview(self)
-        outer.addWidget(self.preview, 1)
+        outer.addWidget(self.preview)
+        self.units_editor = None
         if self.units_service is not None:
             self.units_editor = _OrganizationalUnitsEditor(
                 self.units_service,
@@ -726,6 +794,15 @@ class InstitutionBrandingDialog(QDialog):
                 parent=self,
             )
             outer.addWidget(self.units_editor)
+        self._outer_layout = outer
+        self._units_stretch_index = (
+            outer.indexOf(self.units_editor) if self.units_editor is not None else -1
+        )
+        outer.addStretch(1)
+        self._trailing_stretch_index = outer.count() - 1
+        if self.units_editor is not None:
+            self.units_editor.toggle.toggled.connect(self._on_units_section_toggled)
+            self._set_units_section_stretch(self.units_editor.toggle.isChecked())
         self.name.textChanged.connect(self._refresh_preview)
         self.enabled.toggled.connect(self._refresh_preview)
         self.position_left.toggled.connect(self._refresh_preview)
@@ -754,6 +831,64 @@ class InstitutionBrandingDialog(QDialog):
     def resizeEvent(self, event) -> None:  # noqa: N802 - Qt API name
         super().resizeEvent(event)
         self._set_logo_controls_compact(self.width() < 560)
+
+    def _set_units_section_stretch(self, expanded: bool) -> None:
+        if self.units_editor is None:
+            return
+        self._outer_layout.setStretch(
+            self._units_stretch_index, 1 if expanded else 0
+        )
+        self._outer_layout.setStretch(
+            self._trailing_stretch_index, 0 if expanded else 1
+        )
+        self._outer_layout.invalidate()
+
+    def _on_units_section_toggled(self, expanded: bool) -> None:
+        """Resize the containing dialog when the Unit editor changes size."""
+        self._set_units_section_stretch(expanded)
+        self._outer_layout.activate()
+        self.updateGeometry()
+
+        parent = self.parentWidget()
+        if self.embedded:
+            current = parent
+            handled = False
+            for _ in range(8):
+                if current is None:
+                    break
+                resize_handler = getattr(
+                    current, "_on_institution_units_toggled", None
+                )
+                if callable(resize_handler):
+                    resize_handler(bool(expanded))
+                    handled = True
+                    break
+                current = current.parentWidget()
+            if not handled and parent is not None:
+                parent.updateGeometry()
+            return
+
+        if expanded:
+            if self._units_collapsed_height is None:
+                self._units_collapsed_height = self.height()
+                self._units_collapsed_minimum_height = self.minimumHeight()
+            self._outer_layout.activate()
+            required_height = max(
+                self.sizeHint().height(), self.minimumSizeHint().height()
+            )
+            baseline_minimum = self._units_collapsed_minimum_height or 0
+            self.setMinimumHeight(max(baseline_minimum, required_height))
+            if required_height > self.height():
+                self.resize(self.width(), required_height)
+            return
+
+        if self._units_collapsed_height is not None:
+            collapsed_height = self._units_collapsed_height
+            self._units_collapsed_height = None
+            if self._units_collapsed_minimum_height is not None:
+                self.setMinimumHeight(self._units_collapsed_minimum_height)
+                self._units_collapsed_minimum_height = None
+            self.resize(self.width(), collapsed_height)
 
     def _set_logo_controls_compact(self, compact: bool) -> None:
         compact = bool(compact)

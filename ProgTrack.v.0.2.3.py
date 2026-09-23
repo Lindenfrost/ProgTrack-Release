@@ -1536,6 +1536,7 @@ class StyleSettingsDialog(QDialog):
         self._tab_fit_in_progress = False
         self._tab_fit_pending = False
         self._last_tab_target_sizes: Dict[int, QSize] = {}
+        self._branding_units_restore_size: Optional[QSize] = None
         
         # Store color buttons for easy access
         self.color_buttons = {}
@@ -2236,6 +2237,23 @@ class StyleSettingsDialog(QDialog):
         try:
             available = available_geometry or self._available_screen_geometry()
             target = self._target_size_for_available(available.size())
+            if (
+                self.tabs.currentWidget() is self._branding_editor
+                and self._branding_units_restore_size is not None
+                and self._branding_editor.units_editor is not None
+            ):
+                collapsed_size = self._branding_units_restore_size
+                if self._branding_editor.units_editor.toggle.isChecked():
+                    target = QSize(
+                        max(target.width(), collapsed_size.width()),
+                        max(target.height(), collapsed_size.height()),
+                    )
+                else:
+                    target = QSize(
+                        max(target.width(), collapsed_size.width()),
+                        collapsed_size.height(),
+                    )
+                    self._branding_units_restore_size = None
             old_center = self.frameGeometry().center()
 
             # The geometry guard sets explicit limits for the previous page.
@@ -2267,6 +2285,12 @@ class StyleSettingsDialog(QDialog):
             self._fit_current_tab()
 
         QTimer.singleShot(0, apply_fit)
+
+    def _on_institution_units_toggled(self, expanded: bool) -> None:
+        """Refit the Conventions window around the expanded Institution editor."""
+        if expanded and self._branding_units_restore_size is None:
+            self._branding_units_restore_size = QSize(self.size())
+        self._schedule_current_tab_fit()
 
     def _on_conventions_tab_changed(self, index: int) -> None:
         for page_index in range(self.tabs.count()):

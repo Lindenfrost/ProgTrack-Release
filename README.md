@@ -377,8 +377,12 @@ splash screen, and selecting one or more animals builds only their connected
 pedigree. Up to eight selected animals use the focused relationship view;
 larger selections use the Selection overview. Selected animals are rendered as
 normal nodes and connected context animals as translucent ghosts; clicking a
-ghost adds it to the selection. Genetic (egg/sperm donor) links are used for
-kinship and inbreeding, while surrogate links remain visible relationships but
+ghost adds it to the selection. The ancestor-depth control is limited to 1–3
+generations per selected animal.
+To extend a lineage farther, select another animal lower in that branch;
+the selected animals' bounded ancestor windows are combined.
+Genetic (egg/sperm donor) links are used for kinship and inbreeding, while
+surrogate links remain visible relationships but
 do not change those coefficients. A family with one represented parent is
 completed only when the other parent is available; missing or malformed
 lineages are omitted or warned about instead of being invented.

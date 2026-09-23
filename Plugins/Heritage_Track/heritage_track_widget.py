@@ -615,7 +615,9 @@ class HeritageTrackWidget(QWidget):
         self._pending_selection: Optional[str] = None
         self._pending_selection_timer: Optional[QTimer] = None
 
-        # Generation limit (max ancestor depth in no-selection mode)
+        # Each selected animal gets at most three ancestor steps. Selecting
+        # another animal farther down a lineage can still extend the union of
+        # the visible pedigree deliberately, without an unbounded spinbox.
         session_max = None
         if hasattr(self.app, 'master_track') and self.app.master_track:
             try:
@@ -628,7 +630,11 @@ class HeritageTrackWidget(QWidget):
                     "Could not restore HeritageTrack generation limit",
                     exc_info=True,
                 )
-        self._max_generations: int = int(session_max) if session_max is not None else 3
+        try:
+            requested_generations = int(session_max) if session_max is not None else 3
+        except (TypeError, ValueError, OverflowError):
+            requested_generations = 3
+        self._max_generations: int = max(1, min(3, requested_generations))
 
         self.figure = Figure(figsize=(11, 7))
         self.canvas = FigureCanvas(self.figure)
@@ -673,13 +679,13 @@ class HeritageTrackWidget(QWidget):
         self._configure_symbol_button(self.gen_dec_btn)
         self.gen_spin = QSpinBox()
         self.gen_spin.setMinimum(1)
-        self.gen_spin.setMaximum(999)
+        self.gen_spin.setMaximum(3)
         self.gen_spin.setValue(self._max_generations)
         self.gen_spin.setFixedWidth(48)
         self.gen_spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
         self.gen_spin.setToolTip(
             self.messages.get("heritage_track.tooltip.gen_limit",
-                              "Max ancestor generations shown in no-selection mode"))
+                              "Show 1–3 ancestor generations per selected animal; select more animals to extend a lineage"))
         self.gen_inc_btn = QPushButton()
         apply_icon(self.gen_inc_btn, "control.increment", fallback="Increase")
         self.gen_inc_btn.setIconSize(QSize(27, 27))
@@ -771,6 +777,7 @@ class HeritageTrackWidget(QWidget):
 
     def _on_gen_limit_changed(self, value: int) -> None:
         """Persist the new generation limit (refresh on button click only)."""
+        value = max(1, min(3, int(value)))
         self._max_generations = value
         # Persist to session if Master_Track is active
         if hasattr(self.app, 'master_track') and self.app.master_track:
@@ -1995,10 +2002,10 @@ class HeritageTrackWidget(QWidget):
         chronological_undated_nodes: Set[str],
     ) -> RenderCacheEntry:
         """Rebuild one semantic frame after renderer-driven calibration."""
-        # Singleton parking is a widget-level post-routing operation. Keep
-        # those already parked coordinates stable while the router re-solves
-        # connected semantic blocks from the measured collision feedback.
-        recovery_protected = set(protected_nodes) | set(singleton_nodes)
+        # Singleton parking is an automatic placement result, not a manual
+        # anchor. It may be moved by route-clearance recovery. Only explicit
+        # protected/manual coordinates are immutable here.
+        recovery_protected = set(protected_nodes)
         route_plan = self._pedigree_router.plan(
             dict(seed_positions),
             families,
@@ -4791,6 +4798,7 @@ class HeritageTrackWidget(QWidget):
         return self._render_revision(
             {
                 "schema": "heritage-render-input.v1",
+                "route_geometry_policy": "canonical-marker-clearance.v5-midpoint",
                 "core": core_snapshot,
                 "store": source_store,
                 "temporary_dummies": getattr(self.plugin, "_temporary_dummies", {}),
@@ -4888,6 +4896,44 @@ class HeritageTrackWidget(QWidget):
             self._force_relayout = False
             self._render_core_animals = self._render_store_animals = None
             self.canvas.draw_idle()
+
+    def _reroute_after_singleton_parking(
+        self,
+        route_plan: RoutePlan,
+        families: Mapping[str, Mapping[str, object]],
+        obstacle_labels: Mapping[str, str],
+        protected_nodes: Set[str],
+        selected_animals: Sequence[str],
+        cached_family_positions: Mapping[str, Tuple[float, float]],
+        *,
+        show_inbreeding: bool,
+        manual_animal_position_override: bool,
+    ) -> RoutePlan:
+        """Replan a parked candidate before it can enter the render cache."""
+        parked_route_hits = self._pedigree_router._family_route_marker_hit_details(
+            route_plan.animal_positions,
+            families,
+            route_plan.family_positions,
+            manual_family_ids=set(cached_family_positions),
+        )
+        if manual_animal_position_override or not (
+            parked_route_hits or route_plan.route_obstacle_hits
+        ):
+            return route_plan
+        return self._pedigree_router.plan(
+            dict(route_plan.animal_positions),
+            families,
+            labels=obstacle_labels,
+            protected_nodes=protected_nodes,
+            focus_nodes=set(selected_animals),
+            display_mode=self.layout_mode,
+            show_inbreeding=show_inbreeding,
+            vertical_layout_mode=self.settings.get(
+                "vertical_layout_mode", VERTICAL_LAYOUT_PARTNER_NORMALIZED
+            ),
+            movable_nodes=None,
+            manual_family_positions=cached_family_positions or None,
+        )
 
     def _refresh_graph(
         self, keep_view: bool = False, *,
@@ -5398,6 +5444,35 @@ class HeritageTrackWidget(QWidget):
             # automatic fitting creates the large empty margins seen in the
             # all-species screenshot.
             route_plan.animal_positions = dict(animal_positions)
+            # Parking changes marker positions after the first route plan.
+            # If it creates (or removes) an automatic route/marker hit, return
+            # the complete parked candidate to the same router placement
+            # owner. Do not paint or cache routes computed against the old
+            # singleton coordinates, and do not park the accepted result a
+            # second time.
+            original_route_plan = route_plan
+            try:
+                route_plan = self._reroute_after_singleton_parking(
+                    route_plan, families, obstacle_labels, protected_nodes,
+                    selected_animals, cached_family_positions or {},
+                    show_inbreeding=has_secondary_label,
+                    manual_animal_position_override=manual_animal_position_override,
+                )
+            except GeometryValidationError as exc:
+                self._report_geometry_failure(exc)
+                return
+            if route_plan is not original_route_plan:
+                route_plan.layout_diagnostics = list(
+                    engine.generation_diagnostics(display_nodes, levels)
+                )
+                if route_plan.layout_diagnostics:
+                    route_plan.unresolved = sorted(
+                        set(route_plan.unresolved) | set(route_plan.layout_diagnostics),
+                        key=str.casefold,
+                    )
+                animal_positions = route_plan.animal_positions
+                family_positions = route_plan.family_positions
+                family_members = route_plan.family_members
         positions: Dict[str, Tuple[float, float]] = dict(animal_positions)
         positions.update(family_positions)
 

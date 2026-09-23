@@ -15,7 +15,10 @@ from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from Plugins.Heritage_Track.display_context import DisplayContextBuilder
-from Plugins.Heritage_Track.display_strategies import DisplaySetStrategy
+from Plugins.Heritage_Track.display_strategies import (
+    DisplaySetStrategy,
+    SelectedAnimalsStrategy,
+)
 from Plugins.Heritage_Track.ghost_strategies import (
     ArchivedGhostStrategy,
     CompositeGhostStrategy,
@@ -38,11 +41,28 @@ class _Engine:
 
 
 class _EchoStrategy(DisplaySetStrategy):
-    def compute(self, engine, selected, max_generations=999, exclude_archived=False, archived_set=None):
+    def compute(self, engine, selected, max_generations=3, exclude_archived=False, archived_set=None):
         return set(selected)
 
 
 class HeritageSelectionModeScopeTest(unittest.TestCase):
+    def test_two_targeted_selections_span_six_parent_links_with_depth_three(self):
+        class Engine:
+            child_to_parents = {
+                f"N{index}": {"egg_donor": f"N{index - 1}"}
+                for index in range(1, 8)
+            }
+
+        strategy = SelectedAnimalsStrategy()
+        middle_only = strategy.compute(Engine(), ["N3"], max_generations=3)
+        extended = strategy.compute(
+            Engine(), ["N3", "N6"], max_generations=3
+        )
+
+        self.assertEqual(middle_only, {f"N{index}" for index in range(4)})
+        self.assertEqual(extended, {f"N{index}" for index in range(7)})
+        self.assertNotIn("N7", extended)
+
     def _widget(self):
         records = {
             "Alpha | Callithrix jacchus | 01.01.2020 | DPZ": {
@@ -64,7 +84,7 @@ class HeritageSelectionModeScopeTest(unittest.TestCase):
         widget.app = app
         widget.plugin = SimpleNamespace(_all_identity_records=lambda: records)
         widget.layout_mode = LAYOUT_MODE_FOCUSED
-        widget._max_generations = 999
+        widget._max_generations = 3
         widget._canonical_selection_ids = ()
         return widget, app
 

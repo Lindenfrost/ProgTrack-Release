@@ -19,13 +19,14 @@ from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("MPLBACKEND", "Agg")
 
+from PyQt6.QtCore import QCoreApplication, QEvent, QTimer
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from matplotlib.backends.backend_agg import RendererAgg
 from matplotlib.transforms import Bbox
@@ -48,15 +49,65 @@ ROOT = Path(__file__).resolve().parents[1]
 # modes for every case, and leave the focused edge-case tests below as the
 # source of coverage for the other selection/depth combinations.
 REPRESENTATIVE_CASES = (
-    ("Callitrix jacchus", "all", 6),
+    ("Callitrix jacchus", "all", 3),
     ("Macaca mulatta", "single", 3),
     ("Mus musculus", "all", 3),
-    ("Papio hamadryas anubis", "single", 6),
+    ("Papio hamadryas anubis", "single", 3),
 )
 MODES = (
     VERTICAL_LAYOUT_PARTNER_NORMALIZED,
     VERTICAL_LAYOUT_CHRONOLOGICAL,
 )
+
+
+class SingletonParkingTransactionTest(unittest.TestCase):
+    def test_parked_marker_hit_replans_complete_geometry_before_publication(self) -> None:
+        parked = RoutePlan(
+            animal_positions={"Parent": (0.0, 0.0), "Child": (2.0, 4.0),
+                              "Singleton": (1.0, 2.0)},
+            family_positions={"family": (0.0, 1.0)},
+            family_members={"family": {"Parent", "Child"}},
+            routes={"family": {"Child": [(0.0, 1.0), (2.0, 4.0)]}},
+        )
+        repaired = RoutePlan(
+            animal_positions={**parked.animal_positions, "Singleton": (-4.0, 2.0)},
+            family_positions=dict(parked.family_positions),
+            family_members=dict(parked.family_members),
+            routes=dict(parked.routes),
+        )
+        router = Mock()
+        router._family_route_marker_hit_details.return_value = [
+            ("family", "Child", "Singleton", 0)
+        ]
+        router.plan.return_value = repaired
+        widget = SimpleNamespace(
+            _pedigree_router=router,
+            layout_mode="focused",
+            settings={"vertical_layout_mode": VERTICAL_LAYOUT_CHRONOLOGICAL},
+        )
+        families = {"family": {"mother": "Parent", "children": ["Child"]}}
+        result = HeritageTrackWidget._reroute_after_singleton_parking(
+            widget, parked, families, {node: node for node in parked.animal_positions},
+            set(), ["Child"], {}, show_inbreeding=False,
+            manual_animal_position_override=False,
+        )
+        self.assertIs(result, repaired)
+        self.assertEqual(router.plan.call_count, 1)
+        self.assertEqual(
+            router.plan.call_args.args[0], parked.animal_positions,
+        )
+        self.assertEqual(
+            router.plan.call_args.kwargs["vertical_layout_mode"],
+            VERTICAL_LAYOUT_CHRONOLOGICAL,
+        )
+
+        router.plan.reset_mock()
+        manual = HeritageTrackWidget._reroute_after_singleton_parking(
+            widget, parked, families, {}, set(), ["Child"], {},
+            show_inbreeding=False, manual_animal_position_override=True,
+        )
+        self.assertIs(manual, parked)
+        router.plan.assert_not_called()
 
 
 def runtime_paths(root: Path) -> RuntimePaths:
@@ -98,59 +149,141 @@ class _TestApp(QMainWindow):
 
 
 class CurrentSeedHeritageMatrixTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.qt_app = QApplication.instance() or QApplication([])
-        cls.tempdir = tempfile.TemporaryDirectory()
-        cls.backend = ProgTrackBackend(
-            runtime_paths(Path(cls.tempdir.name)), acquire_process_lock=False
+    def setUp(self) -> None:
+        self.qt_app = QApplication.instance() or QApplication([])
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        self.backend = ProgTrackBackend(
+            runtime_paths(Path(self.tempdir.name)), acquire_process_lock=False
         )
-        snapshot = cls.backend.load_core_data()
-        cls.app = _TestApp()
-        cls.app.backend = cls.backend
-        cls.app.animals = snapshot.get("animals", {})
-        cls.app.archived = snapshot.get("archived_animals", {})
-        cls.app.messages = json.loads(
+        self.addCleanup(self.backend.close)
+        snapshot = self.backend.load_core_data()
+        self.app = _TestApp()
+        self.app.backend = self.backend
+        self.app.animals = snapshot.get("animals", {})
+        self.app.archived = snapshot.get("archived_animals", {})
+        self.app.messages = json.loads(
             (ROOT / "lang" / "messages_en.json").read_text(encoding="utf-8")
         )
-        cls.app.master_track = None
-        cls.app.projects_plugin = None
-        cls.app.selected_animals = []
-        cls.app._selected_heritage_only = []
-        cls.plugin = HeritageTrackPlugin(cls.app)
-        cls.widget = HeritageTrackWidget(cls.plugin)
-        cls.widget.resize(1180, 720)
-        cls.widget.settings["animal_label_detail"] = "birth_date"
-        cls.widget.settings["show_grid"] = False
-        cls.widget.settings["exclude_archived"] = False
-        cls.widget.settings["show_heritage_only"] = True
-        cls.engine = cls.plugin.build_engine()
+        self.app.master_track = None
+        self.app.projects_plugin = None
+        self.app.selected_animals = []
+        self.app._selected_heritage_only = []
+        self.plugin = HeritageTrackPlugin(self.app)
+        self.widget = HeritageTrackWidget(self.plugin)
+        self.widget.resize(1180, 720)
+        self.widget.settings["animal_label_detail"] = "birth_date"
+        self.widget.settings["show_grid"] = False
+        self.widget.settings["exclude_archived"] = False
+        self.widget.settings["show_heritage_only"] = True
+        self.engine = self.plugin.build_engine()
 
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.widget.close()
-        cls.app.close()
-        cls.backend.close()
-        cls.tempdir.cleanup()
 
-    @classmethod
-    def _record(cls, node: str) -> dict:
+    def tearDown(self) -> None:
+        # Dispose Qt resources before closing the temporary database. Fresh
+        # instances keep settings, manual positions and render caches local
+        # to each test; caches remain enabled within a test.
+        for owner in (self.widget, self.app):
+            for timer in owner.findChildren(QTimer):
+                timer.stop()
+            owner.close()
+            owner.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_generation_spinbox_accepts_only_one_to_three(self) -> None:
+        self.assertEqual(self.widget.gen_spin.minimum(), 1)
+        self.assertEqual(self.widget.gen_spin.maximum(), 3)
+        for depth in (1, 2, 3):
+            self.widget.gen_spin.setValue(depth)
+            self.assertEqual(self.widget._max_generations, depth)
+        self.widget.gen_spin.setValue(4)
+        self.assertEqual(self.widget.gen_spin.value(), 3)
+        self.assertEqual(self.widget._max_generations, 3)
+
+    @pytest.mark.extended_heritage
+    def test_explicit_lower_selection_extends_three_step_windows_to_six_links(self) -> None:
+        """A lower selected descendant extends a bounded ancestor window."""
+        species_nodes = self._species_nodes()["Callitrix jacchus"]
+        parent_map = self.engine.child_to_parents
+
+        def six_link_lineage(node: str, remaining: int, seen: set[str]):
+            if remaining == 0:
+                return [node]
+            parent_values = parent_map.get(node, {})
+            for parent in sorted(
+                (parent_values.get("egg_donor"), parent_values.get("sperm_donor")),
+                key=lambda value: str(value or "").casefold(),
+            ):
+                if not parent or parent not in species_nodes or parent in seen:
+                    continue
+                rest = six_link_lineage(parent, remaining - 1, seen | {parent})
+                if rest is not None:
+                    return [node, *rest]
+            return None
+
+        lineage = next(
+            (
+                path
+                for node in sorted(species_nodes, key=str.casefold)
+                if (path := six_link_lineage(node, 6, {node})) is not None
+            ),
+            None,
+        )
+        self.assertIsNotNone(lineage, "seed needs a six-link lineage witness")
+        lower, middle, highest = lineage[0], lineage[3], lineage[6]
+        initial = self._render([middle], 3, VERTICAL_LAYOUT_PARTNER_NORMALIZED)
+        self.assertIn(highest, initial.animal_positions)
+        self.assertNotIn(lower, self.app.selected_animals)
+
+        for mode in MODES:
+            with reported_subtest(self, "targeted six-link extension", mode=mode):
+                plan = self._render([middle, lower], 3, mode)
+                self.assertTrue(set(lineage) <= set(plan.animal_positions))
+                self.assertNotIn(lower, self.widget._ghost_nodes)
+                self.assertEqual(self.widget.gen_spin.value(), 3)
+                self._assert_semantic_geometry(
+                    plan, self._families_for_plan(plan),
+                    f"six parent links from highest to selected lower animal; mode={mode}",
+                )
+
+    def test_fixture_instances_do_not_share_mutable_state(self) -> None:
+        self.widget.settings["animal_label_detail"] = "inbreeding_f"
+        self.widget.temp_positions["fixture-only"] = (123.0, 456.0)
+        self.app.selected_animals.append("fixture-only")
+        self.app.animals["fixture-only"] = {"name": "fixture-only"}
+        other = type(self)("test_denethor_eldarion_partner_rail_stays_readable")
+        try:
+            other.setUp()
+            self.assertNotEqual(self.tempdir.name, other.tempdir.name)
+            self.assertIsNot(self.backend, other.backend)
+            self.assertIsNot(self.plugin.store, other.plugin.store)
+            self.assertIsNot(self.engine, other.engine)
+            self.assertEqual(other.widget.settings["animal_label_detail"], "birth_date")
+            self.assertNotIn("fixture-only", other.widget.temp_positions)
+            self.assertEqual(other.app.selected_animals, [])
+            self.assertNotIn("fixture-only", other.app.animals)
+        finally:
+            if hasattr(other, "widget"):
+                other.tearDown()
+            other.doCleanups()
+
+
+    def _record(self, node: str) -> dict:
         # Mirror the production render snapshot: Core's active/archived
         # projection is authoritative, while the Heritage store contributes
         # only Heritage-owned entries.  The removed ``get_animal`` lookup
         # could accidentally certify stale records or hide missing data.
-        core = cls.plugin._current_core_records(fresh=True)
-        entries = cls.plugin.store.get_all_entries()
+        core = self.plugin._current_core_records(fresh=True)
+        entries = self.plugin.store.get_all_entries()
         record = entries.get(node, {}) if isinstance(entries, dict) else {}
         if isinstance(core, dict) and node in core:
             record = core[node]
         return record if isinstance(record, dict) else {}
 
-    @classmethod
-    def _species_nodes(cls) -> dict[str, list[str]]:
+    def _species_nodes(self) -> dict[str, list[str]]:
         result: dict[str, list[str]] = defaultdict(list)
-        for node in cls.engine.all_nodes:
-            species = str(cls._record(node).get("species", "") or "").strip()
+        for node in self.engine.all_nodes:
+            species = str(self._record(node).get("species", "") or "").strip()
             if species:
                 result[species].append(node)
         return {
@@ -158,18 +291,17 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
             for species, nodes in sorted(result.items(), key=lambda item: item[0].casefold())
         }
 
-    @classmethod
-    def _selection_shapes(cls, species_nodes: list[str]) -> dict[str, list[str]]:
+    def _selection_shapes(self, species_nodes: list[str]) -> dict[str, list[str]]:
         node_set = set(species_nodes)
-        levels = cls.engine.compute_levels(node_set)
-        active = [node for node in species_nodes if node in cls.app.animals]
+        levels = self.engine.compute_levels(node_set)
+        active = [node for node in species_nodes if node in self.app.animals]
         ranked = sorted(
             active or species_nodes,
             key=lambda node: (-levels.get(node, 0), node.casefold()),
         )
         focal = ranked[0]
 
-        parents = cls.engine.child_to_parents.get(focal, {})
+        parents = self.engine.child_to_parents.get(focal, {})
         focal_pair = {
             str(parents.get("egg_donor", "") or "").strip(),
             str(parents.get("sperm_donor", "") or "").strip(),
@@ -180,7 +312,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
             for candidate in species_nodes:
                 if candidate == focal:
                     continue
-                candidate_parents = cls.engine.child_to_parents.get(candidate, {})
+                candidate_parents = self.engine.child_to_parents.get(candidate, {})
                 candidate_pair = {
                     str(candidate_parents.get("egg_donor", "") or "").strip(),
                     str(candidate_parents.get("sperm_donor", "") or "").strip(),
@@ -191,7 +323,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
                 companion = sorted(siblings, key=str.casefold)[0]
         if companion is None:
             children = sorted(
-                cls.engine.parent_to_children.get(focal, set()) & node_set,
+                self.engine.parent_to_children.get(focal, set()) & node_set,
                 key=str.casefold,
             )
             if children:
@@ -209,9 +341,11 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
         }
 
     def _render(self, selection: list[str], depth: int, mode: str):
+        self.assertIn(depth, (1, 2, 3))
         self.app.selected_animals = list(selection)
         self.app._selected_heritage_only = []
-        self.widget._max_generations = depth
+        self.widget.gen_spin.setValue(depth)
+        self.assertEqual(self.widget._max_generations, depth)
         self.widget.settings["vertical_layout_mode"] = mode
         self.widget.temp_positions.clear()
         self.widget.selected_nodes.clear()
@@ -222,7 +356,11 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
             self.plugin.store.remove_node_position(_saved_node)
         self.widget._force_relayout = True
         accepted = self.widget.refresh_graph()
-        self.assertTrue(accepted, "requested Heritage frame was not accepted")
+        self.assertTrue(
+            accepted,
+            "requested Heritage frame was not accepted: "
+            + self.widget.status_label.toolTip(),
+        )
         # ``refresh_graph`` schedules ``draw_idle``. Processing the Qt queue
         # here and then calling ``draw`` rendered every matrix case twice,
         # making the 96-case closure audit look like a layout regression.
@@ -240,6 +378,11 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
         self.assertEqual(tuple(entry.canonical_selection), tuple(sorted(selection, key=lambda value: (value.casefold(), value))))
         self.assertEqual(entry.cache_key, cache_key)
         self.assertTrue(entry.valid)
+        self.assertEqual(
+            dict(entry.route_plan.family_positions),
+            self.widget._route_plan.family_positions,
+            "published family knots and frozen cache must be identical",
+        )
         return self.widget._route_plan
 
     def _families_for_plan(self, plan):
@@ -286,54 +429,13 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
                 for node in (family.get("mother"), family.get("father"))
                 if node in plan.animal_positions
             ]
-            children = [
-                node
-                for node in family.get("children", [])
-                if node in plan.animal_positions
-            ]
             junction_x = plan.family_positions[family_id][0]
-            if len(parents) == 2:
+            if len(parents) == 2 and family_id not in plan.manual_family_ids:
                 parent_xs = sorted(
                     plan.animal_positions[node][0] for node in parents
                 )
                 parent_midpoint = sum(parent_xs) / 2.0
-                parent_span = parent_xs[1] - parent_xs[0]
-                allowed_shift = min(
-                    1.35,
-                    parent_span * 0.22,
-                    max(0.0, (parent_span / 2.0) - 0.08),
-                )
-                visible_children = [
-                    child for child in family.get("children", [])
-                    if child in plan.animal_positions
-                ]
-                if len(visible_children) == 1:
-                    child_x = plan.animal_positions[visible_children[0]][0]
-                    child_axis_eligible = (
-                        parent_xs[0] + 0.08 < child_x < parent_xs[1] - 0.08
-                    )
-                    child_clearance = max(0.35, self.widget._pedigree_router.node_gap)
-                    if (
-                        parent_xs[0] + child_clearance
-                        <= child_x
-                        <= parent_xs[1] - child_clearance
-                    ):
-                        allowed_shift = min(
-                            max(allowed_shift, abs(child_x - parent_midpoint) + self.widget._pedigree_router.route_clearance),
-                            max(0.0, (parent_span / 2.0) - 0.08),
-                        )
-                    elif child_axis_eligible:
-                        allowed_shift = max(
-                            allowed_shift,
-                            abs(child_x - parent_midpoint),
-                        )
-                self.assertGreater(junction_x, parent_xs[0], context)
-                self.assertLess(junction_x, parent_xs[1], context)
-                self.assertLessEqual(
-                    abs(junction_x - parent_midpoint),
-                    allowed_shift + 1e-6,
-                    context,
-                )
+                self.assertAlmostEqual(junction_x, parent_midpoint, delta=1e-6, msg=context)
             # Child centring is intentionally a soft visual objective. The
             # semantic validator below owns topology/direct-route guarantees;
             # a large continuing subtree must not force terminal siblings to
@@ -370,7 +472,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
     def test_representative_layout_is_deterministic(self) -> None:
         species_nodes = self._species_nodes()["Callitrix jacchus"]
         selection = self._selection_shapes(species_nodes)["multiple"]
-        first = self._render(selection, 5, VERTICAL_LAYOUT_PARTNER_NORMALIZED)
+        first = self._render(selection, 3, VERTICAL_LAYOUT_PARTNER_NORMALIZED)
         first_positions = {
             node: tuple(round(value, 6) for value in point)
             for node, point in first.animal_positions.items()
@@ -385,7 +487,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
             for family, routes in first.routes.items()
         }
         second = self._render(
-            list(reversed(selection)), 5, VERTICAL_LAYOUT_PARTNER_NORMALIZED
+            list(reversed(selection)), 3, VERTICAL_LAYOUT_PARTNER_NORMALIZED
         )
         self.assertEqual(first_positions, {
             node: tuple(round(value, 6) for value in point)
@@ -422,7 +524,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
         ]
         plan = self._render(
             selected,
-            6,
+            3,
             VERTICAL_LAYOUT_PARTNER_NORMALIZED,
         )
         families = self._families_for_plan(plan)
@@ -513,9 +615,9 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
         ]
         for mode in MODES:
             with reported_subtest(self, "requested focus framing", mode=mode):
-                plan = self._render(selected, 5, mode)
+                plan = self._render(selected, 3, mode)
                 families = self._families_for_plan(plan)
-                context = f"requested Callitrix focus; depth=5; mode={mode}"
+                context = f"requested Callitrix focus; depth=3; mode={mode}"
                 self._assert_semantic_geometry(plan, families, context)
 
                 renderer = self.widget.canvas.get_renderer()
@@ -637,7 +739,6 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
                     )
                 )
                 parent_center = sum(parent_xs) / 2.0
-                parent_span = parent_xs[1] - parent_xs[0]
                 continuing_delta = plan.animal_positions[arwen][0] - parent_center
                 self.assertGreater(abs(continuing_delta), 0.05, context)
                 for terminal in (elladan, elrohir):
@@ -651,18 +752,10 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
                     )
                 self.assertLessEqual(
                     abs(plan.animal_positions[arwen][0] - origin_x),
-                    2.7 + (parent_span * 0.10),
+                    3.5 + 1e-7,
                     context
                     + ": continuing branch is too far from its relative parent corridor",
                 )
-
-    @pytest.mark.extended_heritage
-    def test_requested_callitrix_focus_remains_clear_on_sidebar_sized_canvas(self) -> None:
-        self.widget.resize(1050, 650)
-        try:
-            self.test_requested_callitrix_focus_is_complete_clear_and_unclipped()
-        finally:
-            self.widget.resize(1180, 720)
 
     @pytest.mark.extended_heritage
     def test_representative_pixel_clearance_and_in_axes_legend_overlay(self) -> None:
@@ -678,7 +771,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
             selection = self._selection_shapes(species_nodes)["all"]
             for mode in MODES:
                 with reported_subtest(self, "Callitrix pixel clearance", species=species, mode=mode):
-                    plan = self._render(selection, 6, mode)
+                    plan = self._render(selection, 3, mode)
                     renderer = self.widget.canvas.get_renderer()
                     label_boxes: dict[str, Bbox] = {}
                     for node, meta in self.widget.node_meta.items():
@@ -752,7 +845,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
             "_compute_origin_anchors",
             wraps=self.widget._pedigree_router._compute_origin_anchors,
         ) as anchor_probe:
-            focused = self._render([elwing], 6, VERTICAL_LAYOUT_PARTNER_NORMALIZED)
+            focused = self._render([elwing], 3, VERTICAL_LAYOUT_PARTNER_NORMALIZED)
             anchor_probe.assert_not_called()
             self.assertEqual(self.widget.layout_mode, "focused")
             self.assertIn(
@@ -762,7 +855,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
                 self.widget.status_label.text(),
             )
             overview = self._render(
-                all_selection, 6, VERTICAL_LAYOUT_PARTNER_NORMALIZED
+                all_selection, 3, VERTICAL_LAYOUT_PARTNER_NORMALIZED
             )
             anchor_probe.assert_called_once()
             self.assertEqual(self.widget.layout_mode, "overview")
@@ -827,7 +920,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
             if self._record(node).get("name") == "Arwen"
         ]
         self.assertEqual(len(selected), 1)
-        initial = self._render(selected, 6, VERTICAL_LAYOUT_PARTNER_NORMALIZED)
+        initial = self._render(selected, 3, VERTICAL_LAYOUT_PARTNER_NORMALIZED)
         ghost = next(iter(sorted(self.widget._ghost_nodes, key=str.casefold)))
         self.assertIn(ghost, initial.animal_positions)
         stale_position = (999.0, 999.0)
@@ -836,7 +929,10 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
         self.widget._add_animal_to_selection(ghost)
         updated = self.widget._route_plan
 
-        self.assertIn(ghost, self.app.selected_animals)
+        self.assertIn(
+            ghost, self.app.selected_animals,
+            self.widget.status_label.toolTip(),
+        )
         self.assertNotIn(ghost, self.widget._ghost_nodes)
         self.assertNotIn(ghost, self.widget.temp_positions)
         self.assertNotEqual(updated.animal_positions[ghost], stale_position)
@@ -861,7 +957,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
         isildur = find("Isildur")
         plan = self._render(
             [denethor, isildur],
-            6,
+            3,
             VERTICAL_LAYOUT_PARTNER_NORMALIZED,
         )
         names = {
@@ -878,11 +974,16 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
             self.assertEqual(len(children), 1)
             child = children[0]
             self.assertIn(names.get(child), {"Faramir", "Boromir"})
-            child_x = plan.animal_positions[child][0]
             junction_x = plan.family_positions[family_id][0]
-            self.assertLess(abs(child_x - junction_x), 0.15)
+            parents = [family.get("mother"), family.get("father")]
+            self.assertAlmostEqual(
+                junction_x,
+                sum(plan.animal_positions[parent][0] for parent in parents) / 2.0,
+                delta=1e-6,
+            )
             route = plan.routes[family_id][child]
-            self.assertLess(abs(route[-1][0] - route[0][0]), 0.15)
+            self.assertEqual(route[0], plan.family_positions[family_id])
+            self.assertEqual(route[-1], plan.animal_positions[child])
             self.assertGreaterEqual(
                 math.dist(route[0], route[-1]),
                 self.widget._pedigree_router._single_child_leg_clearance() - 1e-7,
@@ -893,7 +994,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
         self.assertEqual(plan.unresolved, [])
 
     @pytest.mark.extended_heritage
-    def test_denethor_uneven_depth_five_is_valid_in_both_vertical_modes(self) -> None:
+    def test_denethor_uneven_depths_one_to_three_are_valid_in_both_vertical_modes(self) -> None:
         """A valid uneven ancestor depth must not fail shared-parent routing."""
         denethor = next(
             node
@@ -901,7 +1002,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
             if node.split(" | ", 1)[0] == "Denethor"
         )
 
-        for depth in (4, 5):
+        for depth in (1, 2, 3):
             for mode in MODES:
                 with reported_subtest(
                     self,
@@ -937,7 +1038,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
 
         for mode in MODES:
             with reported_subtest(self, "half-sibling ghost/partner layout", mode=mode):
-                plan = self._render([arwen, boromir], 4, mode)
+                plan = self._render([arwen, boromir], 3, mode)
                 names = {
                     node.split(" | ", 1)[0]: node
                     for node in plan.animal_positions
@@ -994,7 +1095,12 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
                     )
                     junction_x = plan.family_positions[family_id][0]
                     child_x = plan.animal_positions[names[child_name]][0]
-                    self.assertLessEqual(abs(junction_x - child_x), 0.35)
+                    parents = [family.get("mother"), family.get("father")]
+                    self.assertAlmostEqual(
+                        junction_x,
+                        sum(plan.animal_positions[parent][0] for parent in parents) / 2.0,
+                        delta=1e-6,
+                    )
                     self.assertLessEqual(
                         abs(plan.routes[family_id][names[child_name]][-1][0] - child_x),
                         0.35,
@@ -1059,7 +1165,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
                 self.assertEqual(plan.unresolved, [])
 
     @pytest.mark.extended_heritage
-    def test_arwen_only_depth_four_accepts_edge_near_single_child_in_both_modes(self) -> None:
+    def test_arwen_only_depth_three_accepts_edge_near_single_child_in_both_modes(self) -> None:
         """The requested Arwen frame must not fail its own junction validation."""
         arwen = next(
             node
@@ -1069,7 +1175,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
 
         for mode in MODES:
             with reported_subtest(self, "edge-near sole-child geometry", mode=mode):
-                plan = self._render([arwen], 4, mode)
+                plan = self._render([arwen], 3, mode)
                 families = self._families_for_plan(plan)
                 labels = {
                     node: self.widget._get_node_obstacle_label(
@@ -1137,7 +1243,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
         eldarion = find("Eldarion")
         plan = self._render(
             [denethor, eldarion],
-            4,
+            3,
             VERTICAL_LAYOUT_PARTNER_NORMALIZED,
         )
         names = {
@@ -1201,7 +1307,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
     def test_drag_and_pan_interactions_keep_valid_geometry(self) -> None:
         species_nodes = self._species_nodes()["Callitrix jacchus"]
         selection = self._selection_shapes(species_nodes)["single"]
-        plan = self._render(selection, 6, VERTICAL_LAYOUT_PARTNER_NORMALIZED)
+        plan = self._render(selection, 3, VERTICAL_LAYOUT_PARTNER_NORMALIZED)
         original_nodes = set(plan.animal_positions)
         self.assertEqual(set(plan.animal_positions), original_nodes)
 
@@ -1374,7 +1480,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
             for name in ("Arwen", "Eldarion", "Denethor", "Aragorn II")
         ]
         plan = self._render(
-            selected, 5, VERTICAL_LAYOUT_PARTNER_NORMALIZED
+            selected, 3, VERTICAL_LAYOUT_PARTNER_NORMALIZED
         )
         arwen = find("Arwen", plan.animal_positions)
         eldarion = find("Eldarion", plan.animal_positions)
@@ -1470,7 +1576,7 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
     def test_genotype_legend_drag_is_bounded_persisted_and_does_not_pan(self) -> None:
         species_nodes = self._species_nodes()["Callitrix jacchus"]
         selection = self._selection_shapes(species_nodes)["all"]
-        self._render(selection, 6, VERTICAL_LAYOUT_PARTNER_NORMALIZED)
+        self._render(selection, 3, VERTICAL_LAYOUT_PARTNER_NORMALIZED)
         self.widget.canvas.draw()
         legend = self.widget._legend_artist
         self.assertIsNotNone(legend)

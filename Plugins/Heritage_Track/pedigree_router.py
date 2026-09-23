@@ -18,6 +18,7 @@ Segment = Tuple[Point, Point]
 RouteKey = Tuple[str, str, int]
 
 _EPSILON = 1e-7
+_ROUTE_MARKER_MARGIN = 0.01
 # The semantic marker radius is deliberately independent of the pixel-sized
 # obstacle rectangles used by the widget.  It is the single tolerance used
 # when deciding whether two routes really meet at their shared animal.
@@ -29,6 +30,24 @@ LAYOUT_MODE_OVERVIEW = "overview"
 
 class GeometryValidationError(ValueError):
     """Raised when a non-finite value reaches a layout/render boundary."""
+
+
+def _canonical_endpoint_path(start: Point, end: Point, *, parent: bool) -> List[Point]:
+    """Pure route geometry shared by placement previews and final routing."""
+    return _simplify_path([start, (end[0], start[1]), end] if parent else [start, end])
+
+
+def _foreign_marker_hits(
+    endpoint: str, path: Sequence[Point], markers: Mapping[str, "Rect"]
+) -> Tuple[Tuple[int, str], ...]:
+    """Exact automatic collision policy; painting gaps cannot exempt a hit."""
+    return tuple(
+        (index, node)
+        for index, segment in enumerate(_path_segments(path))
+        for node in sorted(markers, key=lambda value: (value.casefold(), value))
+        if node != endpoint
+        and markers[node].intersects(segment, margin=_ROUTE_MARKER_MARGIN)
+    )
 
 
 def is_finite_point(value: object) -> bool:
@@ -337,14 +356,20 @@ class PedigreeRouter:
             prefer_descendant_order=layout_mode == LAYOUT_MODE_FOCUSED,
             focus_nodes=focus,
         )
-        # The final node solver works on animal/label rectangles.  A
-        # chronological parent entry can still be geometrically legal at
-        # that level while its canonical vertical leg crosses a marker from
-        # the same family (the two parents may occupy different date rows).
-        # Repair those route-only lane conflicts before publishing junctions;
-        # this keeps the canonical two-segment parent shape intact.
-        if not self._is_simple_linear_family_graph(adjusted, families):
-            self._repair_parent_entry_marker_lanes(
+        manual_family_ids = set(manual_family_positions or {})
+        # First use the existing canonical family-junction placement to clear
+        # a route-only marker collision without disturbing the animal or
+        # sibling coordinates. If the fixed route shapes still hit markers,
+        # use bounded semantic-block placement recovery as a fallback.
+        family_positions = self._automatic_route_junctions(
+            adjusted, families, labels, show_inbreeding=show_inbreeding,
+            chronological=chronological, manual_family_ids=manual_family_ids,
+        )
+        self._last_route_recovery_stop_reason = ""
+        if self._family_route_marker_hit_details(
+            adjusted, families, family_positions, manual_family_ids=manual_family_ids
+        ):
+            self._repair_canonical_route_marker_collisions(
                 adjusted,
                 families,
                 labels,
@@ -352,39 +377,102 @@ class PedigreeRouter:
                 show_inbreeding,
                 focus_nodes=focus,
                 preserve_y=chronological,
+                manual_family_ids=manual_family_ids,
             )
-            # Parent-entry repair is still an animal-placement operation.  It
-            # may move a complete partner block to clear a foreign marker lane
-            # after the ordinary collision solver has finished.  Recheck the
-            # same calibrated node/marker model before junctions are built so
-            # the final route pass never starts from a stale collision state.
-            post_entry_node_rects = self.node_obstacles(
-                adjusted, labels, show_inbreeding
+            # The automatic animal positions may have changed; recompute
+            # junctions and reapply only automatic, route-safe placement.
+            family_positions = self._automatic_route_junctions(
+                adjusted, families, labels, show_inbreeding=show_inbreeding,
+                chronological=chronological, manual_family_ids=manual_family_ids,
             )
-            post_entry_marker_rects = self.marker_obstacles(adjusted)
-            if self._collision_pairs(
-                adjusted, post_entry_node_rects, post_entry_marker_rects
-            ):
-                self._resolve_obstacle_collisions(
-                    adjusted,
-                    families,
-                    labels,
-                    protected,
-                    show_inbreeding,
-                    preserve_y=chronological,
-                )
-        recovery_diagnostic = str(
-            getattr(self, "_last_collision_recovery_diagnostic", "") or ""
+        def hard_node_pairs(state: Mapping[str, Point]) -> List[Tuple[str, str]]:
+            pairs = self._collision_pairs(
+                state,
+                self.node_obstacles(state, labels, show_inbreeding),
+                self.marker_obstacles(state),
+                include_labels=layout_mode != LAYOUT_MODE_FOCUSED,
+            )
+            # #203: two explicit manual animal anchors may overlap by user
+            # choice. Their contact is not an automatic-recovery witness.
+            return [pair for pair in pairs if not set(pair) <= protected]
+
+        # Route recovery must not silently leave an unrelated interactive
+        # marker pair behind. Conversely, moving a node to clear that pair can
+        # reopen a canonical route. Keep both passes detached and adopt only
+        # a state with a better combined hard-collision score.
+        remaining_route_hits = self._family_route_marker_hit_details(
+            adjusted, families, family_positions,
+            manual_family_ids=manual_family_ids,
         )
+        node_pairs = hard_node_pairs(adjusted)
+        for _joint_pass in range(2):
+            if not node_pairs:
+                break
+            trial = dict(adjusted)
+            self._resolve_obstacle_collisions(
+                trial, families, labels, protected, show_inbreeding,
+                preserve_y=chronological,
+                allow_label_overlaps=layout_mode == LAYOUT_MODE_FOCUSED,
+            )
+            if trial == adjusted:
+                break
+            trial_junctions = self._automatic_route_junctions(
+                trial, families, labels, show_inbreeding=show_inbreeding,
+                chronological=chronological, manual_family_ids=manual_family_ids,
+            )
+            trial_hits = self._family_route_marker_hit_details(
+                trial, families, trial_junctions,
+                manual_family_ids=manual_family_ids,
+            )
+            if trial_hits:
+                self._repair_canonical_route_marker_collisions(
+                    trial, families, labels, protected, show_inbreeding,
+                    focus_nodes=focus, preserve_y=chronological,
+                    manual_family_ids=manual_family_ids,
+                )
+                trial_junctions = self._automatic_route_junctions(
+                    trial, families, labels, show_inbreeding=show_inbreeding,
+                    chronological=chronological, manual_family_ids=manual_family_ids,
+                )
+                trial_hits = self._family_route_marker_hit_details(
+                    trial, families, trial_junctions,
+                    manual_family_ids=manual_family_ids,
+                )
+            trial_pairs = hard_node_pairs(trial)
+            if (len(trial_pairs) + len(trial_hits), len(trial_pairs), len(trial_hits)) >= (
+                len(node_pairs) + len(remaining_route_hits),
+                len(node_pairs), len(remaining_route_hits),
+            ):
+                break
+            adjusted = trial
+            family_positions = trial_junctions
+            node_pairs = trial_pairs
+            remaining_route_hits = trial_hits
+        route_recovery_diagnostic = ""
+        if remaining_route_hits:
+            reason = self._last_route_recovery_stop_reason or "placement-pass budget reached"
+            examples = ", ".join(
+                f"{family_id}:"
+                f"{'parent' if endpoint in self._parents(families.get(family_id, {})) else 'child'}:"
+                f"{endpoint}->{foreign}[{segment_index}]"
+                for family_id, endpoint, foreign, segment_index
+                in remaining_route_hits
+            )
+            route_recovery_diagnostic = (
+                f"automatic route marker recovery incomplete ({reason}; "
+                f"{len(remaining_route_hits)} hits): {examples}"
+            )
+        recovery_diagnostic = (
+            "unresolved node/marker collision recovery: "
+            + ", ".join(f"{left}/{right}" for left, right in node_pairs)
+            if node_pairs else ""
+        )
+        self._last_collision_recovery_diagnostic = recovery_diagnostic
         _assert_finite_points(adjusted, kind="animal")
         animal_obstacles = self.node_obstacles(adjusted, labels, show_inbreeding)
-        family_positions = self._place_junctions(
-            adjusted,
-            families,
-            animal_obstacles,
-            chronological=chronological,
-            focused=layout_mode == LAYOUT_MODE_FOCUSED,
-        )
+        # ``family_positions`` was built from these same final adjusted
+        # animal coordinates. Keep the obstacle computation here for the
+        # existing downstream validation/route contract.
         # Family handles are committed as part of the same position-cache
         # record as animal anchors. In chronological mode only their X
         # coordinate is user-controlled; the Y coordinate remains the fixed
@@ -414,7 +502,10 @@ class PedigreeRouter:
 
         routes: Dict[str, Dict[str, List[Point]]] = {}
         owned_segments: List[_OwnedSegment] = []
-        unresolved: List[str] = [recovery_diagnostic] if recovery_diagnostic else []
+        unresolved: List[str] = [
+            diagnostic for diagnostic in
+            (recovery_diagnostic, route_recovery_diagnostic) if diagnostic
+        ]
         route_obstacle_hits: List[str] = []
         route_obstacle_index = (
             self._build_rect_spatial_index(obstacles)
@@ -443,6 +534,7 @@ class PedigreeRouter:
                 fid.casefold(),
             ),
         )
+        final_marker_obstacles = self.marker_obstacles(adjusted)
         for family_id in ordered_families:
             family = families.get(family_id, {})
             endpoint_routes: Dict[str, List[Point]] = {}
@@ -452,7 +544,7 @@ class PedigreeRouter:
             new_owned: List[_OwnedSegment] = []
 
             for endpoint in endpoints:
-                path, path_has_overlap, path_hits_obstacle = self._route_endpoint(
+                path, path_has_overlap, _path_hits_obstacle = self._route_endpoint(
                     family_id,
                     endpoint,
                     junction,
@@ -465,7 +557,7 @@ class PedigreeRouter:
                     owned_segment_index=owned_segment_index,
                 )
                 endpoint_routes[endpoint] = path
-                if path_hits_obstacle:
+                if _foreign_marker_hits(endpoint, path, final_marker_obstacles):
                     route_obstacle_hits.append(f"{family_id}:{endpoint}")
                 if path_has_overlap:
                     unresolved.append(
@@ -829,47 +921,11 @@ class PedigreeRouter:
             if len(parents) == 2:
                 parent_xs = sorted(plan.animal_positions[parent][0] for parent in parents)
                 midpoint = sum(parent_xs) / 2.0
-                span = parent_xs[1] - parent_xs[0]
-                allowed_shift = min(
-                    1.35,
-                    span * 0.22,
-                    max(0.0, (span / 2.0) - 0.08),
-                )
                 visible_children = [
                     child for child in self._children(family)
                     if child in plan.animal_positions
                 ]
                 if len(visible_children) == 1:
-                    child_x = plan.animal_positions[visible_children[0]][0]
-                    child_axis_eligible = self._single_child_axis_is_eligible(
-                        parent_xs[0], parent_xs[1], child_x
-                    )
-                    child_inside_corridor = (
-                        parent_xs[0] + self.node_gap
-                        <= child_x
-                        <= parent_xs[1] - self.node_gap
-                    )
-                    child_near_parent_edge = min(
-                        abs(child_x - parent_xs[0]),
-                        abs(child_x - parent_xs[1]),
-                    ) <= self.route_clearance + _EPSILON and (
-                        child_x < parent_xs[0] - _EPSILON
-                        or child_x > parent_xs[1] + _EPSILON
-                    )
-                    if child_inside_corridor or child_near_parent_edge:
-                        allowed_shift = min(
-                            max(allowed_shift, abs(child_x - midpoint) + self.route_clearance),
-                            max(0.0, (span / 2.0) - 0.08),
-                        )
-                    elif child_axis_eligible:
-                        # A single child is an owned endpoint. Its incoming
-                        # line may overlap its own label, so a junction on
-                        # that same X axis is valid even when the label-sized
-                        # node gap is not available on both shoulders.
-                        allowed_shift = max(
-                            allowed_shift,
-                            abs(child_x - midpoint),
-                        )
                     child_route = endpoint_routes.get(visible_children[0], [])
                     if _path_length(child_route) < self._single_child_leg_clearance(
                         chronological=str(
@@ -879,13 +935,10 @@ class PedigreeRouter:
                         problems.append(
                             f"{family_id}: single-child route has no marker-clear leg"
                         )
-                if not parent_xs[0] < junction[0] < parent_xs[1]:
+                if (family_id not in manual_family_ids
+                        and abs(junction[0] - midpoint) > _EPSILON):
                     problems.append(
-                        f"{family_id}: junction is not between both parents"
-                    )
-                elif abs(junction[0] - midpoint) > allowed_shift + _EPSILON:
-                    problems.append(
-                        f"{family_id}: junction is excessively displaced from the parent midpoint"
+                        f"{family_id}: automatic junction X differs from current parent midpoint"
                     )
             # A line anchor may sit below a foreign text label: labels are
             # rendered above genealogy lines and the overlap is therefore a
@@ -919,25 +972,11 @@ class PedigreeRouter:
                     problems.append(
                         f"{family_id}: descendant route to {endpoint} is not one direct segment"
                     )
-                for index, segment in enumerate(segments):
-                    for node, rect in marker_obstacles.items():
-                        # A route is expected to enter its own endpoint marker.
-                        # That marker is never a foreign obstacle, regardless
-                        # of which canonical parent segment first reaches its
-                        # label/marker rectangle.
-                        if node == endpoint:
-                            continue
-                        if (
-                            family_id not in manual_family_ids
-                            and rect.intersects(segment, margin=0.01)
-                        ):
-                            route_gaps = plan.crossing_gaps.get((family_id, endpoint, index), [])
-                            if any(rect.contains(point, margin=0.08) for point in route_gaps):
-                                continue
-                            problems.append(
-                                f"{family_id}: route to {endpoint} intersects foreign animal marker {node}"
-                            )
-                            break
+                if family_id not in manual_family_ids:
+                    for _index, node in _foreign_marker_hits(endpoint, path, marker_obstacles):
+                        problems.append(
+                            f"{family_id}: route to {endpoint} intersects foreign animal marker {node}"
+                        )
 
         owned = self._owned_segments(plan.routes)
         route_parts: Dict[Tuple[str, str], List[_OwnedSegment]] = defaultdict(list)
@@ -2046,24 +2085,35 @@ class PedigreeRouter:
             if left in candidate and right in candidate:
                 if candidate[left][0] >= candidate[right][0]:
                     return False
-        # A legal trial cannot insert an unrelated node into an established
-        # same-row partner block.  Uniform branch moves preserve internal
-        # vectors; the only permitted non-uniform case is the explicit
-        # internal-row widening candidate generated below.
-        for group in {frozenset(value) for value in partner_groups.values() if len(value) > 1}:
-            members = [node for node in group if node in candidate]
-            if len(members) < 2:
-                continue
-            ys = [candidate[node][1] for node in members]
-            if max(ys) - min(ys) > 0.42:
-                continue
-            left = min(candidate[node][0] for node in members)
-            right = max(candidate[node][0] for node in members)
-            for node, (x, y) in candidate.items():
-                if node in group or abs(y - ys[0]) > 0.42:
+        # A legal trial must not introduce a new unrelated node inside an
+        # established same-row partner block.  The baseline can already carry
+        # a legacy/automatic insertion; rejecting that unchanged baseline
+        # would prevent the route-clearance repair from making progress.  Only
+        # the delta between baseline and candidate is a placement violation.
+        def inserted_nodes(mapping: Mapping[str, Point]) -> Set[Tuple[Tuple[str, ...], str]]:
+            result: Set[Tuple[Tuple[str, ...], str]] = set()
+            for group in {
+                frozenset(value) for value in partner_groups.values() if len(value) > 1
+            }:
+                members = [node for node in group if node in mapping]
+                if len(members) < 2:
                     continue
-                if left < x < right:
-                    return False
+                ys = [mapping[node][1] for node in members]
+                if max(ys) - min(ys) > 0.42:
+                    continue
+                left = min(mapping[node][0] for node in members)
+                right = max(mapping[node][0] for node in members)
+                group_key = tuple(sorted(group, key=str.casefold))
+                for node, (x, y) in mapping.items():
+                    if node in group or abs(y - ys[0]) > 0.42:
+                        continue
+                    if left < x < right:
+                        result.add((group_key, node))
+            return result
+
+        baseline_insertions = inserted_nodes(baseline)
+        if inserted_nodes(candidate) - baseline_insertions:
+            return False
         return True
 
     def _resolve_obstacle_collisions(
@@ -5419,35 +5469,24 @@ class PedigreeRouter:
                 node_hits += 1
 
         junctions = self._place_junctions(
-            candidate, families, obstacles, chronological=chronological
+            candidate, families, obstacles, chronological=chronological,
+            focused=getattr(self, "_allow_dense_label_overlaps", False),
         )
         proxies: List[Tuple[str, Set[str], Segment]] = []
+        markers = self.marker_obstacles(candidate)
+        marker_hits = 0
         for family_id in sorted(junctions, key=str.casefold):
             family = families[family_id]
             parents = [node for node in self._parents(family) if node in candidate]
             children = [node for node in self._children(family) if node in candidate]
             members = set(parents) | set(children)
             junction = junctions[family_id]
-            for parent in parents:
-                point = candidate[parent]
-                proxies.extend(
-                    (
-                        (family_id, members, (junction, (point[0], junction[1]))),
-                        (family_id, members, ((point[0], junction[1]), point)),
-                    )
+            for endpoint in dict.fromkeys(parents + children):
+                path = _canonical_endpoint_path(
+                    junction, candidate[endpoint], parent=endpoint in parents
                 )
-            for child in children:
-                proxies.append((family_id, members, (junction, candidate[child])))
-
-        markers = self.marker_obstacles(candidate)
-        marker_hits = sum(
-            1
-            for _family_id, members, segment in proxies
-            for node, rect in markers.items()
-            if node not in members
-            and _path_length(segment) > _EPSILON
-            and rect.intersects(segment, margin=0.04)
-        )
+                proxies.extend((family_id, members, segment) for segment in _path_segments(path))
+                marker_hits += len(_foreign_marker_hits(endpoint, path, markers))
         crossings = sum(
             1
             for first, second in combinations(proxies, 2)
@@ -5457,6 +5496,570 @@ class PedigreeRouter:
         )
         return node_hits, marker_hits, crossings
 
+    def _visible_sibling_cohorts(
+        self,
+        positions: Mapping[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+    ) -> List[Tuple[Set[str], bool]]:
+        """Return visible full-sibling cohorts and their terminal status.
+
+        Each family contributes its own cohort. Overlapping half-sibling
+        families are deliberately not transitively merged into one block.
+        """
+        visible_parent_ids = {
+            parent
+            for family in families.values()
+            if any(child in positions for child in self._children(family))
+            for parent in self._parents(family)
+            if parent in positions
+        }
+        cohorts: List[Tuple[Set[str], bool]] = []
+        for family_id in sorted(families, key=str.casefold):
+            children = {
+                child for child in self._children(families[family_id])
+                if child in positions
+            }
+            if len(children) < 2:
+                continue
+            cohorts.append((children, not bool(children & visible_parent_ids)))
+        return cohorts
+
+    @staticmethod
+    def _sibling_recovery_metrics(
+        before: Mapping[str, Point],
+        after: Mapping[str, Point],
+        cohorts: Sequence[Tuple[Set[str], bool]],
+    ) -> Tuple[int, float, float]:
+        """Score broken cohorts and their terminal/ordinary X spans."""
+        broken = 0
+        terminal_span = 0.0
+        ordinary_span = 0.0
+        for members, terminal in cohorts:
+            visible = sorted(members & before.keys() & after.keys(), key=str.casefold)
+            if len(visible) < 2:
+                continue
+            shifts = [after[node][0] - before[node][0] for node in visible]
+            moved_count = sum(abs(shift) > _EPSILON for shift in shifts)
+            # A common translation preserves the cohort. A bounded ordered
+            # X reflow is also cohesive when multiple siblings participate;
+            # moving one child by itself is the last-resort split.
+            if moved_count == 1:
+                broken += 1
+            xs = [after[node][0] for node in visible]
+            span = max(xs) - min(xs)
+            if terminal:
+                terminal_span += span
+            else:
+                ordinary_span += span
+        return broken, round(terminal_span, 9), round(ordinary_span, 9)
+
+    def _sibling_cohort_x_reflow_candidates(
+        self,
+        positions: Mapping[str, Point],
+        hits: Sequence[Tuple[str, str, str, int]],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        protected: Set[str],
+        show_inbreeding: bool,
+        current_collisions: Sequence[Tuple[str, str]],
+        partner_orders: Mapping[Tuple[str, str], int],
+        sibling_orders: Mapping[Tuple[str, str], int],
+        partner_blocks: Mapping[str, Set[str]],
+        sibling_cohorts: Sequence[Tuple[Set[str], bool]],
+        *,
+        preserve_y: bool,
+        manual_family_ids: Set[str],
+        candidate_budget: int = 24,
+        allow_plateau: bool = False,
+    ) -> List[Tuple[Tuple[object, ...], Dict[str, Point]]]:
+        """Try bounded, order-preserving X reflow of directly involved cohorts."""
+        candidates: List[Tuple[Tuple[object, ...], Dict[str, Point]]] = []
+        previews = 0
+        seen_cohorts: Set[Tuple[str, ...]] = set()
+        current_pairs = {
+            (family_id, endpoint, foreign)
+            for family_id, endpoint, foreign, _index in hits
+        }
+        for _family_id, endpoint, foreign, _segment in hits:
+            for cohort, terminal in sibling_cohorts:
+                if endpoint not in cohort and foreign not in cohort:
+                    continue
+                ordered = sorted(
+                    cohort,
+                    key=lambda node: (positions[node][0], node.casefold()),
+                )
+                cohort_key = tuple(ordered)
+                if cohort_key in seen_cohorts or len(ordered) < 2:
+                    continue
+                seen_cohorts.add(cohort_key)
+                center = (len(ordered) - 1) / 2.0
+                # Recovery is not bounded by the current viewport. Dense
+                # sibling cohorts may need a materially wider X interval to
+                # keep their direct routes clear; the widget fits/zooms the
+                # visible frame independently and leaves the rest pannable.
+                # These larger deterministic steps are considered only after
+                # compact reflows fail; only a bounded detached candidate may
+                # trade which route is blocked, never a published frame.
+                graph_xs = [point[0] for point in positions.values()]
+                graph_clear_spread = (
+                    (max(graph_xs) - min(graph_xs)
+                     + (2.0 * self.node_gap)
+                     + (2.0 * self.marker_half_width))
+                    / max(1.0, center)
+                )
+                spreads = list(dict.fromkeys((
+                    0.16, 0.32, 0.64, 1.28, 2.56,
+                    round(graph_clear_spread, 7),
+                    5.12, 10.24, 20.48,
+                )))
+                for spread in spreads:
+                    for direction in (-1.0, 1.0):
+                        trial = dict(positions)
+                        node_shifts: Dict[str, float] = {}
+                        feasible = True
+                        moved_siblings = 0
+                        for index, sibling in enumerate(ordered):
+                            dx = direction * spread * (index - center)
+                            if abs(dx) <= _EPSILON:
+                                continue
+                            block = set(partner_blocks.get(sibling, {sibling})) & set(positions)
+                            if block & protected:
+                                feasible = False
+                                break
+                            moved_siblings += 1
+                            for node in block:
+                                prior = node_shifts.get(node)
+                                if prior is not None and abs(prior - dx) > _EPSILON:
+                                    feasible = False
+                                    break
+                                node_shifts[node] = dx
+                            if not feasible:
+                                break
+                        if not feasible or moved_siblings < 2:
+                            continue
+                        for node, dx in node_shifts.items():
+                            x, y = trial[node]
+                            trial[node] = (x + dx, y)
+                        if not self._placement_candidate_is_legal(
+                            trial,
+                            positions,
+                            set(protected),
+                            partner_orders,
+                            sibling_orders,
+                            partner_blocks,
+                            preserve_y=preserve_y,
+                        ):
+                            continue
+                        broken, terminal_span, ordinary_span = self._sibling_recovery_metrics(
+                            positions, trial, sibling_cohorts
+                        )
+                        if broken:
+                            continue
+                        if previews >= candidate_budget:
+                            return candidates
+                        previews += 1
+                        trial_hits = self._route_marker_hit_details(
+                            trial,
+                            families,
+                            labels,
+                            show_inbreeding=show_inbreeding,
+                            chronological=preserve_y,
+                            manual_family_ids=manual_family_ids,
+                        )
+                        trial_pairs = {
+                            (family_id, route_endpoint, blocker)
+                            for family_id, route_endpoint, blocker, _index in trial_hits
+                        }
+                        if (
+                            (len(trial_hits) != len(hits) if allow_plateau else len(trial_hits) >= len(hits))
+                            or (trial_pairs != current_pairs if allow_plateau else bool(trial_pairs - current_pairs))
+                        ):
+                            continue
+                        target_hit_remains = any(
+                            (family_id, route_endpoint, blocker)
+                            == (_family_id, endpoint, foreign)
+                            for family_id, route_endpoint, blocker, _index in trial_hits
+                        )
+                        trial_node_rects = self.node_obstacles(
+                            trial, labels, show_inbreeding
+                        )
+                        trial_marker_rects = self.marker_obstacles(trial)
+                        trial_collisions = self._collision_pairs(
+                            trial,
+                            trial_node_rects,
+                            trial_marker_rects,
+                            include_labels=not getattr(
+                                self, "_allow_dense_label_overlaps", False
+                            ),
+                        )
+                        if set(trial_collisions) - set(current_collisions):
+                            continue
+                        displacement = sum(abs(dx) for dx in node_shifts.values())
+                        candidates.append(
+                            (
+                                (
+                                    len(trial_hits),
+                                    int(target_hit_remains),
+                                    len(trial_collisions),
+                                    broken,
+                                    terminal_span,
+                                    ordinary_span,
+                                    round(displacement, 9),
+                                    cohort_key,
+                                    round(spread, 9),
+                                    direction,
+                                ),
+                                trial,
+                            )
+                        )
+        return candidates
+
+    def _family_route_marker_hit_details(
+        self,
+        positions: Mapping[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        family_positions: Mapping[str, Point],
+        *,
+        manual_family_ids: Optional[Set[str]] = None,
+        marker_rects: Optional[Mapping[str, Rect]] = None,
+    ) -> List[Tuple[str, str, str, int]]:
+        """Return marker collisions for canonical routes using given knots."""
+        manual_family_ids = set(manual_family_ids or set())
+        markers = marker_rects if marker_rects is not None else self.marker_obstacles(positions)
+        hits: List[Tuple[str, str, str, int]] = []
+        for family_id in sorted(families, key=str.casefold):
+            if family_id in manual_family_ids or family_id not in family_positions:
+                continue
+            family = families[family_id]
+            parents = set(self._parents(family)) & set(positions)
+            junction = family_positions[family_id]
+            for endpoint in self._ordered_endpoints(family, positions):
+                path = _canonical_endpoint_path(
+                    junction, positions[endpoint], parent=endpoint in parents
+                )
+                hits.extend(
+                    (family_id, endpoint, foreign, index)
+                    for index, foreign in _foreign_marker_hits(endpoint, path, markers)
+                )
+        return hits
+
+    def _repair_family_junction_route_markers(
+        self,
+        positions: Mapping[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        family_positions: Dict[str, Point],
+        *,
+        manual_family_ids: Optional[Set[str]] = None,
+        chronological: bool = False,
+    ) -> bool:
+        """Slide automatic family knots within their existing X corridors.
+
+        This preserves animal coordinates and canonical route shapes. It is
+        the first placement response to a route-only marker collision; animal
+        block recovery remains the fallback when the allowed knot corridor
+        cannot clear the complete route.
+        """
+        manual_family_ids = set(manual_family_ids or set())
+        markers = self.marker_obstacles(positions)
+        family_members = self._family_members(positions, families)
+        changed = False
+        margin = _ROUTE_MARKER_MARGIN * 2.0
+
+        for family_id in sorted(families, key=str.casefold):
+            if family_id in manual_family_ids or family_id not in family_positions:
+                continue
+            family = families[family_id]
+            parents = [node for node in self._parents(family) if node in positions]
+            children = [node for node in self._children(family) if node in positions]
+            if not parents or not children:
+                continue
+            current = family_positions[family_id]
+            current_hits = [
+                hit for hit in self._family_route_marker_hit_details(
+                    positions, {family_id: family}, {family_id: current},
+                    marker_rects=markers,
+                )
+            ]
+            if not current_hits:
+                continue
+
+            if len(parents) == 2:
+                parent_xs = sorted(positions[node][0] for node in parents)
+                midpoint = sum(parent_xs) / 2.0
+                # X belongs to the parent pair. Marker conflicts must be
+                # solved by animal/cohort placement (or rejected), never by
+                # sliding this automatic family handle toward a parent.
+                low_x = high_x = midpoint
+            else:
+                midpoint = current[0]
+                low_x = current[0] - max(1.35, self.route_clearance)
+                high_x = current[0] + max(1.35, self.route_clearance)
+            if low_x > high_x:
+                continue
+
+            critical_xs: Set[float] = {low_x, high_x, current[0]}
+            parents_set = set(parents)
+            for _route_family, endpoint, foreign, segment_index in current_hits:
+                rect = markers.get(foreign)
+                if rect is None:
+                    continue
+                path = _canonical_endpoint_path(
+                    current, positions[endpoint], parent=endpoint in parents_set
+                )
+                segments = _path_segments(path)
+                if segment_index >= len(segments):
+                    continue
+                if endpoint in parents_set:
+                    # Only the horizontal junction-entry segment changes
+                    # when the knot moves along X. A vertical parent leg is
+                    # owned by the fixed parent coordinate and is left for
+                    # animal-block recovery.
+                    if segment_index == 0:
+                        critical_xs.update((rect.left - margin, rect.right + margin))
+                    continue
+
+                endpoint_x, endpoint_y = positions[endpoint]
+                start_y = current[1]
+                if abs(endpoint_y - start_y) <= _EPSILON:
+                    critical_xs.update((rect.left - margin, rect.right + margin))
+                    continue
+                for edge_y in (rect.bottom - margin, rect.top + margin):
+                    fraction = (edge_y - start_y) / (endpoint_y - start_y)
+                    if not 0.0 < fraction < 1.0:
+                        continue
+                    for edge_x in (rect.left - margin, rect.right + margin):
+                        critical_xs.add(
+                            (edge_x - (fraction * endpoint_x)) / (1.0 - fraction)
+                        )
+
+            breakpoints = sorted(
+                min(max(float(value), low_x), high_x)
+                for value in critical_xs
+                if math.isfinite(float(value))
+            )
+            candidate_xs: Set[float] = {
+                round(value, 7) for value in breakpoints
+            }
+            for left, right in zip(breakpoints, breakpoints[1:]):
+                if right - left > _EPSILON:
+                    candidate_xs.add(round((left + right) / 2.0, 7))
+            # A few bounded local samples also cover a collision whose
+            # intersection changes at an endpoint rather than a rectangle
+            # corner (for example a horizontal parent-entry segment).
+            for delta in (-1.28, -0.64, -0.32, -0.16, 0.16, 0.32, 0.64, 1.28):
+                candidate_xs.add(round(min(max(current[0] + delta, low_x), high_x), 7))
+
+            current_pairs = {
+                (route_family, endpoint, foreign)
+                for route_family, endpoint, foreign, _index in current_hits
+            }
+            best: Optional[Tuple[Tuple[object, ...], Point]] = None
+            for candidate_x in sorted(candidate_xs, key=lambda value: (abs(value - current[0]), value)):
+                if abs(candidate_x - current[0]) <= _EPSILON:
+                    continue
+                candidate = (candidate_x, current[1])
+                if len(parents) == 2 and not parent_xs[0] < candidate_x < parent_xs[1]:
+                    continue
+                if any(
+                    node not in family_members.get(family_id, set())
+                    and rect.contains(candidate)
+                    for node, rect in markers.items()
+                ):
+                    continue
+                if any(
+                    other_id != family_id
+                    and abs(candidate_x - other_point[0]) < self.junction_clearance * 2.0
+                    and abs(candidate[1] - other_point[1]) < self.junction_clearance * 2.0
+                    for other_id, other_point in family_positions.items()
+                ):
+                    continue
+                trial_positions = dict(family_positions)
+                trial_positions[family_id] = candidate
+                all_trial_hits = self._family_route_marker_hit_details(
+                    positions,
+                    {family_id: family},
+                    trial_positions,
+                    marker_rects=markers,
+                )
+                trial_pairs = {
+                    (route_family, endpoint, foreign)
+                    for route_family, endpoint, foreign, _index in all_trial_hits
+                }
+                if (
+                    len(all_trial_hits) >= len(current_hits)
+                    or trial_pairs - current_pairs
+                ):
+                    continue
+                score: Tuple[object, ...] = (
+                    len(all_trial_hits),
+                    round(abs(candidate_x - current[0]), 9),
+                    candidate_x,
+                )
+                if best is None or score < best[0]:
+                    best = (score, candidate)
+            if best is not None:
+                family_positions[family_id] = best[1]
+                changed = True
+
+            # X-only recovery can reach a dead end when the parent corridor
+            # is narrow but a direct descendant segment clips a marker.  The
+            # automatic family junction has no birth-date Y authority: keep
+            # it inside the same parent/child corridor and search its clear
+            # vertical intervals before moving any animal.  Animal Y values
+            # (including chronological dates), manual family anchors, route
+            # topology and the final marker predicate remain unchanged.
+            current = family_positions[family_id]
+            current_hits = self._family_route_marker_hit_details(
+                positions, {family_id: family}, {family_id: current},
+                marker_rects=markers,
+            )
+            if not current_hits:
+                continue
+            parent_ys = [positions[node][1] for node in parents]
+            parent_mid_y = sum(parent_ys) / len(parent_ys)
+            child_ys = [positions[node][1] for node in children]
+            if min(child_ys) >= parent_mid_y:
+                child_y = min(child_ys)
+            elif max(child_ys) <= parent_mid_y:
+                child_y = max(child_ys)
+            else:
+                child_y = min(child_ys, key=lambda value: abs(value - parent_mid_y))
+            parent_y = max(parent_ys) if child_y >= parent_mid_y else min(parent_ys)
+            low_y, high_y = sorted((parent_y, child_y))
+            padding = min(0.25, (high_y - low_y) * 0.15)
+            low_y += padding
+            high_y -= padding
+            if high_y - low_y <= _EPSILON:
+                continue
+
+            family_members_for_y = family_members.get(family_id, set())
+            y_breakpoints: Set[float] = {low_y, high_y, current[1]}
+            # Marker edges partition the parent/child corridor into intervals
+            # with stable route-clearance behavior. Include exact direct-line
+            # tangencies as well as the horizontal family-rail levels.
+            for foreign, rect in markers.items():
+                if foreign in family_members_for_y:
+                    continue
+                y_breakpoints.update((
+                    rect.bottom - margin,
+                    rect.top + margin,
+                ))
+                for _route_family, endpoint, hit_foreign, _segment_index in current_hits:
+                    if hit_foreign != foreign or endpoint in parents:
+                        continue
+                    endpoint_x, endpoint_y = positions[endpoint]
+                    delta_x = endpoint_x - current[0]
+                    if abs(delta_x) <= _EPSILON:
+                        continue
+                    for edge_x in (rect.left - margin, rect.right + margin):
+                        fraction = (edge_x - current[0]) / delta_x
+                        if not 0.0 < fraction < 1.0:
+                            continue
+                        for edge_y in (rect.bottom - margin, rect.top + margin):
+                            tangent_y = (edge_y - (fraction * endpoint_y)) / (1.0 - fraction)
+                            y_breakpoints.update((
+                                tangent_y - _EPSILON * 8.0,
+                                tangent_y + _EPSILON * 8.0,
+                            ))
+
+            bounded_y = sorted(
+                min(max(float(value), low_y), high_y)
+                for value in y_breakpoints
+                if math.isfinite(float(value))
+            )
+            candidate_ys: Set[float] = {
+                round(value, 7) for value in bounded_y
+            }
+            for lower, upper in zip(bounded_y, bounded_y[1:]):
+                if upper - lower > _EPSILON:
+                    candidate_ys.add(round((lower + upper) / 2.0, 7))
+
+            current_pairs = {
+                (route_family, endpoint, foreign)
+                for route_family, endpoint, foreign, _index in current_hits
+            }
+            best_y: Optional[Tuple[Tuple[object, ...], Point]] = None
+            for candidate_y in sorted(
+                candidate_ys,
+                key=lambda value: (abs(value - current[1]), value),
+            ):
+                if abs(candidate_y - current[1]) <= _EPSILON:
+                    continue
+                candidate = (current[0], candidate_y)
+                if len(children) == 1 and _path_length(
+                    (candidate, positions[children[0]])
+                ) < self._single_child_leg_clearance(
+                    chronological=chronological
+                ) - _EPSILON:
+                    continue
+                if any(
+                    node not in family_members_for_y and rect.contains(candidate)
+                    for node, rect in markers.items()
+                ):
+                    continue
+                if any(
+                    other_id != family_id
+                    and abs(candidate[0] - other_point[0]) < self.junction_clearance * 2.0
+                    and abs(candidate[1] - other_point[1]) < self.junction_clearance * 2.0
+                    for other_id, other_point in family_positions.items()
+                ):
+                    continue
+                trial_positions = dict(family_positions)
+                trial_positions[family_id] = candidate
+                trial_hits = self._family_route_marker_hit_details(
+                    positions, {family_id: family}, trial_positions,
+                    marker_rects=markers,
+                )
+                trial_pairs = {
+                    (route_family, endpoint, foreign)
+                    for route_family, endpoint, foreign, _index in trial_hits
+                }
+                if len(trial_hits) >= len(current_hits) or trial_pairs - current_pairs:
+                    continue
+                target_remains = any(
+                    (route_family, endpoint, foreign) in trial_pairs
+                    for route_family, endpoint, foreign in current_pairs
+                )
+                score = (
+                    len(trial_hits),
+                    int(target_remains),
+                    round(abs(candidate_y - current[1]), 9),
+                    candidate_y,
+                )
+                if best_y is None or score < best_y[0]:
+                    best_y = (score, candidate)
+            if best_y is not None:
+                family_positions[family_id] = best_y[1]
+                changed = True
+        return changed
+
+    def _automatic_route_junctions(
+        self,
+        positions: Mapping[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        *,
+        show_inbreeding: bool,
+        chronological: bool,
+        manual_family_ids: Optional[Set[str]] = None,
+    ) -> Dict[str, Point]:
+        """Build the same automatic junctions for previews and final routes."""
+        junctions = self._place_junctions(
+            positions,
+            families,
+            self.node_obstacles(positions, labels, show_inbreeding),
+            chronological=chronological,
+            focused=getattr(self, "_allow_dense_label_overlaps", False),
+        )
+        self._repair_family_junction_route_markers(
+            positions,
+            families,
+            junctions,
+            manual_family_ids=manual_family_ids,
+            chronological=chronological,
+        )
+        return junctions
+
     def _route_marker_hit_details(
         self,
         positions: Mapping[str, Point],
@@ -5465,55 +6068,213 @@ class PedigreeRouter:
         *,
         show_inbreeding: bool,
         chronological: bool,
+        manual_family_ids: Optional[Set[str]] = None,
     ) -> List[Tuple[str, str, str, int]]:
-        """Return canonical route segments that cross a foreign marker.
-
-        This deliberately mirrors the route portion of ``validate_plan``
-        before a ``RoutePlan`` exists, but scopes the repair signal to the
-        parent-entry case it owns: a marker belonging to the other visible
-        parent of the same family.  Direct child rays and unrelated foreign
-        markers have separate routing/masking policies and must not cause a
-        partner block to move here.
-        """
-        obstacles = self.node_obstacles(positions, labels, show_inbreeding)
-        junctions = self._place_junctions(
-            positions,
-            families,
-            obstacles,
+        """Preview all canonical routes with the final marker predicate."""
+        manual_family_ids = set(manual_family_ids or set())
+        junctions = self._automatic_route_junctions(
+            positions, families, labels,
+            show_inbreeding=show_inbreeding,
             chronological=chronological,
+            manual_family_ids=manual_family_ids,
         )
-        markers = self.marker_obstacles(positions)
-        hits: List[Tuple[str, str, str, int]] = []
-        for family_id in sorted(junctions, key=str.casefold):
-            family = families.get(family_id, {})
-            parents = set(self._parents(family)) & set(positions)
-            junction = junctions[family_id]
-            for endpoint in self._ordered_endpoints(family, positions):
-                # This repair owns only the canonical parent-entry lanes.
-                # Direct child rays have a separate, intentionally maskable
-                # foreign-marker policy and must never cause a parent/mate
-                # block to be shifted as a side effect of this pass.
-                if endpoint not in parents:
-                    continue
-                if endpoint in parents:
-                    path = _simplify_path(
-                        [
-                            junction,
-                            (positions[endpoint][0], junction[1]),
-                            positions[endpoint],
-                        ]
-                    )
-                else:
-                    path = [junction, positions[endpoint]]
-                for index, segment in enumerate(_path_segments(path)):
-                    for foreign, rect in markers.items():
-                        if foreign == endpoint or foreign not in parents:
-                            continue
-                        if rect.intersects(segment, margin=0.01):
-                            hits.append((family_id, endpoint, foreign, index))
-        return hits
+        return self._family_route_marker_hit_details(
+            positions, families, junctions, manual_family_ids=manual_family_ids
+        )
 
-    def _repair_parent_entry_marker_lanes(
+    def _search_detached_route_recovery(
+        self,
+        baseline: Mapping[str, Point],
+        families: Mapping[str, Mapping[str, object]],
+        labels: Mapping[str, str],
+        protected: Set[str],
+        show_inbreeding: bool,
+        partner_blocks: Mapping[str, Set[str]],
+        partner_orders: Mapping[Tuple[str, str], int],
+        sibling_orders: Mapping[Tuple[str, str], int],
+        sibling_cohorts: Sequence[Tuple[Set[str], bool]],
+        *,
+        preserve_y: bool,
+        manual_family_ids: Set[str],
+    ) -> Optional[Dict[str, Point]]:
+        """Search detached placement states when no single safe move suffices.
+
+        The beam is deliberately local to route witnesses. Intermediate
+        collisions are never copied back to the caller; only a completely
+        marker-clear state can leave this helper.
+        """
+        initial_hits = self._route_marker_hit_details(
+            baseline, families, labels,
+            show_inbreeding=show_inbreeding,
+            chronological=preserve_y,
+            manual_family_ids=manual_family_ids,
+        )
+        if not initial_hits:
+            return None
+        initial_rects = self.node_obstacles(baseline, labels, show_inbreeding)
+        initial_pairs = set(self._collision_pairs(
+            baseline, initial_rects, self.marker_obstacles(baseline),
+            include_labels=not getattr(self, "_allow_dense_label_overlaps", False),
+        ))
+        cohorts_by_node: Dict[str, List[Set[str]]] = defaultdict(list)
+        for members, _terminal in sibling_cohorts:
+            expanded = set(members)
+            for member in members:
+                expanded.update(partner_blocks.get(member, {member}))
+            for member in members:
+                cohorts_by_node[member].append(expanded & baseline.keys())
+
+        def signature(state: Mapping[str, Point]) -> Tuple[Tuple[str, float], ...]:
+            return tuple(
+                (node, round(state[node][0], 7))
+                for node in sorted(baseline, key=str.casefold)
+                if abs(state[node][0] - baseline[node][0]) > _EPSILON
+            )
+
+        frontier: List[Dict[str, Point]] = [dict(baseline)]
+        visited = {signature(baseline)}
+        # A small beam is sufficient for interacting route witnesses while
+        # avoiding a graph-wide combinatorial search on the render path.
+        for _depth in range(4):
+            by_witness: Dict[int, List[Tuple[Tuple[object, ...], Dict[str, Point]]]] = defaultdict(list)
+            solutions: List[Tuple[Tuple[object, ...], Dict[str, Point]]] = []
+            for state in frontier:
+                hits = self._route_marker_hit_details(
+                    state, families, labels,
+                    show_inbreeding=show_inbreeding,
+                    chronological=preserve_y,
+                    manual_family_ids=manual_family_ids,
+                )
+                junctions = self._automatic_route_junctions(
+                    state, families, labels,
+                    show_inbreeding=show_inbreeding,
+                    chronological=preserve_y,
+                    manual_family_ids=manual_family_ids,
+                )
+                markers = self.marker_obstacles(state)
+                for witness_index, (family_id, endpoint, foreign, segment_index) in enumerate(hits[:8]):
+                    family = families.get(family_id, {})
+                    if family_id not in junctions or endpoint not in state or foreign not in markers:
+                        continue
+                    parents = set(self._parents(family))
+                    segments = _path_segments(_canonical_endpoint_path(
+                        junctions[family_id], state[endpoint], parent=endpoint in parents,
+                    ))
+                    if segment_index >= len(segments):
+                        continue
+                    segment = segments[segment_index]
+                    segment_left = min(point[0] for point in segment)
+                    segment_right = max(point[0] for point in segment)
+                    foreign_rect = markers[foreign]
+                    margin = max(_ROUTE_MARKER_MARGIN * 2.0, self.route_clearance * 0.25)
+                    possible_nodes = list(dict.fromkeys(
+                        [foreign, endpoint] + [node for node in self._parents(family) if node in state]
+                    ))
+                    previews = 0
+                    for moving_node in possible_nodes:
+                        groups: List[Set[str]] = []
+                        for group in (
+                            *cohorts_by_node.get(moving_node, []),
+                            set(partner_blocks.get(moving_node, {moving_node})),
+                            {moving_node},
+                        ):
+                            group = set(group) & state.keys()
+                            if group and group not in groups and not group & protected:
+                                groups.append(group)
+                        for group in groups:
+                            if previews >= 12:
+                                break
+                            # Exact X boundaries are tried before a modest
+                            # clearance shift. The latter also permits one
+                            # blocker to move while another still masks the
+                            # same route in an intermediate state.
+                            if foreign in group:
+                                deltas = [
+                                    segment_left - margin - foreign_rect.right,
+                                    segment_right + margin - foreign_rect.left,
+                                ]
+                            else:
+                                deltas = [
+                                    foreign_rect.left - margin - segment_right,
+                                    foreign_rect.right + margin - segment_left,
+                                ]
+                            clearance = 2.0 * self.marker_half_width + self.node_gap
+                            deltas.extend((-clearance, clearance))
+                            if endpoint in group and endpoint not in parents:
+                                start_x, start_y = junctions[family_id]
+                                end_x, end_y = state[endpoint]
+                                if abs(end_y - start_y) > _EPSILON:
+                                    for edge_y in (foreign_rect.bottom - margin, foreign_rect.top + margin):
+                                        fraction = (edge_y - start_y) / (end_y - start_y)
+                                        if 0.0 < fraction <= 1.0:
+                                            for edge_x in (foreign_rect.left - margin, foreign_rect.right + margin):
+                                                deltas.append((edge_x - (1.0 - fraction) * start_x) / fraction - end_x)
+                            for delta in sorted({round(value, 7) for value in deltas}, key=lambda value: (abs(value), value)):
+                                if previews >= 12:
+                                    break
+                                if abs(delta) <= _EPSILON:
+                                    continue
+                                trial = dict(state)
+                                for node in group:
+                                    x, y = trial[node]
+                                    trial[node] = (x + delta, y)
+                                key = signature(trial)
+                                if key in visited or not self._placement_candidate_is_legal(
+                                    trial, baseline, protected, partner_orders,
+                                    sibling_orders, partner_blocks, preserve_y=preserve_y,
+                                ):
+                                    continue
+                                visited.add(key)
+                                previews += 1
+                                trial_rects = self.node_obstacles(trial, labels, show_inbreeding)
+                                if set(self._collision_pairs(
+                                    trial, trial_rects, self.marker_obstacles(trial),
+                                    include_labels=not getattr(self, "_allow_dense_label_overlaps", False),
+                                )) - initial_pairs:
+                                    continue
+                                trial_hits = self._route_marker_hit_details(
+                                    trial, families, labels,
+                                    show_inbreeding=show_inbreeding,
+                                    chronological=preserve_y,
+                                    manual_family_ids=manual_family_ids,
+                                )
+                                if len(trial_hits) > len(initial_hits) + 2:
+                                    continue
+                                broken, terminal_span, ordinary_span = self._sibling_recovery_metrics(
+                                    baseline, trial, sibling_cohorts,
+                                )
+                                displacement = sum(
+                                    abs(trial[node][0] - baseline[node][0]) for node in baseline
+                                )
+                                if not trial_hits:
+                                    solutions.append((
+                                        (broken, terminal_span, ordinary_span,
+                                         round(displacement, 7), key), trial,
+                                    ))
+                                    continue
+                                by_witness[witness_index].append((
+                                    (len(trial_hits), broken, terminal_span, ordinary_span,
+                                     round(displacement, 7), key), trial,
+                                ))
+            if solutions:
+                return min(solutions, key=lambda item: item[0])[1]
+            if not by_witness:
+                break
+            # Reserve places for distinct witnesses. A global compactness
+            # sort alone can discard the second blocker needed for a plateau.
+            ranked = [sorted(values, key=lambda item: item[0]) for _, values in sorted(by_witness.items())]
+            frontier = []
+            for rank in range(8):
+                for bucket in ranked:
+                    if rank < len(bucket):
+                        frontier.append(bucket[rank][1])
+                        if len(frontier) == 8:
+                            break
+                if len(frontier) == 8:
+                    break
+        return None
+
+    def _repair_canonical_route_marker_collisions(
         self,
         positions: Dict[str, Point],
         families: Mapping[str, Mapping[str, object]],
@@ -5523,21 +6284,22 @@ class PedigreeRouter:
         *,
         focus_nodes: Optional[Set[str]] = None,
         preserve_y: bool = False,
+        manual_family_ids: Optional[Set[str]] = None,
+        allow_two_step: bool = True,
+        pass_limit: Optional[int] = None,
     ) -> bool:
-        """Move legal same-row blocks away from foreign parent-entry markers.
+        """Recover canonical parent/child clearance by bounded block X shifts.
 
-        Node collision recovery cannot see a route-only conflict when two
-        parents are on different date rows.  The canonical parent route still
-        has to descend vertically into its endpoint, so a nearby parent
-        marker can sit directly in that lane without overlapping either
-        animal rectangle.  Search a bounded set of boundary-derived uniform
-        block shifts and accept only candidates that strictly reduce the
-        actual canonical route-marker hit count without adding node/marker
-        collisions or changing protected/focused anchors.
+        Existing partner blocks and visible sibling cohorts are considered as
+        placement units before individual nodes. Route construction and
+        validation never mutate these coordinates.
         """
         if len(positions) < 2 or not families:
             return False
 
+        manual_family_ids = set(manual_family_ids or set())
+        if allow_two_step:
+            self._last_route_recovery_stop_reason = ""
         baseline = dict(positions)
         block_seed = dict(baseline)
         partner_blocks = self._pack_partner_blocks_on_rows(
@@ -5565,120 +6327,408 @@ class PedigreeRouter:
             )
             for left, right in zip(ordered, ordered[1:]):
                 sibling_orders[(left, right)] = 1
+        sibling_cohorts = self._visible_sibling_cohorts(baseline, families)
+        cohorts_by_node: Dict[str, List[Tuple[Set[str], bool]]] = defaultdict(list)
+        for cohort in sibling_cohorts:
+            for node in cohort[0]:
+                cohorts_by_node[node].append(cohort)
 
-        frozen = set(protected) | set(focus_nodes or set())
+        # Selection/focus is not a manual placement lock.  Only explicit
+        # protected anchors may remain fixed; otherwise an overview in which
+        # every node is selected would make automatic route recovery
+        # impossible.  ``focus_nodes`` remains part of the method contract for
+        # callers and future LayoutEngine migration, but does not override
+        # automatic marker clearance.
+        frozen = set(protected)
         current = dict(baseline)
         changed = False
-        for _pass in range(min(8, max(1, len(families)))):
+
+        # A single family can have many independently blocked child routes.
+        # Bound recovery by visible graph size, not only family count, so one
+        # successful move does not end a multi-child repair prematurely.
+        for _pass in range(
+            pass_limit if pass_limit is not None
+            else min(64, max(1, len(positions) * 2))
+        ):
             hits = self._route_marker_hit_details(
                 current,
                 families,
                 labels,
                 show_inbreeding=show_inbreeding,
                 chronological=preserve_y,
+                manual_family_ids=manual_family_ids,
             )
             if not hits:
                 break
+            current_hit_pairs = {
+                (hit_family, hit_endpoint, hit_foreign)
+                for hit_family, hit_endpoint, hit_foreign, _index in hits
+            }
             current_node_rects = self.node_obstacles(
                 current, labels, show_inbreeding
             )
             current_marker_rects = self.marker_obstacles(current)
+            graph_xs = [point[0] for point in current.values()]
+            graph_label_left = min(rect.left for rect in current_node_rects.values())
+            graph_label_right = max(rect.right for rect in current_node_rects.values())
             current_collisions = self._collision_pairs(
                 current,
                 current_node_rects,
                 current_marker_rects,
+                include_labels=not getattr(self, "_allow_dense_label_overlaps", False),
             )
-            candidates: List[
-                Tuple[
-                    Tuple[int, int, float, Tuple[str, ...]],
-                    Dict[str, Point],
-                ]
-            ] = []
+            junctions = self._automatic_route_junctions(
+                current, families, labels,
+                show_inbreeding=show_inbreeding,
+                chronological=preserve_y,
+                manual_family_ids=manual_family_ids,
+            )
+            candidates: List[Tuple[Tuple[object, ...], Dict[str, Point]]] = []
             marker_margin = max(0.02, self.route_clearance * 0.25)
-            for family_id, endpoint, foreign, _segment_index in hits:
-                family = families.get(family_id, {})
-                possible_nodes = [endpoint]
-                possible_nodes.extend(
-                    node
-                    for node in self._parents(family)
-                    if node in current and node not in possible_nodes
-                )
-                foreign_rect = current_marker_rects.get(foreign)
-                for moving_node in possible_nodes:
-                    group = set(
-                        partner_blocks.get(moving_node, {moving_node})
-                    ) & set(current)
-                    if not group or group & frozen:
-                        continue
-                    x = current[moving_node][0]
-                    deltas = {
-                        round(foreign_rect.left - marker_margin - x, 7),
-                        round(foreign_rect.right + marker_margin - x, 7),
-                    } if foreign_rect is not None else set()
-                    for magnitude in (0.16, 0.32, 0.64, 1.28, 2.56):
-                        deltas.update(
-                            {
-                                round(-magnitude, 7),
-                                round(magnitude, 7),
-                            }
-                        )
-                    for delta in sorted(deltas):
-                        if abs(delta) <= _EPSILON:
+            max_route_previews = 64 if allow_two_step else 24
+            # First exhaust route-safe moves which preserve every sibling
+            # cohort; only then allow a smaller automatic split as a last
+            # resort. This avoids scattering terminal siblings just because
+            # moving one child is cheaper than translating its cohort.
+            for recovery_stage in ("rigid", "cohort_reflow", "split"):
+                route_preview_count = 0
+                if recovery_stage == "cohort_reflow":
+                    candidates = self._sibling_cohort_x_reflow_candidates(
+                        current,
+                        hits,
+                        families,
+                        labels,
+                        frozen,
+                        show_inbreeding,
+                        current_collisions,
+                        partner_orders,
+                        sibling_orders,
+                        partner_blocks,
+                        sibling_cohorts,
+                        preserve_y=preserve_y,
+                        manual_family_ids=manual_family_ids,
+                    )
+                    if candidates:
+                        break
+                    continue
+                allow_sibling_split = recovery_stage == "split"
+                for family_id, endpoint, foreign, segment_index in hits:
+                    target_hit = (family_id, endpoint, foreign, segment_index)
+                    family = families.get(family_id, {})
+                    possible_nodes = list(dict.fromkeys([foreign, endpoint]))
+                    possible_nodes.extend(
+                        node
+                        for node in self._parents(family)
+                        if node in current and node not in possible_nodes
+                    )
+                    foreign_rect = current_marker_rects.get(foreign)
+                    segment = _path_segments(_canonical_endpoint_path(
+                        junctions[family_id], current[endpoint],
+                        parent=endpoint in self._parents(family),
+                    ))[segment_index]
+                    hit_candidates: List[
+                        Tuple[Tuple[object, ...], Dict[str, Point]]
+                    ] = []
+                    exhausted_budget = False
+                    hit_preview_count = 0
+                    # Share a bounded pass across distinct witnesses. The
+                    # first (possibly hard) collision must not starve every
+                    # later route in the same frame.
+                    max_previews_per_hit = max(
+                        4, min(16, max_route_previews // max(1, len(hits)))
+                    )
+                    for moving_node in possible_nodes:
+                        group = set(
+                            partner_blocks.get(moving_node, {moving_node})
+                        ) & set(current)
+                        if not group:
                             continue
-                        trial = dict(current)
-                        for node in group:
-                            node_x, node_y = trial[node]
-                            trial[node] = (node_x + delta, node_y)
-                        if not self._placement_candidate_is_legal(
-                            trial,
-                            current,
-                            frozen,
-                            partner_orders,
-                            sibling_orders,
-                            partner_blocks,
-                            preserve_y=preserve_y,
-                        ):
-                            continue
-                        trial_node_rects = self.node_obstacles(
-                            trial, labels, show_inbreeding
+                        trial_groups: List[Set[str]] = []
+                        for cohort, _terminal in cohorts_by_node.get(moving_node, []):
+                            expanded_cohort = set(cohort)
+                            for sibling in cohort:
+                                expanded_cohort.update(
+                                    set(partner_blocks.get(sibling, {sibling})) & set(current)
+                                )
+                            if expanded_cohort not in trial_groups:
+                                trial_groups.append(expanded_cohort)
+                        if group not in trial_groups:
+                            trial_groups.append(group)
+                        if {moving_node} not in trial_groups:
+                            trial_groups.append({moving_node})
+                        x = current[moving_node][0]
+                        geometric_deltas = {
+                            round(foreign_rect.left - marker_margin - x, 7),
+                            round(foreign_rect.right + marker_margin - x, 7),
+                        } if foreign_rect is not None else set()
+                        if foreign_rect is not None:
+                            left = min(point[0] for point in segment)
+                            right = max(point[0] for point in segment)
+                            # Move the blocking marker beyond the entire
+                            # segment, or the incident route beyond the
+                            # blocking marker.
+                            if foreign in group:
+                                geometric_deltas.update((
+                                    left - marker_margin - foreign_rect.right,
+                                    right + marker_margin - foreign_rect.left,
+                                ))
+                            else:
+                                geometric_deltas.update((
+                                    foreign_rect.left - marker_margin - right,
+                                    foreign_rect.right + marker_margin - left,
+                                ))
+                            if (
+                                endpoint in group
+                                and endpoint not in self._parents(family)
+                            ):
+                                # A direct child route is a sloped segment in
+                                # chronological layouts.  Moving its endpoint
+                                # only needs to clear the marker over the
+                                # segment's shared Y interval; using the full
+                                # route's X extent misses the exact tangent
+                                # placement and the coarse deltas can jump
+                                # straight into another obstacle.  Add both
+                                # sides of every expanded marker corner as
+                                # deterministic critical endpoint positions.
+                                start_x, start_y = junctions[family_id]
+                                end_x, end_y = current[endpoint]
+                                if abs(end_y - start_y) > _EPSILON:
+                                    for edge_y in (
+                                        foreign_rect.bottom - marker_margin,
+                                        foreign_rect.top + marker_margin,
+                                    ):
+                                        fraction = (edge_y - start_y) / (end_y - start_y)
+                                        if not 0.0 < fraction <= 1.0:
+                                            continue
+                                        for edge_x in (
+                                            foreign_rect.left - marker_margin,
+                                            foreign_rect.right + marker_margin,
+                                        ):
+                                            tangent_endpoint_x = (
+                                                edge_x - ((1.0 - fraction) * start_x)
+                                            ) / fraction
+                                            geometric_deltas.add(
+                                                round(tangent_endpoint_x - end_x, 7)
+                                            )
+                        # Expand to the actual graph extent, not to an
+                        # arbitrary data-coordinate limit such as 20.48.
+                        # The preview count, not the viewport or X value, is
+                        # the computation safeguard.
+                        search_radius = max(
+                            1.28,
+                            max(graph_xs) - min(graph_xs)
+                            + (2.0 * self.node_gap)
+                            + (2.0 * self.marker_half_width),
                         )
-                        trial_marker_rects = self.marker_obstacles(trial)
-                        trial_collisions = self._collision_pairs(
-                            trial,
-                            trial_node_rects,
-                            trial_marker_rects,
+                        coarse_deltas: Set[float] = set()
+                        magnitude = 0.16
+                        while magnitude < search_radius:
+                            coarse_deltas.update((round(-magnitude, 7), round(magnitude, 7)))
+                            magnitude *= 2.0
+                        coarse_deltas.update((round(-search_radius, 7), round(search_radius, 7)))
+                        ordered_deltas = sorted(
+                            geometric_deltas, key=lambda value: (abs(value), value)
                         )
-                        if len(trial_collisions) > len(current_collisions):
-                            continue
-                        trial_hits = self._route_marker_hit_details(
-                            trial,
-                            families,
-                            labels,
-                            show_inbreeding=show_inbreeding,
-                            chronological=preserve_y,
-                        )
-                        if len(trial_hits) >= len(hits):
-                            continue
-                        displacement = sum(
-                            abs(trial[node][0] - current[node][0])
-                            for node in group
-                        )
-                        candidates.append(
-                            (
-                                (
-                                    len(trial_hits),
-                                    len(trial_collisions),
-                                    round(displacement, 9),
-                                    tuple(sorted(group, key=str.casefold)),
-                                ),
-                                trial,
+                        ordered_deltas.extend(
+                            delta for delta in sorted(
+                                coarse_deltas, key=lambda value: (abs(value), value)
                             )
+                            if delta not in geometric_deltas
                         )
+                        for trial_group in trial_groups:
+                            if hit_preview_count >= max_previews_per_hit:
+                                break
+                            if trial_group & frozen:
+                                continue
+                            group_has_candidate = False
+                            previews_this_unit = 0
+                            trial_deltas = list(ordered_deltas)
+                            group_left = min(current_node_rects[node].left for node in trial_group)
+                            group_right = max(current_node_rects[node].right for node in trial_group)
+                            outside_deltas = (
+                                graph_label_left - group_right - self.node_gap,
+                                graph_label_right - group_left + self.node_gap,
+                            )
+                            # Try the exact graph-clear shoulders early;
+                            # otherwise a finite preview budget may consume
+                            # only short, necessarily blocked displacements.
+                            trial_deltas = list(dict.fromkeys(
+                                trial_deltas[:4]
+                                + [round(value, 7) for value in outside_deltas]
+                                + trial_deltas[4:]
+                            ))
+                            if (
+                                endpoint in trial_group
+                                and foreign in trial_group
+                                and endpoint not in self._parents(family)
+                            ):
+                                # A large sibling cohort may need more X room
+                                # than the current viewport provides.  Try
+                                # translating the intact cohort wholly to
+                                # either side of its family knot; layout is in
+                                # unbounded data coordinates and the viewport
+                                # is fitted separately around selected/leaves.
+                                cohort_xs = [
+                                    current[node][0]
+                                    for node in trial_group
+                                    if node in current
+                                ]
+                                if cohort_xs:
+                                    junction_x = junctions[family_id][0]
+                                    cohort_edge_deltas = (
+                                        junction_x - marker_margin - max(cohort_xs),
+                                        junction_x + marker_margin - min(cohort_xs),
+                                    )
+                                    trial_deltas = list(dict.fromkeys(
+                                        round(value, 7)
+                                        for value in cohort_edge_deltas
+                                    )) + [
+                                        delta for delta in trial_deltas
+                                        if delta not in cohort_edge_deltas
+                                    ]
+                            for delta in trial_deltas:
+                                if abs(delta) <= _EPSILON:
+                                    continue
+                                if hit_preview_count >= max_previews_per_hit:
+                                    break
+                                if previews_this_unit >= 8:
+                                    break
+                                trial = dict(current)
+                                for node in trial_group:
+                                    node_x, node_y = trial[node]
+                                    trial[node] = (node_x + delta, node_y)
+                                if not self._placement_candidate_is_legal(
+                                    trial,
+                                    current,
+                                    frozen,
+                                    partner_orders,
+                                    sibling_orders,
+                                    partner_blocks,
+                                    preserve_y=preserve_y,
+                                ):
+                                    continue
+                                broken_cohorts, terminal_span, ordinary_span = (
+                                    self._sibling_recovery_metrics(
+                                        current, trial, sibling_cohorts
+                                    )
+                                )
+                                if bool(broken_cohorts) != allow_sibling_split:
+                                    continue
+                                if route_preview_count >= max_route_previews:
+                                    exhausted_budget = True
+                                    break
+                                route_preview_count += 1
+                                hit_preview_count += 1
+                                previews_this_unit += 1
+                                trial_hits = self._route_marker_hit_details(
+                                    trial,
+                                    families,
+                                    labels,
+                                    show_inbreeding=show_inbreeding,
+                                    chronological=preserve_y,
+                                    manual_family_ids=manual_family_ids,
+                                )
+                                trial_hit_pairs = {
+                                    (hit_family, hit_endpoint, hit_foreign)
+                                    for hit_family, hit_endpoint, hit_foreign, _index in trial_hits
+                                }
+                                # Do not trade one foreign-marker collision
+                                # for a different collision elsewhere. Only a
+                                # strict net reduction can advance the state.
+                                if len(trial_hits) >= len(hits):
+                                    continue
+                                if trial_hit_pairs - current_hit_pairs:
+                                    continue
+                                trial_node_rects = self.node_obstacles(
+                                    trial, labels, show_inbreeding
+                                )
+                                trial_marker_rects = self.marker_obstacles(trial)
+                                trial_collisions = self._collision_pairs(
+                                    trial,
+                                    trial_node_rects,
+                                    trial_marker_rects,
+                                    include_labels=not getattr(
+                                        self, "_allow_dense_label_overlaps", False
+                                    ),
+                                )
+                                if set(trial_collisions) - set(current_collisions):
+                                    continue
+                                displacement = sum(
+                                    abs(trial[node][0] - current[node][0])
+                                    for node in trial_group
+                                )
+                                hit_candidates.append(
+                                    (
+                                        (
+                                            len(trial_hits),
+                                            len(trial_hit_pairs - current_hit_pairs),
+                                            int(target_hit in set(trial_hits)),
+                                            len(trial_collisions),
+                                            broken_cohorts,
+                                            terminal_span,
+                                            ordinary_span,
+                                            round(displacement, 9),
+                                            tuple(sorted(trial_group, key=str.casefold)),
+                                            round(delta, 9),
+                                        ),
+                                        trial,
+                                    )
+                                )
+                                # Keep multiple legal translations in play:
+                                # the closest improvement can trap a later
+                                # sibling route whereas a wider lane clears
+                                # both in one transaction.
+                                group_has_candidate = True
+                                if previews_this_unit >= 8:
+                                    break
+                            if exhausted_budget:
+                                break
+                            if group_has_candidate:
+                                continue
+                            if hit_preview_count >= max_previews_per_hit:
+                                break
+                        if exhausted_budget:
+                            break
+                        if hit_preview_count >= max_previews_per_hit:
+                            break
+                    if hit_candidates:
+                        candidates.extend(hit_candidates)
+                    if exhausted_budget:
+                        break
+                if candidates or exhausted_budget:
+                    break
             if not candidates:
+                self._last_route_recovery_stop_reason = (
+                    "candidate preview budget reached"
+                    if exhausted_budget else "no legal strict candidate"
+                )
                 break
             _rank, current = min(candidates, key=lambda item: item[0])
             changed = True
 
+        remaining = self._route_marker_hit_details(
+            current, families, labels,
+            show_inbreeding=show_inbreeding,
+            chronological=preserve_y,
+            manual_family_ids=manual_family_ids,
+        )
+        if remaining and allow_two_step:
+            recovered = self._search_detached_route_recovery(
+                current, families, labels, frozen, show_inbreeding,
+                partner_blocks, partner_orders, sibling_orders, sibling_cohorts,
+                preserve_y=preserve_y,
+                manual_family_ids=manual_family_ids,
+            )
+            if recovered is not None:
+                current = recovered
+                remaining = []
+                changed = True
+        if remaining:
+            if allow_two_step:
+                self._last_route_recovery_stop_reason = (
+                    f"bounded detached search exhausted; {len(remaining)} route hits"
+                )
+            return False
         if changed:
             positions.update(current)
         return changed
@@ -7344,71 +8394,11 @@ class PedigreeRouter:
             )
             bounded_between_parents = len(parents) == 2
             if bounded_between_parents:
-                parent_left = min(positions[node][0] for node in parents)
-                parent_right = max(positions[node][0] for node in parents)
-                parent_span = parent_right - parent_left
-                # The midpoint remains the strong default, but a bounded pull
-                # toward the median child/subtree centre avoids long diagonal
-                # fans and extreme compensating sibling placements.  The knot
-                # always remains visibly between both parent endpoints.
-                # A sole visible child should receive a near-perpendicular
-                # family rail whenever the parent interval permits it.  The
-                # former universal 1.35-unit cap could leave a wide-parent,
-                # single-child family diagonally detached even though the
-                # child was safely between both parents.  Keep the historic
-                # cap for sibling groups; only a one-child family may expand
-                # to the child's bounded corridor (with marker clearance).
-                corridor_limit = max(
-                    0.0, (parent_span / 2.0) - 0.08
-                )
-                child_axis_eligible = (
-                    len(children) == 1
-                    # A one-child family is best represented by a
-                    # perpendicular child rail whenever the child is between
-                    # the two parent endpoints.  The child label is an owned
-                    # endpoint and may therefore overlap its own incoming
-                    # line; requiring a full label-sized ``node_gap`` here
-                    # needlessly displaced the family knot in dense frames.
-                    and self._single_child_axis_is_eligible(
-                        parent_left, parent_right, child_x
-                    )
-                )
-                child_inside_corridor = (
-                    len(children) == 1
-                    and parent_left + self.node_gap <= child_x <= parent_right - self.node_gap
-                )
-                child_near_parent_edge = (
-                    len(children) == 1
-                    and chronological
-                    and focused
-                    and (
-                        child_x < parent_left - _EPSILON
-                        or child_x > parent_right + _EPSILON
-                    )
-                    and min(
-                        abs(child_x - parent_left),
-                        abs(child_x - parent_right),
-                    )
-                    <= self.route_clearance + _EPSILON
-                )
+                # The family knot belongs to the current parent pair, not to
+                # a child corridor. A later parent move is reflected by this
+                # recomputation on every candidate and cache rebuild.
                 corridor_shift = 0.0
-                if child_axis_eligible or child_near_parent_edge:
-                    maximum_shift = min(
-                        corridor_limit,
-                        max(1.35, abs(child_x - parent_x) + self.route_clearance),
-                    )
-                    desired_shift = child_x - parent_x
-                else:
-                    maximum_shift = min(
-                        1.35,
-                        parent_span * 0.22,
-                        corridor_limit,
-                    )
-                    desired_shift = (child_x - parent_x) * 0.55
-                corridor_shift = maximum_shift
-                base_x = parent_x + max(
-                    -maximum_shift, min(maximum_shift, desired_shift)
-                )
+                base_x = parent_x
             else:
                 corridor_shift = 0.0
                 base_x = (parent_x + child_x) / 2.0
@@ -7959,6 +8949,11 @@ class PedigreeRouter:
                 chronological_layout=chronological,
             )
             point = avoid_parent_rail_conflicts(family_id, point)
+            if bounded_x and x_bounds is not None:
+                # Candidate scoring rounds coordinates and may otherwise
+                # introduce a tiny X drift. The automatic two-parent knot is
+                # exactly the current parent midpoint at publication.
+                point = (x_bounds[0], point[1])
             placed[family_id] = point
             placed_order[family_id] = len(placed_order)
             if placed_rail_index is not None:
@@ -8170,7 +9165,7 @@ class PedigreeRouter:
         ] = None,
     ) -> Tuple[List[Point], bool, bool]:
         if not parent_entry:
-            path = [start, end]
+            path = _canonical_endpoint_path(start, end, parent=False)
             _score, overlap, obstacle_hit = self._score_path(
                 family_id,
                 endpoint,
@@ -8187,9 +9182,9 @@ class PedigreeRouter:
         # family node horizontally and enter the parent vertically. Earlier
         # obstacle candidates could add two extra bends; even when technically
         # collision-free those doglegs looked like another family rail. Node
-        # placement owns collision avoidance, while marker masks and text
-        # halos preserve readability for the unavoidable remainder.
-        canonical = _simplify_path([start, (end[0], start[1]), end])
+        # placement owns foreign-marker avoidance; text halos and line/line
+        # crossing gaps are presentation only, never collision exemptions.
+        canonical = _canonical_endpoint_path(start, end, parent=True)
         _score, overlap, obstacle_hit = self._score_path(
             family_id,
             endpoint,

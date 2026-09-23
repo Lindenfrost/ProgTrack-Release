@@ -143,7 +143,7 @@ class HeritagePositionCacheTest(unittest.TestCase):
             "show_heritage_only": True,
             "exclude_archived": False,
         }
-        widget._max_generations = 4
+        widget._max_generations = 3
         widget.plugin = SimpleNamespace(
             _active_backend_revision=1,
             _active_core_projection_revision="core-a",
@@ -615,7 +615,7 @@ class HeritagePositionWidgetTest(unittest.TestCase):
         first_point = self.drag()
         first_key = w._active_position_cache_key
         first_render_key = w._render_cache_entry.cache_key
-        w._max_generations = 4
+        w._max_generations = 3
         self.assertTrue(w.refresh_graph())
         second_key = w._active_position_cache_key
         self.assertNotEqual(second_key, first_key)
