@@ -2019,6 +2019,7 @@ class HeritageTrackWidget(QWidget):
             ),
             movable_nodes=None,
             manual_family_positions=cached_family_positions or None,
+            prearranged_positions=True,
         )
         route_plan.layout_diagnostics = list(
             engine.generation_diagnostics(display_nodes, levels)
@@ -4798,7 +4799,7 @@ class HeritageTrackWidget(QWidget):
         return self._render_revision(
             {
                 "schema": "heritage-render-input.v1",
-                "route_geometry_policy": "canonical-marker-clearance.v5-midpoint",
+                "route_geometry_policy": "canonical-marker-clearance.v6-prearranged-retry",
                 "core": core_snapshot,
                 "store": source_store,
                 "temporary_dummies": getattr(self.plugin, "_temporary_dummies", {}),
@@ -4933,6 +4934,7 @@ class HeritageTrackWidget(QWidget):
             ),
             movable_nodes=None,
             manual_family_positions=cached_family_positions or None,
+            prearranged_positions=True,
         )
 
     def _refresh_graph(

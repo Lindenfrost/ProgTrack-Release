@@ -313,6 +313,7 @@ class PedigreeRouter:
         display_mode: Optional[str] = None,
         show_inbreeding: bool = True,
         vertical_layout_mode: str = "partner_normalized",
+        prearranged_positions: bool = False,
     ) -> RoutePlan:
         labels = labels or {}
         _assert_finite_points(animal_positions, kind="animal input")
@@ -346,16 +347,26 @@ class PedigreeRouter:
         # policy on the router transaction so every recovery pass uses the
         # same rule without special-casing a seed or animal name.
         self._allow_dense_label_overlaps = layout_mode == LAYOUT_MODE_FOCUSED
-        adjusted = self._arrange_nodes(
-            animal_positions,
-            families,
-            labels,
-            protected,
-            show_inbreeding,
-            preserve_y=chronological,
-            prefer_descendant_order=layout_mode == LAYOUT_MODE_FOCUSED,
-            focus_nodes=focus,
-        )
+        if prearranged_positions:
+            # Renderer-calibration and post-parking retries feed back a
+            # candidate that has already passed the layout/ordering stage.
+            # Re-running the arranger on its own output can shift unrelated
+            # branches and manufacture new route/marker collisions. Preserve
+            # those candidate animal coordinates here; the collision and
+            # route recovery passes below remain free to move eligible
+            # automatic nodes when the calibrated geometry requires it.
+            adjusted = dict(animal_positions)
+        else:
+            adjusted = self._arrange_nodes(
+                animal_positions,
+                families,
+                labels,
+                protected,
+                show_inbreeding,
+                preserve_y=chronological,
+                prefer_descendant_order=layout_mode == LAYOUT_MODE_FOCUSED,
+                focus_nodes=focus,
+            )
         manual_family_ids = set(manual_family_positions or {})
         # First use the existing canonical family-junction placement to clear
         # a route-only marker collision without disturbing the animal or
@@ -6118,6 +6129,15 @@ class PedigreeRouter:
         ))
         cohorts_by_node: Dict[str, List[Set[str]]] = defaultdict(list)
         for members, _terminal in sibling_cohorts:
+            # A visible sibling cohort is itself a legal rigid placement
+            # unit. Keep this candidate in addition to the wider cohort-plus-
+            # partner closure: forcing every mate to move with the siblings
+            # can introduce unrelated route hits and hide an otherwise safe
+            # cohort translation.
+            cohort = set(members) & baseline.keys()
+            if cohort:
+                for member in cohort:
+                    cohorts_by_node[member].append(set(cohort))
             expanded = set(members)
             for member in members:
                 expanded.update(partner_blocks.get(member, {member}))
@@ -6153,6 +6173,7 @@ class PedigreeRouter:
                 )
                 markers = self.marker_obstacles(state)
                 for witness_index, (family_id, endpoint, foreign, segment_index) in enumerate(hits[:8]):
+                    target_witness = (family_id, endpoint, foreign)
                     family = families.get(family_id, {})
                     if family_id not in junctions or endpoint not in state or foreign not in markers:
                         continue
@@ -6238,6 +6259,14 @@ class PedigreeRouter:
                                     chronological=preserve_y,
                                     manual_family_ids=manual_family_ids,
                                 )
+                                trial_hit_pairs = {
+                                    (hit_family, hit_endpoint, hit_foreign)
+                                    for hit_family, hit_endpoint, hit_foreign, _index in trial_hits
+                                }
+                                initial_hit_pairs = {
+                                    (hit_family, hit_endpoint, hit_foreign)
+                                    for hit_family, hit_endpoint, hit_foreign, _index in initial_hits
+                                }
                                 if len(trial_hits) > len(initial_hits) + 2:
                                     continue
                                 broken, terminal_span, ordinary_span = self._sibling_recovery_metrics(
@@ -6252,8 +6281,12 @@ class PedigreeRouter:
                                          round(displacement, 7), key), trial,
                                     ))
                                     continue
+                                target_witness_remains = target_witness in trial_hit_pairs
                                 by_witness[witness_index].append((
-                                    (len(trial_hits), broken, terminal_span, ordinary_span,
+                                    (len(trial_hits),
+                                     len(trial_hit_pairs - initial_hit_pairs),
+                                     int(target_witness_remains),
+                                     broken, terminal_span, ordinary_span,
                                      round(displacement, 7), key), trial,
                                 ))
             if solutions:
@@ -6445,6 +6478,9 @@ class PedigreeRouter:
                             continue
                         trial_groups: List[Set[str]] = []
                         for cohort, _terminal in cohorts_by_node.get(moving_node, []):
+                            sibling_cohort = set(cohort) & set(current)
+                            if sibling_cohort and sibling_cohort not in trial_groups:
+                                trial_groups.append(sibling_cohort)
                             expanded_cohort = set(cohort)
                             for sibling in cohort:
                                 expanded_cohort.update(
@@ -6543,6 +6579,52 @@ class PedigreeRouter:
                             group_has_candidate = False
                             previews_this_unit = 0
                             trial_deltas = list(ordered_deltas)
+                            route_tangent_deltas: Set[float] = set()
+                            if foreign_rect is not None:
+                                segment_start, segment_end = segment
+                                start_x, start_y = segment_start
+                                end_x, end_y = segment_end
+                                parent_nodes = set(self._parents(family)) & set(current)
+                                junction_shift = (
+                                    len(parent_nodes & trial_group) / len(parent_nodes)
+                                    if parent_nodes else 0.0
+                                )
+                                endpoint_shift = float(endpoint in trial_group)
+                                foreign_shift = float(foreign in trial_group)
+                                if abs(end_y - start_y) > _EPSILON:
+                                    # Solve the exact horizontal translation at
+                                    # which this route segment becomes tangent
+                                    # to the moving marker.  Coarse powers-of-two
+                                    # steps can skip a narrow legal interval and
+                                    # exhaust the bounded preview budget before
+                                    # testing the first marker-clear placement.
+                                    for edge_y in (
+                                        foreign_rect.bottom - marker_margin,
+                                        foreign_rect.top + marker_margin,
+                                    ):
+                                        fraction = (edge_y - start_y) / (end_y - start_y)
+                                        if not 0.0 <= fraction <= 1.0:
+                                            continue
+                                        line_x = start_x + ((end_x - start_x) * fraction)
+                                        line_shift = (
+                                            ((1.0 - fraction) * junction_shift)
+                                            + (fraction * endpoint_shift)
+                                        )
+                                        relative_shift = line_shift - foreign_shift
+                                        if abs(relative_shift) <= _EPSILON:
+                                            continue
+                                        for edge_x in (
+                                            foreign_rect.left - marker_margin,
+                                            foreign_rect.right + marker_margin,
+                                        ):
+                                            delta = (edge_x - line_x) / relative_shift
+                                            if math.isfinite(delta):
+                                                route_tangent_deltas.add(round(delta, 7))
+                            if route_tangent_deltas:
+                                trial_deltas = list(dict.fromkeys(
+                                    sorted(route_tangent_deltas, key=lambda value: (abs(value), value))
+                                    + trial_deltas
+                                ))
                             group_left = min(current_node_rects[node].left for node in trial_group)
                             group_right = max(current_node_rects[node].right for node in trial_group)
                             outside_deltas = (

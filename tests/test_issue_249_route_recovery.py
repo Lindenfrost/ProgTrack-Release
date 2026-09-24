@@ -23,6 +23,7 @@ class Issue249RouteRecoveryTest(unittest.TestCase):
         router = PedigreeRouter()
         plan = router.plan(
             positions, families, labels={node: node for node in positions},
+            prearranged_positions=True,
         )
 
         midpoint = (plan.animal_positions["Dam"][0] + plan.animal_positions["Sire"][0]) / 2.0
@@ -32,6 +33,24 @@ class Issue249RouteRecoveryTest(unittest.TestCase):
         self.assertEqual(router.validate_plan(
             plan, families, labels={node: node for node in positions},
         ), [])
+
+    def test_prearranged_retry_does_not_run_initial_layout_again(self):
+        positions = {
+            "Dam": (-2.0, 0.0), "Sire": (2.0, 0.0), "Child": (0.0, 4.0),
+        }
+        families = {
+            "family": {"mother": "Dam", "father": "Sire", "children": ["Child"]}
+        }
+        router = PedigreeRouter()
+        with patch.object(router, "_arrange_nodes", side_effect=AssertionError("layout rerun")):
+            plan = router.plan(
+                positions,
+                families,
+                labels={node: node for node in positions},
+                prearranged_positions=True,
+            )
+        self.assertEqual(plan.animal_positions, positions)
+        self.assertEqual(plan.unresolved, [])
 
     def test_explicit_manual_knot_remains_authoritative(self):
         positions = {
@@ -271,6 +290,52 @@ class Issue249RouteRecoveryTest(unittest.TestCase):
 
         self.assertTrue(changed)
         self.assertEqual(witness_hits(positions), [])
+        self.assertEqual(
+            {node: point[1] for node, point in positions.items()},
+            {node: point[1] for node, point in before.items()},
+        )
+
+    def test_two_terminal_sibling_cohorts_can_clear_independent_routes(self):
+        positions = {
+            "P1": (-55.86, 10.0),
+            "A": (-100.45, 21.6), "B": (-98.24, 21.6), "C": (-95.35, 28.8),
+            "Q1": (-47.0, 10.0), "Q2": (-45.90, 10.0),
+            "D": (-58.86, 18.0), "E": (-110.40, 18.0),
+            "Foreign": (-108.01, 18.0),
+        }
+        families = {
+            "first": {"mother": "P1", "father": "D", "children": ["A", "B", "C"]},
+            "second": {"mother": "Q1", "father": "Q2", "children": ["D", "E"]},
+        }
+        labels = {node: node for node in positions}
+        router = PedigreeRouter()
+        before = dict(positions)
+
+        def junctions(candidate, *_args, **_kwargs):
+            return {
+                "first": ((candidate["P1"][0] + candidate["D"][0]) / 2.0, 19.368),
+                "second": ((candidate["Q1"][0] + candidate["Q2"][0]) / 2.0, 16.272),
+            }
+
+        with patch.object(router, "_automatic_route_junctions", side_effect=junctions):
+            initial = router._route_marker_hit_details(
+                positions, families, labels, show_inbreeding=False,
+                chronological=False,
+            )
+            self.assertIn(("first", "A", "B", 0), initial)
+            self.assertIn(("second", "E", "Foreign", 0), initial)
+            changed = router._repair_canonical_route_marker_collisions(
+                positions, families, labels, set(), False,
+            )
+
+        self.assertTrue(changed)
+        self.assertEqual(
+            router._route_marker_hit_details(
+                positions, families, labels, show_inbreeding=False,
+                chronological=False,
+            ),
+            [],
+        )
         self.assertEqual(
             {node: point[1] for node, point in positions.items()},
             {node: point[1] for node, point in before.items()},
