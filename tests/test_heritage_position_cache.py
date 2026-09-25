@@ -840,6 +840,102 @@ class HeritagePositionWidgetTest(unittest.TestCase):
         self.drag(node="Other", dx=3, dy=10)
         self.assertEqual(self.widget.node_positions["Other"][1], 2010.0)
 
+    def test_moving_a_family_member_releases_its_old_manual_knot(self):
+        w = self.widget
+        family = next(iter(w.family_members))
+        initial = w.family_positions[family]
+
+        # First commit an explicit family-group placement, as in the user's
+        # workflow. Its family knot is currently persisted as a manual anchor.
+        members = set(w.family_members[family])
+        w.drag_active = w.is_dragging = True
+        w.drag_node = family
+        w.drag_group_nodes = members
+        w.temp_positions = {family: (initial[0] + 10.0, initial[1] + 3.0)}
+        for node in members:
+            x, y = w.node_positions[node]
+            w.temp_positions[node] = (x + 10.0, y + 3.0)
+        w._on_mouse_release(SimpleNamespace(button=1))
+        moved_knot = w.family_positions[family]
+        self.assertEqual(
+            self.saved()["family_positions"][family],
+            {"x": float(moved_knot[0]), "y": float(moved_knot[1])},
+        )
+
+        # Moving one of that family's animals must invalidate only this now-
+        # stale knot and derive it again from the accepted animal coordinates.
+        self.drag(node="M", dx=-5.0)
+        parent_xs = [w.node_positions[node][0] for node in ("M", "F")]
+        self.assertAlmostEqual(
+            w.family_positions[family][0], sum(parent_xs) / 2.0, delta=1e-6
+        )
+        self.assertNotIn(family, self.saved()["family_positions"])
+
+    def test_moving_a_chronological_family_member_reanchors_knot_without_y_drift(self):
+        w = self.widget
+        w.settings["vertical_layout_mode"] = "chronological"
+        self.assertTrue(w.refresh_graph())
+        family = next(iter(w.family_members))
+        initial_y = w.family_positions[family][1]
+        animal_y = {node: point[1] for node, point in w.node_positions.items()
+                    if not w._is_family_node(node)}
+
+        members = set(w.family_members[family])
+        w.drag_active = w.is_dragging = True
+        w.drag_node = family
+        w.drag_group_nodes = members
+        w.temp_positions = {family: (w.family_positions[family][0] + 10.0, initial_y)}
+        for node in members:
+            x, y = w.node_positions[node]
+            w.temp_positions[node] = (x + 10.0, y + 3.0)
+        w._on_mouse_release(SimpleNamespace(button=1))
+        self.drag(node="M", dx=-5.0)
+
+        parent_midpoint = sum(w.node_positions[node][0] for node in ("M", "F")) / 2.0
+        self.assertAlmostEqual(w.family_positions[family][0], parent_midpoint, delta=1e-6)
+        self.assertEqual(w.family_positions[family][1], initial_y)
+        for node, y in animal_y.items():
+            self.assertEqual(w.node_positions[node][1], y)
+
+    def test_moving_one_family_node_keeps_other_family_anchors(self):
+        self.app.animals["D"] = {
+            "name": "D", "birth_date": "2021-01-01", "sex": "female",
+            "species": "Callithrix jacchus", "eizellspenderin": "C",
+            "samenspender": "Other",
+        }
+        self.app.selected_animals = ["C", "D"]
+        self.assertTrue(self.widget.refresh_graph())
+        families = sorted(self.widget.family_positions)
+        self.assertEqual(len(families), 2)
+
+        for index, family in enumerate(families, start=1):
+            start = self.widget.family_positions[family]
+            self.widget.drag_active = self.widget.is_dragging = True
+            self.widget.drag_node = family
+            self.widget.drag_group_nodes = {family}
+            self.widget.temp_positions = {family: (start[0] + index * 4.0, start[1])}
+            self.widget._on_mouse_release(SimpleNamespace(button=1))
+
+        saved_families = self.saved()["family_positions"]
+        self.assertEqual(set(saved_families), set(families))
+        for family in families:
+            self.assertEqual(
+                saved_families[family],
+                {"x": float(self.widget.family_positions[family][0]),
+                 "y": float(self.widget.family_positions[family][1])},
+            )
+
+        family_for_d = next(
+            family_id
+            for family_id, family in self.widget._render_cache_entry.family_nodes.items()
+            if "D" in self.widget._pedigree_router._children(family)
+        )
+        unaffected_family = next(family for family in families if family != family_for_d)
+        self.drag(node="D", dx=3.0)
+        saved_families = self.saved()["family_positions"]
+        self.assertNotIn(family_for_d, saved_families)
+        self.assertIn(unaffected_family, saved_families)
+
     def test_real_mouse_group_drag_pan_and_zoom_preserve_accepted_map(self):
         w = self.widget
         w.canvas.draw()

@@ -5199,9 +5199,34 @@ class HeritageTrackWidget(QWidget):
                     )):
                 raise ConflictError("The displayed layout changed; reload before moving it again")
             if position_candidate is not None:
+                previous_animal_positions = (
+                    accepted_entry.route_plan.animal_positions
+                    if accepted_entry is not None else {}
+                )
+                moved_animals = {
+                    node
+                    for node, point in position_candidate.items()
+                    if node in previous_animal_positions
+                    and tuple(point) != tuple(previous_animal_positions[node])
+                }
+                if moved_animals:
+                    # A manually placed family knot is an anchor only while
+                    # its animal members stay at the positions around which it
+                    # was placed. Release only knots made stale by this move;
+                    # unrelated family anchors remain user-owned.
+                    for family_id, family in families.items():
+                        members = (
+                            set(self._pedigree_router._parents(family))
+                            | set(self._pedigree_router._children(family))
+                        )
+                        if members & moved_animals:
+                            cached_family_positions.pop(family_id, None)
                 cached_positions = dict(position_candidate)
             if family_position_candidate is not None:
-                cached_family_positions = dict(family_position_candidate)
+                # A family drag edits one explicit anchor. Keep previously
+                # committed anchors for other families instead of replacing
+                # the entire per-selection map with this one-node candidate.
+                cached_family_positions.update(family_position_candidate)
 
         self._active_position_cache_key = position_cache_key
         self._active_position_cache_user = position_cache_user
