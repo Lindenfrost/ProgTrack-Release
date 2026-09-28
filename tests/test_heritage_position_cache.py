@@ -608,6 +608,131 @@ class HeritagePositionWidgetTest(unittest.TestCase):
                 self.drag(dx=2)
                 self.assertEqual(self.saved(b_key), b_saved)
 
+    def test_cold_restore_accepts_saved_visual_conflict_but_keeps_route_integrity(self):
+        widget = self.widget
+        self.app.selected_animals = ["C", "Other"]
+        self.assertTrue(widget.refresh_graph())
+        cache_key = widget._active_position_cache_key
+        saved = self.saved(cache_key)
+        self.assertIn("C", saved["positions"])
+        self.assertIn("Other", saved["positions"])
+
+        # Simulate a complete finite map that was deliberately saved with an
+        # automatic visual-rule conflict. The unrelated animals overlap, but
+        # the pedigree routes and their endpoints remain structurally valid.
+        positions = {
+            node: (point["x"], point["y"])
+            for node, point in saved["positions"].items()
+        }
+        positions["Other"] = positions["C"]
+        family_positions = {
+            family_id: (point["x"], point["y"])
+            for family_id, point in saved["family_positions"].items()
+        }
+        widget.plugin.store.set_position_cache_entry(
+            "guest",
+            cache_key,
+            positions,
+            saved["dependency_revision"],
+            saved["dependency_ids"],
+            family_positions=family_positions,
+        )
+        widget.plugin._render_cache.clear()
+        writes_before_restore = self.app.backend.records.put_count
+
+        with patch.object(
+            widget._pedigree_router,
+            "validate_plan",
+            wraps=widget._pedigree_router.validate_plan,
+        ) as validate_automatic_geometry:
+            self.assertTrue(widget.refresh_graph())
+            validate_automatic_geometry.assert_not_called()
+
+        self.assertTrue(widget._position_cache_hit)
+        self.assertEqual(widget.node_positions["C"], positions["C"])
+        self.assertEqual(widget.node_positions["Other"], positions["Other"])
+        self.assertEqual(self.saved(cache_key)["positions"]["Other"], {
+            "x": positions["Other"][0], "y": positions["Other"][1]
+        })
+        entry = widget._render_cache_entry
+        self.assertTrue(entry.valid)
+        self.assertEqual(
+            widget._pedigree_router.validate_route_integrity(
+                entry.route_plan, entry.family_nodes
+            ),
+            [],
+        )
+        self.assertEqual(
+            entry.route_plan.gap_geometry_revision,
+            entry.route_plan.geometry_revision,
+        )
+        self.assertEqual(self.app.backend.records.put_count, writes_before_restore)
+
+        # Explicit Refresh remains a fresh automatic-layout operation, not a
+        # cache restore, and therefore continues to run strict validation.
+        with patch.object(
+            widget._pedigree_router,
+            "validate_plan",
+            wraps=widget._pedigree_router.validate_plan,
+        ) as validate_refresh:
+            self.refresh_button()
+            validate_refresh.assert_called()
+        self.assertNotEqual(widget.node_positions["C"], widget.node_positions["Other"])
+
+    def test_partial_saved_map_is_a_strict_cache_miss(self):
+        widget = self.widget
+        self.app.selected_animals = ["C", "Other"]
+        self.assertTrue(widget.refresh_graph())
+        cache_key = widget._active_position_cache_key
+        saved = self.saved(cache_key)
+        partial_positions = {
+            node: (point["x"], point["y"])
+            for node, point in saved["positions"].items()
+            if node != "Other"
+        }
+        widget.plugin.store.set_position_cache_entry(
+            "guest",
+            cache_key,
+            partial_positions,
+            saved["dependency_revision"],
+            saved["dependency_ids"],
+            family_positions={
+                family_id: (point["x"], point["y"])
+                for family_id, point in saved["family_positions"].items()
+            },
+        )
+        widget.plugin._render_cache.clear()
+
+        with patch.object(
+            widget._pedigree_router,
+            "validate_plan",
+            wraps=widget._pedigree_router.validate_plan,
+        ) as validate_automatic_geometry:
+            self.assertTrue(widget.refresh_graph())
+            validate_automatic_geometry.assert_called()
+        self.assertEqual(set(self.saved(cache_key)["positions"]), set(widget.node_positions) - {
+            family_id for family_id in widget.node_positions if widget._is_family_node(family_id)
+        })
+
+    def test_restore_route_endpoint_integrity_remains_hard(self):
+        entry = self.widget._render_cache_entry
+        broken_plan = entry.route_plan.to_mutable()
+        family_id = next(iter(broken_plan.routes))
+        endpoint = next(iter(broken_plan.routes[family_id]))
+        del broken_plan.routes[family_id][endpoint]
+
+        diagnostics = self.widget._pedigree_router.validate_route_integrity(
+            broken_plan, entry.family_nodes
+        )
+        self.assertTrue(
+            any(
+                f"{family_id}: routed endpoints do not match semantic family members"
+                in item
+                for item in diagnostics
+            ),
+            diagnostics,
+        )
+
     def test_depth_and_mode_returns_restore_their_own_maps(self):
         w = self.widget
         w._max_generations = 1

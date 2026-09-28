@@ -1464,13 +1464,16 @@ def add_resolved_histories(
     return med, report_data
 
 
+SEED_PROJECT_UNIT_ID = "org-tts"
+
+
 PROJECT_DATA_PROFILES: dict[str, dict[str, Any]] = {
     "Backcrossing": {
         "title": "Callitrix backcrossing and inheritance study",
         "species": "Callitrix jacchus",
         "comment": "Fictional pedigree and backcrossing cohort used to exercise inheritance, partner, and offspring workflows.",
         "focus": "Document inheritance patterns and breeding outcomes across planned backcrosses.",
-        "unit": "Breeding and Genetics Unit",
+        "unit_id": SEED_PROJECT_UNIT_ID,
         "protocol": "DPZ-BC-2026-02",
         "internal": "BACKCROSS-2026",
         "authorization": "IACUC-BC-2026-02",
@@ -1489,7 +1492,7 @@ PROJECT_DATA_PROFILES: dict[str, dict[str, Any]] = {
         "species": "Callitrix jacchus",
         "comment": "Fictional OTOF project covering donor, surrogate, transfer, sperm-donation, pregnancy, and outcome records.",
         "focus": "Evaluate reproductive intervention workflows and embryo-transfer outcomes.",
-        "unit": "Reproductive Biology Unit",
+        "unit_id": SEED_PROJECT_UNIT_ID,
         "protocol": "DPZ-OTOF-2026-04",
         "internal": "OTOF-2026",
         "authorization": "IACUC-OTOF-2026-04",
@@ -1509,7 +1512,7 @@ PROJECT_DATA_PROFILES: dict[str, dict[str, Any]] = {
         "species": "Papio hamadryas anubis",
         "comment": "Fictional Papio example for experimental assignment, welfare oversight, and severity documentation.",
         "focus": "Assess a limited experimental procedure with continuous welfare review.",
-        "unit": "Large Primate Research Unit",
+        "unit_id": SEED_PROJECT_UNIT_ID,
         "protocol": "DPZ-OAK-2026-05",
         "internal": "OAKSHIELD-2026",
         "authorization": "IACUC-OAK-2026-05",
@@ -1522,7 +1525,7 @@ PROJECT_DATA_PROFILES: dict[str, dict[str, Any]] = {
         "species": "Mus musculus",
         "comment": "Fictional example project for an experimental mouse cohort housed together in the Mouse House.",
         "focus": "Demonstrate a complete small-animal experimental workflow with group housing and longitudinal measurements.",
-        "unit": "Mouse House",
+        "unit_id": SEED_PROJECT_UNIT_ID,
         "protocol": "DPZ-RB-2026-06",
         "internal": "RINGBEARER-2026",
         "authorization": "IACUC-RB-2026-06",
@@ -1793,7 +1796,7 @@ def _enrich_project_catalog(project_catalog: dict[str, Any],
             "pi_login": "Researcher",
             "di_login": "Vet",
             "welfare_login": "Veti",
-            "unit": profile["unit"],
+            "unit": profile["unit_id"],
             "purpose": profile["focus"],
             "authorized": "04.08.2026",
             "approved": "04.08.2026",
@@ -1878,6 +1881,7 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
             "short_title": "Ringbearer",
             "welfare_login": "Veti",
             "pi_login": "Researcher",
+            "unit": PROJECT_DATA_PROFILES["Ringbearer"]["unit_id"],
         },
         "animals_config": {
             "approved_count": 4,
@@ -2385,6 +2389,20 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
     expected_units = {str(item["unit_id"]) for item in CANONICAL_ORGANIZATION_UNITS}
     if actual_units != expected_units:
         errors.append(f"organization unit catalog mismatch: {sorted(actual_units)} != {sorted(expected_units)}")
+    if SEED_PROJECT_UNIT_ID not in expected_units:
+        errors.append(f"seed project Unit ID is not registered: {SEED_PROJECT_UNIT_ID}")
+    project_catalog = records.get(("projects", "catalog"), {})
+    seed_projects = project_catalog.get("projects", {})
+    for project_name, profile in PROJECT_DATA_PROFILES.items():
+        project = seed_projects.get(project_name)
+        iacuc = project.get("iacuc", {}) if isinstance(project, dict) else {}
+        actual_unit_id = str(iacuc.get("unit") or "")
+        expected_unit_id = str(profile["unit_id"])
+        if actual_unit_id != expected_unit_id or actual_unit_id not in expected_units:
+            errors.append(
+                f"seed project IACUC Unit mismatch: {project_name} "
+                f"has {actual_unit_id!r}, expected registered {expected_unit_id!r}"
+            )
     housing = records[("housing", "cage")]
     structures = housing.get("structures", {})
     for reference in sorted(set(housing.get("occupants", {})) - set(core["animals"])):

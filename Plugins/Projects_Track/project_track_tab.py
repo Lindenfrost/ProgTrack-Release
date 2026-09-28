@@ -31,6 +31,7 @@ from Plugins.core.animal_roles import (
     role_color_for_record,
 )
 from Plugins.core.project_visibility import diff_project_associated_users
+from Plugins.core.authorization import CanonicalUnitService
 from Plugins.core.project_species import remove_mismatched_assignments
 from Plugins.core.project_periods import ensure_project_periods, make_project_period_id
 from Plugins.core.platform_helpers import open_local_path
@@ -145,6 +146,19 @@ class CollapsibleSection(QWidget):
     def is_expanded(self): return self._btn.isChecked()
     def set_title(self, title):
         self._title = title; self._set_title(title, self._btn.isChecked())
+
+
+class _IacucUnitComboBox(QComboBox):
+    """Refresh canonical choices on demand when the dropdown is opened."""
+
+    def __init__(self, before_show, parent=None):
+        super().__init__(parent)
+        self._before_show = before_show
+
+    def showPopup(self):
+        if callable(self._before_show):
+            self._before_show()
+        super().showPopup()
 
 class _UserInfoDialog(QDialog):
     def __init__(self, user_data, messages, can_edit=False, parent=None):
@@ -435,6 +449,146 @@ class ProjectTrackTab(QWidget):
         for k in ('summary','iacuc','assoc_users','animals_config','arrive'): r.setdefault(k,{})
         r['status'] = normalize_project_status(r.get('status'), default='active')
         return r
+
+    def _load_iacuc_units(self):
+        """Read the canonical Unit catalogue and its backend revision."""
+        service = CanonicalUnitService(self._app.backend)
+        return service.load_with_revision()
+
+    def _populate_iacuc_unit_combo(self, combo, saved_unit_id, units):
+        """Populate the Unit selector with assignable canonical IDs only.
+
+        A pre-existing value that is no longer assignable is retained as a
+        disabled current-value row. This avoids silently clearing historical
+        data while ensuring it cannot be newly selected.
+        """
+        selected_id = str(saved_unit_id or '').strip()
+        previous_block = combo.blockSignals(True)
+        combo.clear()
+        combo.addItem(
+            _m(self._messages, 'project.iacuc.unit.unassigned', 'Unassigned'),
+            '',
+        )
+
+        assignable = [
+            unit for unit in (units or {}).values()
+            if bool(getattr(unit, 'active', False))
+            and not bool(getattr(unit, 'archived', False))
+        ]
+        assignable.sort(
+            key=lambda unit: (
+                str(getattr(unit, 'display_name', '') or '').casefold(),
+                str(getattr(unit, 'unit_id', '') or '').casefold(),
+            )
+        )
+        name_counts = {}
+        for unit in assignable:
+            key = str(getattr(unit, 'display_name', '') or '').strip().casefold()
+            name_counts[key] = name_counts.get(key, 0) + 1
+
+        for unit in assignable:
+            unit_id = str(unit.unit_id)
+            display_name = str(unit.display_name or unit_id)
+            label = (
+                f'{display_name} ({unit_id})'
+                if name_counts.get(display_name.strip().casefold(), 0) > 1
+                else display_name
+            )
+            combo.addItem(label, unit_id)
+
+        selected_index = combo.findData(selected_id)
+        if selected_id and selected_index < 0:
+            label = _m(
+                self._messages,
+                'project.iacuc.unit.unavailable',
+                'Unavailable: {unit}',
+            ).replace('{unit}', selected_id)
+            combo.insertItem(1, label, selected_id)
+            selected_index = 1
+            model_item = combo.model().item(selected_index)
+            if model_item is not None:
+                model_item.setEnabled(False)
+        combo.setCurrentIndex(max(0, selected_index))
+        combo.blockSignals(previous_block)
+
+    def _mark_iacuc_unit_dirty(self, *_args):
+        self._iacuc_unit_selection_dirty = True
+
+    def _refresh_iacuc_unit_catalog(self):
+        combo = getattr(self, '_iacuc_unit_combo', None)
+        if combo is None:
+            return
+        try:
+            units, revision = self._load_iacuc_units()
+        except Exception:
+            logger.exception('Project Track: cannot refresh organizational Units')
+            return
+        backend = self._app.backend
+        if (
+            revision == getattr(self, '_iacuc_unit_catalog_revision', None)
+            and backend is getattr(self, '_iacuc_unit_backend', None)
+        ):
+            return
+        selected_id = str(combo.currentData() or '').strip()
+        was_dirty = bool(getattr(self, '_iacuc_unit_selection_dirty', False))
+        self._populate_iacuc_unit_combo(combo, selected_id, units)
+        self._iacuc_unit_selection_dirty = was_dirty
+        self._iacuc_unit_catalog_revision = revision
+        self._iacuc_unit_backend = backend
+
+    def _validate_iacuc_unit_before_save(self) -> bool:
+        """Revalidate a changed IACUC Unit against the current backend state."""
+        combo = getattr(self, '_iacuc_unit_combo', None)
+        if combo is None:
+            return True
+        selected_id = str(combo.currentData() or '').strip()
+        original_id = str(getattr(self, '_iacuc_unit_original_id', '') or '').strip()
+        changed = (
+            bool(getattr(self, '_iacuc_unit_selection_dirty', False))
+            or selected_id != original_id
+        )
+        try:
+            units, revision = self._load_iacuc_units()
+        except Exception:
+            logger.exception('Project Track: cannot revalidate IACUC Unit')
+            if not changed:
+                return True
+            self._show_iacuc_unit_invalid_warning()
+            return False
+
+        backend = self._app.backend
+        if (
+            revision != getattr(self, '_iacuc_unit_catalog_revision', None)
+            or backend is not getattr(self, '_iacuc_unit_backend', None)
+        ):
+            self._populate_iacuc_unit_combo(combo, selected_id, units)
+            self._iacuc_unit_catalog_revision = revision
+            self._iacuc_unit_backend = backend
+
+        if changed and selected_id:
+            unit = units.get(selected_id) if isinstance(units, dict) else None
+            if (
+                unit is None
+                or not bool(getattr(unit, 'active', False))
+                or bool(getattr(unit, 'archived', False))
+            ):
+                self._populate_iacuc_unit_combo(combo, selected_id, units)
+                self._show_iacuc_unit_invalid_warning()
+                return False
+        return True
+
+    def _show_iacuc_unit_invalid_warning(self):
+        QMessageBox.warning(
+            self,
+            _m(self._messages, 'title.warning', 'Warning'),
+            _m(
+                self._messages,
+                'project.iacuc.unit.invalid',
+                'This organizational Unit is no longer active or registered. '
+                'The choices were refreshed; select an active Unit or '
+                'Unassigned and save again.',
+            ),
+        )
 
     def _status_text(self, status: str) -> str:
         status = normalize_project_status(status, default='active')
@@ -829,10 +983,32 @@ class ProjectTrackTab(QWidget):
         self._iacuc_welfare.setMinimumWidth(_PROJECT_IACUC_FIELD_MIN_WIDTH)
         self._iacuc_welfare.set_login(iacuc.get('welfare_login', '') or '')
         form_i2.addRow(_m(self._messages, "project.iacuc.welfare_officer", "Welfare Officer:"), self._iacuc_welfare)
-        le_unit = QLineEdit(iacuc.get('unit', '') or ''); le_unit.setEnabled(can_manage)
-        le_unit.setMinimumWidth(_PROJECT_IACUC_FIELD_MIN_WIDTH)
-        form_i2.addRow(_m(self._messages, "project.iacuc.unit", "Unit:"), le_unit)
-        self._iacuc_fields['unit'] = le_unit
+        self._iacuc_unit_combo = _IacucUnitComboBox(
+            self._refresh_iacuc_unit_catalog
+        )
+        self._iacuc_unit_combo.setEnabled(can_manage)
+        self._iacuc_unit_combo.setMinimumWidth(_PROJECT_IACUC_FIELD_MIN_WIDTH)
+        self._iacuc_unit_original_id = str(iacuc.get('unit', '') or '').strip()
+        self._iacuc_unit_selection_dirty = False
+        try:
+            units, self._iacuc_unit_catalog_revision = self._load_iacuc_units()
+        except Exception:
+            logger.exception('Project Track: cannot load organizational Units')
+            units, self._iacuc_unit_catalog_revision = {}, None
+        self._iacuc_unit_backend = self._app.backend
+        self._populate_iacuc_unit_combo(
+            self._iacuc_unit_combo,
+            self._iacuc_unit_original_id,
+            units,
+        )
+        self._iacuc_unit_combo.currentIndexChanged.connect(
+            self._mark_iacuc_unit_dirty
+        )
+        form_i2.addRow(
+            _m(self._messages, "project.iacuc.unit", "Unit:"),
+            self._iacuc_unit_combo,
+        )
+        self._iacuc_fields['unit'] = self._iacuc_unit_combo
         iw2 = QWidget(); iw2.setLayout(form_i2)
 
         # IACUC col 3: Purpose, Authorized, Approved
@@ -1369,6 +1545,10 @@ class ProjectTrackTab(QWidget):
         self._refresh_sops(name)
 
     def _save_detail(self, name):
+        # Validate before mutating the in-memory project record or applying any
+        # other part of the form, so a stale Unit cannot cause a partial save.
+        if not self._validate_iacuc_unit_before_save():
+            return
         rec = self._project_record(name); sig = self._current_sig()
         before_rec = json.loads(json.dumps(rec))
         selected_status = next(
@@ -1430,7 +1610,14 @@ class ProjectTrackTab(QWidget):
                         "actor": sig,
                     })
                     animal.pop("project_period_id", None)
-        iacuc_d = {k: v.text().strip() for k, v in self._iacuc_fields.items()}
+        iacuc_d = {
+            key: (
+                str(field.currentData() or '').strip()
+                if key == 'unit'
+                else field.text().strip()
+            )
+            for key, field in self._iacuc_fields.items()
+        }
         iacuc_d['pi_login']      = self._iacuc_pi.get_login() or ''
         iacuc_d['di_login']      = self._iacuc_di.get_login() or ''
         iacuc_d['welfare_login'] = self._iacuc_welfare.get_login() or ''

@@ -1947,7 +1947,13 @@ class GanttWidget(QDialog):
                 logger.error("Invalid date range: start_date > end_date")
                 return
 
-            self.planner_snapshot = PlannerSnapshot.from_inputs(self.animals, self.settings, start_date, end_date, (bd.date for bd in self.block_days), getattr(self, 'planned', ()))
+            self.planner_snapshot = PlannerSnapshot.from_inputs(
+                animals=self.animals,
+                settings=self.settings,
+                horizon_start=start_date,
+                horizon_end=end_date,
+                blocked_days=tuple(bd.date for bd in self.block_days),
+            )
 
             # Initialize fixed events and planned list
             blocks = {bd.date for bd in self.block_days}

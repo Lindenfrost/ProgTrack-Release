@@ -1389,6 +1389,7 @@ class HeritageTrackWidget(QWidget):
         chronological_undated_nodes: Optional[Set[str]] = None,
         cached_family_positions: Optional[Mapping[str, Tuple[float, float]]] = None,
         manual_animal_position_override: bool = False,
+        restoring_cached_layout: bool = False,
     ) -> RenderCacheEntry:
         """Freeze one complete render transaction before any artists paint."""
         record_index = {
@@ -1494,7 +1495,24 @@ class HeritageTrackWidget(QWidget):
             locked_positions=locked_positions,
             bounds=bounds,
         )
-        if not manual_animal_position_override:
+        if restoring_cached_layout:
+            # A complete, context-valid saved map is authoritative over
+            # automatic spacing and collision preferences. Keep hard route
+            # structure, generation diagnostics, and finite-geometry guards
+            # active, while leaving visual-clearance diagnostics observable
+            # but non-fatal for this restore transaction.
+            fatal.extend(
+                self._pedigree_router.validate_route_integrity(route_plan, families)
+            )
+            fatal.extend(
+                item for item in route_plan.layout_diagnostics if item not in fatal
+            )
+            fatal.extend(
+                item
+                for item in route_plan.unresolved
+                if item.startswith("invalid directed parentage cycle:") and item not in fatal
+            )
+        elif not manual_animal_position_override:
             # Singleton parking and other widget-level post-routing
             # adjustments happen after the router's own placement pass. Reuse
             # the router's obstacle model as the final publication boundary.
@@ -2000,6 +2018,7 @@ class HeritageTrackWidget(QWidget):
         source_revision: str,
         cached_family_positions: Dict[str, Tuple[float, float]],
         chronological_undated_nodes: Set[str],
+        restoring_cached_layout: bool = False,
     ) -> RenderCacheEntry:
         """Rebuild one semantic frame after renderer-driven calibration."""
         # Singleton parking is an automatic placement result, not a manual
@@ -2063,6 +2082,7 @@ class HeritageTrackWidget(QWidget):
             artist_scale=self._rendered_artist_scale,
             chronological_undated_nodes=chronological_undated_nodes,
             cached_family_positions=cached_family_positions,
+            restoring_cached_layout=restoring_cached_layout,
         )
 
     def _expand_bounds_for_outside_artists(
@@ -5237,6 +5257,12 @@ class HeritageTrackWidget(QWidget):
             and position_candidate is None
             and family_position_candidate is None
         )
+        restoring_cached_layout = bool(
+            self._position_cache_hit
+            and not self._force_relayout
+            and position_candidate is None
+            and family_position_candidate is None
+        )
 
         locked_positions = cached_positions if cached_entry else {}
 
@@ -5270,6 +5296,9 @@ class HeritageTrackWidget(QWidget):
                 protected_nodes.add(node)
             else:
                 animal_positions[node] = pos
+        restored_animal_positions = (
+            dict(animal_positions) if restoring_cached_layout else None
+        )
         # Partner order and ancestry locality are resolved together by the
         # router's row-block pass.  The former pre-route swap marked automatic
         # nodes as manually protected and therefore prevented the router from
@@ -5500,6 +5529,14 @@ class HeritageTrackWidget(QWidget):
                 animal_positions = route_plan.animal_positions
                 family_positions = route_plan.family_positions
                 family_members = route_plan.family_members
+        if (
+            restoring_cached_layout
+            and restored_animal_positions is not None
+            and dict(animal_positions) != restored_animal_positions
+        ):
+            raise GeometryValidationError(
+                "Restoring the saved layout changed a cached animal coordinate"
+            )
         positions: Dict[str, Tuple[float, float]] = dict(animal_positions)
         positions.update(family_positions)
 
@@ -5581,6 +5618,7 @@ class HeritageTrackWidget(QWidget):
             chronological_undated_nodes=self._chronological_undated_nodes,
             cached_family_positions=cached_family_positions,
             manual_animal_position_override=manual_animal_position_override,
+            restoring_cached_layout=restoring_cached_layout,
         )
         if not render_entry.valid:
             raise GeometryValidationError("; ".join(render_entry.fatal_diagnostics))
@@ -5642,7 +5680,9 @@ class HeritageTrackWidget(QWidget):
             artist_fatal = self._render_artist_fatal_diagnostics(
                 final_renderer,
                 check_viewport=strict_artist_fit,
-                check_collisions=not manual_animal_position_override,
+                check_collisions=not (
+                    manual_animal_position_override or restoring_cached_layout
+                ),
                 allow_dense_label_overlaps=self.layout_mode == LAYOUT_MODE_FOCUSED,
             )
             if not artist_fatal:
@@ -5690,6 +5730,7 @@ class HeritageTrackWidget(QWidget):
                         chronological_undated_nodes=set(
                             self._chronological_undated_nodes
                         ),
+                        restoring_cached_layout=restoring_cached_layout,
                     )
                     if not rebuilt_entry.valid:
                         raise GeometryValidationError(
@@ -5702,7 +5743,8 @@ class HeritageTrackWidget(QWidget):
                     family_positions = dict(route_plan.family_positions)
                     positions = dict(animal_positions)
                     positions.update(family_positions)
-                    needs_position_write = True
+                    if not restoring_cached_layout:
+                        needs_position_write = True
                     continue
             if not strict_artist_fit or fit_attempt >= 2:
                 raise GeometryValidationError("; ".join(artist_fatal))

@@ -851,6 +851,67 @@ class PedigreeRouter:
         """
         return 1.0 if chronological else 2.0
 
+    def validate_route_integrity(
+        self,
+        plan: RoutePlan,
+        families: Mapping[str, Mapping[str, object]],
+    ) -> List[str]:
+        """Validate route structure without applying automatic layout rules.
+
+        A complete saved layout may intentionally violate spacing, collision,
+        corridor, and route-clearance preferences. Its connections must still
+        cover the current semantic family endpoints and lead from each family
+        junction to the corresponding animal. This validator is the hard
+        structural boundary used when restoring such a saved layout.
+        """
+        problems: List[str] = []
+        expected_families = {
+            family_id
+            for family_id, family in families.items()
+            if any(parent in plan.animal_positions for parent in self._parents(family))
+            and any(child in plan.animal_positions for child in self._children(family))
+        }
+        actual_families = set(plan.routes)
+        for family_id in sorted(expected_families - actual_families, key=str.casefold):
+            problems.append(f"{family_id}: expected routable family is missing")
+        for family_id in sorted(actual_families - set(families), key=str.casefold):
+            problems.append(f"{family_id}: unexpected routed family")
+        for family_id in sorted(expected_families - set(plan.family_positions), key=str.casefold):
+            problems.append(f"{family_id}: expected family junction is missing")
+        for family_id in sorted(set(plan.family_positions) - set(families), key=str.casefold):
+            problems.append(f"{family_id}: unexpected family junction")
+
+        for family_id in sorted(actual_families & set(families), key=str.casefold):
+            family = families[family_id]
+            endpoint_routes = plan.routes[family_id]
+            expected_endpoints = set(self._ordered_endpoints(family, plan.animal_positions))
+            if set(endpoint_routes) != expected_endpoints:
+                problems.append(
+                    f"{family_id}: routed endpoints do not match semantic family members"
+                )
+            junction = plan.family_positions.get(family_id)
+            if junction is None:
+                continue
+            for endpoint, path in endpoint_routes.items():
+                if not path:
+                    problems.append(f"{family_id}: route to {endpoint} is empty")
+                    continue
+                if not _points_equal(path[0], junction):
+                    problems.append(f"{family_id}: route to {endpoint} does not start at its junction")
+                    continue
+                if endpoint not in plan.animal_positions:
+                    problems.append(f"{family_id}: route endpoint {endpoint} is outside animal scope")
+                    continue
+                if not _points_equal(path[-1], plan.animal_positions[endpoint]):
+                    problems.append(f"{family_id}: route to {endpoint} does not end at its animal")
+                    continue
+                if not _path_segments(path):
+                    problems.append(
+                        f"{family_id}: route to {endpoint} has no visible connection segment"
+                    )
+
+        return sorted(set(problems))
+
     def validate_plan(
         self,
         plan: RoutePlan,
