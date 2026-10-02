@@ -92,6 +92,9 @@ from Plugins.core.ui_icons import (
     resolve_icon_path as ui_icon_path,
 )
 from Plugins.core.dialog_geometry import install_dialog_geometry_guard
+from Plugins.core.measurement_input import (
+    MeasurementValidator, format_measurement, parse_measurement,
+)
 from Plugins.core.animal_dialog_sections import AnimalDialogSection
 from Plugins.core.authorization import AuthorizationService, CanonicalUnitService
 from Plugins.core.plugin_manager import PluginManager
@@ -473,6 +476,14 @@ def event_matches_recording_role(
     )
 
 
+def style_protected_selector(combo):
+    """Style only the disabled state; do not change permission or scroll behavior."""
+    rule = ('QComboBox:disabled, QComboBox QLineEdit:disabled {'
+            ' background: #f0f0f0; color: #666; }')
+    if rule not in combo.styleSheet():
+        combo.setStyleSheet(combo.styleSheet() + '\n' + rule)
+
+
 def restore_event_combo_selection(
     combo: Any,
     event_type: str,
@@ -506,6 +517,7 @@ def restore_event_combo_selection(
         if item is not None:
             item.setEnabled(False)
     combo.setCurrentIndex(index)
+    style_protected_selector(combo)
     if persisted:
         # A saved event's type is immutable; disable the entire control so it
         # is visibly greyed regardless of whether this role normally offers it.
@@ -660,8 +672,8 @@ _MAIN_ANIMAL_LIST_MIN_WIDTH: int = 130
 # # ================================================================ #
 # # 4. Qt Import                                                       #
 # # ================================================================ #
-from PyQt6.QtCore import Qt, QDate, QTimer, QSize, QRect, QRectF, QEvent
-from PyQt6.QtGui import QIcon, QColor, QIntValidator, QPixmap, QAction, QActionGroup, QDoubleValidator, QFont, QPalette, QTextDocument, QAbstractTextDocumentLayout, QPainter
+from PyQt6.QtCore import Qt, QDate, QTimer, QSize, QRect, QRectF, QEvent, QSignalBlocker
+from PyQt6.QtGui import QIcon, QColor, QIntValidator, QPixmap, QAction, QActionGroup, QFont, QPalette, QTextDocument, QAbstractTextDocumentLayout, QPainter
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QMainWindow, QLabel, QListWidget, QListWidgetItem,
     QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog, QLineEdit, QGroupBox,
@@ -884,6 +896,7 @@ for _mt in ("warning", "information", "critical", "question"):
 matplotlib.rcParams['interactive'] = False
 import matplotlib.pyplot as plt
 from matplotlib.artist import Artist
+from matplotlib.figure import Figure
 from matplotlib.collections import PathCollection
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.dates as mdates
@@ -9202,15 +9215,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------
     def _clear_matplotlib(self) -> None:
         """Clear Matplotlib figure and canvas to free resources."""
+        if self.current_canvas:
+            for cid in getattr(self, '_mpl_cids', []):
+                self.current_canvas.mpl_disconnect(cid)
+            self._mpl_cids = []
+            self.current_canvas.hide()
+            self.current_canvas.close()
+            self.current_canvas.deleteLater()
+            self.current_canvas = None
         if self.current_figure:
             self.current_figure.clf()
             plt.close(self.current_figure)
             self.current_figure = None
-        if self.current_canvas:
-            self.current_canvas.setParent(None)
-            self.current_canvas.close()
-            self.current_canvas.deleteLater()
-            self.current_canvas = None
 
     # ------------------------
     # 7.13 Build Sidebar
@@ -9345,6 +9361,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if tab is None:
             return
         previous_idx = tab.currentIndex()
+        tab.setExpanding(False)
         previous_descriptor = self._category_descriptor_for_index(
             previous_idx, getattr(self, "_category_custom_role_values", [])
         )
@@ -9400,8 +9417,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 target_idx = candidate
                 break
         tab.setCurrentIndex(min(max(target_idx, 0), max(tab.count() - 1, 0)))
+        if hasattr(self, 'animals'):
+            self._update_category_tab_visibility()
+        restored_idx = tab.currentIndex()
         tab.blockSignals(False)
         self._sync_heritage_category_tab_state()
+        if restored_idx != previous_idx and tab.currentIndex() == restored_idx:
+            tab.currentChanged.emit(tab.currentIndex())
 
     def _build_sidebar(self) -> QVBoxLayout:
         """Build the sidebar layout."""
@@ -9411,8 +9433,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.category_tab = QTabBar()
         self._category_custom_role_values = []
         self._rebuild_category_tabs()
-        # default to ♀ (index 0)
-        self.category_tab.setCurrentIndex(0)
+        # The rebuild selects the previous/default category only when visible.
         self.category_tab.currentChanged.connect(self._on_category_selected)
         sidebar.addWidget(self.category_tab)
 
@@ -9814,6 +9835,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         for tab_idx in range(all_idx):
             self.category_tab.setTabVisible(tab_idx, counts.get(tab_idx, 0) > 0)
         self.category_tab.setTabVisible(all_idx, True)
+        self.category_tab.updateGeometry()
+        self.category_tab.update()
 
         current_idx = self.category_tab.currentIndex()
         if current_idx < all_idx and not self.category_tab.isTabVisible(current_idx):
@@ -14998,6 +15021,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         return True
 
     def _refresh_list(self, update_tab_visibility: bool = False, force_heritage_visible: bool = False) -> None:
+        """Publish a sidebar rebuild without intermediate deselection callbacks."""
+        if not hasattr(self, 'lst') or self.lst is None:
+            return
+        with QSignalBlocker(self.lst):
+            self._populate_animal_list(update_tab_visibility, force_heritage_visible)
+
+    def _populate_animal_list(self, update_tab_visibility: bool = False, force_heritage_visible: bool = False) -> None:
         """Refresh the animal list based on current filter and selections.
         
         Args:
@@ -15517,6 +15547,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     order.append(str(value))
             self._edit_selection_order = order
         QTimer.singleShot(0, apply_click)
+
+    def _retain_selection_after_animal_save(self, old_key, new_key):
+        """A save is not a user request to collapse an existing multi-selection."""
+        selection = [new_key if key == old_key else key
+                     for key in getattr(self, 'selected_animals', [])]
+        if new_key not in selection:
+            selection.append(new_key)
+        self.selected_animals = list(dict.fromkeys(
+            key for key in selection if key in self.animals or key in getattr(self, 'archived', {})
+        ))
+        for attr in ('_plot_selection_order', '_edit_selection_order'):
+            order = [new_key if key == old_key else key for key in getattr(self, attr, [])]
+            order = [key for key in order if key in self.selected_animals]
+            order.extend(key for key in self.selected_animals if key not in order)
+            setattr(self, attr, order)
 
     def _selected_animal_for_edit(self, explicit: Optional[str] = None) -> Optional[str]:
         """Resolve the interaction-last selected animal without reordering plots."""
@@ -16386,9 +16431,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 and animal.get("sperm")
                 and role_value in specs["sperm_measurements"]["roles"]
             )
-            has_events |= steroid_active and bool(
-                animal.get("sperm") or animal.get("events")
-            )
+            has_events |= bool(plot_event_entries(animal)) or (steroid_active and bool(animal.get("sperm")))
         if steroid_active and self.has_pdg_plugin and getattr(self, "pdg_cap", None):
             for name in selected:
                 params = self.pdg_cap._plugin.get_parameters(name)
@@ -16454,6 +16497,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         self.detail_widget.setMinimumSize(0, 0)
         self._clear_matplotlib()
+        self.hover_data = []
 
         has_selection = bool(self.selected_animals)
         if hasattr(self, "btn_plot_recent"):
@@ -16591,7 +16635,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 break
             widget = item.widget()
             if widget:
-                widget.setParent(None)
+                widget.hide()
+                widget.deleteLater()
 
         # ------------------------
         # 7.18.7 Handle empty selection: show splash image
@@ -16635,7 +16680,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # 7.18.8 Create Matplotlib figure and axes
         # ------------------------
         n = len(self.selected_animals)
-        fig, axes = plt.subplots(n, 1, figsize=(10, 3 * n), sharex=True)
+        fig = Figure(figsize=(10, 3 * n))
+        axes = fig.subplots(n, 1, sharex=True)
         fig.subplots_adjust(hspace=0.7, bottom=0.2)
         self.current_figure = fig
         if n == 1:
@@ -16684,7 +16730,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             has_pdg = steroid_active and bool(a.get('pdg'))
             has_weight = bool(a.get('gewicht'))
             has_sperm_data = steroid_active and bool(a.get('sperm'))
-            if not recs and not has_pdg and not has_weight and not has_sperm_data:
+            has_events = bool(plot_event_entries(a))
+            if not recs and not has_pdg and not has_weight and not has_sperm_data and not has_events:
                 ax.set_title(f"{role_label} – {_dname}")
                 # remove ticks/labels and frame for a clean empty panel
                 ax.set_xticks([])
@@ -17181,7 +17228,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
 
 
-            if steroid_active:
+            if steroid_active or has_events:
                 # Current role recipes govern which new event types can be
                 # created, not which already-saved history is visible.
                 # Stable IDs suppress only duplicate copies of the same row;
@@ -17335,7 +17382,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             txt = f"{lab} ({historical_suffix})"
                         else:
                             denom = max_allowed.get(typ, counts.get(typ, '?'))
-                            if typ.lower() == 'abortion':
+                            definition = self._custom_event_definition_for_type(typ) or {}
+                            counting = str(definition.get('kind') or '').casefold() == 'counting'
+                            if typ.lower() == 'abortion' or counting:
                                 txt = f"{lab} ({idxs[typ]})"
                             else:
                                 txt = f"{lab} ({idxs[typ]}/{denom})"
@@ -17882,6 +17931,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # 7.18.15 Create and configure FigureCanvas
         # ------------------------
         canvas = FigureCanvas(fig)
+        canvas.setParent(self.detail_widget)
 
         # ------------------------
         # 7.18.15 Ensure Urine-mode overlays reapply on resize
@@ -17889,14 +17939,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         def _on_resize(event):
             if self.current_canvas:
                 self._apply_mode()
-        canvas.mpl_connect('resize_event', _on_resize)
-        #disconnect old mpl callbacks if present
-        for cid in getattr(self, '_mpl_cids', []):
-            try:
-                fig.canvas.mpl_disconnect(cid)
-            except Exception:
-                pass
-        self._mpl_cids = []
+        # Old callbacks belong to the old canvas and were disconnected during cleanup.
+        self._mpl_cids = [canvas.mpl_connect('resize_event', _on_resize)]
 
         # ------------------------
         # 7.18.16 Register Matplotlib event handlers
@@ -17928,7 +17972,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 continue
             stats_text = self._get_event_statistics(animal)
             if stats_text and stats_text != "-":
-                self.dlay.addWidget(QLabel(f"{name}: {stats_text}"))
+                summary = QLabel(f"{self._display_name(name)} — {self._plot_statistics_label(animal, stats_text)}")
+                summary.setProperty('projectLabel', str(animal.get('project') or '').strip())
+                summary.setProperty('animalKey', name)
+                summary.setToolTip(str(animal.get('ipid') or name))
+                self.dlay.addWidget(summary)
 
         count = len(self.selected_animals)
         if count in (1, 2):
@@ -18328,6 +18376,38 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # 7.19 Build Editable List
     #     Construct the editable animal selection list with controls.
     # ------------------------
+    @staticmethod
+    def _plot_statistics_label(animal, stats_text):
+        """A project-context heading is not an internal animal/origin identity."""
+        project = str(animal.get('project') or '').strip()
+        return f'{project}: {stats_text}' if project else stats_text
+
+    def _read_dialog_measurements(self, rows, *, unique_dates=False):
+        """Validate the entire history before a dialog reaches any write boundary."""
+        result, seen = [], set()
+        for d_edit, value_edit, *extra in rows:
+            date_text, value_text = d_edit.text().strip(), value_edit.text().strip()
+            if not date_text and not value_text:
+                continue
+            date = datetime.strptime(date_text, DATE_FORMAT)
+            if unique_dates and date in seen:
+                raise ValueError(date_text)
+            seen.add(date)
+            value = parse_measurement(value_text)
+            entry = {'datum': date, 'wert': value}
+            if extra and extra[0] is not None and extra[0].text().strip():
+                entry['probennummer'] = extra[0].text().strip()
+            result.append(entry)
+        return result
+
+    def _measurement_input_error(self):
+        self._show_message_raw(
+            self.messages.get('error.title', 'Error'),
+            self.messages.get('error.invalid_measurement_input',
+                              'Invalid measurement date or value. Correct the entry before saving.'),
+            'error',
+        )
+
     def _build_editable_list(self, title: str, items: List[Any],
                              format_item: Callable[[Any], Tuple[str, Optional[str], Optional[str]]],
                              add_default: Callable[[List[Any]], Tuple[str, Optional[str], Optional[str]]],
@@ -18402,6 +18482,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             d_edit.textChanged.connect(validate_date_field)
             
             w_edit = QLineEdit(item_data[1]) if item_data[1] is not None else None
+            if w_edit is not None:
+                w_edit.setValidator(MeasurementValidator(parent=w_edit))
             # Add sample ID field only if col_headers indicates it should exist (non-empty header)
             has_sample_id = col_headers and len(col_headers) > 2 and col_headers[2]
             probe_edit = None
@@ -21103,6 +21185,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             mt.audit("toggle_master_track",
                      "disabled" if currently_enabled else "enabled")
 
+    def _clear_session_animal_selection(self):
+        """Clear runtime subjects at an actor boundary; never alter stored layout maps."""
+        for attr in ('selected_animals', '_selected_archived', '_selected_heritage_only',
+                     '_plot_selection_order', '_edit_selection_order', 'last_plotted_animals'):
+            setattr(self, attr, [])
+        self._plot_x_viewport = None
+        lst = getattr(self, 'lst', None)
+        if lst is not None:
+            with QSignalBlocker(lst):
+                lst.clearSelection()
+                lst.setCurrentRow(-1)
+
     def _do_master_logout(self):
         """Log out, save session, revert to Guest mode, refresh UI."""
         mt = getattr(self, 'master_track', None)
@@ -21115,6 +21209,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if heritage_plugin is not None and callable(getattr(heritage_plugin, 'on_user_logout', None)):
             heritage_plugin.on_user_logout()
         mt.logout()
+        self._clear_session_animal_selection()
         # Revert to global disabled_plugins (Guest defaults)
         self._disabled_plugins = self._load_disabled_plugins()
         # Reload language from global settings (guest mode doesn't persist changes)
@@ -21139,6 +21234,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if hasattr(self, 'chk_events_experimental'):
             self.chk_events_experimental.setChecked(True)
         self._apply_all_plugin_states()
+        self._refresh_list(update_tab_visibility=True)
+        self._on_select()
         self._refresh_master_menu_states()
         self._update_master_status_bar()
         self._apply_master_button_states()
@@ -21158,6 +21255,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not mt:
             return
         if mt.login_interactive():
+            self._clear_session_animal_selection()
             heritage_plugin = getattr(self, 'heritage_plugin', None)
             if heritage_plugin is not None and callable(getattr(heritage_plugin, 'on_user_logout', None)):
                 # A successful user switch also ends the previous guest/user
@@ -21183,6 +21281,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Load/apply the newly authenticated user's style before plugin
             # callbacks and menu/state refreshes redraw their views.
             self._reload_user_style_settings()
+            self._refresh_list(update_tab_visibility=True)
+            self._on_select()
             self._refresh_master_menu_states()
             self._update_master_status_bar()
             self._apply_master_button_states()
@@ -21589,6 +21689,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     btn.setEnabled(True)
             if hasattr(self, 'btn_load_sperm'):
                 self.btn_load_sperm.setEnabled(steroid_active)
+            active_selected = any(name in self.animals for name in self.selected_animals)
+            for attr in ('btn_edit', 'btn_edit_animal'):
+                btn = getattr(self, attr, None)
+                if btn:
+                    btn.setEnabled(active_selected and self._can_use_primary_edit_button())
             return
         can_create = mt.can("core.create_animals")
         can_import = mt.can("core.import")
@@ -21602,9 +21707,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.btn_new.setEnabled(can_create)
         if hasattr(self, 'btn_edit'):
             # Edit button also needs a selection — only enable if both permission and selection
-            self.btn_edit.setEnabled(can_edit and bool(self.selected_animals))
+            self.btn_edit.setEnabled(can_edit and any(name in self.animals for name in self.selected_animals))
         if hasattr(self, 'btn_edit_animal'):
-            self.btn_edit_animal.setEnabled(can_edit and bool(self.selected_animals))
+            self.btn_edit_animal.setEnabled(can_edit and any(name in self.animals for name in self.selected_animals))
         if hasattr(self, 'btn_load_blood'):
             self.btn_load_blood.setEnabled(can_import_research_data)
         if hasattr(self, 'btn_load_urine'):
@@ -21658,6 +21763,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         inspectable and scrollable; ordinary field/group containers retain the
         historical disabled-container behavior.
         """
+        for widgets in groups.values():
+            for widget in (widgets if isinstance(widgets, (list, tuple)) else [widgets]):
+                if isinstance(widget, QComboBox):
+                    style_protected_selector(widget)
+                elif widget is not None:
+                    for combo in widget.findChildren(QComboBox):
+                        style_protected_selector(combo)
         for perm, widgets in groups.items():
             if not self._master_can(perm):
                 if not isinstance(widgets, (list, tuple)):
@@ -22376,8 +22488,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 logging.error(f"Cage_Track address fields failed: {e}")
                 cage_address_fields = None
 
-        ref_w_le = QLineEdit(str(rec.get('ref_weight', DEFAULT_REF_WEIGHT))); self._std_widen(ref_w_le)
-        ref_w_le.setValidator(QDoubleValidator(0.0, 10000.0, 2))
+        ref_w_le = QLineEdit(format_measurement(rec.get('ref_weight', DEFAULT_REF_WEIGHT))); self._std_widen(ref_w_le)
+        ref_w_le.setValidator(MeasurementValidator(10000.0))
         form.addRow(self.messages.get("dialog.partner.field.reference_weight", "Reference Weight (g):"), ref_w_le)
 
         # Sex (same pattern as offspring dialog, guarded by core.edit_animal_identity)
@@ -22576,7 +22688,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             
             d_le.textChanged.connect(validate_weight_date)
             
-            v_le.setValidator(QDoubleValidator(0.0, 100000.0, 3))
+            v_le.setValidator(MeasurementValidator(100000.0))
             add_btn = QPushButton("×")
             add_btn.setFixedWidth(50)
 
@@ -22598,7 +22710,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         while row.count():
                             itm = row.takeAt(0).widget()
                             if itm:
-                                itm.setParent(None)
+                                itm.hide()
+                                itm.deleteLater()
                         wt_layout.removeItem(row)
                         break
                 refresh_weight_cap()
@@ -22622,7 +22735,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # seed with existing rows
         for w in sorted(norm_w, key=lambda t: t['datum'] or datetime.now()):
             d = w['datum'].strftime(DATE_FORMAT) if isinstance(w['datum'], datetime) else str(w['datum'])
-            add_w_row((d, str(w['wert'])))
+            add_w_row((d, format_measurement(w['wert'])))
 
         btn_add_w = QPushButton(self.messages.get("dialog.partner.button.new_weight", "New Weight"))
         btn_add_w.clicked.connect(lambda: add_w_row(None))
@@ -22673,33 +22786,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 selected_species=selected_species,
             )
 
-            # parse ref weight
+            # Read the complete measurement edit before building a write plan.
             try:
-                ref_w = float(ref_w_le.text().strip().replace(',', '.'))
-            except Exception:
-                ref_w = DEFAULT_REF_WEIGHT
-
-            # parse weights
-            new_weights = []
-            for d_le, v_le in wt_rows:
-                ds = d_le.text().strip()
-                vs = v_le.text().strip().replace(',', '.')
-                if not ds or not vs:
-                    continue
-                try:
-                    d = datetime.strptime(ds, DATE_FORMAT)
-                except Exception:
-                    try:
-                        d = datetime.strptime(ds, "%Y-%m-%d")
-                    except Exception:
-                        self._show_message("error.invalid_date", self.messages.get("dialog.partner.error.invalid_date", "Invalid date: {date}").format(date=ds))
-                        return
-                try:
-                    val = float(vs)
-                except Exception:
-                    self._show_message_raw("Fehler", f"Ungültiges Gewicht: {vs}")
-                    return
-                new_weights.append({'datum': d, 'wert': val})
+                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
+                new_weights = self._read_dialog_measurements(wt_rows)
+            except ValueError:
+                self._measurement_input_error()
+                return
 
             # write record
             rec_obj = dict(self.animals.get(name, {})) if editing else {}
@@ -23003,8 +23096,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._move_form_row_after(form, _cage_addr_group, genotype_le)
 
         # Reference weight
-        ref_w_le = QLineEdit(str(rec.get('ref_weight', DEFAULT_REF_WEIGHT))); self._std_widen(ref_w_le)
-        ref_w_le.setValidator(QDoubleValidator(0.0, 10000.0, 2))
+        ref_w_le = QLineEdit(format_measurement(rec.get('ref_weight', DEFAULT_REF_WEIGHT))); self._std_widen(ref_w_le)
+        ref_w_le.setValidator(MeasurementValidator(10000.0))
         form.addRow(self.messages.get("dialog.sperm_donor.label.ref_weight", "Reference Weight (g):"), ref_w_le)
         
         # Max sperm samples
@@ -23236,7 +23329,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         wlay = QVBoxLayout(weight_tab)
         # build editable weight list using the helper
         def fmt_weight(item):
-            return (item['datum'].strftime(DATE_FORMAT), str(int(item['wert'])), '')
+            return (item['datum'].strftime(DATE_FORMAT), format_measurement(item['wert']), '')
         def def_weight(ws):
             return (datetime.now().date().strftime(DATE_FORMAT), '0', '')
         
@@ -23309,7 +23402,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             # parse numeric fields
             try:
-                ref_w = float(ref_w_le.text())
+                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
                 max_sp = int(max_sperm_le.text()) if steroid_active else int(rec.get('max_spermaproben') if rec.get('max_spermaproben') is not None else DEFAULT_MAX_SPERM_SAMPLES)
                 recov  = int(rec_le.text()) if steroid_active else int(rec.get('recovery_time', DEFAULT_RECOVERY_TIME))
             except ValueError:
@@ -23319,33 +23412,33 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     'error'
                 )
                 return
-            # parse weight entries
-            new_weights: List[Dict[str, Any]] = []
-            for d_edit, w_edit, probe_edit in weight_widgets:
-                try:
-                    dt = datetime.strptime(d_edit.text(), DATE_FORMAT)
-                    txt = w_edit.text().strip()
-                    val = float(txt) if txt else None
-                    new_weights.append({'datum': dt, 'wert': val})
-                except Exception:
-                    continue
+            try:
+                new_weights = self._read_dialog_measurements(weight_widgets)
+            except ValueError:
+                self._measurement_input_error()
+                return
             # parse sperm entries
             new_sperm: List[Dict[str, Any]] = []
             if steroid_active:
                 for d_le, mot_le, prog_le, cnt_le in sperm_widgets:
                     try:
                         dt = datetime.strptime(d_le.text(), DATE_FORMAT)
-                    except Exception:
-                        continue
+                    except ValueError:
+                        self._measurement_input_error()
+                        return
                     m_text = mot_le.text().strip()
                     p_text = prog_le.text().strip()
                     c_text = cnt_le.text().strip()
-                    sperm_entry = {
-                        'datum':       dt,
-                        'motility':    float(m_text) if m_text else None,
-                        'progressive': float(p_text) if p_text else None,
-                        'count':       float(c_text) if c_text else None
-                    }
+                    try:
+                        sperm_entry = {
+                            'datum': dt,
+                            'motility': parse_measurement(m_text) if m_text else None,
+                            'progressive': parse_measurement(p_text) if p_text else None,
+                            'count': parse_measurement(c_text) if c_text else None,
+                        }
+                    except ValueError:
+                        self._measurement_input_error()
+                        return
                     for sample_key, sample_id in getattr(
                         d_le, '_progtrack_sperm_identifiers', {}
                     ).items():
@@ -23710,7 +23803,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         wlay = QVBoxLayout(weight_tab)
         
         def fmt_wg(item):
-            return (item['datum'].strftime(DATE_FORMAT), str(int(item['wert'])), '')
+            return (item['datum'].strftime(DATE_FORMAT), format_measurement(item['wert']), '')
             
         def def_wg(ws):
             return (datetime.now().date().strftime(DATE_FORMAT), '0', '')
@@ -23891,6 +23984,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Save button
         save_btn2 = QPushButton(self.messages.get("dialog.offspring.button.save", "Save"))
         def on_save_offspring() -> None:
+            try:
+                weights_list = self._read_dialog_measurements(wg_widgets)
+            except ValueError:
+                self._measurement_input_error()
+                return
             self._save_trace("offspring.save.enter", editing=editing, original_name=name)
             # determine name
             new_name = name_le.text().strip()
@@ -23998,14 +24096,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
             rec_obj['in_experiment'] = new_in_exp_o
             # weights
-            weights_list = []
-            for d_edit, w_edit, probe_edit in wg_widgets:
-                try:
-                    dt = datetime.strptime(d_edit.text(), DATE_FORMAT)
-                    val = float(w_edit.text())
-                    weights_list.append({'datum': dt, 'wert': val})
-                except Exception:
-                    pass
             rec_obj['gewicht'] = weights_list
             rec_obj['project'] = project_le.currentText().strip()
             rec_obj['severity'] = severity_cb.currentData()
@@ -24236,8 +24326,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 cage_address_fields = None
         
         # Reference weight
-        ref_w_le = QLineEdit(str(rec.get('ref_weight', DEFAULT_REF_WEIGHT)))
-        ref_w_le.setValidator(QDoubleValidator(0.0, 10000.0, 2))
+        ref_w_le = QLineEdit(format_measurement(rec.get('ref_weight', DEFAULT_REF_WEIGHT)))
+        ref_w_le.setValidator(MeasurementValidator(10000.0))
         self._std_widen(ref_w_le)
         form.addRow(self.messages.get("dialog.zuchttier.ref_weight", "Reference Weight (g):"), ref_w_le)
         
@@ -24357,7 +24447,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         wlay = QVBoxLayout(weight_tab)
         
         def fmt_wg(item):
-            return (item['datum'].strftime(DATE_FORMAT), str(int(item['wert'])), '')
+            return (item['datum'].strftime(DATE_FORMAT), format_measurement(item['wert']), '')
         
         def def_wg(ws):
             return (datetime.now().date().strftime(DATE_FORMAT), '0', '')
@@ -24557,6 +24647,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         save_btn = QPushButton(self.messages.get("dialog.zuchttier.button.save", "Save"))
         
         def on_save_zuchttier() -> None:
+            try:
+                weights_list = self._read_dialog_measurements(wg_widgets)
+                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
+            except ValueError:
+                self._measurement_input_error()
+                return
             self._save_trace("zuchttier.save.enter", editing=editing, original_name=name)
             # Determine name
             new_name = name_le.text().strip()
@@ -24622,7 +24718,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['severity'] = severity_cb.currentData()
             self._apply_identity_fields_to_record(
                 rec_obj, new_name, _orig_name, selected_species, birth_date)
-            rec_obj['ref_weight'] = float(ref_w_le.text()) if ref_w_le.text() else DEFAULT_REF_WEIGHT
+            rec_obj['ref_weight'] = ref_w
             rec_obj['death_date'] = death_date_le.text().strip()
             if not self._capture_death_lifecycle(rec_obj, rec):
                 return
@@ -24676,14 +24772,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     return
             
             # Weights
-            weights_list = []
-            for d_edit, w_edit, probe_edit in wg_widgets:
-                try:
-                    dt = datetime.strptime(d_edit.text(), DATE_FORMAT)
-                    val = float(w_edit.text())
-                    weights_list.append({'datum': dt, 'wert': val})
-                except Exception:
-                    pass
             rec_obj['gewicht'] = weights_list
             
             # Events
@@ -24957,7 +25045,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         # ── Genotype ─────────────────────────────────────────────────────────
         # ── Ref. weight ──────────────────────────────────────────────────────
-        ref_w_le = QLineEdit(str(rec.get('ref_weight', DEFAULT_REF_WEIGHT)))
+        ref_w_le = QLineEdit(format_measurement(rec.get('ref_weight', DEFAULT_REF_WEIGHT)))
         self._std_widen(ref_w_le)
         form.addRow(self.messages.get('dialog.field.reference_weight', 'Reference weight (g):'), ref_w_le)
 
@@ -25048,7 +25136,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         wg_sc, wg_widgets = self._build_editable_list(
             self.messages.get('dialog.animal.tab.weights', 'Weights'),
             sorted_gewicht,
-            lambda item: (item['datum'].strftime(DATE_FORMAT), str(int(item['wert'])), ''),
+            lambda item: (item['datum'].strftime(DATE_FORMAT), format_measurement(item['wert']), ''),
             lambda ws:   (datetime.now().date().strftime(DATE_FORMAT), '0', ''),
             col_headers=(
                 self.messages.get('table.header.date',   'Date'),
@@ -25197,6 +25285,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             else self._master_can('core.edit_animal_core'))
 
         def on_save_versuchstier():
+            try:
+                weights_list = self._read_dialog_measurements(wg_widgets)
+                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
+            except ValueError:
+                self._measurement_input_error()
+                return
             self._save_trace("versuchstier.save.enter", editing=editing, original_name=name)
             new_name = name_le.text().strip()
             self._save_trace("versuchstier.save.name_read", new_name=new_name)
@@ -25231,19 +25325,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 new_name, selected_species, birth_date, origin
             )
             self._save_trace("versuchstier.save.identity_resolved", new_name=new_name, selected_species=selected_species)
-            try:
-                ref_w = float(ref_w_le.text()) if ref_w_le.text() else DEFAULT_REF_WEIGHT
-            except ValueError:
-                ref_w = DEFAULT_REF_WEIGHT
 
-            weights_list = []
-            for d_edit, w_edit, _probe in wg_widgets:
-                try:
-                    dt  = datetime.strptime(d_edit.text(), DATE_FORMAT)
-                    val = float(w_edit.text())
-                    weights_list.append({'datum': dt, 'wert': val})
-                except Exception:
-                    pass
 
             events_list = []
             for ev_d, ev_c in ev_widgets:
@@ -25546,8 +25628,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         ref_w_le = None
         if "reference_weight" in enabled_blocks:
-            ref_w_le = QLineEdit(str(rec.get("ref_weight", "")))
-            ref_w_le.setValidator(QDoubleValidator(0.0, 100000.0, 3, ref_w_le))
+            ref_w_le = QLineEdit(format_measurement(rec.get("ref_weight", "")))
+            ref_w_le.setValidator(MeasurementValidator(100000.0, ref_w_le))
             self._std_widen(ref_w_le)
             form.addRow(self.messages.get("dialog.field.reference_weight", "Reference weight (g):"), ref_w_le)
 
@@ -25585,9 +25667,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._move_form_row_after(form, basic_parent_section, basic_limits_section)
 
         new_weight_le = None
-        if "weight" in enabled_blocks:
+        if creating and "weight" in enabled_blocks:
             new_weight_le = QLineEdit("")
-            new_weight_le.setValidator(QDoubleValidator(0.0, 100000.0, 3, new_weight_le))
+            new_weight_le.setValidator(MeasurementValidator(100000.0, new_weight_le))
             weight_label = (
                 self.messages.get("dialog.field.initial_weight", "Initial weight (g):")
                 if creating else
@@ -25615,6 +25697,26 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             form.addRow(self.messages.get("dialog.offspring.health_status", "Health Status:"), health_w)
 
         self._add_scrollable_animal_form(dlg, v, form)
+
+        custom_tabs = None
+        custom_weight_tab = None
+        weight_widgets = []
+        if not creating and "weight" in enabled_blocks:
+            custom_tabs = QTabWidget()
+            custom_weight_tab = QWidget()
+            weight_layout = QVBoxLayout(custom_weight_tab)
+            weight_scroll, weight_widgets = self._build_editable_list(
+                self.messages.get("dialog.animal.tab.weights", "Weights"),
+                sorted(rec.get("gewicht", []), key=lambda item: item["datum"]),
+                lambda item: (item["datum"].strftime(DATE_FORMAT),
+                              format_measurement(item["wert"]), ""),
+                lambda rows: (datetime.now().strftime(DATE_FORMAT), "", ""),
+                col_headers=(self.messages.get("table.header.date", "Date"),
+                             self.messages.get("table.header.weight", "Weight (g)"), ""),
+            )
+            weight_layout.addWidget(weight_scroll)
+            custom_tabs.addTab(custom_weight_tab,
+                               self.messages.get("dialog.animal.tab.weights", "Weights"))
 
         # Dynamic Role Setup events use the same bounded history surface as
         # the built-in role dialogs.  A retired definition is intentionally
@@ -25753,15 +25855,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 custom_event_scroll, custom_event_frame, len(custom_event_widgets)
             )
             custom_event_layout.addWidget(custom_event_scroll, 1)
-            custom_tabs = QTabWidget()
+            if custom_tabs is None:
+                custom_tabs = QTabWidget()
             custom_tabs.setVisible(not creating)
             custom_tabs.addTab(
                 custom_event_tab,
                 self.messages.get("dialog.animal.tab.events", "Events"),
             )
+        if custom_tabs is not None:
             v.addWidget(custom_tabs, 0)
-        else:
-            custom_tabs = None
         self._register_animal_dialog_tabs(dlg, custom_tabs)
 
         save_btn = QPushButton(self.messages.get("button.save", "Save"))
@@ -25775,6 +25877,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._freeze_dialog_inputs(dlg)
 
         def on_save_basic_role():
+            try:
+                weights = (self._read_dialog_measurements(weight_widgets)
+                           if custom_weight_tab is not None else None)
+                weight_value = (parse_measurement(new_weight_le.text())
+                                if new_weight_le is not None and new_weight_le.text().strip()
+                                else None)
+                ref_weight = (parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
+                              if ref_w_le is not None else rec.get("ref_weight", DEFAULT_REF_WEIGHT))
+            except ValueError:
+                self._measurement_input_error()
+                return
             base_name = name_le.text().strip()
             if not base_name:
                 self._show_message_raw(
@@ -25822,14 +25935,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             except ValueError as exc:
                 self._show_message_raw(self.messages.get("error.title", "Error"), str(exc), "error")
                 return
-
-            if ref_w_le is not None:
-                try:
-                    ref_weight = float(ref_w_le.text()) if ref_w_le.text().strip() else DEFAULT_REF_WEIGHT
-                except ValueError:
-                    ref_weight = DEFAULT_REF_WEIGHT
-            else:
-                ref_weight = rec.get("ref_weight", DEFAULT_REF_WEIGHT)
 
             rec_obj = dict(rec)
             animal_id, generated_id_meta = self._id_for_animal_dialog(
@@ -25964,15 +26069,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     )
                     return
 
-            if new_weight_le is not None and new_weight_le.text().strip():
-                try:
-                    weight_value = float(new_weight_le.text().strip())
-                except ValueError:
-                    weight_value = None
-                if weight_value is not None:
-                    weights = list(rec_obj.get("gewicht", []))
-                    weights.append({"datum": datetime.now(), "wert": weight_value})
-                    rec_obj["gewicht"] = weights
+            if weights is not None:
+                rec_obj["gewicht"] = weights
+            if weight_value is not None:
+                rec_obj["gewicht"] = [*rec_obj.get("gewicht", []),
+                                      {"datum": datetime.now(), "wert": weight_value}]
 
             if not creating and new_key != name:
                 self.animals.pop(name, None)
@@ -26000,7 +26101,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     )
                 except Exception as exc:
                     logging.warning(f"Could not save basic-role cage address block: {exc}")
-            self.selected_animals = [new_key]
+            self._retain_selection_after_animal_save(name, new_key)
             self._refresh_list(update_tab_visibility=True)
             self._on_select()
             dlg.accept()
@@ -26012,7 +26113,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 birth_date_le, death_date_le, special_status_le, sex_cb, genotype_le,
             ],
             'core.edit_animal_housing': [_cage_addr_group, parents_group],
-            'core.edit_animal_measurements': [new_weight_le, custom_event_tab],
+            'core.edit_animal_measurements': [new_weight_le, custom_weight_tab, custom_event_tab],
             'core.edit_animal_research_data': [ref_w_le, *custom_limit_widgets.values()],
         })
         dlg.exec()
@@ -26197,8 +26298,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 cage_address_fields = None
 
         # Reference weight
-        ref_w_le = QLineEdit(str(rec.get('ref_weight', DEFAULT_REF_WEIGHT)))
-        ref_w_le.setValidator(QDoubleValidator(0.0, 10000.0, 2))
+        ref_w_le = QLineEdit(format_measurement(rec.get('ref_weight', DEFAULT_REF_WEIGHT)))
+        ref_w_le.setValidator(MeasurementValidator(10000.0))
         self._std_widen(ref_w_le)
         form.addRow(self.messages.get("dialog.female_animal.ref_weight", "Reference Weight (g):"), ref_w_le)
 
@@ -26449,7 +26550,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         # ---------------- Weight tab ----------------
         def fmt_gewicht(item):
-            return (item['datum'].strftime(DATE_FORMAT), str(int(item['wert'])), '')
+            return (item['datum'].strftime(DATE_FORMAT), format_measurement(item['wert']), '')
         
         def def_gewicht(widgets):
             return (datetime.now().date().strftime(DATE_FORMAT), '0', '')
@@ -26517,6 +26618,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ---------------- Save (single standard button) ----------------
         save_btn = QPushButton(self.messages.get("button.save", "Save"))
         def on_save() -> None:
+            pdg_w = []
+            if steroid_active and self.has_pdg_plugin:
+                for i in range(tabs.count()):
+                    tab_widget = tabs.widget(i)
+                    if hasattr(tab_widget, '_pdg_widgets'):
+                        pdg_w = tab_widget._pdg_widgets
+                        break
+            try:
+                ref_weight = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
+                new_gew = self._read_dialog_measurements(gew_w, unique_dates=True)
+                if steroid_active:
+                    new_daten = self._read_dialog_measurements(dp_w, unique_dates=True)
+                    new_pdg = self._read_dialog_measurements(pdg_w)
+            except ValueError:
+                self._measurement_input_error()
+                return
             self._save_trace(
                 "female_like.save.enter",
                 editing=not creating,
@@ -26566,16 +26683,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 new_name=new_name,
                 selected_species=selected_species,
             )
-
-            # Get PdG widgets from plugin-created tab if available
-            pdg_w = []
-            if steroid_active and self.has_pdg_plugin:
-                # Find the PdG tab and get its widgets
-                for i in range(tabs.count()):
-                    tab_widget = tabs.widget(i)
-                    if hasattr(tab_widget, '_pdg_widgets'):
-                        pdg_w = tab_widget._pdg_widgets
-                        break
 
             # Read the internal role code from the combobox userData so
             # storage and logic stay independent of the localized label.
@@ -26629,7 +26736,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     rec, self.animals.get(name, {}) if not creating else {}):
                     return
                 rec['special_status'] = special_status_le.text().strip()
-                rec['ref_weight'] = float(ref_w_le.text() or DEFAULT_REF_WEIGHT)
+                rec['ref_weight'] = ref_weight
                 if steroid_active:
                     rec['max_messungen']   = int(maxm_le.text() or DEFAULT_MAX_MESS)
                     rec['max_pgf']         = int(maxp_le.text() or DEFAULT_MAX_PGF)
@@ -26701,39 +26808,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 old_pdg_count=len(_st_old_pdg),
             )
 
-            # Progesteron
+            # All measurement rows were validated before scalar/relationship work.
             if steroid_active:
-                new_daten, seen_dates = [], set()
-                for d_edit, w_edit, probe_edit in dp_w:
-                    # Skip deleted widgets or empty rows
-                    try:
-                        date_text = d_edit.text().strip() if d_edit else ''
-                        value_text = w_edit.text().strip() if w_edit else ''
-                        if not date_text or not value_text:
-                            continue
-                    except (RuntimeError, AttributeError):
-                        # Widget has been deleted or is invalid
-                        continue
-                    try:
-                        dt = datetime.strptime(d_edit.text(), DATE_FORMAT).date()
-                        if dt in seen_dates: raise ValueError('Doppeltes Datum')
-                        seen_dates.add(dt)
-                        val = float(w_edit.text())
-                        if not (val >= 0):
-                            raise ValueError("Measurement values must be non-negative")
-                        entry = {'datum': datetime.combine(dt, datetime.min.time()), 'wert': val}
-                        # Add probennummer if provided
-                        probe_text = probe_edit.text().strip()
-                        if probe_text:
-                            entry['probennummer'] = probe_text
-                        new_daten.append(entry)
-                    except Exception as e:
-                        self._show_message(
-                            self.messages.get('error.title', 'Error'),
-                            self.messages.get('error.invalid_prog_values', 'Invalid progesterone values: {}').format(str(e)),
-                            'error'
-                        )
-                        return
                 max_mess = rec.get('max_messungen', DEFAULT_MAX_MESS)
                 if len(new_daten) > max_mess:
                     self._show_message(
@@ -26743,73 +26819,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     )
                     return
                 rec['daten'] = new_daten
-            else:
-                rec['daten'] = rec.get('daten', [])
-
-            # PdG
-            if steroid_active:
-                new_pdg = []
-                for d_edit, w_edit, probe_edit in pdg_w:
-                    # Skip deleted widgets or empty rows
-                    try:
-                        date_text = d_edit.text().strip() if d_edit else ''
-                        value_text = w_edit.text().strip() if w_edit else ''
-                        if not date_text or not value_text:
-                            continue
-                    except (RuntimeError, AttributeError):
-                        # Widget has been deleted or is invalid
-                        continue
-                    try:
-                        dt = datetime.strptime(d_edit.text(), DATE_FORMAT).date()
-                        val = float((w_edit.text() or "").strip())
-                        if not (val >= 0):
-                            raise ValueError("Measurement values must be non-negative")
-                        entry = {'datum': datetime.combine(dt, datetime.min.time()), 'wert': val}
-                        # Add probennummer if provided
-                        probe_text = probe_edit.text().strip()
-                        if probe_text:
-                            entry['probennummer'] = probe_text
-                        new_pdg.append(entry)
-                    except Exception as e:
-                        self._show_message(
-                            self.messages.get('error.title', 'Error'),
-                            self.messages.get('error.invalid_pdg_values', 'Invalid PdG values: {}').format(str(e)),
-                            'error'
-                        )
-                        return
-                rec['pdg'] = new_pdg
-            else:
-                rec['pdg'] = rec.get('pdg', [])
-
-            # Gewicht
-            new_gew, seen_w = [], set()
-            for d_edit, w_edit, probe_edit in gew_w:
-                # Skip deleted widgets or empty rows
-                try:
-                    date_text = d_edit.text().strip() if d_edit else ''
-                    value_text = w_edit.text().strip() if w_edit else ''
-                    if not date_text or not value_text:
-                        continue
-                except (RuntimeError, AttributeError):
-                    # Widget has been deleted or is invalid
-                    continue
-                try:
-                    dt = datetime.strptime(d_edit.text(), DATE_FORMAT).date()
-                    if dt in seen_w:
-                        raise ValueError(self.messages.get('error.duplicate_weight_date', 'Duplicate weight date: {}').format(dt.strftime(DATE_FORMAT)))
-                    seen_w.add(dt)
-                    val = float(w_edit.text())
-                    if not (val >= 0):
-                        raise ValueError("Measurement values must be non-negative")
-                    new_gew.append({'datum': datetime.combine(dt, datetime.min.time()), 'wert': val})
-                except Exception as e:
-                    logging.error(f"Weight validation error: {e}, date={d_edit.text() if d_edit else 'N/A'}, value={w_edit.text() if w_edit else 'N/A'}")
-                    self._show_message(
-                        self.messages.get('error.title', 'Error'),
-                        self.messages.get('error.invalid_weight_values', 'Invalid weight values: {}').format(str(e)),
-                        'error'
-                    )
-                    return
+                if self.has_pdg_plugin:
+                    rec['pdg'] = new_pdg
             rec['gewicht'] = new_gew
 
             # Events
@@ -26968,7 +26979,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._refresh_list(update_tab_visibility=True)
             self._save_trace("female_like.save.refresh_list.after", key=key)
             
-            self.selected_animals = [key]
+            self._retain_selection_after_animal_save(name, key)
             self._save_trace("female_like.save.dialog_accept.before", key=key)
             dlg.accept()
             self._save_trace("female_like.save.dialog_accept.after", key=key)

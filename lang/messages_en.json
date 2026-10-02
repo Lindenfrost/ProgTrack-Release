@@ -1,4 +1,5 @@
 {
+  "error.invalid_measurement_input": "Invalid measurement date or value. Correct the entry before saving.",
   "app.title": "ProgTrack v.0.2.3",
   "menu.program": "Settings",
   "menu.program.language_settings": "Language",

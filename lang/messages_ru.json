@@ -1,4 +1,5 @@
 {
+  "error.invalid_measurement_input": "Неверная дата или значение измерения. Исправьте запись перед сохранением.",
   "app.title": "ProgTrack v.0.2.3",
   "menu.program": "Настройки",
   "menu.program.language_settings": "Язык",

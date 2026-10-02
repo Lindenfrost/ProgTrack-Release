@@ -1,4 +1,5 @@
 {
+  "error.invalid_measurement_input": "Data o valore della misurazione non valido. Correggere la voce prima di salvare.",
   "app.title": "ProgTrack v.0.2.3",
   "menu.program": "Impostazioni",
   "menu.program.language_settings": "Lingua",

@@ -1,4 +1,5 @@
 {
+  "error.invalid_measurement_input": "Ungültiges Messdatum oder ungültiger Messwert. Bitte den Eintrag vor dem Speichern korrigieren.",
   "app.title": "ProgTrack v.0.2.3",
   "menu.program": "Einstellungen",
   "menu.program.language_settings": "Sprache",
