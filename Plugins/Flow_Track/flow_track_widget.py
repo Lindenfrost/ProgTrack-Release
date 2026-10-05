@@ -3254,7 +3254,7 @@ class FlowTrackWidget:
             
             ivm_rate_text = f"  {self.messages.get('flow_track.dialog.egg_donor.ivm_rate_desc', 'Proportion of retrieved GV oocytes that mature to IVM M2')}\n"
             ivm_rate_text += f"  {total.get('total_ivm_m2', 0)}/{total.get('total_gv_isolated', 0)} ({self._format_efficiency(total.get('ivm_rate'))})"
-            ivm_rate_display = QtWidgets.QLabel(ivm_rate_text)
+            ivm_rate_display = QtWidgets.QLabel(ivm_rate_text, metrics_group)
             ivm_rate_display.setStyleSheet("padding: 5px;")
             ivm_rate_display.setVisible(metric_visibility.get('ivm_rate', True))
             metrics_layout.addWidget(ivm_rate_display)
@@ -3273,7 +3273,7 @@ class FlowTrackWidget:
             
             fert_rate_text = f"  {self.messages.get('flow_track.dialog.egg_donor.fert_rate_after_ivm_desc', 'Proportion of IVM-derived M2 oocytes that fertilize successfully')}\n"
             fert_rate_text += f"  {total.get('total_ivm_m2_fertilized', 0)}/{total.get('total_ivm_m2', 0)} ({self._format_efficiency(total.get('fert_rate_after_ivm'))})"
-            fert_rate_display = QtWidgets.QLabel(fert_rate_text)
+            fert_rate_display = QtWidgets.QLabel(fert_rate_text, metrics_group)
             fert_rate_display.setStyleSheet("padding: 5px;")
             fert_rate_display.setVisible(metric_visibility.get('fert_rate_after_ivm', True))
             metrics_layout.addWidget(fert_rate_display)
@@ -3293,7 +3293,7 @@ class FlowTrackWidget:
             total_usable = total.get('total_transferred_ivm', 0) + total.get('total_frozen_ivm', 0)
             usable_yield_text = f"  {self.messages.get('flow_track.dialog.egg_donor.usable_from_fert_desc', 'Proportion of fertilized IVM-derived oocytes that result in transferable/freezable embryos')}\n"
             usable_yield_text += f"  {total_usable}/{total.get('total_ivm_m2_fertilized', 0)} ({self._format_efficiency(total.get('usable_from_fert'))})"
-            usable_yield_display = QtWidgets.QLabel(usable_yield_text)
+            usable_yield_display = QtWidgets.QLabel(usable_yield_text, metrics_group)
             usable_yield_display.setStyleSheet("padding: 5px;")
             usable_yield_display.setVisible(metric_visibility.get('usable_from_fert', True))
             metrics_layout.addWidget(usable_yield_display)
@@ -3312,7 +3312,7 @@ class FlowTrackWidget:
             
             impl_rate_text = f"  {self.messages.get('flow_track.dialog.egg_donor.implantation_rate_desc', 'Proportion of transferred embryos that implant successfully')}\n"
             impl_rate_text += f"  {total.get('total_implanted_ivm', 0)}/{total.get('total_transferred_ivm', 0)} ({self._format_efficiency(total.get('implantation_rate'))})"
-            impl_rate_display = QtWidgets.QLabel(impl_rate_text)
+            impl_rate_display = QtWidgets.QLabel(impl_rate_text, metrics_group)
             impl_rate_display.setStyleSheet("padding: 5px;")
             impl_rate_display.setVisible(metric_visibility.get('implantation_rate', True))
             metrics_layout.addWidget(impl_rate_display)
@@ -3331,7 +3331,7 @@ class FlowTrackWidget:
             
             usable_per_gv_text = f"  {self.messages.get('flow_track.dialog.egg_donor.usable_per_gv_desc', 'Number of transferable/freezable embryos per GV oocyte retrieved')}\n"
             usable_per_gv_text += f"  {total_usable}/{total.get('total_gv_isolated', 0)} ({self._format_ratio(total.get('usable_per_gv'))})"
-            usable_per_gv_display = QtWidgets.QLabel(usable_per_gv_text)
+            usable_per_gv_display = QtWidgets.QLabel(usable_per_gv_text, metrics_group)
             usable_per_gv_display.setStyleSheet("padding: 5px;")
             usable_per_gv_display.setVisible(metric_visibility.get('usable_per_gv', True))
             metrics_layout.addWidget(usable_per_gv_display)
@@ -3350,7 +3350,7 @@ class FlowTrackWidget:
             
             fert_per_gv_text = f"  {self.messages.get('flow_track.dialog.egg_donor.fert_per_gv_desc', 'Number of successfully fertilized IVM-derived oocytes per GV oocyte retrieved')}\n"
             fert_per_gv_text += f"  {total.get('total_ivm_m2_fertilized', 0)}/{total.get('total_gv_isolated', 0)} ({self._format_ratio(total.get('fert_per_gv'))})"
-            fert_per_gv_display = QtWidgets.QLabel(fert_per_gv_text)
+            fert_per_gv_display = QtWidgets.QLabel(fert_per_gv_text, metrics_group)
             fert_per_gv_display.setStyleSheet("padding: 5px;")
             fert_per_gv_display.setVisible(metric_visibility.get('fert_per_gv', True))
             metrics_layout.addWidget(fert_per_gv_display)
@@ -3455,7 +3455,7 @@ class FlowTrackWidget:
             surg_frame_layout.addLayout(header_row)
             
             # Content widget (collapsible)
-            content_widget = QtWidgets.QWidget()
+            content_widget = QtWidgets.QWidget(surg_frame)
             content_widget.setVisible(surgery_visible)  # Apply saved state
             surg_layout = QtWidgets.QHBoxLayout()  # Main horizontal layout
             
@@ -3878,7 +3878,7 @@ class FlowTrackWidget:
             
             fert_ivm_text = f"  {self.messages.get('flow_track.dialog.sperm_donor.fert_rate_ivm_desc', 'Proportion of IVM-derived M2 oocytes that fertilize successfully with this sperm')}\n"
             fert_ivm_text += f"  {total.get('total_ivm_m2_fertilized', 0)}/{total.get('total_ivm_m2_inseminated', 0)} ({self._format_efficiency(total.get('fert_rate_ivm'))})"
-            fert_ivm_display = QtWidgets.QLabel(fert_ivm_text)
+            fert_ivm_display = QtWidgets.QLabel(fert_ivm_text, metrics_group)
             fert_ivm_display.setStyleSheet("padding: 5px;")
             fert_ivm_display.setVisible(sperm_metric_visibility.get('fert_rate_ivm', True))
             metrics_layout.addWidget(fert_ivm_display)
@@ -3898,7 +3898,7 @@ class FlowTrackWidget:
             total_usable_ivm = total.get('total_transferred_ivm', 0) + total.get('total_frozen_ivm', 0)
             usable_ivm_text = f"  {self.messages.get('flow_track.dialog.sperm_donor.usable_per_ivm_desc', 'Number of transferable or freezable embryos obtained per IVM-derived M2 oocyte inseminated')}\n"
             usable_ivm_text += f"  {total_usable_ivm}/{total.get('total_ivm_m2_inseminated', 0)} ({self._format_ratio(total.get('usable_per_ivm'))})"
-            usable_ivm_display = QtWidgets.QLabel(usable_ivm_text)
+            usable_ivm_display = QtWidgets.QLabel(usable_ivm_text, metrics_group)
             usable_ivm_display.setStyleSheet("padding: 5px;")
             usable_ivm_display.setVisible(sperm_metric_visibility.get('usable_per_ivm', True))
             metrics_layout.addWidget(usable_ivm_display)
@@ -3917,7 +3917,7 @@ class FlowTrackWidget:
             
             impl_rate_text = f"  {self.messages.get('flow_track.dialog.sperm_donor.implantation_rate_desc', 'Proportion of transferred IVM M2 embryos that implant successfully')}\n"
             impl_rate_text += f"  {total.get('total_implanted_ivm', 0)}/{total.get('total_transferred_ivm', 0)} ({self._format_efficiency(total.get('implantation_rate'))})"
-            impl_rate_display = QtWidgets.QLabel(impl_rate_text)
+            impl_rate_display = QtWidgets.QLabel(impl_rate_text, metrics_group)
             impl_rate_display.setStyleSheet("padding: 5px;")
             impl_rate_display.setVisible(sperm_metric_visibility.get('implantation_rate', True))
             metrics_layout.addWidget(impl_rate_display)
@@ -3936,7 +3936,7 @@ class FlowTrackWidget:
             
             fert_vivo_text = f"  {self.messages.get('flow_track.dialog.sperm_donor.fert_rate_in_vivo_desc', 'Proportion of in vivo-matured M2 oocytes that fertilize successfully')}\n"
             fert_vivo_text += f"  {total.get('total_in_vivo_m2_fertilized', 0)}/{total.get('total_in_vivo_m2_inseminated', 0)} ({self._format_efficiency(total.get('fert_rate_in_vivo'))})"
-            fert_vivo_display = QtWidgets.QLabel(fert_vivo_text)
+            fert_vivo_display = QtWidgets.QLabel(fert_vivo_text, metrics_group)
             fert_vivo_display.setStyleSheet("padding: 5px;")
             fert_vivo_display.setVisible(sperm_metric_visibility.get('fert_rate_in_vivo', True))
             metrics_layout.addWidget(fert_vivo_display)
@@ -4025,7 +4025,7 @@ class FlowTrackWidget:
                 sperm_frame_layout.addLayout(header_row)
                 
                 # Content widget (collapsible)
-                content_widget = QtWidgets.QWidget()
+                content_widget = QtWidgets.QWidget(sperm_frame)
                 content_widget.setVisible(donation_visible)
                 sperm_inner_layout = QtWidgets.QHBoxLayout()  # Main horizontal layout
                 
@@ -4426,7 +4426,7 @@ class FlowTrackWidget:
             total_text = f"  {self.messages.get('flow_track.dialog.surrogate.proportion_transferred', 'Proportion of transferred embryos which resulted in implantation')}\n"
             total_text += f"  {total_implanted}/{total_embryos} ({self._format_efficiency(total_implantation_pct)})"
             
-            total_display = QtWidgets.QLabel(total_text)
+            total_display = QtWidgets.QLabel(total_text, metrics_group)
             total_display.setStyleSheet("padding: 5px;")
             total_display.setVisible(surrogate_metric_visibility.get('total_implantation_rate', True))
             metrics_layout.addWidget(total_display)
@@ -4450,7 +4450,7 @@ class FlowTrackWidget:
             success_text = f"  {self.messages.get('flow_track.dialog.surrogate.proportion_transfers', 'Proportion of transfers which resulted in implantation')}\n"
             success_text += f"  {successful_transfers}/{total_transfers} ({self._format_efficiency(transfer_success_rate)})"
             
-            success_display = QtWidgets.QLabel(success_text)
+            success_display = QtWidgets.QLabel(success_text, metrics_group)
             success_display.setStyleSheet("padding: 5px;")
             success_display.setVisible(surrogate_metric_visibility.get('transfer_success_rate', True))
             metrics_layout.addWidget(success_display)
@@ -4534,7 +4534,7 @@ class FlowTrackWidget:
             trans_frame_layout.addLayout(header_row)
             
             # Content widget (collapsible)
-            content_widget = QtWidgets.QWidget()
+            content_widget = QtWidgets.QWidget(trans_frame)
             content_widget.setVisible(transfer_visible)
             trans_row = QtWidgets.QHBoxLayout()
             
@@ -4871,9 +4871,9 @@ class FlowTrackWidget:
         layout.addSpacing(10)
         
         # === FREEZE DATE (v3.0: required if cryopreserved=True, hidden otherwise) ===
-        freeze_date_label = QtWidgets.QLabel(self.messages.get("flow_track.edit_embryo.freeze_date", "Freeze Date (required for frozen embryos):"))
+        freeze_date_label = QtWidgets.QLabel(self.messages.get("flow_track.edit_embryo.freeze_date", "Freeze Date (required for frozen embryos):"), dialog)
         
-        freeze_date_edit = QtWidgets.QDateEdit()
+        freeze_date_edit = QtWidgets.QDateEdit(dialog)
         freeze_date_edit.setCalendarPopup(True)
         freeze_date_edit.setSpecialValueText(self.messages.get('flow_track.edit_embryo.not_frozen', '(Not frozen)'))
         

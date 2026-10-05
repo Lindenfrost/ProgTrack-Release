@@ -560,7 +560,7 @@ class ManageUsersDialog(QDialog):
         layout.addWidget(self.table)
 
         btn_row = QHBoxLayout()
-        add_btn = QPushButton(_msg(messages, "master_track.manage.add", "Create User"))
+        add_btn = QPushButton(_msg(messages, "master_track.manage.add", "Create User"), self)
         add_btn.clicked.connect(self._add_user)
         add_btn.setVisible(self._can_create_users)
         btn_row.addWidget(add_btn)
@@ -1250,10 +1250,12 @@ class EditJobsDialog(QDialog):
 
     def _load_job(self, job_name: str) -> None:
         self.delete_job_btn.setEnabled(bool(job_name) and job_name not in DEFAULT_JOB_BUNDLES)
-        for i in reversed(range(self._scroll_vbox.count())):
-            w = self._scroll_vbox.itemAt(i).widget()
-            if w:
-                w.setParent(None)  # type: ignore[arg-type]
+        while self._scroll_vbox.count():
+            item = self._scroll_vbox.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.hide()
+                w.deleteLater()
         self._perm_checks = {}
         job_perms = JOB_BUNDLES.get(job_name, set())
         self.timeout_spin.setValue(self.plugin.get_job_timeout(job_name))

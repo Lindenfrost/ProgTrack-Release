@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import uuid
 import zipfile
@@ -297,6 +298,7 @@ class PostgreSQLAdministrationService:
                 capture_output=True,
                 text=True,
                 check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
             )
             if completed.returncode:
                 raise BackendConfigurationError(
@@ -377,6 +379,7 @@ class PostgreSQLAdministrationService:
                 capture_output=True,
                 text=True,
                 check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
             )
             if completed.returncode:
                 raise BackendConfigurationError(

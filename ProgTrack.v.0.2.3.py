@@ -7700,7 +7700,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         dlg.setWindowModality(Qt.WindowModality.WindowModal)
         dlg.setWindowTitle(title)
         v = QVBoxLayout(dlg)
-        form = QFormLayout()
+        # Visibility rules run while callers are still building the form.
+        # Own its controls from the start so setVisible(True) cannot expose
+        # a temporary top-level window before the scroll area is attached.
+        body = QWidget(dlg)
+        form = QFormLayout(body)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         # apply standard width (hard minimum + resize using constants)
@@ -7724,8 +7728,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self, dlg: QDialog, outer: QVBoxLayout, form: QFormLayout
     ) -> QScrollArea:
         """Keep animal fields usable on small screens without shrinking controls."""
-        body = QWidget(dlg)
-        body.setLayout(form)
+        body = form.parentWidget()
+        if body is None:
+            body = QWidget(dlg)
+            body.setLayout(form)
         scroll = QScrollArea(dlg)
         scroll.setObjectName("animalDialogFormScroll")
         scroll.setWidgetResizable(True)
@@ -23167,7 +23173,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._add_scrollable_animal_form(dlg, v, form)
 
         # --- Tabbed editors for sperm and weight ---
-        tabs = QTabWidget()
+        tabs = QTabWidget(dlg)
         # Hide tabs in the create-new dialog; only show when editing
         tabs.setVisible(editing)
         # Sperm tab
@@ -23793,7 +23799,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._add_scrollable_animal_form(dlg, layout, form)
         
         # Tabs for weight and events
-        tabs = QTabWidget()
+        tabs = QTabWidget(dlg)
         # Hide tabs in the create-new dialog; only show when editing
         tabs.setVisible(editing)
         steroid_active = self._is_steroid_track_active()
@@ -24438,7 +24444,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._add_scrollable_animal_form(dlg, layout, form)
         
         # Tabs for weight and events (hidden while creating)
-        tabs = QTabWidget()
+        tabs = QTabWidget(dlg)
         tabs.setVisible(editing)
         steroid_active = self._is_steroid_track_active()
         
@@ -25126,7 +25132,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._add_scrollable_animal_form(dlg, layout, form)
 
         # ── Tabs: Weights + Events ─────────────────────────────────────────────
-        tabs = QTabWidget()
+        tabs = QTabWidget(dlg)
         tabs.setVisible(editing)
 
         # Weight tab
@@ -25702,7 +25708,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         custom_weight_tab = None
         weight_widgets = []
         if not creating and "weight" in enabled_blocks:
-            custom_tabs = QTabWidget()
+            custom_tabs = QTabWidget(dlg)
             custom_weight_tab = QWidget()
             weight_layout = QVBoxLayout(custom_weight_tab)
             weight_scroll, weight_widgets = self._build_editable_list(
@@ -25856,7 +25862,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
             custom_event_layout.addWidget(custom_event_scroll, 1)
             if custom_tabs is None:
-                custom_tabs = QTabWidget()
+                custom_tabs = QTabWidget(dlg)
             custom_tabs.setVisible(not creating)
             custom_tabs.addTab(
                 custom_event_tab,
@@ -26413,7 +26419,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._add_scrollable_animal_form(dlg, v, form)
 
         # Tabs (hidden while creating)
-        tabs = QTabWidget()
+        tabs = QTabWidget(dlg)
         tabs.setVisible(not creating)
         tabs.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
