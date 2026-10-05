@@ -19,6 +19,9 @@ import shutil
 import sys
 import tempfile
 import unicodedata
+import zipfile
+from functools import lru_cache
+from itertools import permutations
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -61,7 +64,8 @@ ELDARION_BIRTH_DATE = date(2026, 3, 1)
 # the current example workflows. Obsolete Anode/Crossbreeding/Zucht
 # assignments are cleared instead of leaving orphaned project names in the
 # database; deleting a project must not silently move animals to another one.
-SEED_PROJECTS = frozenset({"Backcrossing", "OTOF-", "Oakshield", "Ringbearer"})
+SEED_PROJECTS = frozenset({"Backcrossing", "OTOF-", "Oakshield", "Ringbearer", "Shire"})
+SHIRE_MOUSE_LIMIT = 500
 
 OTOF_EXPERIMENTAL_ANIMAL_NAMES = frozenset({
     "Thranduil", "Ekaterina", "Olga", "Svetlana", "Legolas",
@@ -864,6 +868,187 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
             "bilbo": next(key for key in core["animals"] if key.startswith("Bilbo | Mus musculus |"))}
 
 
+def add_shire_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str, Any]:
+    """Author a bounded five-generation pedigree, retaining existing identities.
+
+    Each planned pair has one or two litters of 10--12 young. Selection is
+    TOTAL per pair, not per litter: two in generations 1--3, one in generation
+    4, and only Sam in generation 5 (the preserved Sam/Rosie/Elanor outcross).
+    Existing biological dates and Ringbearer procedures remain unchanged.
+    Litter/selection provenance is seed metadata, never a Heritage Core shadow
+    or an invented embryo-transfer workflow.
+    """
+    animals = core["animals"]
+    existing = {
+        record["name"]: ipid for ipid, record in animals.items()
+        if record.get("species") == "Mus musculus"
+    }
+    generations: dict[str, int] = {}
+    litters: list[dict[str, Any]] = []
+    pairings: list[dict[str, Any]] = []
+    hobbit_males = ("Fosco", "Posco", "Dudo", "Tobold", "Doderic", "Seredic",
+                    "Isembard", "Adalgrim", "Hobson", "Tolman", "Holman", "Falco")
+    portuguese_females = ("Mariana", "Beatriz", "Ines", "Leonor", "Catarina",
+                         "Teresa", "Matilde", "Joana", "Carolina", "Madalena", "Clara", "Luisa")
+    surnames = ("Baggins", "Took", "Brandybuck", "Gamgee", "Bolger", "Boffin",
+                "Chubb", "Goodbody", "Grubb", "Hornblower", "Bracegirdle", "Burrows")
+    serial = 0
+
+    def new_child(sex: str, born: date, father: str, mother: str) -> str:
+        nonlocal serial
+        serial += 1
+        names = hobbit_males if sex == "Male" else portuguese_females
+        name = f"{names[(serial - 1) % len(names)]} {surnames[(serial - 1) // len(names) % len(surnames)]} {serial:03d}"
+        return add_mouse_animal(
+            core, key_map, name, born.strftime("%d.%m.%Y"), sex,
+            "breeding_animal", parent_m=father, parent_f=mother, project="Shire",
+        )
+
+    @lru_cache(maxsize=None)
+    def kinship(left: str, right: str) -> float:
+        """Pedigree coancestry; unrelated external founders have coefficient 0."""
+        if left == right:
+            record = animals[left]
+            father, mother = record.get("samenspender"), record.get("eizellspenderin")
+            return (1.0 + (kinship(father, mother) if father and mother else 0.0)) / 2.0
+        if (generations.get(left, 0), left) < (generations.get(right, 0), right):
+            return kinship(right, left)
+        record = animals[left]
+        father, mother = record.get("samenspender"), record.get("eizellspenderin")
+        return (kinship(father, right) + kinship(mother, right)) / 2.0 if father and mother else 0.0
+
+    def best_assignment(costs: list[list[float]]) -> tuple[int, ...]:
+        # At most eight pairs: exhaustively minimize worst coancestry, then
+        # total coancestry; stable index order breaks ties deterministically.
+        return min(permutations(range(len(costs))), key=lambda perm: (
+            max(costs[index][mate] for index, mate in enumerate(perm)),
+            sum(costs[index][mate] for index, mate in enumerate(perm)), perm,
+        ))
+
+    def select_pairs(males: list[str], females: list[str]) -> list[tuple[str, str]]:
+        costs = [[kinship(male, female) for female in females] for male in males]
+        assignment = best_assignment(costs)
+        return [(male, females[assignment[index]]) for index, male in enumerate(males)]
+
+    founders = [(existing["Bungo"], existing["Belladonna"])]
+    for index, (male, female) in enumerate((
+        ("Gerontius", "Adamanta"), ("Balbo", "Berylla"), ("Mungo", "Laura"),
+        ("Hildigrim", "Rosa"), ("Fortinbras", "Lalia"),
+        ("Gorbadoc", "Mirabella"), ("Bandobras", "Mariana"),
+    )):
+        birthday = date(2019, 1, 15) + timedelta(days=index * 2)
+        founders.append((
+            add_mouse_animal(core, key_map, male, birthday.strftime("%d.%m.%Y"), "Male", "breeding_animal", project="Shire"),
+            add_mouse_animal(core, key_map, female, (birthday + timedelta(days=1)).strftime("%d.%m.%Y"), "Female", "breeding_animal", project="Shire"),
+        ))
+    for pair in founders:
+        generations.update({ipid: 0 for ipid in pair})
+
+    def add_litter(generation: int, pair_index: int, litter_index: int,
+                   father: str, mother: str, born: date,
+                   named_child: str | None = None) -> list[str]:
+        size = 10 + (generation + pair_index + litter_index) % 3
+        children = [named_child] if named_child else []
+        if named_child:
+            record = animals[named_child]
+            record["samenspender"], record["eizellspenderin"] = father, mother
+            if parse_record_date(record["birth_date"]) != born:
+                raise ValueError("Shire must not change an existing animal's identity")
+        while len(children) < size:
+            sex = "Male" if len(children) % 2 == 0 else "Female"
+            children.append(new_child(sex, born, father, mother))
+        generations.update({ipid: generation for ipid in children})
+        litters.append({
+            "litter_id": f"SHIRE-G{generation}-P{pair_index + 1:02d}-L{litter_index + 1}",
+            "generation": generation, "father": father, "mother": mother,
+            "birth_date": born.isoformat(), "offspring": children,
+        })
+        return children
+
+    current_pairs = founders
+    canonical_pairs = (("Drogo", "Primula"), ("Hamfast", "Bell"),
+                       ("Saradoc", "Esmeralda"), ("Paladin", "Eglantine"))
+    for generation in range(1, 6):
+        selected_males: list[str] = []
+        selected_females: list[str] = []
+        named_selections: dict[int, str] = {}
+        if generation == 4:
+            # Select one child from each of the eight families. Determine
+            # prospective mates before naming them so the established named
+            # parent couples also receive the least-related available match.
+            males, females = current_pairs[::2], current_pairs[1::2]
+            costs = [[sum(kinship(a, b) for a in male for b in female) / 4.0
+                      for female in females] for male in males]
+            assignment = best_assignment(costs)
+            for index, (male_name, female_name) in enumerate(canonical_pairs):
+                named_selections[index * 2] = existing[male_name]
+                named_selections[assignment[index] * 2 + 1] = existing[female_name]
+        for pair_index, (father, mother) in enumerate(current_pairs):
+            named = named_selections.get(pair_index)
+            if generation == 5:
+                named = existing[("Frodo", "Sam", "Merry", "Pippin")[pair_index]]
+            born = (
+                parse_record_date(animals[named]["birth_date"]) if named
+                else {1: date(2019, 9, 1), 2: date(2020, 2, 1), 3: date(2020, 8, 1)}[generation]
+            )
+            children = add_litter(generation, pair_index, 0, father, mother, born, named)
+            if generation <= 3:
+                selected = [next(ipid for ipid in children if animals[ipid]["sex"] == sex)
+                            for sex in ("Male", "Female")]
+            elif generation == 4:
+                selected = [named]
+            else:
+                selected = [named] if animals[named]["name"] == "Sam" else []
+            if generation == 1 and pair_index == 0:
+                add_litter(1, 0, 1, father, mother, date(2021, 1, 10), existing["Bilbo"])
+            elif generation == 5 and pair_index < 2:
+                add_litter(5, pair_index, 1, father, mother, born + timedelta(days=35))
+            pairings.append({
+                "offspring_generation": generation, "father": father, "mother": mother,
+                "selected_for_breeding": selected, "coancestry": kinship(father, mother),
+            })
+            animals[father]["verpaart_mit"] = mother
+            animals[mother]["verpaart_mit"] = father
+            for ipid in selected:
+                (selected_males if animals[ipid]["sex"] == "Male" else selected_females).append(ipid)
+        if generation < 4:
+            current_pairs = select_pairs(selected_males, selected_females)
+        elif generation == 4:
+            current_pairs = [(existing[male], existing[female]) for male, female in canonical_pairs]
+    # Keep Sam's daughter, with a complete 10-animal litter and an unrelated
+    # existing Rosie as the external spouse. This is explicitly generation 6,
+    # not a claim that Sam is a leaf or a sixth planned selection round.
+    sam, rosie = existing["Sam"], existing["Rosie"]
+    add_litter(6, 0, 0, sam, rosie, date(2024, 6, 10), existing["Elanor"])
+    pairings.append({"offspring_generation": 6, "father": sam, "mother": rosie,
+                     "selected_for_breeding": [], "coancestry": kinship(sam, rosie)})
+    all_mice = {ipid: record for section in ("animals", "archived_animals")
+                for ipid, record in core.get(section, {}).items()
+                if record.get("species") == "Mus musculus"}
+    if len(all_mice) > SHIRE_MOUSE_LIMIT:
+        raise ValueError(f"Shire exceeds the complete seed mouse cap: {len(all_mice)}")
+    for ipid, record in all_mice.items():
+        if record.get("project") != "Ringbearer":
+            record["project"] = "Shire"
+            record["in_experiment"] = False
+        else:
+            record["project_history"] = [{
+                "project": "Shire", "entry_date": record["birth_date"],
+                "leave_date": "22.07.2026", "status": "former",
+                "in_experiment": False,
+            }]
+    return {
+        "schema_version": 1, "fictional": True, "mouse_limit": SHIRE_MOUSE_LIMIT,
+        "founder_pairs": [list(pair) for pair in founders],
+        "generation_by_ipid": generations, "litters": litters, "pairings": pairings,
+        "terminal_ringbearers": [existing[name] for name in ("Frodo", "Sam", "Merry", "Pippin")],
+        "exception": "Sam remains Elanor's father; his unrelated Rosie outcross adds generation 6.",
+        "external_spouses": [rosie],
+        "naming": "Hobbit names and ASCII Portuguese names for invented spouses; numeric suffixes ensure uniqueness.",
+        "pairing_policy": "Minimize worst and then total pedigree coancestry among available selected breeders; no claim of zero inbreeding in a closed colony.",
+    }
+
+
 def normalize_mouse_public_ids(core: dict[str, Any]) -> None:
     """Apply the configured public-ID shape to every mouse in the seed.
 
@@ -907,6 +1092,103 @@ def normalize_mouse_public_ids(core: dict[str, Any]) -> None:
             else "U"
         )
         record["id"] = f"mm_{year}_{counters[year]:04d}_{sex_token}_{name_token}"
+
+
+def validate_shire_colony(mice: dict[str, Any], shire: dict[str, Any]) -> list[str]:
+    """Reject incomplete litter/selection provenance before package export."""
+    errors: list[str] = []
+    if len(mice) > SHIRE_MOUSE_LIMIT:
+        errors.append("Shire: complete mouse seed exceeds 500")
+    founder_pairs = shire.get("founder_pairs", [])
+    founders = [ipid for pair in founder_pairs for ipid in pair]
+    if len(founder_pairs) != 8 or len(founders) != 16 or len(set(founders)) != 16:
+        errors.append("Shire: expected eight distinct founder pairs")
+    generations = shire.get("generation_by_ipid", {})
+    seen: set[str] = set()
+    by_pair: dict[tuple[str, str], list[str]] = {}
+    litter_ids: set[str] = set()
+    for litter in shire.get("litters", []):
+        father, mother = litter["father"], litter["mother"]
+        if litter["litter_id"] in litter_ids:
+            errors.append("Shire: duplicate litter ID")
+        litter_ids.add(litter["litter_id"])
+        if mice.get(father, {}).get("sex") != "Male" or mice.get(mother, {}).get("sex") != "Female":
+            errors.append("Shire: unresolved or incompatible litter parents")
+        children = litter.get("offspring", [])
+        if not 10 <= len(children) <= 12 or len(set(children)) != len(children):
+            errors.append("Shire: litter must contain 10-12 distinct offspring")
+        pair = (father, mother)
+        by_pair.setdefault(pair, []).append(litter["litter_id"])
+        for ipid in children:
+            if ipid in seen:
+                errors.append("Shire: offspring appears in multiple litters")
+            seen.add(ipid)
+            record = mice.get(ipid, {})
+            if (record.get("samenspender"), record.get("eizellspenderin")) != pair:
+                errors.append(f"Shire: litter parentage mismatch: {ipid}")
+            born = parse_record_date(record.get("birth_date"))
+            if born != parse_record_date(litter.get("birth_date")):
+                errors.append(f"Shire: litter birth date mismatch: {ipid}")
+            if generations.get(ipid) != litter["generation"]:
+                errors.append(f"Shire: generation mismatch: {ipid}")
+            for parent in pair:
+                parent_birth = parse_record_date(mice.get(parent, {}).get("birth_date"))
+                if not parent_birth or not born or parent_birth >= born:
+                    errors.append(f"Shire: parent does not predate offspring: {ipid}")
+    if any(not 1 <= len(litters) <= 2 for litters in by_pair.values()):
+        errors.append("Shire: pair must have 1-2 litters")
+    if set(generations) != set(founders) | seen:
+        errors.append("Shire: generation catalogue does not match founders and offspring")
+    paired: set[tuple[str, str]] = set()
+    for pairing in shire.get("pairings", []):
+        pair = pairing["father"], pairing["mother"]
+        if pair in paired or pair not in by_pair:
+            errors.append("Shire: duplicate or unpopulated breeding pair")
+        paired.add(pair)
+        selected = pairing.get("selected_for_breeding", [])
+        if len(selected) > 4 or len(set(selected)) != len(selected):
+            errors.append("Shire: more than four distinct selected breeders per pair")
+        for ipid in selected:
+            record = mice.get(ipid, {})
+            if (record.get("samenspender"), record.get("eizellspenderin")) != pair:
+                errors.append("Shire: selected breeder is not this pair's offspring")
+    if paired != set(by_pair):
+        errors.append("Shire: missing breeding pair provenance")
+    for ipid in shire.get("terminal_ringbearers", []):
+        if generations.get(ipid) != 5 or mice.get(ipid, {}).get("project") != "Ringbearer":
+            errors.append("Shire: Ringbearer is not a fifth-generation study animal")
+    return errors
+
+
+def assign_seed_event_ids(core: dict[str, Any], reference_package: Path | None = OUTPUT) -> None:
+    """Preserve authored procedure IDs; never let seed export create random IDs.
+
+    The tracked canonical package is the identity reference, not the current
+    runtime database. A missing package is supported for a first clean build;
+    genuinely new events receive a content-derived ID. Recreated scientific
+    scenarios retain their prior IDs when their animal/event content matches.
+    """
+    def signature(ipid: str, event: dict[str, Any]) -> str:
+        content = {key: value for key, value in event.items()
+                   if key not in {"event_id", "recorded_role"}}
+        return json.dumps([ipid, content], sort_keys=True, ensure_ascii=False)
+
+    authored: dict[str, str] = {}
+    if reference_package is not None and reference_package.exists():
+        with zipfile.ZipFile(reference_package) as package:
+            for line in package.read("records/animals.jsonl").decode("utf-8").splitlines():
+                row = json.loads(line)
+                for event in row["payload"].get("events", []):
+                    if event.get("event_id"):
+                        authored[signature(row["ipid"], event)] = event["event_id"]
+    for section in ("animals", "archived_animals"):
+        for ipid, record in core.get(section, {}).items():
+            for event in record.get("events", []):
+                if not event.get("event_id"):
+                    key = signature(ipid, event)
+                    event["event_id"] = authored.get(key) or hashlib.sha256(
+                        ("progtrack-fictional-seed-event:" + key).encode("utf-8")
+                    ).hexdigest()[:32]
 
 
 def monitoring(start: date, prefix: str, *, donor: bool) -> tuple[list, list, list]:
@@ -1337,6 +1619,35 @@ def complete_housing(
         animal = active_animals.get(ipid)
         if animal and str(animal.get("species") or "") == "Mus musculus":
             occupants.pop(ipid, None)
+    # The enlarged Shire colony must not be put into one mixed-sex cage.
+    # Preserve the existing experimental cages/Bilbo witness; seed ordinary
+    # breeding pairs separately and remaining animals in small same-sex groups.
+    mouse_cage_assignments: dict[str, str] = {}
+    colony = {
+        ipid: animal for ipid, animal in sorted(active_animals.items())
+        if animal.get("species") == "Mus musculus"
+        and animal.get("name") not in {"Bilbo", "Frodo", "Sam", "Merry", "Pippin"}
+    }
+
+    def colony_cage(members: list[str]) -> None:
+        index = len({*mouse_cage_assignments.values()}) + 1
+        cage_id = f"cage_mus_shire_{index:03d}"
+        cages[cage_id] = {
+            "display_name": f"S{index:03d}", "id": cage_id, "order": index + 3,
+            "parent_room_id": "room_mus_colony", "virtual": False,
+        }
+        mouse_cage_assignments.update({ipid: cage_id for ipid in members})
+
+    for ipid, animal in colony.items():
+        partner = str(animal.get("verpaart_mit") or animal.get("partner_von") or "")
+        if ipid not in mouse_cage_assignments and partner in colony and partner not in mouse_cage_assignments:
+            if animal.get("sex") != colony[partner].get("sex"):
+                colony_cage([ipid, partner])
+    for sex in ("Male", "Female"):
+        unpaired = [ipid for ipid, animal in colony.items()
+                    if animal.get("sex") == sex and ipid not in mouse_cage_assignments]
+        for index in range(0, len(unpaired), 5):
+            colony_cage(unpaired[index:index + 5])
     def valid_cage(cage_id: str) -> bool:
         cage = cages.get(cage_id, {})
         room = structures.get("rooms", {}).get(cage.get("parent_room_id"), {})
@@ -1360,7 +1671,7 @@ def complete_housing(
             elif animal.get("in_experiment"):
                 cage_id = "cage_mus_experimental_frodo_sam"
             else:
-                cage_id = "cage_mus_breeding"
+                cage_id = mouse_cage_assignments.get(ipid, "cage_mus_breeding")
         else:
             cage_id = cage_choices.get(animal["species"], "cage_unassigned")
         occupants[ipid] = {
@@ -1533,6 +1844,19 @@ PROJECT_DATA_PROFILES: dict[str, dict[str, Any]] = {
         "approved_count": 4,
         "roles": {"experimental_animal": 4},
     },
+    "Shire": {
+        "title": "Shire mouse breeding colony",
+        "species": "Mus musculus",
+        "comment": "Fictional bounded pedigree from eight founder pairs through five offspring generations. Ringbearer animals originate here; Sam remains Elanor's father in a sixth-generation outcross.",
+        "focus": "Exercise multi-generation natural breeding, 1-2 litters of 10-12 young per pair, limited breeder selection and least-related available mates, below 500 mice in the complete seed.",
+        "unit_id": SEED_PROJECT_UNIT_ID,
+        "protocol": "DPZ-SHIRE-2019-01",
+        "internal": "SHIRE-2019",
+        "authorization": "IACUC-SHIRE-2019-01",
+        "start_date": "01.01.2019",
+        "approved_count": SHIRE_MOUSE_LIMIT,
+        "roles": {"breeding_animal": SHIRE_MOUSE_LIMIT},
+    },
 }
 
 
@@ -1669,7 +1993,7 @@ def _normalise_seed_partner_relationships(core: dict[str, Any]) -> None:
 
 
 def _normalise_project_payload(payload: Any, *, history: bool) -> dict[str, Any]:
-    """Filter a legacy project payload to the supported four projects."""
+    """Filter a legacy project payload to the supported seed projects."""
     if not isinstance(payload, dict):
         payload = {"version": 1, "projects": {}}
     result = {key: copy.deepcopy(value) for key, value in payload.items() if key != "projects"}
@@ -1918,6 +2242,26 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
         "archived": False,
     }
     _enrich_project_catalog(project_catalog, project_history, core)
+    # Shire provenance survives transfer into Ringbearer, without assigning
+    # either animal to two current projects or erasing the study's procedures.
+    shire_history = project_history["projects"]["Shire"]["animals"]
+    for entry in shire_history:
+        birthday = parse_record_date(core["animals"].get(entry["ipid"], {}).get("birth_date"))
+        if birthday:
+            entry["date_entered"] = max(date(2019, 1, 1), birthday).strftime("%d.%m.%Y")
+    for ipid in scenario["mouse"]["experimental"]:
+        animal = core["animals"][ipid]
+        former = {
+            "project": "Shire", "ipid": ipid, "name": animal["name"],
+            "date_entered": animal["birth_date"], "date_left": "22.07.2026",
+            "status": "former", "last_severity": None,
+            "had_in_experiment": False, "previous_in_experiment": False,
+            "previous_project_snapshot": [], "previous_experimental_snapshot": [],
+        }
+        shire_history.append(former)
+        next(entry for entry in project_history["projects"]["Ringbearer"]["animals"]
+             if entry["ipid"] == ipid)["previous_project_snapshot"] = [copy.deepcopy(former)]
+    records[("seed", "shire-colony")] = copy.deepcopy(scenario["shire"])
     records[("housing", "cage")] = complete_housing(
         records[("housing", "cage")], core["animals"]
     )
@@ -1950,6 +2294,7 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
             "otof-low-development", "surrogate-nonpregnant", "surrogate-abortions",
             "mild-resolved-medical", "all-species-weights", "four-level-housing",
             "mus-musculus-ringbearer-colony", "mouse-house-group-housing",
+            "shire-five-generation-breeding-colony",
         ],
     }
     # Archived authoring snapshots contain a handful of obsolete medical and
@@ -2481,6 +2826,7 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
         ipid: record for ipid, record in core["animals"].items()
         if str(record.get("species") or "") == "Mus musculus"
     }
+    errors.extend(validate_shire_colony(mice, records.get(("seed", "shire-colony"), {})))
     required_mouse_names = {"Frodo", "Sam", "Merry", "Pippin", "Fredegar"}
     if not required_mouse_names.issubset({r.get("name") for r in mice.values()}):
         errors.append("Mus musculus youngest-generation names are incomplete")
@@ -2505,8 +2851,11 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
             if record.get("name") in {"Frodo", "Sam"}
             else "cage_mus_experimental_merry_pippin"
             if record.get("name") in {"Merry", "Pippin"}
-            else "cage_mus_breeding"
+            else str(occupant.get("cage_id") or "")
         )
+        if record.get("name") not in {"Bilbo", "Frodo", "Sam", "Merry", "Pippin"}:
+            if not expected_cage.startswith("cage_mus_shire_"):
+                errors.append(f"Shire mouse lacks a colony cage: {ipid}")
         if occupant.get("cage_id") != expected_cage:
             errors.append(
                 f"mouse housing mismatch: {record.get('name')} -> "
@@ -2524,6 +2873,8 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any],
             "weighted_animals": sum(bool(v.get("gewicht")) for v in all_animals.values()),
             "species": len({v["species"] for v in all_animals.values()}),
             "canonical_users": len(actual_users),
+            "mice": len(mice),
+            "shire_litters": len(scenario.get("shire", {}).get("litters", [])),
             "scientifically_current_weights": sum(
                 bool(researcher_record_dates(value))
                 and max(
@@ -2557,9 +2908,11 @@ def main() -> int:
     # Rewrite inherited pedigree references before adding new canonical animals.
     core = prune_removed_animal_references(rewrite_references(core, key_map))
     mouse_scenario = add_mouse_colony(core, key_map)
+    shire_scenario = add_shire_colony(core, key_map)
     normalize_mouse_public_ids(core)
     scenario = add_reproduction_scenarios(core, key_map)
     scenario["mouse"] = mouse_scenario
+    scenario["shire"] = shire_scenario
     normalize_mature_offspring_roles(core)
     _normalise_seed_project_assignments(core)
     _apply_otof_example_experiment_status(core)
@@ -2581,6 +2934,10 @@ def main() -> int:
                 replace_nonpositive=True,
             )
     complete_scientific_histories(core)
+    event_reference = os.environ.get("PROGTRACK_SEED_EVENT_REFERENCE")
+    if event_reference and not Path(event_reference).is_file():
+        raise SystemExit("Explicit seed event reference does not exist")
+    assign_seed_event_ids(core, Path(event_reference) if event_reference else OUTPUT)
     records = domain_records(core, key_map, scenario)
     result = validate(core, records, scenario)
     if not result["valid"]:
@@ -2624,13 +2981,16 @@ source for Standalone SQLite and Shared PostgreSQL development/demo systems.
 | Scenario | Coverage |
 |---|---|
 | Complete immutable identity | Every animal; four-block IPID including origin |
-| Projects | Only Backcrossing, OTOF-, Oakshield and Ringbearer are seeded; removed legacy project assignments remain unassigned |
+| Projects | Backcrossing, OTOF-, Oakshield, Ringbearer and Shire; both mouse projects use Mus musculus and canonical organizational Units |
 | Weight history | Every active and archived animal through its latest researcher-entered scientific/clinical record |
 | Species | Callitrix, Macaca, Papio, Mus |
 | Mus musculus | Canonical Hobbit-derived genealogy (Drogo + Primula -> Frodo), Italian partner names, realistic mouse weights and connected ancestry |
 | Ringbearer | Frodo/Sam and Merry/Pippin are adult experimental mice in one project and two pair cages; each has one surgery event and no birth event |
+| Shire | Eight founder pairs; five planned offspring generations; 1-2 litters per pair, 10-12 young per litter, at most two selected per pair across all litters; complete mouse seed below 500. Deterministic pedigree-coancestry minimization reduces inbreeding; a closed colony is not claimed to be inbreeding-free. Existing parents and identities are retained. |
+| Shire exception and provenance | Sam remains Elanor's father; a complete Sam/Rosie litter adds generation 6. Ringbearers retain their current project and procedures, with former Shire membership in Core/project history. Machine-readable litter, generation, selection and pairing evidence: seed/shire-colony domain record. Existing unrelated legacy mouse families remain background examples, not new selection rounds. |
+| Shire names and users | Hobbit names; ASCII Portuguese names for newly invented spouses; deterministic numeric suffixes distinguish repeated family names. Researcher PI/planning, Manager applicant, Vet deputy/clinical, Veti welfare (Vet + AWO), Keeper husbandry; no extra privilege overrides or duplicate users. |
 | Heritage shipped seed | No Heritage-owned dummy animals are packaged; runtime dummy support is exercised only through explicit fixtures |
-| Mouse House | Dedicated building/unit/room; two Ringbearer pair cages, breeding group, and Bilbo's deliberate single cage |
+| Mouse House | Dedicated building/unit/room; two Ringbearer pair cages, separate ordinary breeding-pair cages and same-sex groups of at most five, plus Bilbo's deliberate single cage |
 | Denethor family | Elros descendant; Boromir and Faramir with distinct donors/surrogates |
 | OTOF- success | Two complete transfer, pregnancy-verification, and live-birth paths |
 | OTOF- failure | Poor yield, low embryo development, repeated negative pregnancy verification, two verified pregnancies followed by abortions |
