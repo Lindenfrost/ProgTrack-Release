@@ -321,6 +321,7 @@
   </table>
 
   <h3>4.4 Daten bearbeiten</h3>
+  <p>Unter <strong>Bearbeiten → Gewichte</strong> fügt <strong>Gewicht hinzufügen</strong> eine Historienzeile hinzu. Tragen Sie Datum und Gewicht in Gramm ein und speichern Sie. Die Aktion ist in integrierten und konfigurierten Rolleneditoren gleich; ohne Messdaten-Bearbeitungsrecht können Sie die Historie ansehen, aber keine Zeile hinzufügen. Anfangsgewichtsfelder beim Anlegen eines Tiers sind davon getrennt.</p>
   <p>Wählen Sie ein Tier aus und verwenden Sie die Bearbeiten-Aktion. In der Kategorie Alle ändert Rolle bearbeiten nur die Rolle/Kategorie; die separate Bearbeiten-Aktion öffnet den vollständigen rollenspezifischen Editor.</p>
   <p><strong><img class="ui-icon" src="../icons/ui/action_edit.svg" alt="Bearbeiten" /> Bearbeiten</strong> · <strong><img class="ui-icon" src="../icons/ui/action_edit_role.svg" alt="Rolle bearbeiten" /> Rolle bearbeiten</strong></p>
   <table class="basic"><tr><th>Editor-Tab</th><th>Nutzung</th></tr>
@@ -419,6 +420,8 @@
   </p>
 
   <h3>6.2 Linienstile, Marker und Farben</h3>
+  <p>Beim Überfahren oder Anklicken eines sichtbaren benutzerdefinierten Ereignis<strong>symbols</strong> erscheinen Name, Datum und laufende Anzahl innerhalb seiner erfassten Rolle und Projektzugehörigkeitsperiode. Zählende Ereignisse zeigen x; limitierte Ereignisse zeigen x/y nur bei einem tatsächlich anwendbaren Maximum. Überlagerte Symbole listen die zusammenfallenden Ereignisse gemeinsam. Historische Ereignisse übernehmen nicht das aktuelle Kontingent. Vertikale Ereignis<strong>linien erzeugen keine Tooltips</strong>; verwenden Sie deren Beschriftungen. Messpunkt-Tooltips bleiben unverändert.</p>
+  <p><strong>Anzeige → Ereignisse</strong> steuert Ereignissymbole, Linien und Beschriftungen in konfigurierten Rollenkategorien und Alle unabhängig von Steroid Track. Bei einer Rolle mit konfigurierten Ereignissen, aber ohne datierte Historie ist das Kontrollkästchen sichtbar und deaktiviert; ohne Ereignisfähigkeit oder gespeicherte datierte Ereignisse fehlt es. Historische Ereignisse bleiben auch nach Entfernen eines Rollenblocks steuerbar. Umschalten ändert weder Gewichte noch gespeicherte Datensätze.</p>
   <p>
     Verwenden Sie die Gruppen <strong>Anzeige</strong> / <strong>
     Liniendarstellung</strong>, um zu steuern, wie Progesteron-, Gewichts- und
@@ -525,7 +528,7 @@
   <h2 id="plugins">9. Plugins und Module</h2>
   <p>Plugin-Verfügbarkeit wird beim Start geprüft. Anklickbare Einträge im Menü Werkzeuge zeigen/verbergen Haupttabs; Fensterwerkzeuge öffnen einen eigenen Dialog. Kann ein Plugin nicht importiert oder initialisiert werden, bleibt es nicht verfügbar und der Grund steht im technischen Protokoll. Bei einem gepackten Release den vollständigen Ordner <code>_internal</code> wiederherstellen, statt einzelne Pakete daneben zu installieren.</p>
     <table class="basic"><tr><th>Menüeintrag</th><th>Art</th><th>Aktuelles Verhalten und Nutzung</th></tr>
-  <tr><td><strong>Steroid Track</strong></td><td>Feature-Gate</td><td>Steroid Track ist ein echtes Plugin ohne eigenes Fenster. Es aktiviert Phasenfilter für weibliche Tiere, Blut-Progesteronimport, Urin-PdG-Import, Spermaimport, Hormon-/Ereignissteuerungen, Sperma-Plotsteuerungen und den PdG-Konverter.</td></tr>
+  <tr><td><strong>Steroid Track</strong></td><td>Feature-Gate</td><td>Steroid Track ist ein echtes Plugin ohne eigenes Fenster. Es aktiviert Phasenfilter für weibliche Tiere, Blut-Progesteronimport, Urin-PdG-Import, Spermaimport, Hormonsteuerungen, Sperma-Plotsteuerungen und den PdG-Konverter. Die Ereignissichtbarkeit ist davon unabhängig.</td></tr>
   <tr><td><strong>PdG→Progesteron Converter</strong></td><td>Dialog</td><td>Erstellt tierbezogene PdG-zu-Progesteron-Modelle aus gepaarten PdG- und Blut-Progesteronmessungen am selben Tag; gespeicherte Modelle aktivieren Vereinheitl. Prog. und kombinierte Diagramme.</td></tr>
   <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Bietet Anmeldung, Gastmodus, Benutzer, Jobs, Berechtigungen, Sitzungen und Audit-Protokolle. Kontorollen sind lord, master, user und guest; Job-Bündel verfeinern die praktischen Rechte. AWO ist ein an den Job Vet gebundener Job für Tierschutz- und IACUC-Aufgaben.</td></tr>
   <tr><td><strong>Projekt Track</strong></td><td>Seitenleiste + optionaler Tab</td><td>Bietet zuordnungsabhängige Projekt-/Speziesfilter, Projekthistorie, IACUC-/AWO-Zuordnung, Versuchsstatus, Dokumente/SOPs und Projektverwaltung. Jedes Projekt hat genau den lokalisierten Status Entwurf, Aktiv oder Geschlossen; die Liste zeigt Entwurf kursiv, Aktiv fett und Geschlossen normal. Schließen archiviert es nicht und entfernt keine Zuordnungen; Statuswechsel sind berechtigungsgeprüft und protokolliert.</td></tr>

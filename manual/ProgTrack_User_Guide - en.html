@@ -317,6 +317,7 @@
   </table>
 
   <h3>4.4 Editing data</h3>
+  <p>In <strong>Edit → Weights</strong>, <strong>Add Weight</strong> adds one history row. Enter its date and weight in grams, then Save. This action is the same in built-in and configured role editors; users without measurement-edit permission can inspect the history but cannot add a row. Initial-weight fields when creating an animal are separate.</p>
   <p>Select an animal and use the edit action. In the All category, Edit Role changes only the role/category; the separate Edit action opens the full role-specific editor.</p>
   <p><strong><img class="ui-icon" src="../icons/ui/action_edit.svg" alt="Edit" /> Edit</strong> · <strong><img class="ui-icon" src="../icons/ui/action_edit_role.svg" alt="Edit role" /> Edit Role</strong></p>
   <table class="basic"><tr><th>Editor tab</th><th>Use</th></tr>
@@ -408,6 +409,8 @@
   </p>
 
   <h3>6.2 Line styles, markers and colors</h3>
+  <p>Hover or click a visible custom event <strong>symbol</strong> to see its name, date and cumulative count within its recorded role and membership period. Counting shows x; Limiting shows x/y only for a real applicable maximum. Overlapping symbols list the coincident events together. Historical events do not borrow the current quota. Vertical event <strong>lines do not trigger tooltips</strong>; use their labels. Measurement-point tooltips remain unchanged.</p>
+  <p><strong>Display → Events</strong> controls event symbols, lines and labels in configured role categories and All, independently of Steroid Track. A role with configured events but no dated history has a visible, disabled checkbox; a role without event capability or saved dated events has none. Historical events remain controllable after a role block is removed. Toggling Events does not change weights or saved records.</p>
   <p>
     Use the <strong>Display</strong> / <strong>Line Style</strong> groups to
     adjust how progesterone, weight and sperm series are drawn.
@@ -505,7 +508,7 @@
   <h2 id="plugins">9. Plugins and modules</h2>
   <p>Plugin availability is checked during startup. Checkable entries in the Tools menu show or hide main tabs; window-style tools open a separate dialog or window. A plugin that fails to import or initialize remains unavailable and writes the reason to the technical log. Restore the complete bundled <code>_internal</code> runtime rather than installing ad-hoc packages beside a frozen release.</p>
     <table class="basic"><tr><th>Menu item</th><th>Kind</th><th>Current behavior and use</th></tr>
-  <tr><td><strong>Steroid Track</strong></td><td>Feature gate</td><td>Steroid Track is a real plugin without its own window. It enables female phase filters, blood progesterone import, urine PdG import, sperm import, hormone/event plot controls, sperm plot controls, and the PdG converter entry.</td></tr>
+  <tr><td><strong>Steroid Track</strong></td><td>Feature gate</td><td>Steroid Track is a real plugin without its own window. It enables female phase filters, blood progesterone import, urine PdG import, sperm import, hormone plot controls, sperm plot controls, and the PdG converter entry. The Events visibility control is independent.</td></tr>
   <tr><td><strong>PdG→Progesterone Converter</strong></td><td>Dialog</td><td>Fits animal-specific PdG to progesterone models from paired same-day PdG and blood progesterone measurements; fitted models enable Unified Prog. and combined plots.</td></tr>
   <tr><td><strong>Master Track</strong></td><td>Administration</td><td>Provides login, guest mode, users, jobs, permissions, sessions, and audit logs. Account roles are lord, master, user, and guest; job bundles refine practical permissions. AWO is a Vet-bound job for animal-welfare work and IACUC assignments.</td></tr>
   <tr><td><strong>Project Track</strong></td><td>Sidebar + optional tab</td><td>Adds association-scoped project/species filters, project history, IACUC/AWO assignment, experiment state, documents/SOPs, and project management. Each project has one localized Draft, Active, or Closed state; the list shows Draft italic, Active bold, and Closed in normal text. Closing does not archive it or remove assignments; lifecycle changes are permission-checked and audited.</td></tr>

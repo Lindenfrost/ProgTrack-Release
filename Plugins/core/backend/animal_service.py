@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import json
 from datetime import datetime
 from typing import Any, Mapping
@@ -259,13 +258,43 @@ class AnimalService:
                     )
             existing_rows = _fetchall(
                 connection,
-                "SELECT ipid,name,species,birth_date,origin,role_id,record_json,revision "
+                "SELECT ipid,name,species,birth_date,origin,archived,role_id,record_json,revision "
                 "FROM animals",
             )
             existing = {
                 self.adapter.row_to_dict(row)["ipid"]: self.adapter.row_to_dict(row)
                 for row in existing_rows
             }
+            existing_measurements: dict[str, list[tuple[str, str, str, str, str, str]]] = {}
+            for row in _fetchall(
+                connection,
+                "SELECT measurement_id,animal_ipid,kind,measured_at,value_json,"
+                "sample_id,source_id FROM measurements",
+            ):
+                data = self.adapter.row_to_dict(row)
+                raw_value = data.get("value_json")
+                existing_measurements.setdefault(str(data["animal_ipid"]), []).append(
+                    (
+                        str(data["measurement_id"]),
+                        str(data["kind"]),
+                        str(data["measured_at"]),
+                        raw_value if isinstance(raw_value, str) else dumps(raw_value),
+                        str(data.get("sample_id") or ""),
+                        str(data.get("source_id") or ""),
+                    )
+                )
+            existing_events: dict[str, dict[str, dict[str, Any]]] = {}
+            event_owners: dict[str, str] = {}
+            for row in _fetchall(
+                connection,
+                "SELECT event_id,animal_ipid,event_type,occurred_at,created_at,payload_json "
+                "FROM animal_events",
+            ):
+                data = self.adapter.row_to_dict(row)
+                event_id = str(data["event_id"])
+                owner_ipid = str(data["animal_ipid"])
+                existing_events.setdefault(owner_ipid, {})[event_id] = data
+                event_owners[event_id] = owner_ipid
             incoming_ids = set(combined)
             for ipid in set(existing) - incoming_ids:
                 _execute(
@@ -273,8 +302,15 @@ class AnimalService:
                     f"DELETE FROM animals WHERE ipid={mark}",
                     (ipid,),
                 )
+                existing_measurements.pop(ipid, None)
+                for event_id in existing_events.pop(ipid, {}):
+                    event_owners.pop(event_id, None)
             for ipid, (source_record, archived_flag) in combined.items():
-                record = copy.deepcopy(dict(source_record))
+                # Only this top-level mapping is mutated below; the nested
+                # measurements/events are detached with pop() and otherwise
+                # treated as read-only. A full deepcopy made every save copy
+                # the entire population's history before deciding what changed.
+                record = dict(source_record)
                 identity = _identity(ipid, record)
                 record.update(identity)
                 measurements = {
@@ -285,15 +321,24 @@ class AnimalService:
                 role_id = str(record.get("rolle") or record.get("role_id") or "unknown")
                 previous = existing.get(ipid)
                 previous_role = ""
+                base_changed = True
+                record_json = dumps(record)
                 if previous:
                     previous_payload = previous.get("record_json")
-                    previous_record = (
-                        previous_payload
-                        if isinstance(previous_payload, Mapping)
-                        else loads(previous_payload or "{}", {})
-                    )
+                    if isinstance(previous_payload, str) and previous_payload == record_json:
+                        previous_record = {}
+                        record_payload_matches = True
+                    else:
+                        previous_record = (
+                            dict(previous_payload)
+                            if isinstance(previous_payload, Mapping)
+                            else loads(previous_payload or "{}", {})
+                        )
+                        if not isinstance(previous_record, Mapping):
+                            previous_record = {}
+                        record_payload_matches = dumps(previous_record) == record_json
                     previous_role = str(
-                        (previous_record.get("rolle") if isinstance(previous_record, Mapping) else "")
+                        previous_record.get("rolle")
                         or previous.get("role_id")
                         or "unknown"
                     )
@@ -304,18 +349,24 @@ class AnimalService:
                             raise ImmutableIdentityError(
                                 f"{field} cannot change for established animal {ipid}."
                             )
-                    _execute(
-                        connection,
-                        f"UPDATE animals SET archived={mark},role_id={mark},record_json={json_mark},"
-                        f"revision=revision+1,updated_at={mark} WHERE ipid={mark}",
-                        (
-                            int(archived_flag) if self.adapter.dialect == "sqlite" else archived_flag,
-                            role_id,
-                            dumps(record),
-                            timestamp,
-                            ipid,
-                        ),
+                    base_changed = (
+                        bool(previous.get("archived")) != bool(archived_flag)
+                        or str(previous.get("role_id") or "") != role_id
+                        or not record_payload_matches
                     )
+                    if base_changed:
+                        _execute(
+                            connection,
+                            f"UPDATE animals SET archived={mark},role_id={mark},record_json={json_mark},"
+                            f"revision=revision+1,updated_at={mark} WHERE ipid={mark}",
+                            (
+                                int(archived_flag) if self.adapter.dialect == "sqlite" else archived_flag,
+                                role_id,
+                                record_json,
+                                timestamp,
+                                ipid,
+                            ),
+                        )
                 else:
                     _execute(
                         connection,
@@ -332,17 +383,13 @@ class AnimalService:
                             identity["origin"],
                             int(archived_flag) if self.adapter.dialect == "sqlite" else archived_flag,
                             role_id,
-                            dumps(record),
+                            record_json,
                             1,
                             timestamp,
                             timestamp,
                         ),
                     )
-                _execute(
-                    connection,
-                    f"DELETE FROM measurements WHERE animal_ipid={mark}",
-                    (ipid,),
-                )
+                measurement_rows: list[tuple[str, str, str, str, str, str]] = []
                 for kind, entries in measurements.items():
                     for index, entry in enumerate(entries):
                         if not isinstance(entry, Mapping):
@@ -361,6 +408,49 @@ class AnimalService:
                             "measurement", ipid, kind, measured_at, sample_id,
                             dumps(entry), index,
                         )
+                        measurement_rows.append(
+                            (
+                                measurement_id,
+                                kind,
+                                measured_at,
+                                dumps(dict(entry)),
+                                sample_id,
+                                "core",
+                            )
+                        )
+                measurement_rows.sort()
+                stored_measurement_rows = sorted(existing_measurements.get(ipid, []))
+                measurement_changed = len(measurement_rows) != len(stored_measurement_rows)
+                if not measurement_changed:
+                    for incoming_row, stored_row in zip(
+                        measurement_rows, stored_measurement_rows
+                    ):
+                        if incoming_row[:3] != stored_row[:3] or incoming_row[4:] != stored_row[4:]:
+                            measurement_changed = True
+                            break
+                        if incoming_row[3] != stored_row[3]:
+                            try:
+                                canonical_stored_value = dumps(loads(stored_row[3], {}))
+                            except (TypeError, ValueError):
+                                measurement_changed = True
+                                break
+                            if incoming_row[3] != canonical_stored_value:
+                                measurement_changed = True
+                                break
+                if measurement_changed:
+                    _execute(
+                        connection,
+                        f"DELETE FROM measurements WHERE animal_ipid={mark}",
+                        (ipid,),
+                    )
+                    for (
+                        measurement_id,
+                        kind,
+                        measured_at,
+                        value_json,
+                        sample_id,
+                        source_id,
+                    ) in measurement_rows:
                         _execute(
                             connection,
                             "INSERT INTO measurements("
@@ -373,24 +463,15 @@ class AnimalService:
                                 ipid,
                                 kind,
                                 measured_at,
-                                dumps(dict(entry)),
+                                value_json,
                                 sample_id,
-                                "core",
+                                source_id,
                                 timestamp,
                             ),
                         )
-                existing_event_rows = _fetchall(
-                    connection,
-                    "SELECT event_id,event_type,created_at,payload_json FROM animal_events "
-                    f"WHERE animal_ipid={mark}",
-                    (ipid,),
-                )
-                existing_events = {
-                    str(self.adapter.row_to_dict(row)["event_id"]):
-                    self.adapter.row_to_dict(row)
-                    for row in existing_event_rows
-                }
+                animal_events = existing_events.setdefault(ipid, {})
                 incoming_event_ids: set[str] = set()
+                event_changed = False
                 for index, event in enumerate(events):
                     if not isinstance(event, Mapping):
                         continue
@@ -420,7 +501,17 @@ class AnimalService:
                         )
                     incoming_event_ids.add(event_id)
 
-                    previous_event = existing_events.get(event_id)
+                    previous_event = animal_events.get(event_id)
+                    previous_event_payload: Any = {}
+                    previous_event_json = ""
+                    if previous_event is not None:
+                        raw_event_payload = previous_event.get("payload_json")
+                        if isinstance(raw_event_payload, Mapping):
+                            previous_event_payload = dict(raw_event_payload)
+                            previous_event_json = dumps(previous_event_payload)
+                        else:
+                            previous_event_json = str(raw_event_payload or "{}")
+                            previous_event_payload = loads(previous_event_json, {})
                     payload = dict(event)
                     if previous_event is not None:
                         previous_type = str(previous_event["event_type"] or "")
@@ -429,12 +520,6 @@ class AnimalService:
                                 "A saved animal event's type is immutable; "
                                 f"event {event_id} is {previous_type!r}, not {event_type!r}."
                             )
-                        previous_payload = previous_event.get("payload_json")
-                        previous_event_payload = (
-                            previous_payload
-                            if isinstance(previous_payload, Mapping)
-                            else loads(previous_payload or "{}", {})
-                        )
                         previous_recorded_role = str(
                             previous_event_payload.get("recorded_role")
                             if isinstance(previous_event_payload, Mapping) else ""
@@ -456,17 +541,11 @@ class AnimalService:
                             previous_recorded_role or submitted_recorded_role or role_id
                         )
                     else:
-                        owner = _fetchone(
-                            connection,
-                            "SELECT animal_ipid FROM animal_events "
-                            f"WHERE event_id={mark}",
-                            (event_id,),
-                        )
-                        if owner is not None:
-                            owner_data = self.adapter.row_to_dict(owner)
+                        owner_ipid = event_owners.get(event_id)
+                        if owner_ipid is not None:
                             raise ConflictError(
                                 f"Event identity {event_id} already belongs to "
-                                f"animal {owner_data['animal_ipid']}."
+                                f"animal {owner_ipid}."
                             )
                         payload["recorded_role"] = str(
                             payload.get("recorded_role") or role_id
@@ -477,13 +556,21 @@ class AnimalService:
                     payload.pop("date", None)
                     payload_json = dumps(payload)
                     if previous_event is not None:
-                        _execute(
-                            connection,
-                            "UPDATE animal_events SET occurred_at="
-                            f"{mark},payload_json={json_mark} WHERE event_id={mark} "
-                            f"AND animal_ipid={mark}",
-                            (occurred_at, payload_json, event_id, ipid),
-                        )
+                        payload_matches = previous_event_json == payload_json
+                        if not payload_matches:
+                            payload_matches = dumps(previous_event_payload) == payload_json
+                        if (
+                            str(previous_event.get("occurred_at") or "") != occurred_at
+                            or not payload_matches
+                        ):
+                            _execute(
+                                connection,
+                                "UPDATE animal_events SET occurred_at="
+                                f"{mark},payload_json={json_mark} WHERE event_id={mark} "
+                                f"AND animal_ipid={mark}",
+                                (occurred_at, payload_json, event_id, ipid),
+                            )
+                            event_changed = True
                     else:
                         _execute(
                             connection,
@@ -501,33 +588,66 @@ class AnimalService:
                                 timestamp,
                             ),
                         )
-                for removed_event_id in set(existing_events) - incoming_event_ids:
+                        event_changed = True
+                        event_owners[event_id] = ipid
+                for removed_event_id in set(animal_events) - incoming_event_ids:
                     _execute(
                         connection,
                         "DELETE FROM animal_events WHERE event_id="
                         f"{mark} AND animal_ipid={mark}",
                         (removed_event_id, ipid),
                     )
+                    event_owners.pop(removed_event_id, None)
+                    animal_events.pop(removed_event_id, None)
+                    event_changed = True
+                if previous and not base_changed and (measurement_changed or event_changed):
+                    _execute(
+                        connection,
+                        f"UPDATE animals SET revision=revision+1,updated_at={mark} "
+                        f"WHERE ipid={mark}",
+                        (timestamp, ipid),
+                    )
             settings = dumps(snapshot.get("settings", {}))
-            if self.adapter.dialect == "sqlite":
-                _execute(
-                    connection,
-                    """
-                    INSERT INTO installation(key,value_json,revision,updated_at)
-                    VALUES(?,?,1,?)
-                    ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,
-                    revision=installation.revision+1,updated_at=excluded.updated_at
-                    """,
-                    ("core.settings", settings, timestamp),
-                )
+            settings_row = _fetchone(
+                connection,
+                "SELECT value_json FROM installation WHERE key=" + mark,
+                ("core.settings",),
+            )
+            if settings_row is None:
+                if self.adapter.dialect == "sqlite":
+                    _execute(
+                        connection,
+                        "INSERT INTO installation(key,value_json,revision,updated_at) "
+                        "VALUES(?,?,1,?)",
+                        ("core.settings", settings, timestamp),
+                    )
+                else:
+                    _execute(
+                        connection,
+                        "INSERT INTO installation(key,value_json,revision,updated_at) "
+                        "VALUES(%s,%s::jsonb,1,%s)",
+                        ("core.settings", settings, timestamp),
+                    )
             else:
-                _execute(
-                    connection,
-                    """
-                    INSERT INTO installation(key,value_json,revision,updated_at)
-                    VALUES(%s,%s::jsonb,1,%s)
-                    ON CONFLICT(key) DO UPDATE SET value_json=EXCLUDED.value_json,
-                    revision=installation.revision+1,updated_at=EXCLUDED.updated_at
-                    """,
-                    ("core.settings", settings, timestamp),
+                settings_data = self.adapter.row_to_dict(settings_row)
+                raw_settings = settings_data.get("value_json")
+                current_settings = (
+                    raw_settings
+                    if isinstance(raw_settings, Mapping)
+                    else loads(raw_settings or "{}", {})
                 )
+                if dumps(current_settings) != settings:
+                    if self.adapter.dialect == "sqlite":
+                        _execute(
+                            connection,
+                            "UPDATE installation SET value_json=?,revision=revision+1,updated_at=? "
+                            "WHERE key=?",
+                            (settings, timestamp, "core.settings"),
+                        )
+                    else:
+                        _execute(
+                            connection,
+                            "UPDATE installation SET value_json=%s::jsonb,revision=revision+1,updated_at=%s "
+                            "WHERE key=%s",
+                            (settings, timestamp, "core.settings"),
+                        )

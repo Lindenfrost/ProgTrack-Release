@@ -811,9 +811,11 @@ class OrganCheckbox(QWidget):
 
     def _update_style(self):
         if self._warning and self._checked:
-            self._chk.setStyleSheet("QCheckBox::indicator { background-color: #ff6666; }")
+            self._lbl.setStyleSheet("color: red; font-weight: bold;")
+        elif self._checked:
+            self._lbl.setStyleSheet("color: black; font-weight: bold;")
         else:
-            self._chk.setStyleSheet("")
+            self._lbl.setStyleSheet("color: #888; font-weight: normal;")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:

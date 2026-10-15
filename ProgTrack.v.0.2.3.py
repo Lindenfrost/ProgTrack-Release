@@ -92,6 +92,7 @@ from Plugins.core.ui_icons import (
     resolve_icon_path as ui_icon_path,
 )
 from Plugins.core.dialog_geometry import install_dialog_geometry_guard
+from Plugins.core.monochrome_indicators import install_monochrome_indicator_style
 from Plugins.core.measurement_input import (
     MeasurementValidator, format_measurement, parse_measurement,
 )
@@ -353,7 +354,7 @@ EVENT_STYLE_METADATA: Dict[str, Dict[str, Any]] = {
     },
     "embryo_transfer": {
         "label_keys": ("event.embryo_transfer", "plot.event.embryo_transfer"),
-        "default_color": "#000000",
+        "default_color": "#2feade",
         "render_mode": "line", "default_marker": "o",
     },
     "pregnancy": {
@@ -373,7 +374,7 @@ EVENT_STYLE_METADATA: Dict[str, Dict[str, Any]] = {
     },
     "birth": {
         "label_keys": ("event.birth", "plot.event.birth"),
-        "default_color": "#000000",
+        "default_color": "#ead700",
         "render_mode": "line", "default_marker": "o",
     },
     "pgf": {
@@ -421,10 +422,14 @@ def event_style_metadata(
         base["label"] = str(
             definition.get("name") or definition.get("label") or key
         ).strip() or key
-        base["default_color"] = str(
-            definition.get("default_color") or definition.get("color")
-            or base["default_color"]
-        )
+        # These two canonical built-in defaults are owned by this metadata,
+        # not by potentially stale event-definition rows. Per-user appearance
+        # overrides are applied later by the shared style resolver.
+        if key not in {"birth", "embryo_transfer"}:
+            base["default_color"] = str(
+                definition.get("default_color") or definition.get("color")
+                or base["default_color"]
+            )
         base["default_marker"] = str(
             definition.get("default_marker") or definition.get("marker")
             or base["default_marker"]
@@ -534,6 +539,14 @@ def ensure_event_record_id(event: Dict[str, Any]) -> str:
     return event_id
 
 
+def event_source_for_editor_row(event: Any) -> Dict[str, Any]:
+    """Give a persisted event its stable ID before copying it into an editor."""
+    if not isinstance(event, dict):
+        return {}
+    ensure_event_record_id(event)
+    return copy.deepcopy(event)
+
+
 def event_payload_from_editor_row(
     combo: Any,
     event_type: str,
@@ -577,6 +590,34 @@ def event_payload_from_editor_row(
             payload["recorded_role"] = current_role
     payload.update({"event_type": value, "datum": event_date})
     return payload
+
+
+def append_event_payload_once(
+    events: List[Dict[str, Any]],
+    seen_event_rows: set,
+    row_widget: Any,
+    event_payload: Dict[str, Any],
+) -> bool:
+    """Append one event row, suppressing only a repeated row/event reference."""
+    source_event = getattr(row_widget, "_progtrack_source_event", {})
+    if not isinstance(source_event, dict):
+        source_event = {}
+    event_id = str(
+        source_event.get("event_id") or event_payload.get("event_id") or ""
+    ).strip()
+    if event_id:
+        identity = ("event", event_id)
+    else:
+        row_id = str(getattr(row_widget, "_progtrack_editor_row_id", "") or "")
+        if not row_id:
+            row_id = uuid4().hex
+            row_widget._progtrack_editor_row_id = row_id
+        identity = ("editor-row", row_id)
+    if identity in seen_event_rows:
+        return False
+    seen_event_rows.add(identity)
+    events.append(event_payload)
+    return True
 
 
 def historical_event_label(
@@ -5689,6 +5730,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # checkbox is toggled.  Keep them in the same sperm visibility
             # group as the bars and measurement lines.
             artist.set_visible(sperm_visible)
+        annotation = self.__dict__.get('_annotation')
+        if not events_visible and getattr(annotation, '_progtrack_event_tooltip', False):
+            annotation.remove()
+            self._annotation = None
         # The mode helper owns which progesterone sub-mode is active, but
         # role applicability is owned here.  This prevents a stale blood/PdG
         # artist from surviving a role switch to a role without progesterone.
@@ -5748,10 +5793,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             sperm_control.setVisible(sperm_applicable)
             sperm_control.setEnabled(sperm_applicable and has_sperm_measurements)
 
-        # The existing category-specific Events/Progesterone controls remain
-        # authoritative on their dedicated tabs.  On All, use the existing
-        # generic controls for the union of selected roles so experimental
-        # offspring keeps its required Events control.
+        # Resolve Events on every category, not only All.  The selected
+        # canonical roles/configuration and renderable history determine
+        # applicability; the category chooses only the existing preference
+        # checkbox. Custom and All tabs share the generic checkbox.
+        active_events_control = self._get_current_events_checkbox()
+        events_applicable = has_selection and "events" in applicable
+        for key in ('chk_events', 'chk_events_offspring',
+                    'chk_events_breeding', 'chk_events_experimental'):
+            control = self.__dict__.get(key)
+            if control is not None:
+                control.setText(self.__dict__.get('messages', {}).get('checkbox.events', 'Events'))
+                active = events_applicable and control is active_events_control
+                control.setVisible(active)
+                control.setEnabled(active and has_events)
+
+        # All uses the union of selected roles for its progesterone control.
         category_tab = getattr(self, "category_tab", None)
         current_index = category_tab.currentIndex() if category_tab is not None else None
         try:
@@ -5759,12 +5816,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         except Exception:
             all_index = None
         if current_index == all_index:
-            events_control = getattr(self, "chk_events", None)
-            if events_control is not None:
-                events_applicable = has_selection and "events" in applicable
-                events_control.setVisible(events_applicable)
-                events_control.setEnabled(events_applicable and has_events)
-
             progesterone_control = self.__dict__.get("chk_prog")
             if progesterone_control is not None:
                 progesterone_applicable = has_selection and "progesterone" in applicable
@@ -5801,6 +5852,99 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         except Exception:
             pass
 
+
+    @staticmethod
+    def _plot_event_display_point(artist, day, value, mouse_y=None):
+        """Return symbol pixel geometry using its real offset transform.
+
+        Vertical event lines deliberately have no tooltip target.
+        """
+        geometry = getattr(artist, '_progtrack_event_geometry', None)
+        if not geometry or not artist.get_visible():
+            return None
+        offsets = artist.get_offsets()
+        if geometry != 'symbol' or not len(offsets):
+            return None
+        point = artist.get_offset_transform().transform(offsets[0])
+        if artist.get_clip_on() and not artist.axes.bbox.contains(*point):
+            return None
+        return point
+
+    def _plot_event_tooltip_contexts(self, animal_data, entries, *, scoped, active_period):
+        """Build immutable, chronological event projections; do not write records.
+
+        Input has already been projected/deduplicated and period-normalized by
+        the renderer. Counts belong to each event's own period and recorded
+        role, not the animal's current display membership.
+        """
+        role = self._animal_role_value(animal_data)
+        active_types = self._custom_event_types_for_role(role)
+        ordered = []
+        for index, (event_type, raw_date, event) in enumerate(entries):
+            numeric_date = _safe_date2num(_to_py_datetime(raw_date))
+            if numeric_date is not None:
+                ordered.append((numeric_date, index, event_type, event))
+        counts, contexts, definitions = {}, {}, {}
+        for _date, _index, event_type, event in sorted(ordered):
+            period = str(event.get('project_period_id') or 'unassigned') if scoped else ''
+            recorded_role = canonical_role_value(event.get('recorded_role') or role, default=role)
+            key = (period, recorded_role, event_type.casefold())
+            counts[key] = counts.get(key, 0) + 1
+            if event_type in EVENT_STYLE_METADATA:
+                continue  # Keep existing built-in measurement/event tooltip text.
+            if event_type not in definitions:
+                definitions[event_type] = self._custom_event_definition_for_type(event_type) or {}
+            definition = definitions[event_type]
+            snapshot = event.get('custom_event_snapshot')
+            snapshot = snapshot if isinstance(snapshot, dict) else {}
+            label = str(snapshot.get('name') or snapshot.get('label')
+                        or definition.get('name') or definition.get('label')
+                        or historical_event_label(self.messages, event_type, event))
+            historical = ((scoped and period != active_period)
+                          or not event_matches_recording_role(event, role, fallback_role=role)
+                          or event_type not in active_types
+                          or not definition or not definition.get('active', True))
+            kind = str(snapshot.get('kind') or definition.get('kind') or 'counting').casefold()
+            maximum = None
+            if kind == 'limiting' and not historical:
+                candidate = self._get_report_event_max(event_type, animal_data)
+                if (isinstance(candidate, (int, float)) and not isinstance(candidate, bool)
+                        and math.isfinite(candidate) and candidate >= 0):
+                    maximum = format_measurement(candidate)
+            contexts[id(event)] = (label, counts[key], maximum, historical, period, recorded_role)
+        return contexts
+
+    def _weight_display_values(
+        self, animal_data: Dict[str, Any], day, value: float,
+        *, report_index: Optional[AnimalReportIndex] = None,
+    ) -> Tuple[str, Optional[float]]:
+        """Project raw weights for display only; never round before arithmetic.
+
+        A previous reading means the last timestamp on a strictly earlier day.
+        Keep the Plot scan read-only (building a report index can normalize
+        project history); Reports reuses its already prepared index.
+        """
+        day = day.date() if isinstance(day, datetime) else day
+        reference = animal_data.get('ref_weight')
+        if self._uses_offspring_weight_evaluation(self._animal_role_value(animal_data)):
+            previous = None
+            if report_index is not None:
+                previous = report_index.previous_weight_before(day)
+            else:
+                previous_timestamp = None
+                for reading in animal_data.get('gewicht', []) or []:
+                    if not isinstance(reading, dict):
+                        continue
+                    timestamp = reading.get('datum')
+                    if isinstance(timestamp, datetime) and timestamp.date() < day:
+                        if previous_timestamp is None or timestamp >= previous_timestamp:
+                            previous, previous_timestamp = reading, timestamp
+            reference = previous.get('wert') if previous is not None else None
+        change = None
+        if (isinstance(reference, (int, float)) and not isinstance(reference, bool)
+                and math.isfinite(reference) and reference > 0):
+            change = ((value - reference) / reference) * 100.0
+        return f"{value:.2f}", change
 
     def _format_tooltip(self, data_type: str, date: datetime, value: Optional[float], animal_name: str, extra: Optional[dict] = None) -> str:
         """Return a human-friendly tooltip string for the given measurement.
@@ -5847,6 +5991,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         progressive_label = self.messages.get('plot.tooltip.progressive_label', 'Progressive')
         prog_label = self.messages.get('plot.series.progesterone', 'Progesterone')
         weight_label = self.messages.get('plot.series.weight', 'Weight')
+        event_context = extra.get('event_context')
+        if event_context is not None:
+            label, count, maximum, historical, _period, _role = event_context
+            usage = str(count) if maximum is None else f"{count}/{maximum}"
+            history = (f" ({self.messages.get('plot.event.historical', 'historical')})"
+                       if historical else '')
+            return f"{date_label}: {date_str}\n{label} ({usage}){history}"
         pdg_label = self.messages.get('plot.series.pdg', 'PdG')
         prog_computed_label = self.messages.get('plot.tooltip.progesterone_computed_label', 'Progesterone (computed)')
         pdg_orig_label = self.messages.get('plot.tooltip.pdg_original_label', 'orig. PdG')
@@ -5889,38 +6040,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if dtype == 'weight':
             rec = self.animals.get(animal_name, {})
             rolle = self._animal_role_value(rec)
-            # Normalize date for comparison
-            dt_date = date.date() if isinstance(date, datetime) else date
             # allow "missing" weight entries to display a tooltip
             if value is None:
                 return f"{date_label}: {date_str}\n{weight_label}: {na_label}"
-            if self._uses_offspring_weight_evaluation(rolle):
-                # Offspring weight-evaluation block: compare to the last
-                # measurement before this date.
-                prev_val = None
-                try:
-                    series = sorted(rec.get('gewicht', []), key=lambda t: t['datum'])
-                    for entry in series:
-                        # entry['datum'] is datetime
-                        if entry['datum'].date() < dt_date:
-                            prev_val = entry['wert']
-                        elif entry['datum'].date() == dt_date:
-                            break
-                except Exception:
-                    prev_val = None
-                if prev_val not in (None, 0, False):
-                    delta_pct = ((value - prev_val) / prev_val) * 100.0
-                    sign = '+' if delta_pct >= 0 else ''
-                    return f"{date_label}: {date_str}\n{weight_label}: {value:.0f} {weight_unit} ({sign}{delta_pct:.1f} {percent_unit} {vs_previous_label})"
-                return f"{date_label}: {date_str}\n{weight_label}: {value:.0f} {weight_unit}"
-            else:
-                # For other animals compare to reference weight
-                ref_w = rec.get('ref_weight', DEFAULT_REF_WEIGHT) or 0
-                if ref_w > 0:
-                    delta_pct = ((value - ref_w) / ref_w) * 100.0
-                    sign = '+' if delta_pct >= 0 else ''
-                    return f"{date_label}: {date_str}\n{weight_label}: {value:.0f} {weight_unit} ({sign}{delta_pct:.0f} {percent_unit})"
-                return f"{date_label}: {date_str}\n{weight_label}: {value:.0f} {weight_unit}"
+            weight_text, delta_pct = self._weight_display_values(rec, date, value)
+            result = f"{date_label}: {date_str}\n{weight_label}: {weight_text} {weight_unit}"
+            if delta_pct is not None:
+                previous = (f" {vs_previous_label}"
+                            if self._uses_offspring_weight_evaluation(rolle) else '')
+                result += f" ({delta_pct:+.2f}{percent_unit}{previous})"
+            return result
         # Raw PdG measurement
         if dtype == 'pdg':
             probennummer = extra.get('probennummer')
@@ -9691,41 +9820,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if hasattr(self, 'chk_prog') and self.chk_prog is not None:
             self.chk_prog.setVisible(visible and not events_only)
 
-        # Events checkbox - show appropriate one based on tab
-        if hasattr(self, 'chk_events') and self.chk_events is not None:
-            self.chk_events.setVisible(visible and not events_only)
-            if not visible:
-                # Keep the semantic Display preference intact.  Applicability
-                # and the effective artist state are resolved centrally by
-                # _apply_plot_display_state; hiding a category control must
-                # not turn a future valid role's default into False.
-                for ln in getattr(self, 'ev_lines', []):
-                    if ln not in getattr(self, 'sperm_artists', []):
-                        ln.set_visible(False)
-                for tx in getattr(self, 'ev_texts', []):
-                    tx.set_visible(False)
+        # Events are independent of hormone/category visibility, including
+        # event-only custom roles and historical events after a role change.
+        # Never change the checked preference or hide event artists merely
+        # because progesterone controls are hidden.
+        self._update_plot_display_control_visibility()
 
         # Blood/combined/urine are progesterone-specific: hide when events_only
         prog_visible = visible and not events_only
-
-        # Per-role Events checkboxes
-        if events_only:
-            current_idx = self.category_tab.currentIndex() if hasattr(self, 'category_tab') and self.category_tab is not None else 0
-            # 2=👶 Offspring, 4=⚤ Breeding, 5=💡 Experimental
-            if hasattr(self, 'chk_events_offspring'):
-                self.chk_events_offspring.setVisible(visible and current_idx == 2)
-            if hasattr(self, 'chk_events_breeding'):
-                self.chk_events_breeding.setVisible(visible and current_idx == 4)
-            if hasattr(self, 'chk_events_experimental'):
-                self.chk_events_experimental.setVisible(visible and current_idx == 5)
-        else:
-            # Hide all per-role checkboxes when on female tab
-            if hasattr(self, 'chk_events_offspring'):
-                self.chk_events_offspring.setVisible(False)
-            if hasattr(self, 'chk_events_breeding'):
-                self.chk_events_breeding.setVisible(False)
-            if hasattr(self, 'chk_events_experimental'):
-                self.chk_events_experimental.setVisible(False)
 
         mode_widget = getattr(self, 'mode_widget', None)
         if mode_widget is not None:
@@ -9838,11 +9940,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if tab_idx < all_idx:
                 counts[tab_idx] = counts.get(tab_idx, 0) + 1
 
+        visibility_changed = False
         for tab_idx in range(all_idx):
-            self.category_tab.setTabVisible(tab_idx, counts.get(tab_idx, 0) > 0)
-        self.category_tab.setTabVisible(all_idx, True)
-        self.category_tab.updateGeometry()
-        self.category_tab.update()
+            visible = counts.get(tab_idx, 0) > 0
+            if self.category_tab.isTabVisible(tab_idx) != visible:
+                self.category_tab.setTabVisible(tab_idx, visible)
+                visibility_changed = True
+        if not self.category_tab.isTabVisible(all_idx):
+            self.category_tab.setTabVisible(all_idx, True)
+            visibility_changed = True
 
         current_idx = self.category_tab.currentIndex()
         if current_idx < all_idx and not self.category_tab.isTabVisible(current_idx):
@@ -9850,6 +9956,34 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if self.category_tab.isTabVisible(tab_idx):
                     self.category_tab.setCurrentIndex(tab_idx)
                     break
+
+        if visibility_changed:
+            self._refresh_category_tab_layout()
+        else:
+            self.category_tab.update()
+
+    def _refresh_category_tab_layout(self) -> None:
+        """Synchronously relayout the sidebar after category visibility changes.
+
+        QTabBar updates its hidden-tab state immediately, but its owning sidebar
+        may defer geometry publication until another interaction (such as
+        selecting All). Activate the ancestor layouts now so the first frame
+        after Role Setup, login, or a visibility-scope change is already current.
+        """
+        tab = getattr(self, "category_tab", None)
+        if tab is None:
+            return
+        tab.updateGeometry()
+        parent = tab.parentWidget()
+        while parent is not None:
+            layout = parent.layout()
+            if layout is not None:
+                layout.invalidate()
+                layout.activate()
+            parent.updateGeometry()
+            parent.update()
+            parent = parent.parentWidget()
+        tab.update()
 
     def _on_phase_selected(self, button):
         """Handle phase button selection when ♀ is active."""
@@ -10561,7 +10695,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # Build and add Plots tab (existing content)
         scroll = self._build_main_content()
-        self.main_tabs.addTab(scroll, self.messages.get("tab.plots", "Plots"))
+        self.plots_tab = scroll
+        self.main_tabs.addTab(self.plots_tab, self.messages.get("tab.plots", "Plots"))
         
         # Add Reports tab if plugin is enabled (checked earlier in _init_application_state)
         if self.reports_enabled:
@@ -12738,37 +12873,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             lines.append(f"{pdg_label}: {value} µg/mg Cr" + (f" ({sample_id_label}: {probe})" if probe else ""))
         
         # Check for weight measurements
-        role = self._animal_role_value(animal_data)
         for weight in report_index.records_on('gewicht', date):
             value = weight.get('wert', '?')
-            # Round to 0 decimal places (integer)
             if isinstance(value, (int, float)):
-                current_weight = int(round(float(value)))
-
-                # Calculate percentage change
-                reference_weight = None
-                if self._uses_offspring_weight_evaluation(role):
-                    # Offspring weight-evaluation block: compare to the last
-                    # measurement before this date.
-                    previous_weight = report_index.previous_weight_before(date)
-                    if previous_weight is not None:
-                        last_weight = previous_weight.get('wert')
-                        if isinstance(last_weight, (int, float)):
-                            reference_weight = float(last_weight)
-                else:
-                    # Ordinary workflow: compare to the configured reference
-                    # weight.
-                    ref_w = animal_data.get('ref_weight')
-                    if isinstance(ref_w, (int, float)):
-                        reference_weight = float(ref_w)
-
-                # Format weight with percentage
+                current_weight, percent_change = self._weight_display_values(
+                    animal_data, date, value, report_index=report_index
+                )
                 weight_label = messages.get('daily.weight', 'Weight')
-                if reference_weight and reference_weight > 0:
-                    percent_change = ((current_weight - reference_weight) / reference_weight) * 100
-                    sign = '+' if percent_change >= 0 else ''
+                if percent_change is not None:
                     color = 'green' if percent_change >= 0 else 'red'
-                    weight_text = f"{weight_label}: {current_weight}g (<span style='color:{color}'>{sign}{percent_change:.1f}%</span>)"
+                    weight_text = f"{weight_label}: {current_weight}g (<span style='color:{color}'>{percent_change:+.2f}%</span>)"
                 else:
                     weight_text = f"{weight_label}: {current_weight}g"
 
@@ -15449,13 +15563,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         can_archive = self._master_can('core.archive_animals')
         can_delete  = self._master_can('core.delete_animals')
         can_edit    = self._can_use_primary_edit_button()
+        can_edit_animal = self._master_can('core.edit_animal_core')
         selected_arch = getattr(self, '_selected_archived', [])
         active_selected = any(name in self.animals for name in self.selected_animals)
         self.btn_restore.setEnabled(bool(selected_arch) and can_archive)
         self.btn_delete.setEnabled(bool(selected_arch) and can_delete)
         self.btn_edit.setEnabled(active_selected and can_edit)
         if hasattr(self, 'btn_edit_animal'):
-            self.btn_edit_animal.setEnabled(active_selected and can_edit)
+            self.btn_edit_animal.setEnabled(active_selected and can_edit_animal)
 
         # QListWidget item size hints are measured before the row is inserted;
         # a long archived label can therefore widen the content area and push
@@ -15568,6 +15683,40 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             order = [key for key in order if key in self.selected_animals]
             order.extend(key for key in self.selected_animals if key not in order)
             setattr(self, attr, order)
+
+    def _complete_successful_animal_edit(self, old_key, new_key) -> bool:
+        """Restore canonical selection and refresh only the active Plots view."""
+        self._retain_selection_after_animal_save(old_key, new_key)
+        self._refresh_list(update_tab_visibility=True)
+
+        tabs = getattr(self, "main_tabs", None)
+        plots_tab = getattr(self, "plots_tab", None)
+        if (
+            tabs is not None
+            and plots_tab is not None
+            and tabs.currentWidget() is plots_tab
+        ):
+            self._plot_selected()
+            return True
+        return False
+
+    def _exec_animal_editor_dialog(self, dlg) -> bool:
+        """Run an editor and finalize its selection/plot only after it closes."""
+        dlg.exec()
+        saved_identity = getattr(
+            dlg, "_progtrack_successful_animal_edit", None
+        )
+        if not (
+            isinstance(saved_identity, tuple)
+            and len(saved_identity) == 2
+        ):
+            return False
+        try:
+            delattr(dlg, "_progtrack_successful_animal_edit")
+        except AttributeError:
+            pass
+        self._complete_successful_animal_edit(*saved_identity)
+        return True
 
     def _selected_animal_for_edit(self, explicit: Optional[str] = None) -> Optional[str]:
         """Resolve the interaction-last selected animal without reordering plots."""
@@ -16465,6 +16614,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 features.add(feature)
         if not self._uses_offspring_weight_evaluation(role):
             features.discard("weight_overlay")
+        if ("events" not in features and self.__dict__.get("backend") is not None
+                and self._active_custom_event_definitions_for_role(role)):
+            features.add("events")
         return features
 
     def _plot_applicable_features(self) -> Set[str]:
@@ -16486,6 +16638,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if not isinstance(record, dict):
                 continue
             features.update(self._plot_features_for_role(self._animal_role_value(record)))
+            # Retired/removed role blocks govern new entry, not saved history.
+            if plot_event_entries(record):
+                features.add("events")
         return features
 
     def _plot_selected(self) -> None:
@@ -17243,6 +17398,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 evs = plot_event_entries(a)
                 scoped_plot = has_project_context(a)
                 active_period = current_period_id(a) if scoped_plot else ""
+                event_contexts = self._plot_event_tooltip_contexts(
+                    a, evs, scoped=scoped_plot, active_period=active_period
+                )
 
                 # Resolve every plotted event through the same canonical
                 # appearance resolver used by Visual Style.  This removes the
@@ -17312,7 +17470,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if event_type:
                         max_allowed[event_type] = self._get_report_event_max(event_type, a)
 
-                # constant y‐offset for all event triangles so only the tip touches the axis
+                # Symbol positions share the animal's axes-fraction baseline.
+                # Group by their actual plotted x position within this animal
+                # axis, preserving the first source-order event as the marker
+                # representative. Separate animals use separate axes/groups.
+                symbol_groups = {}
 
                 for typ, dt_raw, event_record in evs:
                     is_current_period = (
@@ -17347,6 +17509,24 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         if dt_num is None:
                             logging.warning(f"Skipping invalid event date: {dt_raw!r}")
                             continue
+                        group_key = (float(dt_num), float(TRI_Y))
+                        context = event_contexts.get(id(event_record))
+                        group_item = (
+                            typ, dt, name, context, str(labels.get(typ) or typ)
+                        )
+                        existing_group = symbol_groups.get(group_key)
+                        if existing_group is not None:
+                            existing_group["items"].append(group_item)
+                            symbol = existing_group["artist"]
+                            symbol._progtrack_coincident_event_items = tuple(
+                                existing_group["items"]
+                            )
+                            # A single representative keeps its original face,
+                            # shape, and source order; the red edge signals
+                            # that more than one saved event occupies this point.
+                            symbol.set_edgecolors("#ff0000")
+                            symbol.set_linewidths(1.5)
+                            continue
                         symbol = ax.scatter(
                             dt_num, TRI_Y,
                             marker=appearance.get("marker", "o"),
@@ -17354,6 +17534,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             transform=ax.get_xaxis_transform(),
                             clip_on=True, picker=10, zorder=3
                         )
+                        symbol._progtrack_event_geometry = 'symbol'
+                        symbol._progtrack_event_context = context
+                        symbol_groups[group_key] = {
+                            "artist": symbol,
+                            "items": [group_item],
+                        }
                         events_chk = self._get_current_events_checkbox()
                         symbol.set_visible(events_chk is not None and events_chk.isChecked())
                         self.ev_lines.append(symbol)
@@ -17403,6 +17589,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             va='center',
                             clip_on=True
                         )
+                        context = event_contexts.get(id(event_record))
+                        if context is not None:
+                            ev_text.set_text(self._format_tooltip(
+                                typ, dt, None, name,
+                                extra={'event_context': context}
+                            ).split('\n', 1)[1])
                         # Respect events checkbox state (use appropriate checkbox for current tab)
                         events_chk = self._get_current_events_checkbox()
                         ev_text.set_visible(events_chk is not None and events_chk.isChecked())
@@ -17612,6 +17804,82 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ------------------------
         # 7.18.12 Hover tooltip handler (visible lines only)
         # ------------------------
+        def clear_event_hover():
+            annotation = self._annotation
+            if getattr(annotation, '_progtrack_event_hover', False):
+                annotation.remove()
+                self._annotation = None
+                fig.canvas.draw_idle()
+
+        def event_tooltip_text(entry, mouse_y):
+            """Keep coincident events accessible without choosing an arbitrary row."""
+            day, value, axis, event_type, subject, artist = entry
+            point = self._plot_event_display_point(artist, day, value, mouse_y)
+            matches = []
+            grouped_items = getattr(
+                artist, '_progtrack_coincident_event_items', None
+            )
+            if grouped_items:
+                date_label = self.messages.get('plot.tooltip.date_label', 'Date')
+                for typ, event_day, name, context, label in grouped_items:
+                    if context is not None:
+                        text = self._format_tooltip(
+                            typ, event_day, None, name,
+                            extra={'event_context': context},
+                        )
+                    elif str(typ).casefold() in {'fsh', 'progesterone', 'progesteron'}:
+                        # Keep the established built-in tooltip for these
+                        # symbol types; other built-ins need their event name
+                        # because their normal line labels are not present.
+                        text = self._format_tooltip(typ, event_day, None, name)
+                    else:
+                        date_text = (
+                            event_day.strftime('%d.%m.%Y')
+                            if hasattr(event_day, 'strftime') else str(event_day)
+                        )
+                        text = f"{date_label}: {date_text}\n{label}"
+                    matches.append((name, text))
+                if len(matches) == 1:
+                    return matches[0][1]
+                return '\n\n'.join(
+                    f"{self._display_name(name)} — {text}"
+                    for name, text in matches
+                )
+
+            for candidate in self.hover_data:
+                if len(candidate) != 6:
+                    continue
+                d, v, ax_h, typ, name, line = candidate
+                context = getattr(line, '_progtrack_event_context', None)
+                if context is None or ax_h is not axis or not line.get_visible():
+                    continue
+                other = self._plot_event_display_point(line, d, v, mouse_y)
+                if other is not None and np.hypot(*(other - point)) <= 1.0:
+                    text = self._format_tooltip(typ, d, None, name, extra={'event_context': context})
+                    matches.append((name, text))
+            if len(matches) == 1:
+                return matches[0][1]
+            return '\n\n'.join(f"{self._display_name(name)} — {text}" for name, text in matches)
+
+        def event_annotation(point, text, *, hover=False):
+            fx, fy = fig.transFigure.inverted().transform(point)
+            annotation = fig.text(
+                fx, fy, text, transform=fig.transFigure, clip_on=False, zorder=9999,
+                bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.9)
+            )
+            annotation._progtrack_event_tooltip = True
+            annotation._progtrack_event_hover = hover
+            # Keep the tooltip readable near the canvas boundary after zoom
+            # or resize; its anchor must not push text beyond the canvas.
+            bounds = annotation.get_window_extent(fig.canvas.get_renderer())
+            margin = 10
+            dx = min(0, fig.bbox.x1 - margin - bounds.x1)
+            dy = min(0, fig.bbox.y1 - margin - bounds.y1)
+            dx += max(0, fig.bbox.x0 + margin - (bounds.x0 + dx))
+            dy += max(0, fig.bbox.y0 + margin - (bounds.y0 + dy))
+            annotation.set_position(fig.transFigure.inverted().transform(point + (dx, dy)))
+            return annotation
+
         def on_move(event):
             # Handle horizontal panning if active
             nonlocal _pan_active, _pan_start_x, _pan_axis
@@ -17634,6 +17902,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
             
             if event.inaxes is None:
+                clear_event_hover()
                 return
 
             closest = None
@@ -17672,7 +17941,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 is_triangle_event = (dtype in ('fsh', 'progesterone') 
                                     and isinstance(v, (int, float)) 
                                     and abs(v - TRI_Y) < 1e-6)
-                if is_triangle_event:
+                event_point = self._plot_event_display_point(line, d, v, event.y)
+                if getattr(line, '_progtrack_event_geometry', None) and event_point is None:
+                    continue
+                if event_point is not None:
+                    x_px, y_px = event_point
+                elif is_triangle_event:
                     x_num = mdates.date2num(d)
                     x_px, y_px = ax_h.get_xaxis_transform().transform((x_num, TRI_Y))
                 else:
@@ -17681,7 +17955,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         if len(offs) == 0:
                             continue
                         x_off, y_off = offs[0]
-                        x_px, y_px = line.get_transform().transform((x_off, y_off))
+                        x_px, y_px = line.get_offset_transform().transform((x_off, y_off))
                     else:
                         x_px, y_px = line.get_transform().transform((mdates.date2num(d), v))
 
@@ -17695,13 +17969,25 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self._highlight_point = None
                 self._highlight_scatter = None
                 event.canvas.draw_idle()
+            if closest and (
+                getattr(closest[5], '_progtrack_event_context', None) is not None
+                or getattr(closest[5], '_progtrack_coincident_event_items', None)
+            ):
+                d, v, axis, _typ, _subject, artist = closest
+                if self._annotation:
+                    self._annotation.remove()
+                point = self._plot_event_display_point(artist, d, v, event.y)
+                self._annotation = event_annotation(point, event_tooltip_text(closest, event.y), hover=True)
+                event.canvas.draw_idle()
+                return
+            clear_event_hover()
             if closest and self._highlight_point != closest:
                 d, v, ax_h, dtype, name_h, line = closest
                 self._highlight_point = closest
                 # draw hover-highlight using the artist's own coordinate system
                 if hasattr(line, "get_offsets"):
                     x_off, y_off = line.get_offsets()[0]
-                    trans = line.get_transform()
+                    trans = line.get_offset_transform()
                     mark = 'v' if dtype in ('fsh','progesterone') else 'o'
                     size = 150 if dtype in ('fsh','progesterone') else 80
                     self._highlight_scatter = ax_h.scatter(
@@ -17796,12 +18082,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     d, v, ax, data_type, name, line, probennummer = entry
                 else:
                     d, v, ax, data_type, name, line = entry
+                if not line.get_visible():
+                    continue
                 # Compute display coords robustly
                 # Only use axis transform for actual triangle events (fsh, progesterone injections at TRI_Y)
                 is_triangle_event = (data_type in ('fsh', 'progesterone') 
                                     and isinstance(v, (int, float)) 
                                     and abs(v - TRI_Y) < 1e-6)
-                if is_triangle_event:
+                event_point = self._plot_event_display_point(line, d, v, event.y)
+                if getattr(line, '_progtrack_event_geometry', None) and event_point is None:
+                    continue
+                if event_point is not None:
+                    x_px, y_px = event_point
+                    local_thresh = (max(SELECT_PIXEL_THRESHOLD, 18)
+                                    if is_triangle_event else SELECT_PIXEL_THRESHOLD)
+                elif is_triangle_event:
                     x_num = mdates.date2num(d)
                     x_px, y_px = ax.get_xaxis_transform().transform((x_num, TRI_Y))
                     local_thresh = max(SELECT_PIXEL_THRESHOLD, 18)
@@ -17811,7 +18106,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         if len(offs) == 0:
                             continue
                         x_off, y_off = offs[0]
-                        x_px, y_px = line.get_transform().transform((x_off, y_off))
+                        x_px, y_px = line.get_offset_transform().transform((x_off, y_off))
                     else:
                         x_px, y_px = line.get_transform().transform((mdates.date2num(d), v))
                     local_thresh = SELECT_PIXEL_THRESHOLD
@@ -17854,6 +18149,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 d, v, ax, data_type, name, line = closest
             # Build tooltip text via unified helper
             extra_data = {}
+            event_context = getattr(line, '_progtrack_event_context', None)
+            grouped_event_items = getattr(
+                line, '_progtrack_coincident_event_items', None
+            )
+            if event_context is not None:
+                extra_data['event_context'] = event_context
             # For sperm entries include motility and progressive percentages
             if data_type in ('sperm_total', 'sperm_motility', 'sperm_progressive'):
                 # mot_pct and prog_pct may be undefined in this scope for non-applicable types
@@ -17874,6 +18175,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                 and abs(v - TRI_Y) < 1e-6)
             v_for_text = None if is_axis_triangle else v
             text = self._format_tooltip(data_type, d, v_for_text, name, extra=extra_data)
+            if event_context is not None or grouped_event_items:
+                text = event_tooltip_text((d, v, ax, data_type, name, line), event.y)
 
             # (above we have reset all sperm dots → now highlight the one under the cursor)
             if data_type in ('sperm_total', 'sperm_motility', 'sperm_progressive'):
@@ -17892,7 +18195,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             is_triangle_event = (data_type in ('fsh', 'progesterone') 
                                 and isinstance(v, (int, float)) 
                                 and abs(v - TRI_Y) < 1e-6)
-            if is_triangle_event:
+            event_point = self._plot_event_display_point(line, d, v, event.y)
+            if event_point is not None:
+                disp_x, disp_y = event_point
+            elif is_triangle_event:
                 x_num = mdates.date2num(d)
                 disp_x, disp_y = ax.get_xaxis_transform().transform((x_num, TRI_Y))
             else:
@@ -17905,15 +18211,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if self._annotation:
                 self._annotation.remove()
 
-            self._annotation = fig.text(
-                fig_x, fig_y,
-                text,
-                transform=fig.transFigure,
-                bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.9),
-                verticalalignment='center',
-                zorder=9999,
-                clip_on=False
-            )
+            if event_context is not None or grouped_event_items:
+                self._annotation = event_annotation(np.array((disp_x, disp_y)), text)
+            else:
+                self._annotation = fig.text(
+                    fig_x, fig_y, text, transform=fig.transFigure,
+                    bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.9),
+                    verticalalignment='center', zorder=9999, clip_on=False
+                )
 
             # remove the overlay dot immediately after annotation spawns
             for od in self.sperm_overlay_dots:
@@ -18136,13 +18441,34 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             table.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
             table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
             table.resizeRowsToContents()
-            rows = min(5, max(0, int(row_count)))
+            rows = min(5, max(0, min(int(row_count), table.rowCount())))
             header_h = max(1, int(table.horizontalHeader().sizeHint().height()))
-            row_h = max(1, int(table.verticalHeader().defaultSectionSize()))
-            for row in range(min(table.rowCount(), rows)):
-                row_h = max(row_h, int(table.rowHeight(row)))
+            if table.rowCount():
+                # resizeRowsToContents() may make the actual sections much
+                # shorter than QHeaderView.defaultSectionSize().  Capping by
+                # that default over-reserves the table and can fit more than
+                # five short rows, leaving six-to-nine-row histories with no
+                # scrollbar at all.  Use measured section heights instead;
+                # the largest section keeps the viewport bounded to at most
+                # five rows even when row contents vary in height.
+                row_h = max(
+                    1,
+                    max(int(table.rowHeight(row)) for row in range(table.rowCount())),
+                )
+            else:
+                row_h = max(1, int(table.verticalHeader().defaultSectionSize()))
             frame = table.frameWidth() * 2
-            target = header_h + rows * row_h + frame + 4
+            # Short tables must remain fully visible even if a horizontal
+            # scrollbar appears after their final width is assigned.  For an
+            # overflowing table, do not reserve that extra height: after a
+            # resize hides the horizontal bar, it must still never expose a
+            # sixth data row.
+            horizontal_slack = (
+                max(0, int(table.horizontalScrollBar().sizeHint().height()))
+                if 0 < table.rowCount() <= 5
+                else 0
+            )
+            target = header_h + rows * row_h + frame + horizontal_slack + 4
             table.setFixedHeight(max(28, target))
             table.setProperty("_progtrack_viewport_target", int(max(28, target)))
             fit = getattr(table.window(), "_progtrack_fit_animal_tabs", None)
@@ -18417,7 +18743,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _build_editable_list(self, title: str, items: List[Any],
                              format_item: Callable[[Any], Tuple[str, Optional[str], Optional[str]]],
                              add_default: Callable[[List[Any]], Tuple[str, Optional[str], Optional[str]]],
-                             col_headers: Optional[Tuple[str, str, str]] = None
+                             col_headers: Optional[Tuple[str, str, str]] = None,
+                             *, add_button_text: Optional[str] = None,
                              ) -> Tuple[QScrollArea, List[Tuple[QLineEdit, Optional[QLineEdit], Optional[QLineEdit]]]]:
         """Build a scrollable list for editing items with date validation and optional sample ID."""
         frame = QFrame()
@@ -18458,8 +18785,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             header_layout.addWidget(del_header, 0)  # No stretch
             layout.addLayout(header_layout)
         
-        # Localized "New" button with the list title
-        add_btn = QPushButton(self.messages["button.new_item"].format(title=title))
+        # Weight histories supply a singular action independently of the tab
+        # title. Other measurement lists retain their existing labels.
+        add_btn = QPushButton(add_button_text if add_button_text is not None
+                              else self.messages["button.new_item"].format(title=title))
         layout.addWidget(add_btn)
 
         # ------------------------
@@ -18607,12 +18936,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 len(item_data) > 2 and isinstance(item_data[2], dict)
             )
             source_event = (
-                copy.deepcopy(item_data[2])
+                event_source_for_editor_row(item_data[2])
                 if persisted_event
                 else {}
             )
-            if persisted_event:
-                ensure_event_record_id(source_event)
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(5)
@@ -21214,7 +21541,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         heritage_plugin = getattr(self, 'heritage_plugin', None)
         if heritage_plugin is not None and callable(getattr(heritage_plugin, 'on_user_logout', None)):
             heritage_plugin.on_user_logout()
-        mt.logout()
+        # The complete UI state was persisted above; do not write the same
+        # per-user session record a second time from MasterTrackPlugin.logout.
+        mt.logout(save_session=False)
         self._clear_session_animal_selection()
         # Revert to global disabled_plugins (Guest defaults)
         self._disabled_plugins = self._load_disabled_plugins()
@@ -21696,10 +22025,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if hasattr(self, 'btn_load_sperm'):
                 self.btn_load_sperm.setEnabled(steroid_active)
             active_selected = any(name in self.animals for name in self.selected_animals)
-            for attr in ('btn_edit', 'btn_edit_animal'):
-                btn = getattr(self, attr, None)
-                if btn:
-                    btn.setEnabled(active_selected and self._can_use_primary_edit_button())
+            if hasattr(self, 'btn_edit'):
+                self.btn_edit.setEnabled(
+                    active_selected and self._can_use_primary_edit_button()
+                )
+            if hasattr(self, 'btn_edit_animal'):
+                self.btn_edit_animal.setEnabled(
+                    active_selected and self._master_can('core.edit_animal_core')
+                )
             return
         can_create = mt.can("core.create_animals")
         can_import = mt.can("core.import")
@@ -21708,6 +22041,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         can_import_measurements = can_import and mt.can("core.edit_animal_measurements")
         can_archive = mt.can("core.archive_animals")
         can_delete = mt.can("core.delete_animals")
+        can_edit_animal = self._master_can('core.edit_animal_core')
 
         if hasattr(self, 'btn_new'):
             self.btn_new.setEnabled(can_create)
@@ -21715,7 +22049,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Edit button also needs a selection — only enable if both permission and selection
             self.btn_edit.setEnabled(can_edit and any(name in self.animals for name in self.selected_animals))
         if hasattr(self, 'btn_edit_animal'):
-            self.btn_edit_animal.setEnabled(can_edit and any(name in self.animals for name in self.selected_animals))
+            self.btn_edit_animal.setEnabled(
+                can_edit_animal and any(name in self.animals for name in self.selected_animals)
+            )
         if hasattr(self, 'btn_load_blood'):
             self.btn_load_blood.setEnabled(can_import_research_data)
         if hasattr(self, 'btn_load_urine'):
@@ -22726,7 +23062,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             row.addWidget(d_le, 1)
             row.addWidget(v_le, 1)
             row.addWidget(add_btn, 0)
-            # Insert new rows above the "Neu Gewicht" button if present
+            # Insert new rows above the weight-history add action if present
             try:
                 idx_btn = wt_layout.indexOf(btn_add_w)  # -1 if button not added yet
             except NameError:
@@ -22743,7 +23079,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             d = w['datum'].strftime(DATE_FORMAT) if isinstance(w['datum'], datetime) else str(w['datum'])
             add_w_row((d, format_measurement(w['wert'])))
 
-        btn_add_w = QPushButton(self.messages.get("dialog.partner.button.new_weight", "New Weight"))
+        btn_add_w = QPushButton(self.messages.get("button.add_weight", "Add Weight"))
         btn_add_w.clicked.connect(lambda: add_w_row(None))
         wt_layout.addWidget(btn_add_w)
         self._cap_history_viewport(wt_scroll, wt_frame, len(wt_rows))
@@ -22923,14 +23259,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("partner.save.persistence.after", new_name=new_name)
             if not editing:
                 self._audit_animal_created(new_name, rec_obj)
+            if editing:
+                dlg._progtrack_successful_animal_edit = (name, new_name)
             self._save_trace("partner.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
             self._save_trace("partner.save.dialog_accept.after", new_name=new_name)
-            self._refresh_list(update_tab_visibility=True)
-            # Select new/edited item
-            items = self.lst.findItems(new_name, Qt.MatchFlag.MatchStartsWith)
-            if items:
-                self.lst.setCurrentItem(items[0])
+            if not editing:
+                self._refresh_list(update_tab_visibility=True)
+                # Select a newly created item; edits preserve the canonical
+                # selection and are finalized after the modal dialog returns.
+                items = self.lst.findItems(new_name, Qt.MatchFlag.MatchStartsWith)
+                if items:
+                    self.lst.setCurrentItem(items[0])
             # Refresh report table if Reports tab is active
             if self.reports_enabled and hasattr(self, 'report_current_animal'):
                 if self.report_current_animal == new_name:
@@ -22953,7 +23293,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         })
         if read_only:
             self._freeze_dialog_inputs(dlg)
-        dlg.exec()
+        self._exec_animal_editor_dialog(dlg)
 
 
     def _dlg_samenspender(self, name: Optional[str], read_only: bool = False) -> None:
@@ -23345,6 +23685,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             sorted_gewicht, 
             fmt_weight, 
             def_weight,
+            add_button_text=self.messages.get("button.add_weight", "Add Weight"),
             col_headers=(
                 self.messages.get("table.header.date", "Date"),
                 self.messages.get("table.header.weight", "Weight (g)"),
@@ -23573,7 +23914,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("sperm_donor.save.persistence.after", new_name=new_name)
             if not editing:
                 self._audit_animal_created(new_name, rec_obj)
-            self._refresh_list(update_tab_visibility=True)
+            if editing:
+                dlg._progtrack_successful_animal_edit = (name, new_name)
+            else:
+                self._refresh_list(update_tab_visibility=True)
             dlg.accept()
             # Refresh report table if Reports tab is active
             if self.reports_enabled and hasattr(self, 'report_current_animal'):
@@ -23600,7 +23944,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         })
         if read_only:
             self._freeze_dialog_inputs(dlg)
-        dlg.exec()
+        self._exec_animal_editor_dialog(dlg)
 
     def _dlg_offspring(self, name: Optional[str], read_only: bool = False) -> None:
         """
@@ -23820,6 +24164,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             sorted_gewicht, 
             fmt_wg, 
             def_wg,
+            add_button_text=self.messages.get("button.add_weight", "Add Weight"),
             col_headers=(
                 self.messages.get("table.header.date", "Date"),
                 self.messages.get("table.header.weight", "Weight (g)"),
@@ -23872,7 +24217,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # function to add event row
             def add_ev_row(data: Optional[Tuple[Any, ...]] = None) -> None:
                 source_event = (
-                    copy.deepcopy(data[2])
+                    event_source_for_editor_row(data[2])
                     if data and len(data) > 2 and isinstance(data[2], dict)
                     else {}
                 )
@@ -23923,8 +24268,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
                 if data:
                     stored_type = str(data[1] or "").strip().lower()
-                    if source_event:
-                        ensure_event_record_id(source_event)
                     restore_event_combo_selection(
                         combo,
                         stored_type,
@@ -24107,15 +24450,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             rec_obj['severity'] = severity_cb.currentData()
             # events
             if steroid_active:
-                events_list = []
+                events_list, seen_event_rows = [], set()
                 for date_le, combo in ev_widgets:
                     try:
                         dt = datetime.strptime(date_le.text(), DATE_FORMAT)
                         # Use currentData() to get canonical event type, not translated display text
                         typ = combo.currentData()
                         if typ:  # Ensure we have valid data
-                            events_list.append(
-                                event_payload_from_editor_row(combo, typ, dt)
+                            event_payload = event_payload_from_editor_row(combo, typ, dt)
+                            append_event_payload_once(
+                                events_list, seen_event_rows, combo, event_payload
                             )
                     except Exception:
                         pass
@@ -24166,9 +24510,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("offspring.save.persistence.after", new_name=new_name)
             if not editing:
                 self._audit_animal_created(new_name, rec_obj)
-            self._save_trace("offspring.save.refresh_list.before", new_name=new_name)
-            self._refresh_list(update_tab_visibility=True)
-            self._save_trace("offspring.save.refresh_list.after", new_name=new_name)
+            if editing:
+                dlg._progtrack_successful_animal_edit = (name, new_name)
+            else:
+                self._save_trace("offspring.save.refresh_list.before", new_name=new_name)
+                self._refresh_list(update_tab_visibility=True)
+                self._save_trace("offspring.save.refresh_list.after", new_name=new_name)
             self._save_trace("offspring.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
             self._save_trace("offspring.save.dialog_accept.after", new_name=new_name)
@@ -24194,7 +24541,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         })
         if read_only:
             self._freeze_dialog_inputs(dlg)
-        dlg.exec()
+        self._exec_animal_editor_dialog(dlg)
 
     def _dlg_zuchttier(self, name: Optional[str], read_only: bool = False) -> None:
         """
@@ -24464,6 +24811,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             sorted_gewicht,
             fmt_wg,
             def_wg,
+            add_button_text=self.messages.get("button.add_weight", "Add Weight"),
             col_headers=(
                 self.messages.get("table.header.date", "Date"),
                 self.messages.get("table.header.weight", "Weight (g)"),
@@ -24516,7 +24864,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Function to add event row
             def add_ev_row(data: Optional[Tuple[Any, ...]] = None) -> None:
                 source_event = (
-                    copy.deepcopy(data[2])
+                    event_source_for_editor_row(data[2])
                     if data and len(data) > 2 and isinstance(data[2], dict)
                     else {}
                 )
@@ -24571,8 +24919,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
                 if data:
                     stored_type = str(data[1] or "").strip().lower()
-                    if source_event:
-                        ensure_event_record_id(source_event)
                     restore_event_combo_selection(
                         combo,
                         stored_type,
@@ -24782,14 +25128,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             
             # Events
             if steroid_active:
-                events_list = []
+                events_list, seen_event_rows = [], set()
                 for date_le, combo in ev_widgets:
                     try:
                         dt = datetime.strptime(date_le.text(), DATE_FORMAT)
                         typ = combo.currentData()
                         if typ:
-                            events_list.append(
-                                event_payload_from_editor_row(combo, typ, dt)
+                            event_payload = event_payload_from_editor_row(combo, typ, dt)
+                            append_event_payload_once(
+                                events_list, seen_event_rows, combo, event_payload
                             )
                     except Exception:
                         pass
@@ -24842,9 +25189,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("zuchttier.save.persistence.after", new_name=new_name)
             if not editing:
                 self._audit_animal_created(new_name, rec_obj)
-            self._save_trace("zuchttier.save.refresh_list.before", new_name=new_name)
-            self._refresh_list(update_tab_visibility=True)
-            self._save_trace("zuchttier.save.refresh_list.after", new_name=new_name)
+            if editing:
+                dlg._progtrack_successful_animal_edit = (name, new_name)
+            else:
+                self._save_trace("zuchttier.save.refresh_list.before", new_name=new_name)
+                self._refresh_list(update_tab_visibility=True)
+                self._save_trace("zuchttier.save.refresh_list.after", new_name=new_name)
             self._save_trace("zuchttier.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
             self._save_trace("zuchttier.save.dialog_accept.after", new_name=new_name)
@@ -24870,7 +25220,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         })
         if read_only:
             self._freeze_dialog_inputs(dlg)
-        dlg.exec()
+        self._exec_animal_editor_dialog(dlg)
 
     def _dlg_versuchstier(
         self,
@@ -25144,6 +25494,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             sorted_gewicht,
             lambda item: (item['datum'].strftime(DATE_FORMAT), format_measurement(item['wert']), ''),
             lambda ws:   (datetime.now().date().strftime(DATE_FORMAT), '0', ''),
+            add_button_text=self.messages.get("button.add_weight", "Add Weight"),
             col_headers=(
                 self.messages.get('table.header.date',   'Date'),
                 self.messages.get('table.header.weight', 'Weight (g)'),
@@ -25192,7 +25543,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         def add_ev_row_vt(data: Optional[Tuple[Any, ...]] = None) -> None:
             source_event = (
-                copy.deepcopy(data[2])
+                event_source_for_editor_row(data[2])
                 if data and len(data) > 2 and isinstance(data[2], dict)
                 else {}
             )
@@ -25225,8 +25576,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 'measurement')
             if data:
                 stored = str(data[1] or "").strip().lower()
-                if source_event:
-                    ensure_event_record_id(source_event)
                 restore_event_combo_selection(
                     ev_combo,
                     stored,
@@ -25333,14 +25682,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("versuchstier.save.identity_resolved", new_name=new_name, selected_species=selected_species)
 
 
-            events_list = []
+            events_list, seen_event_rows = [], set()
             for ev_d, ev_c in ev_widgets:
                 try:
                     dt  = datetime.strptime(ev_d.text(), DATE_FORMAT)
                     typ = ev_c.currentData()
                     if typ:
-                        events_list.append(
-                            event_payload_from_editor_row(ev_c, typ, dt)
+                        event_payload = event_payload_from_editor_row(ev_c, typ, dt)
+                        append_event_payload_once(
+                            events_list, seen_event_rows, ev_c, event_payload
                         )
                 except Exception:
                     pass
@@ -25451,9 +25801,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("versuchstier.save.persistence.after", new_name=new_name)
             if not editing:
                 self._audit_animal_created(new_name, rec_obj)
-            self._save_trace("versuchstier.save.refresh_list.before", new_name=new_name)
-            self._refresh_list(update_tab_visibility=True)
-            self._save_trace("versuchstier.save.refresh_list.after", new_name=new_name)
+            if editing:
+                dlg._progtrack_successful_animal_edit = (name, new_name)
+            else:
+                self._save_trace("versuchstier.save.refresh_list.before", new_name=new_name)
+                self._refresh_list(update_tab_visibility=True)
+                self._save_trace("versuchstier.save.refresh_list.after", new_name=new_name)
             self._save_trace("versuchstier.save.dialog_accept.before", new_name=new_name)
             dlg.accept()
             self._save_trace("versuchstier.save.dialog_accept.after", new_name=new_name)
@@ -25474,7 +25827,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         })
         if read_only:
             self._freeze_dialog_inputs(dlg)
-        dlg.exec()
+        self._exec_animal_editor_dialog(dlg)
 
     def _dlg_basic_animal_role(
         self,
@@ -25717,6 +26070,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 lambda item: (item["datum"].strftime(DATE_FORMAT),
                               format_measurement(item["wert"]), ""),
                 lambda rows: (datetime.now().strftime(DATE_FORMAT), "", ""),
+                add_button_text=self.messages.get("button.add_weight", "Add Weight"),
                 col_headers=(self.messages.get("table.header.date", "Date"),
                              self.messages.get("table.header.weight", "Weight (g)"), ""),
             )
@@ -25768,11 +26122,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             custom_event_scroll = None
 
             def add_custom_event_row(data=None):
-                source_event = (
-                    copy.deepcopy(data) if isinstance(data, dict) else {}
-                )
-                if source_event:
-                    ensure_event_record_id(source_event)
+                source_event = event_source_for_editor_row(data)
                 row = QHBoxLayout()
                 date_edit = QLineEdit(
                     str((data.get("datum") or data.get("date") or ""))
@@ -26015,6 +26365,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if str(getattr(combo, "_progtrack_source_event", {}).get("event_id") or "")
                 }
                 retained_events = []
+                seen_event_rows = set()
                 for event in rec_obj.get("events", []) or []:
                     if not isinstance(event, dict):
                         retained_events.append(event)
@@ -26049,7 +26400,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         snapshot = self._custom_event_snapshot(event_type)
                         if snapshot.get("id") != event_type or self._custom_event_definition_for_type(event_type):
                             entry["custom_event_snapshot"] = snapshot
-                    retained_events.append(entry)
+                    append_event_payload_once(
+                        retained_events, seen_event_rows, event_combo, entry
+                    )
                 rec_obj["events"] = retained_events
                 violations = self._custom_event_limit_additions_allowed(rec, rec_obj)
                 if violations:
@@ -26107,9 +26460,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     )
                 except Exception as exc:
                     logging.warning(f"Could not save basic-role cage address block: {exc}")
-            self._retain_selection_after_animal_save(name, new_key)
-            self._refresh_list(update_tab_visibility=True)
-            self._on_select()
+            if creating:
+                self._retain_selection_after_animal_save(name, new_key)
+                self._refresh_list(update_tab_visibility=True)
+                self._on_select()
+            else:
+                dlg._progtrack_successful_animal_edit = (name, new_key)
             dlg.accept()
 
         save_btn.clicked.connect(on_save_basic_role)
@@ -26122,7 +26478,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             'core.edit_animal_measurements': [new_weight_le, custom_weight_tab, custom_event_tab],
             'core.edit_animal_research_data': [ref_w_le, *custom_limit_widgets.values()],
         })
-        dlg.exec()
+        saved_edit = self._exec_animal_editor_dialog(dlg)
+        tabs = getattr(self, "main_tabs", None)
+        plots_tab = getattr(self, "plots_tab", None)
+        if saved_edit and not (
+            tabs is not None
+            and plots_tab is not None
+            and tabs.currentWidget() is plots_tab
+        ):
+            # Preserve the basic-role editor's existing active non-Plot refresh.
+            self._on_select()
 
     def _dlg_female_animal(
         self,
@@ -26567,6 +26932,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             sorted_gewicht, 
             fmt_gewicht, 
             def_gewicht,
+            add_button_text=self.messages.get("button.add_weight", "Add Weight"),
             col_headers=(
                 self.messages.get("table.header.date", "Date"),
                 self.messages.get("table.header.weight", "Weight (g)"),
@@ -26831,7 +27197,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             # Events
             if steroid_active:
-                new_events, seen_events = [], set()
+                new_events, seen_event_rows = [], set()
                 for d_edit, combo in events_w:
                     # Skip deleted widgets or empty rows.
                     try:
@@ -26857,22 +27223,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             typ not in allowed_types and not unchanged_historical_type
                         ):
                             raise ValueError
-                        key = (typ, dt)
-                        # Existing records are history, not new duplicates to
-                        # normalize away. Preserve repeated persisted events;
-                        # duplicate suppression remains for newly entered or
-                        # retagged rows.
-                        if key not in seen_events or unchanged_historical_type:
-                            seen_events.add(key)
-                            new_events.append(
-                                event_payload_from_editor_row(
-                                    combo,
-                                    typ,
-                                    datetime.combine(dt, datetime.min.time()),
-                                    recording_role=role_code,
-                                    legacy_recording_role=role_now,
-                                )
-                            )
+                        event_payload = event_payload_from_editor_row(
+                            combo,
+                            typ,
+                            datetime.combine(dt, datetime.min.time()),
+                            recording_role=role_code,
+                            legacy_recording_role=role_now,
+                        )
+                        # Event type/date are not identity: multiple events of
+                        # the same type on the same day (including in separate
+                        # project periods or recording roles) are valid rows.
+                        # Suppress only a duplicate reference to the same
+                        # persisted event or the same editor widget.
+                        append_event_payload_once(
+                            new_events, seen_event_rows, combo, event_payload
+                        )
                     except Exception:
                         self._show_message(
                             self.messages.get("error.title", "Error"),
@@ -26981,11 +27346,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         except Exception:
                             self._save_trace("female_like.save.sample_urine.exception", key=key, date=_d)
                             pass
-            self._save_trace("female_like.save.refresh_list.before", key=key)
-            self._refresh_list(update_tab_visibility=True)
-            self._save_trace("female_like.save.refresh_list.after", key=key)
-            
-            self._retain_selection_after_animal_save(name, key)
+            if creating:
+                self._save_trace("female_like.save.refresh_list.before", key=key)
+                self._refresh_list(update_tab_visibility=True)
+                self._save_trace("female_like.save.refresh_list.after", key=key)
+                self._retain_selection_after_animal_save(name, key)
+            else:
+                dlg._progtrack_successful_animal_edit = (name, key)
             self._save_trace("female_like.save.dialog_accept.before", key=key)
             dlg.accept()
             self._save_trace("female_like.save.dialog_accept.after", key=key)
@@ -27020,7 +27387,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         })
         if read_only:
             self._freeze_dialog_inputs(dlg)
-        dlg.exec()
+        self._exec_animal_editor_dialog(dlg)
 
     # ------------------------
     # 7.22 Edit Animal Dialog
@@ -28640,6 +29007,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 # ------------------------
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    install_monochrome_indicator_style(app)
     win = ProgTrackApp()
     win.show()
     sys.exit(app.exec())

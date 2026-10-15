@@ -324,6 +324,7 @@
   </table>
 
   <h3>4.4 Modifica dei dati</h3>
+  <p>In <strong>Modifica → Pesi</strong>, <strong>Aggiungi peso</strong> aggiunge una riga alla cronologia. Inserire data e peso in grammi, quindi salvare. L'azione è identica negli editor dei ruoli predefiniti e configurati; senza il permesso di modificare le misurazioni si può consultare la cronologia, ma non aggiungere righe. I campi del peso iniziale alla creazione di un animale sono separati.</p>
   <p>Selezionare un animale e usare l’azione di modifica. Nella categoria Tutti, Modifica ruolo cambia solo ruolo/categoria; l’azione Modifica separata apre l’editor completo specifico per ruolo.</p>
   <p><strong><img class="ui-icon" src="../icons/ui/action_edit.svg" alt="Modifica" /> Modifica</strong> · <strong><img class="ui-icon" src="../icons/ui/action_edit_role.svg" alt="Modifica ruolo" /> Modifica ruolo</strong></p>
   <table class="basic"><tr><th>Scheda editor</th><th>Uso</th></tr>
@@ -422,6 +423,8 @@
   </p>
 
   <h3>6.2 Stili di linea, marcatori e colori</h3>
+  <p>Passare il puntatore o fare clic su un <strong>simbolo</strong> di evento personalizzato visibile per vedere nome, data e conteggio cumulativo nel ruolo registrato e nel periodo di appartenenza al progetto. Counting mostra x; Limiting mostra x/y solo con un massimo realmente applicabile. I simboli sovrapposti elencano insieme gli eventi coincidenti. Gli eventi storici non usano la quota attuale. Le <strong>linee verticali degli eventi non generano tooltip</strong>: leggere le etichette. I tooltip dei punti di misurazione restano invariati.</p>
+  <p><strong>Visualizzazione → Eventi</strong> controlla simboli, linee ed etichette degli eventi nelle categorie dei ruoli configurati e in Tutti, indipendentemente da Steroid Track. Un ruolo con eventi configurati ma senza cronologia datata mostra una casella disabilitata; senza capacità di eventi o eventi datati salvati la casella non compare. Gli eventi storici restano controllabili dopo la rimozione di un blocco del ruolo. Il comando non modifica pesi o dati salvati.</p>
   <p>
     Utilizzare i gruppi <strong>Display</strong> / <strong>Line
     Style</strong> per regolare come vengono disegnate le serie di
@@ -529,7 +532,7 @@
   <h2 id="plugins">9. Plugin e moduli</h2>
   <p>La disponibilità dei plugin viene verificata all’avvio. Le voci selezionabili nel menu Strumenti mostrano/nascondono schede principali; gli strumenti a finestra aprono un dialogo separato. Se un plugin non può essere importato o inizializzato, resta indisponibile e il motivo viene scritto nel log tecnico. In una release pacchettizzata ripristinare l'intero runtime <code>_internal</code> invece di installare singoli pacchetti accanto all'applicazione.</p>
     <table class="basic"><tr><th>Voce menu</th><th>Tipo</th><th>Comportamento attuale e uso</th></tr>
-  <tr><td><strong>Steroid Track</strong></td><td>Abilitazione</td><td>Steroid Track è un vero plugin senza finestra propria. Abilita filtri di fase femminili, import del progesterone ematico, import PdG urinario, import sperma, controlli grafico ormoni/eventi, controlli sperma e convertitore PdG.</td></tr>
+  <tr><td><strong>Steroid Track</strong></td><td>Abilitazione</td><td>Steroid Track è un vero plugin senza finestra propria. Abilita filtri di fase femminili, import del progesterone ematico, import PdG urinario, import sperma, controlli grafico ormoni, controlli sperma e convertitore PdG. Il controllo di visibilità degli eventi è indipendente.</td></tr>
   <tr><td><strong>Convertitore PdG→Progesterone</strong></td><td>Dialogo</td><td>Adatta modelli PdG→progesterone specifici per animale da misure appaiate nello stesso giorno; i modelli abilitano Prog. unificato e grafici combinati.</td></tr>
   <tr><td><strong>Master Track</strong></td><td>Amministrazione</td><td>Fornisce accesso, modalità ospite, utenti, lavori, permessi, sessioni e audit log. I ruoli account sono lord, master, user e guest; i pacchetti lavoro rifiniscono i permessi pratici. AWO è un job vincolato a Vet per il benessere animale e gli incarichi IACUC.</td></tr>
   <tr><td><strong>Project Track</strong></td><td>Pannello + scheda opzionale</td><td>Offre filtri progetto/specie limitati alle associazioni, cronologia progetti, assegnazioni IACUC/AWO, stato sperimentale degli animali, documenti/SOP e gestione progetti. Ogni progetto ha uno stato localizzato Bozza, Attivo o Chiuso; l'elenco mostra Bozza in corsivo, Attivo in grassetto e Chiuso normale. La chiusura non archivia il progetto né rimuove associazioni; i cambi di stato sono autorizzati e registrati.</td></tr>

@@ -7,12 +7,38 @@
 
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import date, datetime
 
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.backend_store import BackendJsonStore
 
 from .converter import PdGConverter, get_paired_data
+
+
+def _format_unified_prog_date(value):
+    """Return a display-only, locale-independent Unified Prog. date."""
+    parsed_date = None
+    if isinstance(value, datetime):
+        # Preserve the calendar date supplied by the record; do not convert
+        # timezone-aware values and risk shifting the displayed day.
+        parsed_date = value.date()
+    elif isinstance(value, date):
+        parsed_date = value
+    elif isinstance(value, str) and value.strip():
+        text = value.strip()
+        try:
+            parsed_date = datetime.fromisoformat(text).date()
+        except ValueError:
+            try:
+                parsed_date = date.fromisoformat(text)
+            except ValueError:
+                pass
+
+    if parsed_date is not None:
+        return parsed_date.strftime("%d. %m. %Y")
+
+    # Keep the existing safe fallback for missing or unsupported values.
+    return str(value)[:10] if value else ""
 
 
 class PdGConverterPlugin:
@@ -328,10 +354,7 @@ class PdGCapability:
             for i, rec in enumerate(sorted_records):
                 # Date
                 date_val = rec.get('datum')
-                if isinstance(date_val, datetime):
-                    date_str = date_val.strftime('%Y-%m-%d')
-                else:
-                    date_str = str(date_val)[:10] if date_val else ""
+                date_str = _format_unified_prog_date(date_val)
                 conv_table.setItem(i, 0, QTableWidgetItem(date_str))
                 
                 # PdG value

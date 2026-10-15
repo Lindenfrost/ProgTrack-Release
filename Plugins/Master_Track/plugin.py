@@ -373,11 +373,12 @@ class MasterTrackPlugin:
         self._current_role = ROLE_GUEST
         logger.info("Running in Guest (read-only) mode")
 
-    def logout(self) -> None:
-        """Log out the current user, save session, return to Guest."""
+    def logout(self, *, save_session: bool = True) -> None:
+        """Log out, optionally saving session state first, and return to Guest."""
         self._stop_idle_timer()
         if self._current_username:
-            self.save_session()
+            if save_session:
+                self.save_session()
             self.audit("logout", self._current_username)
         self._set_guest()
 
@@ -408,29 +409,35 @@ class MasterTrackPlugin:
         self._stop_idle_timer()
         self._idle_warned = False
 
+        # Mouse and keyboard activity can reset this countdown many times per
+        # minute. Keep one app-owned warning timer and one logout timer instead
+        # of leaving stopped QTimer children behind after every interaction.
+        if self._warning_timer is None:
+            self._warning_timer = QTimer(self.app)
+            self._warning_timer.setSingleShot(True)
+            self._warning_timer.timeout.connect(self._on_idle_warning)
+        if self._idle_timer is None:
+            self._idle_timer = QTimer(self.app)
+            self._idle_timer.setSingleShot(True)
+            self._idle_timer.timeout.connect(self._on_idle_timeout)
+
         timeout_ms = self._effective_timeout_minutes * 60 * 1000
         warning_ms = max(0, timeout_ms - 15 * 1000)
 
         # Warning timer (fires 15 seconds before logout)
         if warning_ms > 0 and warning_ms < timeout_ms:
-            self._warning_timer = QTimer(self.app)
-            self._warning_timer.setSingleShot(True)
-            self._warning_timer.timeout.connect(self._on_idle_warning)
             self._warning_timer.start(warning_ms)
+        else:
+            self._warning_timer.stop()
 
         # Logout timer
-        self._idle_timer = QTimer(self.app)
-        self._idle_timer.setSingleShot(True)
-        self._idle_timer.timeout.connect(self._on_idle_timeout)
         self._idle_timer.start(timeout_ms)
 
     def _stop_idle_timer(self) -> None:
         if self._idle_timer is not None:
             self._idle_timer.stop()
-            self._idle_timer = None
         if self._warning_timer is not None:
             self._warning_timer.stop()
-            self._warning_timer = None
         self._idle_warned = False
         if self._idle_warning_countdown is not None:
             self._idle_warning_countdown.stop()
