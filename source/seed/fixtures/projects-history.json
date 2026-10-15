@@ -1,0 +1,254 @@
+{
+  "projects": {
+    "Anode": {
+      "animals": [
+        {
+          "date_entered": "20.07.2026",
+          "date_left": null,
+          "ipid": "Azog | Papio hamadryas anubis | 04.04.2010 | DPZ",
+          "last_severity": null,
+          "name": "Azog",
+          "previous_experimental_snapshot": [],
+          "previous_project_snapshot": [],
+          "status": "active"
+        }
+      ],
+      "archived": false
+    },
+    "Backcrossing": {
+      "animals": [
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Aragorn I | Callitrix jacchus | 07.02.2018 | DPZ",
+          "last_severity": null,
+          "name": "Aragorn I",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Aragorn II | Callitrix jacchus | 11.02.2021 | DPZ",
+          "last_severity": null,
+          "name": "Aragorn II",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Arwen | Callitrix jacchus | 23.02.2015 | DPZ",
+          "last_severity": null,
+          "name": "Arwen",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Celebrian | Callitrix jacchus | 06.05.2007 | DPZ",
+          "last_severity": null,
+          "name": "Celebrian",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Eldarion | Callitrix jacchus | 01.03.2026 | DPZ",
+          "last_severity": null,
+          "name": "Eldarion",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Elladan | Callitrix jacchus | 23.07.2015 | DPZ",
+          "last_severity": null,
+          "name": "Elladan",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Elrohir | Callitrix jacchus | 21.01.2016 | DPZ",
+          "last_severity": null,
+          "name": "Elrohir",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": "20.07.2026",
+          "ipid": "Elrond | Callitrix jacchus | 04.02.2012 | DPZ",
+          "last_severity": null,
+          "name": "Elrond",
+          "previous_in_experiment": false,
+          "status": "former"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Isildur | Callitrix jacchus | 23.02.2015 | DPZ",
+          "last_severity": null,
+          "name": "Isildur",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Jessica | Callitrix jacchus | 06.07.2015 | Iluvatar",
+          "last_severity": null,
+          "name": "Jessica",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Taylor | Callitrix jacchus | 14.06.2018 | Iluvatar",
+          "last_severity": null,
+          "name": "Taylor",
+          "status": "active"
+        }
+      ],
+      "archived": false
+    },
+    "OTOF-": {
+      "animals": [
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Anton | Callitrix jacchus | 25.05.2015 | Iluvatar",
+          "last_severity": null,
+          "name": "Anton",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Ekaterina | Callitrix jacchus | 02.04.2016 | Iluvatar",
+          "last_severity": null,
+          "name": "Ekaterina",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Konstantin | Callitrix jacchus | 18.08.2020 | Iluvatar",
+          "last_severity": null,
+          "name": "Konstantin",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Legolas | Callitrix jacchus | 04.03.2026 | DPZ",
+          "last_severity": null,
+          "name": "Legolas",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Olga | Callitrix jacchus | 20.06.2015 | Iluvatar",
+          "last_severity": null,
+          "name": "Olga",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Oropher | Callitrix jacchus | 25.05.2015 | Iluvatar",
+          "last_severity": null,
+          "name": "Oropher",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Svetlana | Callitrix jacchus | 03.05.2021 | Iluvatar",
+          "last_severity": null,
+          "name": "Svetlana",
+          "status": "active"
+        },
+        {
+          "date_entered": "20.04.2026",
+          "date_left": null,
+          "ipid": "Thranduil | Callitrix jacchus | 11.02.2021 | DPZ",
+          "last_severity": null,
+          "name": "Thranduil",
+          "status": "active"
+        }
+      ],
+      "archived": false
+    },
+    "Oakshield": {
+      "animals": [
+        {
+          "date_entered": "20.07.2026",
+          "date_left": "20.07.2026",
+          "had_in_experiment": true,
+          "ipid": "Azog | Papio hamadryas anubis | 04.04.2010 | DPZ",
+          "last_severity": null,
+          "name": "Azog",
+          "previous_experimental_snapshot": [],
+          "previous_in_experiment": true,
+          "previous_project_snapshot": [
+            {
+              "date_entered": "20.07.2026",
+              "date_left": "20.07.2026",
+              "ipid": "Azog | Papio hamadryas anubis | 04.04.2010 | DPZ",
+              "last_severity": null,
+              "name": "Azog",
+              "previous_experimental_snapshot": [],
+              "previous_in_experiment": false,
+              "previous_project_snapshot": [],
+              "project": "Zucht",
+              "status": "former"
+            }
+          ],
+          "status": "former"
+        },
+        {
+          "date_entered": "21.07.2026",
+          "date_left": null,
+          "had_in_experiment": true,
+          "ipid": "Azog | Papio hamadryas anubis | 04.04.2010 | DPZ",
+          "last_severity": null,
+          "name": "Azog",
+          "previous_experimental_snapshot": [],
+          "previous_in_experiment": true,
+          "previous_project_snapshot": [
+            {
+              "date_entered": "20.07.2026",
+              "date_left": "20.07.2026",
+              "ipid": "Azog | Papio hamadryas anubis | 04.04.2010 | DPZ",
+              "last_severity": null,
+              "name": "Azog",
+              "previous_experimental_snapshot": [],
+              "previous_in_experiment": false,
+              "previous_project_snapshot": [],
+              "project": "Zucht",
+              "status": "former"
+            }
+          ],
+          "status": "active"
+        }
+      ],
+      "archived": false
+    },
+    "Zucht": {
+      "animals": [
+        {
+          "date_entered": "20.07.2026",
+          "date_left": "20.07.2026",
+          "ipid": "Azog | Papio hamadryas anubis | 04.04.2010 | DPZ",
+          "last_severity": null,
+          "name": "Azog",
+          "previous_experimental_snapshot": [],
+          "previous_in_experiment": false,
+          "previous_project_snapshot": [],
+          "status": "former"
+        }
+      ],
+      "archived": false
+    }
+  },
+  "version": 1
+}

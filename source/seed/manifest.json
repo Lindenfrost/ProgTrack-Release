@@ -1,0 +1,171 @@
+{
+  "schema": "progtrack-seed-source/1",
+  "seed_version": "0.2.1",
+  "created_at": "2026-07-30T00:00:00+00:00",
+  "package_id": "8f99615e-13b0-52c8-b778-d7d51efb8b74",
+  "reference_date": "2026-03-01",
+  "inputs": {
+    "profiles": {
+      "path": "scenarios/profiles.json"
+    },
+    "reproduction": {
+      "path": "scenarios/reproduction.json"
+    },
+    "event-identities": {
+      "path": "fixtures/event-identities.json"
+    },
+    "animal-roles": {
+      "root": "repository",
+      "path": "Plugins/core/animal_roles.json"
+    },
+    "craniometry": {
+      "root": "repository",
+      "path": "Plugins/Embryo_Track/cranimetry_reference.json"
+    },
+    "animals-active-callitrix": {
+      "path": "fixtures/animals-active-callitrix.json"
+    },
+    "animals-active-macaca": {
+      "path": "fixtures/animals-active-macaca.json"
+    },
+    "animals-active-papio": {
+      "path": "fixtures/animals-active-papio.json"
+    },
+    "animals-active-mus": {
+      "path": "fixtures/animals-active-mus.json"
+    },
+    "animals-archived-callitrix": {
+      "path": "fixtures/animals-archived-callitrix.json"
+    },
+    "animals-archived-macaca": {
+      "path": "fixtures/animals-archived-macaca.json"
+    },
+    "animals-archived-papio": {
+      "path": "fixtures/animals-archived-papio.json"
+    },
+    "animals-archived-mus": {
+      "path": "fixtures/animals-archived-mus.json"
+    },
+    "projects-catalog": {
+      "path": "fixtures/projects-catalog.json"
+    },
+    "projects-history": {
+      "path": "fixtures/projects-history.json"
+    },
+    "housing-cage": {
+      "path": "fixtures/housing-cage.json"
+    },
+    "housing-inspections": {
+      "path": "fixtures/housing-inspections.json"
+    },
+    "medical-history": {
+      "path": "fixtures/medical-history.json"
+    },
+    "reports-animal-reports": {
+      "path": "fixtures/reports-animal-reports.json"
+    },
+    "samples-organs": {
+      "path": "fixtures/samples-organs.json"
+    },
+    "samples-other": {
+      "path": "fixtures/samples-other.json"
+    },
+    "mouse-colony": {
+      "path": "scenarios/mouse-colony.json"
+    },
+    "shire": {
+      "path": "scenarios/shire.json"
+    },
+    "weights": {
+      "path": "scenarios/weights.json"
+    }
+  },
+  "scenarios": [
+    {
+      "id": "complete-identity",
+      "description": "Canonical identity, references, roles and experimental limits for all active and archived animals."
+    },
+    {
+      "id": "all-species-weights",
+      "description": "Weight histories for Callitrix, Macaca, Papio and Mus through the latest scientific record."
+    },
+    {
+      "id": "denethor-family",
+      "description": "Denethor, Boromir and Faramir retain biological donor and surrogate parentage."
+    },
+    {
+      "id": "otof-success",
+      "description": "Two linked egg retrieval, sperm collection, embryo transfer, verification and birth chains."
+    },
+    {
+      "id": "otof-poor-yield",
+      "description": "Megan: low oocyte yield and no embryos; no fabricated transfer."
+    },
+    {
+      "id": "otof-low-development",
+      "description": "Lauren: low embryo development, one transferred embryo and a verified pregnancy ending in abortion."
+    },
+    {
+      "id": "surrogate-nonpregnant",
+      "description": "Two fully linked transfers with negative pregnancy verification."
+    },
+    {
+      "id": "surrogate-abortions",
+      "description": "Two fully linked transfers with positive verification followed by abortion."
+    },
+    {
+      "id": "svetlana-legolas",
+      "description": "Legolas retains Svetlana/Thranduil biological parentage and Olga as surrogate. Svetlana's collection is 1 October 2025, Thranduil's existing sample is 2 October, Olga's corrected transfer is 10 October; birth stays 4 March 2026."
+    },
+    {
+      "id": "monitoring",
+      "description": "Three 28-day cycles; one reading per animal/kind/calendar day; post-PGF response retains its sample number."
+    },
+    {
+      "id": "flow-donor-links",
+      "description": "Every transferred embryo links to an egg retrieval and an identified Denethor or Thranduil sperm sample; sperm is collected one day after eggs; transfer is 6-9 days after sperm collection/fertilization (current examples: 7-9 days after eggs, 6-8 after sperm)."
+    },
+    {
+      "id": "complete-donor-stage-counts",
+      "description": "Every egg collection and sperm sample has complete stage metrics. In-vivo MII is limited to 0-2 per collection and never produces embryos; all 21 embryos arise from IVF-fertilized in-vitro MII. Collection-only/unused samples have no fabricated fertilization or embryo links."
+    },
+    {
+      "id": "mus-musculus-ringbearer-colony",
+      "description": "Four experimental Ringbearer mice preserve their surgery events and former Shire membership."
+    },
+    {
+      "id": "shire-five-generation-breeding-colony",
+      "description": "Eight founder pairs, five planned generations, 1-2 litters per pair, 10-12 young per litter, limited selected breeders and at most 500 mice in total."
+    },
+    {
+      "id": "shire-naming",
+      "description": "Hobbit and ASCII Portuguese names with descriptive monikers; no numeric offspring names."
+    },
+    {
+      "id": "sam-elanor",
+      "description": "Sam remains Elanor's father; Sam/Rosie's complete litter is the explicit generation-6 exception."
+    },
+    {
+      "id": "mouse-house-group-housing",
+      "description": "Study pair cages, ordinary breeding cages and same-sex groups of at most five; Bilbo's deliberate single-cage witness."
+    },
+    {
+      "id": "mild-resolved-medical",
+      "description": "Four explicitly pinned animal observations and resolutions, independent of population sort order."
+    },
+    {
+      "id": "projects-and-security",
+      "description": "Five projects, seven synthetic users; job-derived permissions and separate organizational versus housing Units."
+    },
+    {
+      "id": "heritage-ownership",
+      "description": "No Heritage-owned dummy or real-animal Core shadow in the shipped seed."
+    }
+  ],
+  "excluded_resources": [
+    {
+      "path": "Plugins/PdG_converter/data/models.json",
+      "reason": "Old fitted-model identity is obsolete; backend PdG models intentionally start empty. Do not silently import historical fitted parameters."
+    }
+  ]
+}

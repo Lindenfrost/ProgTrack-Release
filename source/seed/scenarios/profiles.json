@@ -1,0 +1,293 @@
+{
+  "CANONICAL_ORGANIZATION_UNITS": [
+    {
+      "active": true,
+      "archived": false,
+      "display_name": "IT",
+      "facility_ref": "dpz",
+      "revision": 1,
+      "unit_id": "org-it"
+    },
+    {
+      "active": true,
+      "archived": false,
+      "display_name": "TTS",
+      "facility_ref": "dpz",
+      "revision": 1,
+      "unit_id": "org-tts"
+    },
+    {
+      "active": true,
+      "archived": false,
+      "display_name": "HUS",
+      "facility_ref": "dpz",
+      "revision": 1,
+      "unit_id": "org-hus"
+    }
+  ],
+  "CANONICAL_USERS": [
+    {
+      "created_at": "2026-04-16",
+      "display_name": "Administrator Administratorson",
+      "email": "admin@dpz.eu",
+      "jobs": [],
+      "mobile": "0176234234234",
+      "phone": "-000",
+      "profession": "Software engineer",
+      "pronouns": "Mr.",
+      "role": "lord",
+      "unit": "IT",
+      "unit_id": "org-it",
+      "username": "Admin"
+    },
+    {
+      "created_at": "2026-04-16",
+      "display_name": "Dr. Researcher Sciencedottir",
+      "email": "res@dpz.eu",
+      "jobs": [
+        "researcher"
+      ],
+      "mobile": "01753457685634",
+      "phone": "-111",
+      "profession": "Biologist",
+      "pronouns": "Mrs.",
+      "role": "user",
+      "unit": "TTS",
+      "unit_id": "org-tts",
+      "username": "Researcher"
+    },
+    {
+      "created_at": "2026-04-16",
+      "display_name": "Dr. Veterinary Medicinsson",
+      "email": "vet@dpz.eu",
+      "jobs": [
+        "vet"
+      ],
+      "mobile": "0176345345475456",
+      "phone": "-222",
+      "profession": "Veterinary surgeon",
+      "pronouns": "Mr.",
+      "role": "user",
+      "unit": "HUS",
+      "unit_id": "org-hus",
+      "username": "Vet"
+    },
+    {
+      "created_at": "2026-04-16",
+      "display_name": "Dr. Manager Plansdottir",
+      "email": "man@dpz.eu",
+      "jobs": [
+        "manager"
+      ],
+      "mobile": "0146234234345235",
+      "phone": "-333",
+      "profession": "Biologist",
+      "pronouns": "Ms.",
+      "role": "user",
+      "unit": "HUS",
+      "unit_id": "org-hus",
+      "username": "Manager"
+    },
+    {
+      "created_at": "2026-04-16",
+      "display_name": "Keeper Breedsson",
+      "email": "keep@dpz.eu",
+      "jobs": [
+        "keeper"
+      ],
+      "mobile": "01782342343463425",
+      "phone": "-444",
+      "profession": "Animal caretaker",
+      "pronouns": "Mr.",
+      "role": "user",
+      "unit": "HUS",
+      "unit_id": "org-hus",
+      "username": "Keeper"
+    },
+    {
+      "created_at": "2026-04-16",
+      "display_name": "Tester Aitisson",
+      "email": "test@dpz.eu",
+      "jobs": [
+        "tester"
+      ],
+      "mobile": "016745346234234",
+      "phone": "-999",
+      "profession": "Software engineer",
+      "pronouns": "Mr.",
+      "role": "user",
+      "unit": "TTS",
+      "unit_id": "org-tts",
+      "username": "Tester"
+    },
+    {
+      "created_at": "2026-07-22",
+      "display_name": "Dr. Veterinary Medicinsdottir",
+      "email": "veti@dpz.eu",
+      "jobs": [
+        "vet",
+        "animal_welfare_officer"
+      ],
+      "mobile": "",
+      "phone": "",
+      "profession": "Veterinary Surgeon",
+      "pronouns": "",
+      "role": "user",
+      "unit": "HUS",
+      "unit_id": "org-hus",
+      "username": "Veti"
+    }
+  ],
+  "OTOF_EXPERIMENTAL_ANIMAL_NAMES": [
+    "Ekaterina",
+    "Legolas",
+    "Olga",
+    "Svetlana",
+    "Thranduil"
+  ],
+  "DEFAULT_HOUSING_CAGES": {
+    "Callitrix jacchus": "cage_cj_family_01",
+    "Macaca mulatta": "cage_mm_01",
+    "Papio hamadryas anubis": "cage_pa_01"
+  },
+  "PROJECT_DATA_PROFILES": {
+    "Backcrossing": {
+      "approved_count": 15,
+      "authorization": "IACUC-BC-2026-02",
+      "comment": "Fictional pedigree and backcrossing cohort used to exercise inheritance, partner, and offspring workflows.",
+      "focus": "Document inheritance patterns and breeding outcomes across planned backcrosses.",
+      "internal": "BACKCROSS-2026",
+      "protocol": "DPZ-BC-2026-02",
+      "role_order": ["breeding_animal", "offspring", "egg_cell_donor", "surrogate", "sperm_donor"],
+      "roles": {
+        "breeding_animal": 10,
+        "egg_cell_donor": 1,
+        "offspring": 2,
+        "sperm_donor": 1,
+        "surrogate": 1
+      },
+      "species": "Callitrix jacchus",
+      "start_date": "20.04.2026",
+      "title": "Callitrix backcrossing and inheritance study",
+      "unit_id": "org-tts"
+    },
+    "OTOF-": {
+      "approved_count": 17,
+      "authorization": "IACUC-OTOF-2026-04",
+      "comment": "Fictional OTOF project covering donor, surrogate, transfer, sperm-donation, pregnancy, and outcome records.",
+      "focus": "Evaluate reproductive intervention workflows and embryo-transfer outcomes.",
+      "internal": "OTOF-2026",
+      "protocol": "DPZ-OTOF-2026-04",
+      "role_order": ["surrogate", "egg_cell_donor", "partner_animal", "sperm_donor", "experimental_offspring", "breeding_animal"],
+      "roles": {
+        "breeding_animal": 1,
+        "egg_cell_donor": 6,
+        "experimental_offspring": 1,
+        "partner_animal": 2,
+        "sperm_donor": 2,
+        "surrogate": 5
+      },
+      "species": "Callitrix jacchus",
+      "start_date": "20.04.2026",
+      "title": "OTOF reproductive intervention study",
+      "unit_id": "org-tts"
+    },
+    "Oakshield": {
+      "approved_count": 1,
+      "authorization": "IACUC-OAK-2026-05",
+      "comment": "Fictional Papio example for experimental assignment, welfare oversight, and severity documentation.",
+      "focus": "Assess a limited experimental procedure with continuous welfare review.",
+      "internal": "OAKSHIELD-2026",
+      "protocol": "DPZ-OAK-2026-05",
+      "role_order": ["experimental_animal"],
+      "roles": {
+        "experimental_animal": 1
+      },
+      "species": "Papio hamadryas anubis",
+      "start_date": "20.07.2026",
+      "title": "Oakshield Papio welfare and procedure study",
+      "unit_id": "org-tts"
+    },
+    "Ringbearer": {
+      "approved_count": 4,
+      "authorization": "IACUC-RB-2026-06",
+      "comment": "Fictional example project for an experimental mouse cohort housed together in the Mouse House.",
+      "focus": "Demonstrate a complete small-animal experimental workflow with group housing and longitudinal measurements.",
+      "internal": "RINGBEARER-2026",
+      "protocol": "DPZ-RB-2026-06",
+      "role_order": ["experimental_animal"],
+      "roles": {
+        "experimental_animal": 4
+      },
+      "species": "Mus musculus",
+      "start_date": "22.07.2026",
+      "title": "Ringbearer mouse colony",
+      "unit_id": "org-tts"
+    },
+    "Shire": {
+      "approved_count": 500,
+      "authorization": "IACUC-SHIRE-2019-01",
+      "comment": "Fictional bounded pedigree from eight founder pairs through five offspring generations. Ringbearer animals originate here; Sam remains Elanor's father in a sixth-generation outcross.",
+      "focus": "Exercise multi-generation natural breeding, 1-2 litters of 10-12 young per pair, limited breeder selection and least-related available mates, below 500 mice in the complete seed.",
+      "internal": "SHIRE-2019",
+      "protocol": "DPZ-SHIRE-2019-01",
+      "role_order": ["breeding_animal"],
+      "roles": {
+        "breeding_animal": 500
+      },
+      "species": "Mus musculus",
+      "start_date": "01.01.2019",
+      "title": "Shire mouse breeding colony",
+      "unit_id": "org-tts"
+    }
+  },
+  "REMOVED_ANIMAL_NAMES": [
+    "Andy",
+    "Betta",
+    "Bobby",
+    "Cindy",
+    "Dana",
+    "Echo",
+    "Fredi",
+    "Kronar",
+    "Lindir",
+    "RoleProbe",
+    "Test"
+  ],
+  "RINGBEARER_SURGERY_DATES": {
+    "Frodo": "2024-09-15",
+    "Merry": "2024-09-17",
+    "Pippin": "2024-09-18",
+    "Sam": "2024-09-16"
+  },
+  "SEED_PROJECTS": [
+    "Backcrossing",
+    "OTOF-",
+    "Oakshield",
+    "Ringbearer",
+    "Shire"
+  ],
+  "SHIRE_MOUSE_LIMIT": 500,
+  "SHIRE_NAME_MONIKERS": [
+    "Tall",
+    "Fat",
+    "Handsome",
+    "Dreamy",
+    "Brave",
+    "Bright",
+    "Curious",
+    "Gentle",
+    "Jolly",
+    "Merry",
+    "Nimble",
+    "Sunny",
+    "Clever",
+    "Daring",
+    "Quiet",
+    "Swift",
+    "Witty",
+    "Bold",
+    "Calm",
+    "Kind"
+  ]
+}

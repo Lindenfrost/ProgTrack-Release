@@ -1,0 +1,26 @@
+{
+  "donors": [["Tiffany", "17.04.2017"], ["Nicole", "09.06.2018"], ["Megan", "22.08.2019"], ["Lauren", "03.10.2019"]],
+  "surrogates": [["Rachel", "14.02.2017"], ["Amanda", "19.05.2018"], ["Heather", "26.07.2018"], ["Alaine", "30.09.2019"]],
+  "sperm_donor": "Denethor",
+  "sperm_delay_days": 1,
+  "transfer_delay_range": [6, 9],
+  "transfer_delay_reference": "sperm_collection",
+  "in_vivo_m2_limit_per_collection": 2,
+  "fertilization_method": "IVF",
+  "monitoring": {"start_date": "2024-08-01", "animal_offset_days": 3, "cycles": 3, "cycle_days": 28, "sampling_days": [0, 4, 7, 10, 14, 18, 23, 27], "pgf_day": 24, "post_pgf_days": 3},
+  "cycles": [
+    {"key": "tiffany-boromir", "donor": 0, "egg_date": "2024-10-10", "transfer_date": "2024-10-18", "surrogate": 0, "outcome": "birth", "offspring": "boromir", "gv_isolated": 12, "m1_isolated": 1, "m2_isolated": 2, "m1_to_m2": 10, "fertilized": 8, "in_vivo_m2_inseminated": 2, "in_vivo_m2_fertilized": 1, "embryos": 6},
+    {"key": "nicole-faramir", "donor": 1, "egg_date": "2025-11-17", "transfer_date": "2025-11-25", "surrogate": 1, "outcome": "birth", "offspring": "faramir", "gv_isolated": 11, "m1_isolated": 1, "m2_isolated": 1, "m1_to_m2": 9, "fertilized": 7, "in_vivo_m2_inseminated": 1, "in_vivo_m2_fertilized": 1, "embryos": 5},
+    {"key": "tiffany-negative", "donor": 0, "egg_date": "2025-01-13", "transfer_date": "2025-01-20", "surrogate": 2, "outcome": "not-pregnant", "offspring": "", "gv_isolated": 10, "m1_isolated": 0, "m2_isolated": 1, "m1_to_m2": 8, "fertilized": 4, "in_vivo_m2_inseminated": 1, "in_vivo_m2_fertilized": 0, "embryos": 2},
+    {"key": "nicole-negative", "donor": 1, "egg_date": "2025-04-11", "transfer_date": "2025-04-20", "surrogate": 2, "outcome": "not-pregnant", "offspring": "", "gv_isolated": 9, "m1_isolated": 1, "m2_isolated": 0, "m1_to_m2": 7, "fertilized": 4, "in_vivo_m2_inseminated": 0, "in_vivo_m2_fertilized": 0, "embryos": 2},
+    {"key": "lauren-abortion", "donor": 3, "egg_date": "2024-10-03", "transfer_date": "2024-10-10", "surrogate": 3, "outcome": "abortion", "offspring": "", "gv_isolated": 8, "m1_isolated": 0, "m2_isolated": 1, "m1_to_m2": 6, "fertilized": 3, "in_vivo_m2_inseminated": 1, "in_vivo_m2_fertilized": 0, "embryos": 2},
+    {"key": "lauren-low-development", "donor": 3, "egg_date": "2025-03-02", "transfer_date": "2025-03-10", "surrogate": 3, "outcome": "abortion", "offspring": "", "gv_isolated": 13, "m1_isolated": 1, "m2_isolated": 2, "m1_to_m2": 10, "fertilized": 8, "in_vivo_m2_inseminated": 2, "in_vivo_m2_fertilized": 1, "embryos": 1},
+    {"key": "megan-poor-yield", "donor": 2, "egg_date": "2025-02-12", "transfer_date": null, "surrogate": null, "outcome": "poor-yield", "offspring": "", "gv_isolated": 2, "m1_isolated": 0, "m2_isolated": 0, "m1_to_m2": 1, "fertilized": 0, "in_vivo_m2_inseminated": 0, "in_vivo_m2_fertilized": 0, "embryos": 0}
+  ],
+  "existing_cycles": [
+    {"key": "svetlana-legolas", "egg_name": "Svetlana", "sperm_name": "Thranduil", "surrogate_name": "Olga", "egg_date": "2025-10-01", "transfer_date": "2025-10-10", "outcome": "birth", "offspring": "legolas", "gv_isolated": 8, "m1_isolated": 0, "m2_isolated": 1, "m1_to_m2": 6, "fertilized": 4, "in_vivo_m2_inseminated": 1, "in_vivo_m2_fertilized": 1, "embryos": 3}
+  ],
+  "collection_only": [
+    {"egg_name": "Ekaterina", "egg_date": "2025-10-01", "gv_isolated": 6, "m1_isolated": 1, "m2_isolated": 1, "m1_to_m2": 4, "fertilized": 0, "in_vivo_m2_fertilized": 0, "embryos": 0}
+  ]
+}

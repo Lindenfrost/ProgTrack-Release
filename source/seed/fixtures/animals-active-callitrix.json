@@ -1,0 +1,2892 @@
+{
+  "Anton | Callitrix jacchus | 25.05.2015 | Iluvatar": {
+    "_base_name": "Anton",
+    "abnormal_current": false,
+    "birth_date": "25.05.2015",
+    "chip_nr": "SC2V6KB0",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Anton",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: OTOF; Assigned to project: OTOF-"
+      }
+    },
+    "events": [],
+    "experimental_limits": {
+      "ref_weight": 488
+    },
+    "generated_id_absolute_sequence": 141,
+    "generated_id_sequence": 3,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2015-05-25T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2015-06-15T00:00:00",
+        "wert": 81.2
+      },
+      {
+        "datum": "2015-07-09T00:00:00",
+        "wert": 112.8
+      },
+      {
+        "datum": "2015-08-23T00:00:00",
+        "wert": 180.6
+      },
+      {
+        "datum": "2015-10-22T00:00:00",
+        "wert": 253.0
+      },
+      {
+        "datum": "2016-01-20T00:00:00",
+        "wert": 334.3
+      },
+      {
+        "datum": "2016-05-24T00:00:00",
+        "wert": 406.6
+      },
+      {
+        "datum": "2016-11-15T00:00:00",
+        "wert": 483.1
+      },
+      {
+        "datum": "2026-03-06T00:00:00",
+        "wert": 488.0
+      }
+    ],
+    "id": "cj_15_0003_M_Anton",
+    "in_experiment": false,
+    "ipid": "Anton | Callitrix jacchus | 25.05.2015 | Iluvatar",
+    "name": "Anton",
+    "origin": "Iluvatar",
+    "partner_von": "",
+    "pdg": [],
+    "project": "OTOF-",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "OTOF",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 488,
+    "reproduktionsfeld": "",
+    "rolle": "partner_animal",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": []
+  },
+  "Aragorn I | Callitrix jacchus | 07.02.2018 | DPZ": {
+    "_base_name": "Aragorn I",
+    "abnormal_current": false,
+    "birth_date": "07.02.2018",
+    "chip_nr": "UW242D1W",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Aragorn I",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: Crossbreeding; Assigned to project: Backcrossing"
+      }
+    },
+    "eizellspenderin": "Jessica | Callitrix jacchus | 06.07.2015 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 462
+    },
+    "generated_id_absolute_sequence": 165,
+    "generated_id_sequence": 4,
+    "genotype": "H-/H-",
+    "gewicht": [
+      {
+        "datum": "2018-02-07T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2018-02-28T00:00:00",
+        "wert": 78.0
+      },
+      {
+        "datum": "2018-03-24T00:00:00",
+        "wert": 108.0
+      },
+      {
+        "datum": "2018-05-08T00:00:00",
+        "wert": 154.0
+      },
+      {
+        "datum": "2018-07-07T00:00:00",
+        "wert": 206.0
+      },
+      {
+        "datum": "2018-10-05T00:00:00",
+        "wert": 274.0
+      },
+      {
+        "datum": "2019-02-07T00:00:00",
+        "wert": 357.0
+      },
+      {
+        "datum": "2019-08-01T00:00:00",
+        "wert": 462.0
+      },
+      {
+        "datum": "2020-03-08T00:00:00",
+        "wert": 461.0
+      },
+      {
+        "datum": "2020-10-14T00:00:00",
+        "wert": 461.0
+      },
+      {
+        "datum": "2021-07-11T00:00:00",
+        "wert": 461.0
+      },
+      {
+        "datum": "2022-06-26T00:00:00",
+        "wert": 460.0
+      },
+      {
+        "datum": "2023-07-31T00:00:00",
+        "wert": 458.0
+      },
+      {
+        "datum": "2026-02-07T00:00:00",
+        "wert": 459.0
+      }
+    ],
+    "id": "cj_18_0004_M_Aragorn_I",
+    "in_experiment": false,
+    "ipid": "Aragorn I | Callitrix jacchus | 07.02.2018 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Aragorn I",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Backcrossing",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "Crossbreeding",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 462,
+    "rolle": "breeding_animal",
+    "samenspender": "Isildur | Callitrix jacchus | 23.02.2015 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Aragorn II | Callitrix jacchus | 11.02.2021 | DPZ": {
+    "_base_name": "Aragorn II",
+    "abnormal_current": false,
+    "birth_date": "11.02.2021",
+    "chip_nr": "DOWAFD9E",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Aragorn II",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: Crossbreeding; Assigned to project: Backcrossing"
+      }
+    },
+    "eizellspenderin": "Taylor | Callitrix jacchus | 14.06.2018 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 480
+    },
+    "generated_id_absolute_sequence": 197,
+    "generated_id_sequence": 2,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2021-02-11T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2021-03-04T00:00:00",
+        "wert": 79.0
+      },
+      {
+        "datum": "2021-03-28T00:00:00",
+        "wert": 111.0
+      },
+      {
+        "datum": "2021-05-12T00:00:00",
+        "wert": 158.0
+      },
+      {
+        "datum": "2021-07-11T00:00:00",
+        "wert": 213.0
+      },
+      {
+        "datum": "2021-10-09T00:00:00",
+        "wert": 284.0
+      },
+      {
+        "datum": "2022-02-11T00:00:00",
+        "wert": 371.0
+      },
+      {
+        "datum": "2022-08-05T00:00:00",
+        "wert": 480.0
+      },
+      {
+        "datum": "2023-03-13T00:00:00",
+        "wert": 483.0
+      },
+      {
+        "datum": "2023-10-19T00:00:00",
+        "wert": 412.0
+      },
+      {
+        "datum": "2024-07-15T00:00:00",
+        "wert": 482.0
+      },
+      {
+        "datum": "2025-06-30T00:00:00",
+        "wert": 480.0
+      },
+      {
+        "datum": "2026-03-06T00:00:00",
+        "wert": 480.0
+      }
+    ],
+    "id": "cj_21_0002_M_Aragorn_II",
+    "in_experiment": false,
+    "ipid": "Aragorn II | Callitrix jacchus | 11.02.2021 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Aragorn II",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Backcrossing",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "Crossbreeding",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 480,
+    "rolle": "breeding_animal",
+    "samenspender": "Aragorn I | Callitrix jacchus | 07.02.2018 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Arwen | Callitrix jacchus | 23.02.2015 | DPZ": {
+    "_base_name": "Arwen",
+    "abnormal_current": false,
+    "birth_date": "23.02.2015",
+    "chip_nr": "D9W0K9PH",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Arwen",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: Crossbreeding; Assigned to project: Backcrossing"
+      }
+    },
+    "eizellspenderin": "Celebrian | Callitrix jacchus | 06.05.2007 | DPZ",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 515
+    },
+    "generated_id_absolute_sequence": 139,
+    "generated_id_sequence": 1,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2015-02-23T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2015-03-16T00:00:00",
+        "wert": 85.0
+      },
+      {
+        "datum": "2015-04-09T00:00:00",
+        "wert": 121.0
+      },
+      {
+        "datum": "2015-05-24T00:00:00",
+        "wert": 175.0
+      },
+      {
+        "datum": "2015-07-23T00:00:00",
+        "wert": 237.0
+      },
+      {
+        "datum": "2015-10-21T00:00:00",
+        "wert": 318.0
+      },
+      {
+        "datum": "2016-02-23T00:00:00",
+        "wert": 417.0
+      },
+      {
+        "datum": "2016-08-16T00:00:00",
+        "wert": 541.0
+      },
+      {
+        "datum": "2017-03-24T00:00:00",
+        "wert": 541.0
+      },
+      {
+        "datum": "2017-10-30T00:00:00",
+        "wert": 465.0
+      },
+      {
+        "datum": "2018-07-27T00:00:00",
+        "wert": 515.0
+      },
+      {
+        "datum": "2019-07-12T00:00:00",
+        "wert": 518.0
+      },
+      {
+        "datum": "2020-08-15T00:00:00",
+        "wert": 515.0
+      },
+      {
+        "datum": "2026-03-06T00:00:00",
+        "wert": 515.0
+      },
+      {
+        "datum": "2026-07-01T00:00:00",
+        "wert": 410.0
+      }
+    ],
+    "id": "cj_15_0001_F_Arwen",
+    "in_experiment": false,
+    "ipid": "Arwen | Callitrix jacchus | 23.02.2015 | DPZ",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Arwen",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Backcrossing",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "Crossbreeding",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 515,
+    "rolle": "breeding_animal",
+    "samenspender": "Elrond | Callitrix jacchus | 04.02.2012 | DPZ",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Celebrian | Callitrix jacchus | 06.05.2007 | DPZ": {
+    "_base_name": "Celebrian",
+    "abnormal_current": false,
+    "birth_date": "06.05.2007",
+    "chip_nr": "GDHYPHAJ",
+    "daten": [],
+    "death_date": "05.05.2020",
+    "display_name": "Celebrian",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: Crossbreeding; Assigned to project: Backcrossing"
+      }
+    },
+    "eizellspenderin": "Galadriel | Callitrix jacchus | 17.06.2005 | DPZ",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 422
+    },
+    "generated_id_absolute_sequence": 88,
+    "generated_id_sequence": 4,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2007-05-06T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2007-05-27T00:00:00",
+        "wert": 74.0
+      },
+      {
+        "datum": "2007-06-20T00:00:00",
+        "wert": 101.0
+      },
+      {
+        "datum": "2007-08-04T00:00:00",
+        "wert": 143.0
+      },
+      {
+        "datum": "2007-10-03T00:00:00",
+        "wert": 190.0
+      },
+      {
+        "datum": "2008-01-01T00:00:00",
+        "wert": 251.0
+      },
+      {
+        "datum": "2008-05-05T00:00:00",
+        "wert": 327.0
+      },
+      {
+        "datum": "2008-10-27T00:00:00",
+        "wert": 422.0
+      },
+      {
+        "datum": "2009-06-04T00:00:00",
+        "wert": 423.0
+      },
+      {
+        "datum": "2010-01-10T00:00:00",
+        "wert": 422.0
+      },
+      {
+        "datum": "2010-10-07T00:00:00",
+        "wert": 426.0
+      },
+      {
+        "datum": "2011-09-22T00:00:00",
+        "wert": 425.0
+      },
+      {
+        "datum": "2012-10-26T00:00:00",
+        "wert": 419.0
+      },
+      {
+        "datum": "2020-05-05T00:00:00",
+        "wert": 423.0
+      }
+    ],
+    "id": "cj_07_0004_F_Celebrian",
+    "in_experiment": false,
+    "ipid": "Celebrian | Callitrix jacchus | 06.05.2007 | DPZ",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Celebrian",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Backcrossing",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "Crossbreeding",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 422,
+    "rolle": "breeding_animal",
+    "samenspender": "Celeborn | Callitrix jacchus | 29.08.2004 | Iluvatar",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Ekaterina | Callitrix jacchus | 02.04.2016 | Iluvatar": {
+    "_base_name": "Ekaterina",
+    "abnormal_current": false,
+    "birth_date": "02.04.2016",
+    "chip_nr": "RHPZHHSV",
+    "daten": [
+      {
+        "datum": "2025-07-24T00:00:00",
+        "wert": 4.0
+      },
+      {
+        "datum": "2025-07-28T00:00:00",
+        "wert": 3.0
+      },
+      {
+        "datum": "2025-07-31T00:00:00",
+        "wert": 4.0
+      },
+      {
+        "datum": "2025-08-04T00:00:00",
+        "wert": 5.0
+      },
+      {
+        "datum": "2025-08-07T00:00:00",
+        "wert": 13.0
+      },
+      {
+        "datum": "2025-08-11T00:00:00",
+        "wert": 27.0
+      },
+      {
+        "datum": "2025-08-14T00:00:00",
+        "wert": 44.0
+      },
+      {
+        "datum": "2025-08-18T00:00:00",
+        "wert": 63.0
+      },
+      {
+        "datum": "2025-08-21T00:00:00",
+        "wert": 76.0
+      },
+      {
+        "datum": "2025-08-25T00:00:00",
+        "wert": 68.0
+      },
+      {
+        "datum": "2025-08-28T00:00:00",
+        "wert": 5.0
+      },
+      {
+        "datum": "2025-09-01T00:00:00",
+        "wert": 3.0
+      },
+      {
+        "datum": "2025-09-04T00:00:00",
+        "wert": 4.0
+      },
+      {
+        "datum": "2025-09-08T00:00:00",
+        "wert": 5.0
+      },
+      {
+        "datum": "2025-09-11T00:00:00",
+        "wert": 23.0
+      },
+      {
+        "datum": "2025-09-15T00:00:00",
+        "wert": 41.0
+      },
+      {
+        "datum": "2025-09-18T00:00:00",
+        "wert": 62.0
+      },
+      {
+        "datum": "2025-09-22T00:00:00",
+        "wert": 2.0
+      },
+      {
+        "datum": "2025-09-25T00:00:00",
+        "wert": 3.0
+      },
+      {
+        "datum": "2025-09-29T00:00:00",
+        "wert": 4.0
+      },
+      {
+        "datum": "2025-10-02T00:00:00",
+        "wert": 12.0
+      },
+      {
+        "datum": "2025-10-06T00:00:00",
+        "wert": 34.0
+      },
+      {
+        "datum": "2025-10-09T00:00:00",
+        "wert": 34.0
+      },
+      {
+        "datum": "2025-10-13T00:00:00",
+        "wert": 33.0
+      },
+      {
+        "datum": "2025-10-16T00:00:00",
+        "wert": 35.0
+      },
+      {
+        "datum": "2025-10-20T00:00:00",
+        "wert": 4.0
+      }
+    ],
+    "death_date": "",
+    "display_name": "Ekaterina",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: OTOF; Assigned to project: OTOF-"
+      }
+    },
+    "eizellspenderin": "",
+    "events": [
+      {
+        "datum": "2025-09-22T00:00:00",
+        "event_type": "fsh"
+      },
+      {
+        "datum": "2025-09-23T00:00:00",
+        "event_type": "fsh"
+      },
+      {
+        "datum": "2025-09-24T00:00:00",
+        "event_type": "fsh"
+      },
+      {
+        "datum": "2025-09-25T00:00:00",
+        "event_type": "fsh"
+      },
+      {
+        "datum": "2025-09-26T00:00:00",
+        "event_type": "fsh"
+      },
+      {
+        "datum": "2025-09-27T00:00:00",
+        "event_type": "fsh"
+      },
+      {
+        "datum": "2025-09-28T00:00:00",
+        "event_type": "fsh"
+      },
+      {
+        "datum": "2025-09-29T00:00:00",
+        "event_type": "fsh"
+      },
+      {
+        "datum": "2025-09-30T00:00:00",
+        "event_type": "fsh"
+      },
+      {
+        "datum": "2025-10-01T00:00:00",
+        "event_type": "surgery"
+      },
+      {
+        "datum": "2025-09-21T00:00:00",
+        "event_type": "pgf"
+      }
+    ],
+    "experimental_limits": {
+      "max_fsh": 200,
+      "max_messungen": 100,
+      "max_op": 3,
+      "max_pgf": 12,
+      "recovery_time": 30,
+      "ref_weight": 492
+    },
+    "generated_id_absolute_sequence": 147,
+    "generated_id_sequence": 2,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2016-04-02T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2016-04-23T00:00:00",
+        "wert": 82.0
+      },
+      {
+        "datum": "2016-05-17T00:00:00",
+        "wert": 114.0
+      },
+      {
+        "datum": "2016-07-01T00:00:00",
+        "wert": 182.0
+      },
+      {
+        "datum": "2016-08-30T00:00:00",
+        "wert": 255.0
+      },
+      {
+        "datum": "2016-11-28T00:00:00",
+        "wert": 337.0
+      },
+      {
+        "datum": "2017-04-02T00:00:00",
+        "wert": 410.0
+      },
+      {
+        "datum": "2017-09-24T00:00:00",
+        "wert": 492.0
+      },
+      {
+        "datum": "2026-03-06T00:00:00",
+        "wert": 492.0
+      }
+    ],
+    "id": "cj_16_0002_F_Ekaterina",
+    "in_experiment": false,
+    "ipid": "Ekaterina | Callitrix jacchus | 02.04.2016 | Iluvatar",
+    "max_fsh": 200,
+    "max_messungen": 100,
+    "max_op": 3,
+    "max_pgf": 12,
+    "name": "Ekaterina",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "OTOF-",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "OTOF",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "recovery_time": 30,
+    "ref_weight": 492,
+    "rolle": "egg_cell_donor",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Eldarion | Callitrix jacchus | 01.03.2026 | DPZ": {
+    "_base_name": "Eldarion",
+    "abnormal_current": false,
+    "birth_date": "01.03.2026",
+    "chip_nr": "GTG5A4EN",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Eldarion",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: Crossbreeding; Assigned to project: Backcrossing"
+      }
+    },
+    "eizellspenderin": "Arwen | Callitrix jacchus | 23.02.2015 | DPZ",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 223,
+    "generated_id_sequence": 2,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2026-03-01T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2026-03-06T00:00:00",
+        "wert": 41.0
+      },
+      {
+        "datum": "2026-03-15T00:00:00",
+        "wert": 47.0
+      }
+    ],
+    "id": "cj_26_0002_M_Eldarion",
+    "in_experiment": false,
+    "ipid": "Eldarion | Callitrix jacchus | 01.03.2026 | DPZ",
+    "manual_plus": false,
+    "name": "Eldarion",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Backcrossing",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "Crossbreeding",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "rolle": "offspring",
+    "samenspender": "Aragorn II | Callitrix jacchus | 11.02.2021 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Elladan | Callitrix jacchus | 23.07.2015 | DPZ": {
+    "_base_name": "Elladan",
+    "abnormal_current": false,
+    "birth_date": "23.07.2015",
+    "chip_nr": "9RV3NEDI",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Elladan",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: Crossbreeding; Assigned to project: Backcrossing"
+      }
+    },
+    "eizellspenderin": "Celebrian | Callitrix jacchus | 06.05.2007 | DPZ",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 473
+    },
+    "generated_id_absolute_sequence": 145,
+    "generated_id_sequence": 7,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2015-07-23T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2015-08-13T00:00:00",
+        "wert": 79.0
+      },
+      {
+        "datum": "2015-09-06T00:00:00",
+        "wert": 109.0
+      },
+      {
+        "datum": "2015-10-21T00:00:00",
+        "wert": 157.0
+      },
+      {
+        "datum": "2015-12-20T00:00:00",
+        "wert": 210.0
+      },
+      {
+        "datum": "2016-03-19T00:00:00",
+        "wert": 280.0
+      },
+      {
+        "datum": "2016-07-22T00:00:00",
+        "wert": 365.0
+      },
+      {
+        "datum": "2017-01-13T00:00:00",
+        "wert": 473.0
+      },
+      {
+        "datum": "2017-08-21T00:00:00",
+        "wert": 472.0
+      },
+      {
+        "datum": "2018-03-29T00:00:00",
+        "wert": 470.0
+      },
+      {
+        "datum": "2018-12-24T00:00:00",
+        "wert": 471.0
+      },
+      {
+        "datum": "2019-12-09T00:00:00",
+        "wert": 470.0
+      },
+      {
+        "datum": "2021-01-12T00:00:00",
+        "wert": 469.0
+      },
+      {
+        "datum": "2024-07-22T00:00:00",
+        "wert": 476.0
+      }
+    ],
+    "id": "cj_15_0007_M_Elladan",
+    "in_experiment": false,
+    "ipid": "Elladan | Callitrix jacchus | 23.07.2015 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Elladan",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Backcrossing",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "Crossbreeding",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 473,
+    "rolle": "breeding_animal",
+    "samenspender": "Elrond | Callitrix jacchus | 04.02.2012 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Elrohir | Callitrix jacchus | 21.01.2016 | DPZ": {
+    "_base_name": "Elrohir",
+    "abnormal_current": false,
+    "birth_date": "21.01.2016",
+    "chip_nr": "SUZFZANR",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Elrohir",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: Crossbreeding; Assigned to project: Backcrossing"
+      }
+    },
+    "eizellspenderin": "Celebrian | Callitrix jacchus | 06.05.2007 | DPZ",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 471
+    },
+    "generated_id_absolute_sequence": 146,
+    "generated_id_sequence": 1,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2016-01-21T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2016-02-11T00:00:00",
+        "wert": 78.0
+      },
+      {
+        "datum": "2016-03-06T00:00:00",
+        "wert": 109.0
+      },
+      {
+        "datum": "2016-04-20T00:00:00",
+        "wert": 156.0
+      },
+      {
+        "datum": "2016-06-19T00:00:00",
+        "wert": 209.0
+      },
+      {
+        "datum": "2016-09-17T00:00:00",
+        "wert": 279.0
+      },
+      {
+        "datum": "2017-01-20T00:00:00",
+        "wert": 364.0
+      },
+      {
+        "datum": "2017-07-14T00:00:00",
+        "wert": 471.0
+      },
+      {
+        "datum": "2018-02-19T00:00:00",
+        "wert": 472.0
+      },
+      {
+        "datum": "2018-09-27T00:00:00",
+        "wert": 471.0
+      },
+      {
+        "datum": "2019-06-24T00:00:00",
+        "wert": 469.0
+      },
+      {
+        "datum": "2020-06-08T00:00:00",
+        "wert": 472.0
+      },
+      {
+        "datum": "2021-07-13T00:00:00",
+        "wert": 474.0
+      },
+      {
+        "datum": "2025-01-20T00:00:00",
+        "wert": 475.0
+      }
+    ],
+    "id": "cj_16_0001_M_Elrohir",
+    "in_experiment": false,
+    "ipid": "Elrohir | Callitrix jacchus | 21.01.2016 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Elrohir",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Backcrossing",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "Crossbreeding",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 471,
+    "rolle": "breeding_animal",
+    "samenspender": "Elrond | Callitrix jacchus | 04.02.2012 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Elrond | Callitrix jacchus | 04.02.2012 | DPZ": {
+    "_base_name": "Elrond",
+    "abnormal_current": false,
+    "birth_date": "04.02.2012",
+    "chip_nr": "U26ZP4NF",
+    "daten": [],
+    "death_cause": "Euthanasie",
+    "death_date": "08.07.2026",
+    "display_name": "Elrond",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: Crossbreeding; Assigned to project: Backcrossing"
+      },
+      "2026-07-06": {
+        "signatures": "Manager"
+      },
+      "2026-07-20": {
+        "project_note": "Left project: Backcrossing"
+      }
+    },
+    "eizellspenderin": "Elwing | Callitrix jacchus | 08.01.2008 | DPZ",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 452
+    },
+    "generated_id_absolute_sequence": 118,
+    "generated_id_sequence": 1,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2012-02-04T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2012-02-25T00:00:00",
+        "wert": 76.0
+      },
+      {
+        "datum": "2012-03-20T00:00:00",
+        "wert": 105.0
+      },
+      {
+        "datum": "2012-05-04T00:00:00",
+        "wert": 150.0
+      },
+      {
+        "datum": "2012-07-03T00:00:00",
+        "wert": 201.0
+      },
+      {
+        "datum": "2012-10-01T00:00:00",
+        "wert": 268.0
+      },
+      {
+        "datum": "2013-02-03T00:00:00",
+        "wert": 349.0
+      },
+      {
+        "datum": "2013-07-28T00:00:00",
+        "wert": 452.0
+      },
+      {
+        "datum": "2014-03-05T00:00:00",
+        "wert": 452.0
+      },
+      {
+        "datum": "2014-10-11T00:00:00",
+        "wert": 456.0
+      },
+      {
+        "datum": "2015-07-08T00:00:00",
+        "wert": 455.0
+      },
+      {
+        "datum": "2016-06-22T00:00:00",
+        "wert": 454.0
+      },
+      {
+        "datum": "2017-07-27T00:00:00",
+        "wert": 449.0
+      },
+      {
+        "datum": "2024-02-04T00:00:00",
+        "wert": 453.0
+      }
+    ],
+    "id": "cj_12_0001_M_Elrond",
+    "in_experiment": false,
+    "ipid": "Elrond | Callitrix jacchus | 04.02.2012 | DPZ",
+    "lifecycle_events": [
+      {
+        "actor": "Dr. Manager Plansdottir",
+        "date": "08.07.2026",
+        "event_id": "08f627eb931a4e45baf46140da0fe6c4",
+        "event_type": "death",
+        "reason": "Euthanasie",
+        "recipient": "",
+        "role": "manager"
+      }
+    ],
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Elrond",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "Crossbreeding",
+        "severity": ""
+      },
+      {
+        "entry_date": "20.04.2026",
+        "leave_date": "20.07.2026",
+        "project": "Backcrossing",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 452,
+    "rolle": "breeding_animal",
+    "samenspender": "Earendil | Callitrix jacchus | 14.02.2010 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": true,
+    "sick_end_date": null,
+    "sick_start_date": "2026-07-06T00:00:00",
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Elros | Callitrix jacchus | 04.02.2012 | DPZ": {
+    "_base_name": "Elros",
+    "abnormal_current": false,
+    "birth_date": "04.02.2012",
+    "chip_nr": "4FPROF7G",
+    "daten": [],
+    "death_date": "24.07.2025",
+    "display_name": "Elros",
+    "edits": {},
+    "eizellspenderin": "Elwing | Callitrix jacchus | 08.01.2008 | DPZ",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 444
+    },
+    "generated_id_absolute_sequence": 119,
+    "generated_id_sequence": 2,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2012-07-24T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2012-08-14T00:00:00",
+        "wert": 76.0
+      },
+      {
+        "datum": "2012-09-07T00:00:00",
+        "wert": 105.0
+      },
+      {
+        "datum": "2012-10-22T00:00:00",
+        "wert": 149.0
+      },
+      {
+        "datum": "2012-12-21T00:00:00",
+        "wert": 198.0
+      },
+      {
+        "datum": "2013-03-21T00:00:00",
+        "wert": 264.0
+      },
+      {
+        "datum": "2013-07-24T00:00:00",
+        "wert": 344.0
+      },
+      {
+        "datum": "2014-01-15T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2014-08-23T00:00:00",
+        "wert": 447.0
+      },
+      {
+        "datum": "2015-03-31T00:00:00",
+        "wert": 394.0
+      },
+      {
+        "datum": "2015-12-26T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2016-12-10T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2018-01-14T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2025-07-24T00:00:00",
+        "wert": 447.0
+      }
+    ],
+    "id": "cj_12_0002_M_Elros",
+    "in_experiment": false,
+    "ipid": "Elros | Callitrix jacchus | 04.02.2012 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Elros",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 444,
+    "rolle": "breeding_animal",
+    "samenspender": "Earendil | Callitrix jacchus | 14.02.2010 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Elured | Callitrix jacchus | 20.01.2007 | DPZ": {
+    "_base_name": "Elured",
+    "abnormal_current": false,
+    "birth_date": "20.01.2007",
+    "chip_nr": "6S7FH2IB",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Elured",
+    "edits": {},
+    "eizellspenderin": "Nimloth | Callitrix jacchus | 06.09.2004 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 442
+    },
+    "generated_id_absolute_sequence": 85,
+    "generated_id_sequence": 1,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2007-01-20T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2007-02-10T00:00:00",
+        "wert": 76.0
+      },
+      {
+        "datum": "2007-03-06T00:00:00",
+        "wert": 104.0
+      },
+      {
+        "datum": "2007-04-20T00:00:00",
+        "wert": 148.0
+      },
+      {
+        "datum": "2007-06-19T00:00:00",
+        "wert": 198.0
+      },
+      {
+        "datum": "2007-09-17T00:00:00",
+        "wert": 262.0
+      },
+      {
+        "datum": "2008-01-20T00:00:00",
+        "wert": 342.0
+      },
+      {
+        "datum": "2008-07-13T00:00:00",
+        "wert": 442.0
+      },
+      {
+        "datum": "2009-02-18T00:00:00",
+        "wert": 445.0
+      },
+      {
+        "datum": "2009-09-26T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2010-06-23T00:00:00",
+        "wert": 438.0
+      },
+      {
+        "datum": "2011-06-08T00:00:00",
+        "wert": 442.0
+      },
+      {
+        "datum": "2012-07-12T00:00:00",
+        "wert": 445.0
+      },
+      {
+        "datum": "2015-01-20T00:00:00",
+        "wert": 440.0
+      }
+    ],
+    "id": "cj_07_0001_M_Elured",
+    "in_experiment": false,
+    "ipid": "Elured | Callitrix jacchus | 20.01.2007 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Elured",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 442,
+    "rolle": "breeding_animal",
+    "samenspender": "Dior | Callitrix jacchus | 09.05.2004 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Elurin | Callitrix jacchus | 17.07.2007 | DPZ": {
+    "_base_name": "Elurin",
+    "abnormal_current": false,
+    "birth_date": "17.07.2007",
+    "chip_nr": "M2PE5DU6",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Elurin",
+    "edits": {},
+    "eizellspenderin": "Nimloth | Callitrix jacchus | 06.09.2004 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 496
+    },
+    "generated_id_absolute_sequence": 90,
+    "generated_id_sequence": 6,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2007-07-17T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2007-08-07T00:00:00",
+        "wert": 81.0
+      },
+      {
+        "datum": "2007-08-31T00:00:00",
+        "wert": 113.0
+      },
+      {
+        "datum": "2007-10-15T00:00:00",
+        "wert": 163.0
+      },
+      {
+        "datum": "2007-12-14T00:00:00",
+        "wert": 219.0
+      },
+      {
+        "datum": "2008-03-13T00:00:00",
+        "wert": 293.0
+      },
+      {
+        "datum": "2008-07-16T00:00:00",
+        "wert": 383.0
+      },
+      {
+        "datum": "2009-01-07T00:00:00",
+        "wert": 496.0
+      },
+      {
+        "datum": "2009-08-15T00:00:00",
+        "wert": 496.0
+      },
+      {
+        "datum": "2010-03-23T00:00:00",
+        "wert": 493.0
+      },
+      {
+        "datum": "2010-12-18T00:00:00",
+        "wert": 495.0
+      },
+      {
+        "datum": "2011-12-03T00:00:00",
+        "wert": 494.0
+      },
+      {
+        "datum": "2013-01-06T00:00:00",
+        "wert": 500.0
+      },
+      {
+        "datum": "2014-07-16T00:00:00",
+        "wert": 493.0
+      }
+    ],
+    "id": "cj_07_0006_M_Elurin",
+    "in_experiment": false,
+    "ipid": "Elurin | Callitrix jacchus | 17.07.2007 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Elurin",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 496,
+    "rolle": "breeding_animal",
+    "samenspender": "Dior | Callitrix jacchus | 09.05.2004 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Isildur | Callitrix jacchus | 23.02.2015 | DPZ": {
+    "_base_name": "Isildur",
+    "abnormal_current": false,
+    "birth_date": "23.02.2015",
+    "chip_nr": "JWR03DLQ",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Isildur",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: Crossbreeding; Assigned to project: Backcrossing"
+      }
+    },
+    "eizellspenderin": "Madison | Callitrix jacchus | 31.12.2012 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 443
+    },
+    "generated_id_absolute_sequence": 140,
+    "generated_id_sequence": 2,
+    "genotype": "H-/H-",
+    "gewicht": [
+      {
+        "datum": "2015-02-23T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2015-03-16T00:00:00",
+        "wert": 76.0
+      },
+      {
+        "datum": "2015-04-09T00:00:00",
+        "wert": 104.0
+      },
+      {
+        "datum": "2015-05-24T00:00:00",
+        "wert": 148.0
+      },
+      {
+        "datum": "2015-07-23T00:00:00",
+        "wert": 198.0
+      },
+      {
+        "datum": "2015-10-21T00:00:00",
+        "wert": 263.0
+      },
+      {
+        "datum": "2016-02-23T00:00:00",
+        "wert": 343.0
+      },
+      {
+        "datum": "2016-08-16T00:00:00",
+        "wert": 443.0
+      },
+      {
+        "datum": "2017-03-24T00:00:00",
+        "wert": 447.0
+      },
+      {
+        "datum": "2017-10-30T00:00:00",
+        "wert": 442.0
+      },
+      {
+        "datum": "2018-07-27T00:00:00",
+        "wert": 439.0
+      },
+      {
+        "datum": "2019-07-12T00:00:00",
+        "wert": 446.0
+      },
+      {
+        "datum": "2020-08-15T00:00:00",
+        "wert": 446.0
+      },
+      {
+        "datum": "2026-03-06T00:00:00",
+        "wert": 444.0
+      }
+    ],
+    "id": "cj_15_0002_M_Isildur",
+    "in_experiment": false,
+    "ipid": "Isildur | Callitrix jacchus | 23.02.2015 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Isildur",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Backcrossing",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "Crossbreeding",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 443,
+    "rolle": "breeding_animal",
+    "samenspender": "Elros | Callitrix jacchus | 04.02.2012 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Jessica | Callitrix jacchus | 06.07.2015 | Iluvatar": {
+    "_base_name": "Jessica",
+    "abnormal_current": false,
+    "birth_date": "06.07.2015",
+    "chip_nr": "BJV167TQ",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Jessica",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: Crossbreeding; Assigned to project: Backcrossing"
+      }
+    },
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 444
+    },
+    "generated_id_absolute_sequence": 144,
+    "generated_id_sequence": 6,
+    "genotype": "H-/H-",
+    "gewicht": [
+      {
+        "datum": "2015-07-06T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2015-07-27T00:00:00",
+        "wert": 76.0
+      },
+      {
+        "datum": "2015-08-20T00:00:00",
+        "wert": 105.0
+      },
+      {
+        "datum": "2015-10-04T00:00:00",
+        "wert": 149.0
+      },
+      {
+        "datum": "2015-12-03T00:00:00",
+        "wert": 198.0
+      },
+      {
+        "datum": "2016-03-02T00:00:00",
+        "wert": 264.0
+      },
+      {
+        "datum": "2016-07-05T00:00:00",
+        "wert": 344.0
+      },
+      {
+        "datum": "2016-12-27T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2017-08-04T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2018-03-12T00:00:00",
+        "wert": 443.0
+      },
+      {
+        "datum": "2018-12-07T00:00:00",
+        "wert": 442.0
+      },
+      {
+        "datum": "2019-11-22T00:00:00",
+        "wert": 443.0
+      },
+      {
+        "datum": "2020-12-26T00:00:00",
+        "wert": 442.0
+      },
+      {
+        "datum": "2023-07-06T00:00:00",
+        "wert": 448.0
+      }
+    ],
+    "id": "cj_15_0006_F_Jessica",
+    "in_experiment": false,
+    "ipid": "Jessica | Callitrix jacchus | 06.07.2015 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Jessica",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Backcrossing",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "Crossbreeding",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 444,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Konstantin | Callitrix jacchus | 18.08.2020 | Iluvatar": {
+    "_base_name": "Konstantin",
+    "abnormal_current": false,
+    "birth_date": "18.08.2020",
+    "chip_nr": "3J40RVN1",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Konstantin",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: OTOF; Assigned to project: OTOF-"
+      }
+    },
+    "events": [],
+    "experimental_limits": {
+      "ref_weight": 491
+    },
+    "generated_id_absolute_sequence": 195,
+    "generated_id_sequence": 20,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2020-08-18T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2020-09-08T00:00:00",
+        "wert": 81.5
+      },
+      {
+        "datum": "2020-10-02T00:00:00",
+        "wert": 113.4
+      },
+      {
+        "datum": "2020-11-16T00:00:00",
+        "wert": 181.6
+      },
+      {
+        "datum": "2021-01-15T00:00:00",
+        "wert": 254.4
+      },
+      {
+        "datum": "2021-04-15T00:00:00",
+        "wert": 336.3
+      },
+      {
+        "datum": "2021-08-18T00:00:00",
+        "wert": 409.1
+      },
+      {
+        "datum": "2022-02-09T00:00:00",
+        "wert": 486.1
+      },
+      {
+        "datum": "2026-03-06T00:00:00",
+        "wert": 491.0
+      }
+    ],
+    "id": "cj_20_0020_M_Konstantin",
+    "in_experiment": false,
+    "ipid": "Konstantin | Callitrix jacchus | 18.08.2020 | Iluvatar",
+    "name": "Konstantin",
+    "origin": "Iluvatar",
+    "partner_von": "",
+    "pdg": [],
+    "project": "OTOF-",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "OTOF",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 491,
+    "reproduktionsfeld": "",
+    "rolle": "partner_animal",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": []
+  },
+  "Legolas | Callitrix jacchus | 04.03.2026 | DPZ": {
+    "_base_name": "Legolas",
+    "abnormal_current": false,
+    "birth_date": "04.03.2026",
+    "chip_nr": "PWEFZVNB",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Legolas",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: OTOF; Assigned to project: OTOF-"
+      }
+    },
+    "eizellspenderin": "Svetlana | Callitrix jacchus | 03.05.2021 | Iluvatar",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 226,
+    "generated_id_sequence": 5,
+    "genotype": "OTOF-/WT",
+    "gewicht": [
+      {
+        "datum": "2026-03-04T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2026-03-09T00:00:00",
+        "wert": 41.0
+      },
+      {
+        "datum": "2026-03-15T00:00:00",
+        "wert": 45.0
+      }
+    ],
+    "id": "cj_26_0005_M_Legolas",
+    "in_experiment": false,
+    "ipid": "Legolas | Callitrix jacchus | 04.03.2026 | DPZ",
+    "manual_plus": false,
+    "name": "Legolas",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "OTOF-",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "OTOF",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "rolle": "offspring",
+    "samenspender": "Thranduil | Callitrix jacchus | 11.02.2021 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "Olga | Callitrix jacchus | 20.06.2015 | Iluvatar",
+    "ziehvater": "Anton | Callitrix jacchus | 25.05.2015 | Iluvatar"
+  },
+  "Olga | Callitrix jacchus | 20.06.2015 | Iluvatar": {
+    "_base_name": "Olga",
+    "abnormal_current": false,
+    "birth_date": "20.06.2015",
+    "chip_nr": "LVP9SCS9",
+    "daten": [
+      {
+        "datum": "2025-07-24T00:00:00",
+        "probennummer": "B01",
+        "wert": 5.0
+      },
+      {
+        "datum": "2025-07-28T00:00:00",
+        "probennummer": "B02",
+        "wert": 4.0
+      },
+      {
+        "datum": "2025-07-31T00:00:00",
+        "probennummer": "B03",
+        "wert": 4.0
+      },
+      {
+        "datum": "2025-08-04T00:00:00",
+        "probennummer": "B04",
+        "wert": 5.0
+      },
+      {
+        "datum": "2025-08-07T00:00:00",
+        "probennummer": "B05",
+        "wert": 14.0
+      },
+      {
+        "datum": "2025-08-11T00:00:00",
+        "probennummer": "B06",
+        "wert": 26.0
+      },
+      {
+        "datum": "2025-08-14T00:00:00",
+        "probennummer": "B07",
+        "wert": 43.0
+      },
+      {
+        "datum": "2025-08-18T00:00:00",
+        "probennummer": "B08",
+        "wert": 61.0
+      },
+      {
+        "datum": "2025-08-21T00:00:00",
+        "probennummer": "B09",
+        "wert": 74.0
+      },
+      {
+        "datum": "2025-08-25T00:00:00",
+        "probennummer": "B10",
+        "wert": 66.0
+      },
+      {
+        "datum": "2025-08-28T00:00:00",
+        "probennummer": "B11",
+        "wert": 4.0
+      },
+      {
+        "datum": "2025-09-01T00:00:00",
+        "probennummer": "B12",
+        "wert": 3.0
+      },
+      {
+        "datum": "2025-09-04T00:00:00",
+        "probennummer": "B13",
+        "wert": 4.0
+      },
+      {
+        "datum": "2025-09-08T00:00:00",
+        "probennummer": "B14",
+        "wert": 4.0
+      },
+      {
+        "datum": "2025-09-11T00:00:00",
+        "probennummer": "B15",
+        "wert": 22.0
+      },
+      {
+        "datum": "2025-09-15T00:00:00",
+        "probennummer": "B16",
+        "wert": 40.0
+      },
+      {
+        "datum": "2025-09-18T00:00:00",
+        "probennummer": "B17",
+        "wert": 60.0
+      },
+      {
+        "datum": "2025-09-25T00:00:00",
+        "probennummer": "B18",
+        "wert": 2.0
+      },
+      {
+        "datum": "2025-09-29T00:00:00",
+        "probennummer": "B19",
+        "wert": 3.0
+      },
+      {
+        "datum": "2025-10-02T00:00:00",
+        "probennummer": "B20",
+        "wert": 13.0
+      },
+      {
+        "datum": "2025-10-06T00:00:00",
+        "probennummer": "B21",
+        "wert": 29.0
+      },
+      {
+        "datum": "2025-10-09T00:00:00",
+        "probennummer": "B22",
+        "wert": 46.0
+      }
+    ],
+    "death_date": "",
+    "display_name": "Olga",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: OTOF; Assigned to project: OTOF-"
+      }
+    },
+    "events": [
+      {
+        "datum": "2025-05-11T00:00:00",
+        "event_type": "embryo_transfer"
+      },
+      {
+        "datum": "2025-10-12T00:00:00",
+        "event_type": "progesterone"
+      },
+      {
+        "datum": "2025-10-13T00:00:00",
+        "event_type": "progesterone"
+      },
+      {
+        "datum": "2025-10-14T00:00:00",
+        "event_type": "progesterone"
+      },
+      {
+        "datum": "2025-10-15T00:00:00",
+        "event_type": "progesterone"
+      },
+      {
+        "datum": "2025-10-16T00:00:00",
+        "event_type": "progesterone"
+      },
+      {
+        "datum": "2025-10-17T00:00:00",
+        "event_type": "progesterone"
+      },
+      {
+        "datum": "2025-10-18T00:00:00",
+        "event_type": "progesterone"
+      },
+      {
+        "datum": "2025-10-19T00:00:00",
+        "event_type": "progesterone"
+      },
+      {
+        "datum": "2025-11-10T00:00:00",
+        "event_type": "pregnancy"
+      },
+      {
+        "datum": "2026-03-04T00:00:00",
+        "event_type": "birth"
+      },
+      {
+        "datum": "2025-09-22T00:00:00",
+        "event_type": "pgf"
+      }
+    ],
+    "experimental_limits": {
+      "max_embryo": 5,
+      "max_geburten": 3,
+      "max_messungen": 100,
+      "max_pgf": 12,
+      "max_pregnancies": 3,
+      "recovery_time": 60,
+      "ref_weight": 468
+    },
+    "generated_id_absolute_sequence": 143,
+    "generated_id_sequence": 5,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2015-06-20T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2015-07-11T00:00:00",
+        "wert": 80.0
+      },
+      {
+        "datum": "2015-08-04T00:00:00",
+        "wert": 110.0
+      },
+      {
+        "datum": "2015-09-18T00:00:00",
+        "wert": 174.0
+      },
+      {
+        "datum": "2015-11-17T00:00:00",
+        "wert": 243.0
+      },
+      {
+        "datum": "2016-02-15T00:00:00",
+        "wert": 321.0
+      },
+      {
+        "datum": "2016-06-19T00:00:00",
+        "wert": 390.0
+      },
+      {
+        "datum": "2016-12-11T00:00:00",
+        "wert": 468.0
+      },
+      {
+        "datum": "2017-06-11T00:00:00",
+        "wert": 466.0
+      },
+      {
+        "datum": "2017-12-11T00:00:00",
+        "wert": 470.0
+      },
+      {
+        "datum": "2018-06-11T00:00:00",
+        "wert": 467.0
+      },
+      {
+        "datum": "2018-12-11T00:00:00",
+        "wert": 469.0
+      },
+      {
+        "datum": "2019-06-11T00:00:00",
+        "wert": 466.0
+      },
+      {
+        "datum": "2019-12-11T00:00:00",
+        "wert": 470.0
+      },
+      {
+        "datum": "2020-06-11T00:00:00",
+        "wert": 468.0
+      },
+      {
+        "datum": "2020-12-11T00:00:00",
+        "wert": 471.0
+      },
+      {
+        "datum": "2021-06-11T00:00:00",
+        "wert": 469.0
+      },
+      {
+        "datum": "2021-12-11T00:00:00",
+        "wert": 472.0
+      },
+      {
+        "datum": "2022-06-11T00:00:00",
+        "wert": 470.0
+      },
+      {
+        "datum": "2022-12-11T00:00:00",
+        "wert": 467.0
+      },
+      {
+        "datum": "2023-06-11T00:00:00",
+        "wert": 469.0
+      },
+      {
+        "datum": "2023-12-11T00:00:00",
+        "wert": 466.0
+      },
+      {
+        "datum": "2024-06-11T00:00:00",
+        "wert": 470.0
+      },
+      {
+        "datum": "2024-12-11T00:00:00",
+        "wert": 471.0
+      },
+      {
+        "datum": "2025-10-11T00:00:00",
+        "wert": 468.0
+      },
+      {
+        "datum": "2025-11-10T00:00:00",
+        "wert": 495.0
+      },
+      {
+        "datum": "2025-12-10T00:00:00",
+        "wert": 523.0
+      },
+      {
+        "datum": "2026-01-09T00:00:00",
+        "wert": 551.0
+      },
+      {
+        "datum": "2026-02-08T00:00:00",
+        "wert": 608.0
+      },
+      {
+        "datum": "2026-03-04T00:00:00",
+        "wert": 608.0
+      },
+      {
+        "datum": "2026-03-05T00:00:00",
+        "wert": 395.0
+      },
+      {
+        "datum": "2026-03-12T00:00:00",
+        "wert": 431.0
+      },
+      {
+        "datum": "2026-03-19T00:00:00",
+        "wert": 468.0
+      }
+    ],
+    "id": "cj_15_0005_F_Olga",
+    "in_experiment": false,
+    "ipid": "Olga | Callitrix jacchus | 20.06.2015 | Iluvatar",
+    "max_embryo": 5,
+    "max_geburten": 3,
+    "max_messungen": 100,
+    "max_pgf": 12,
+    "max_pregnancies": 3,
+    "name": "Olga",
+    "origin": "Iluvatar",
+    "pdg": [
+      {
+        "datum": "2025-07-24T00:00:00",
+        "probennummer": "U01",
+        "wert": 6.5
+      },
+      {
+        "datum": "2025-07-28T00:00:00",
+        "probennummer": "U02",
+        "wert": 6.0
+      },
+      {
+        "datum": "2025-07-31T00:00:00",
+        "probennummer": "U03",
+        "wert": 6.0
+      },
+      {
+        "datum": "2025-08-04T00:00:00",
+        "probennummer": "U04",
+        "wert": 6.5
+      },
+      {
+        "datum": "2025-08-07T00:00:00",
+        "probennummer": "U05",
+        "wert": 10.0
+      },
+      {
+        "datum": "2025-08-11T00:00:00",
+        "probennummer": "U06",
+        "wert": 14.0
+      },
+      {
+        "datum": "2025-08-14T00:00:00",
+        "probennummer": "U07",
+        "wert": 20.0
+      },
+      {
+        "datum": "2025-08-18T00:00:00",
+        "probennummer": "U08",
+        "wert": 27.0
+      },
+      {
+        "datum": "2025-08-21T00:00:00",
+        "probennummer": "U09",
+        "wert": 32.0
+      },
+      {
+        "datum": "2025-08-25T00:00:00",
+        "probennummer": "U10",
+        "wert": 29.0
+      },
+      {
+        "datum": "2025-08-28T00:00:00",
+        "probennummer": "U11",
+        "wert": 6.0
+      },
+      {
+        "datum": "2025-09-01T00:00:00",
+        "probennummer": "U12",
+        "wert": 5.5
+      },
+      {
+        "datum": "2025-09-04T00:00:00",
+        "probennummer": "U13",
+        "wert": 6.0
+      },
+      {
+        "datum": "2025-09-08T00:00:00",
+        "probennummer": "U14",
+        "wert": 6.0
+      },
+      {
+        "datum": "2025-09-11T00:00:00",
+        "probennummer": "U15",
+        "wert": 13.0
+      },
+      {
+        "datum": "2025-09-15T00:00:00",
+        "probennummer": "U16",
+        "wert": 19.0
+      },
+      {
+        "datum": "2025-09-18T00:00:00",
+        "probennummer": "U17",
+        "wert": 26.0
+      },
+      {
+        "datum": "2025-09-25T00:00:00",
+        "probennummer": "U18",
+        "wert": 5.0
+      },
+      {
+        "datum": "2025-09-29T00:00:00",
+        "probennummer": "U19",
+        "wert": 5.5
+      },
+      {
+        "datum": "2025-10-02T00:00:00",
+        "probennummer": "U20",
+        "wert": 9.5
+      },
+      {
+        "datum": "2025-10-06T00:00:00",
+        "probennummer": "U21",
+        "wert": 15.0
+      },
+      {
+        "datum": "2025-10-09T00:00:00",
+        "probennummer": "U22",
+        "wert": 21.0
+      },
+      {
+        "datum": "2025-10-13T00:00:00",
+        "probennummer": "U23",
+        "wert": 30.0
+      },
+      {
+        "datum": "2025-10-16T00:00:00",
+        "probennummer": "U24",
+        "wert": 32.0
+      },
+      {
+        "datum": "2025-10-20T00:00:00",
+        "probennummer": "U25",
+        "wert": 34.0
+      },
+      {
+        "datum": "2025-10-23T00:00:00",
+        "probennummer": "U26",
+        "wert": 33.0
+      },
+      {
+        "datum": "2025-10-27T00:00:00",
+        "probennummer": "U27",
+        "wert": 32.0
+      },
+      {
+        "datum": "2025-10-30T00:00:00",
+        "probennummer": "U28",
+        "wert": 34.0
+      },
+      {
+        "datum": "2025-11-03T00:00:00",
+        "probennummer": "U29",
+        "wert": 34.5
+      },
+      {
+        "datum": "2025-11-06T00:00:00",
+        "probennummer": "U30",
+        "wert": 34.0
+      },
+      {
+        "datum": "2025-11-10T00:00:00",
+        "probennummer": "U31",
+        "wert": 35.0
+      }
+    ],
+    "project": "OTOF-",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "OTOF",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "recovery_time": 60,
+    "ref_weight": 468,
+    "rolle": "surrogate",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": []
+  },
+  "Oropher | Callitrix jacchus | 25.05.2015 | Iluvatar": {
+    "_base_name": "Oropher",
+    "abnormal_current": false,
+    "birth_date": "25.05.2015",
+    "chip_nr": "5O4ZAP7V",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Oropher",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: OTOF; Assigned to project: OTOF-"
+      }
+    },
+    "events": [],
+    "experimental_limits": {
+      "ref_weight": 488
+    },
+    "generated_id_absolute_sequence": 142,
+    "generated_id_sequence": 4,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2015-05-25T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2015-06-15T00:00:00",
+        "wert": 81.2
+      },
+      {
+        "datum": "2015-07-09T00:00:00",
+        "wert": 112.8
+      },
+      {
+        "datum": "2015-08-23T00:00:00",
+        "wert": 180.6
+      },
+      {
+        "datum": "2015-10-22T00:00:00",
+        "wert": 253.0
+      },
+      {
+        "datum": "2016-01-20T00:00:00",
+        "wert": 334.3
+      },
+      {
+        "datum": "2016-05-24T00:00:00",
+        "wert": 406.6
+      },
+      {
+        "datum": "2016-11-15T00:00:00",
+        "wert": 483.1
+      },
+      {
+        "datum": "2026-03-06T00:00:00",
+        "wert": 488.0
+      }
+    ],
+    "id": "cj_15_0004_M_Oropher",
+    "in_experiment": false,
+    "ipid": "Oropher | Callitrix jacchus | 25.05.2015 | Iluvatar",
+    "name": "Oropher",
+    "origin": "Iluvatar",
+    "partner_von": "",
+    "pdg": [],
+    "project": "OTOF-",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "OTOF",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 488,
+    "reproduktionsfeld": "",
+    "rolle": "partner_animal",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": []
+  },
+  "Svetlana | Callitrix jacchus | 03.05.2021 | Iluvatar": {
+    "_base_name": "Svetlana",
+    "abnormal_current": false,
+    "birth_date": "03.05.2021",
+    "chip_nr": "I9KPVFP4",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Svetlana",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: OTOF; Assigned to project: OTOF-"
+      }
+    },
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 472
+    },
+    "generated_id_absolute_sequence": 199,
+    "generated_id_sequence": 4,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2021-05-03T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2021-05-24T00:00:00",
+        "wert": 80.0
+      },
+      {
+        "datum": "2021-06-17T00:00:00",
+        "wert": 111.0
+      },
+      {
+        "datum": "2021-08-01T00:00:00",
+        "wert": 176.0
+      },
+      {
+        "datum": "2021-09-30T00:00:00",
+        "wert": 245.0
+      },
+      {
+        "datum": "2021-12-29T00:00:00",
+        "wert": 324.0
+      },
+      {
+        "datum": "2022-05-03T00:00:00",
+        "wert": 393.0
+      },
+      {
+        "datum": "2022-10-25T00:00:00",
+        "wert": 472.0
+      },
+      {
+        "datum": "2026-03-06T00:00:00",
+        "wert": 472.0
+      }
+    ],
+    "id": "cj_21_0004_F_Svetlana",
+    "in_experiment": false,
+    "ipid": "Svetlana | Callitrix jacchus | 03.05.2021 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Svetlana",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "OTOF-",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "OTOF",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 472,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Taylor | Callitrix jacchus | 14.06.2018 | Iluvatar": {
+    "_base_name": "Taylor",
+    "abnormal_current": false,
+    "birth_date": "14.06.2018",
+    "chip_nr": "HAD5CMP7",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Taylor",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: Crossbreeding; Assigned to project: Backcrossing"
+      }
+    },
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 446
+    },
+    "generated_id_absolute_sequence": 173,
+    "generated_id_sequence": 12,
+    "genotype": "H-/H-",
+    "gewicht": [
+      {
+        "datum": "2018-06-14T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2018-07-05T00:00:00",
+        "wert": 76.0
+      },
+      {
+        "datum": "2018-07-29T00:00:00",
+        "wert": 105.0
+      },
+      {
+        "datum": "2018-09-12T00:00:00",
+        "wert": 149.0
+      },
+      {
+        "datum": "2018-11-11T00:00:00",
+        "wert": 199.0
+      },
+      {
+        "datum": "2019-02-09T00:00:00",
+        "wert": 265.0
+      },
+      {
+        "datum": "2019-06-14T00:00:00",
+        "wert": 345.0
+      },
+      {
+        "datum": "2019-12-06T00:00:00",
+        "wert": 446.0
+      },
+      {
+        "datum": "2020-07-13T00:00:00",
+        "wert": 442.0
+      },
+      {
+        "datum": "2021-02-18T00:00:00",
+        "wert": 448.0
+      },
+      {
+        "datum": "2021-11-15T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2022-10-31T00:00:00",
+        "wert": 445.0
+      },
+      {
+        "datum": "2023-12-05T00:00:00",
+        "wert": 443.0
+      },
+      {
+        "datum": "2025-06-13T00:00:00",
+        "wert": 446.0
+      }
+    ],
+    "id": "cj_18_0012_F_Taylor",
+    "in_experiment": false,
+    "ipid": "Taylor | Callitrix jacchus | 14.06.2018 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Taylor",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Backcrossing",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "Crossbreeding",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "ref_weight": 446,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Thranduil | Callitrix jacchus | 11.02.2021 | DPZ": {
+    "_base_name": "Thranduil",
+    "abnormal_current": false,
+    "birth_date": "11.02.2021",
+    "chip_nr": "04SBI0BV",
+    "daten": [],
+    "death_date": "",
+    "display_name": "Thranduil",
+    "edits": {
+      "2026-04-20": {
+        "project_note": "Left project: OTOF; Assigned to project: OTOF-"
+      }
+    },
+    "eizellspenderin": "Ekaterina | Callitrix jacchus | 02.04.2016 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_spermaproben": 100,
+      "recovery_time": 60,
+      "ref_weight": 486
+    },
+    "generated_id_absolute_sequence": 198,
+    "generated_id_sequence": 3,
+    "genotype": "OTOF-/OTOF-",
+    "gewicht": [
+      {
+        "datum": "2021-02-11T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2021-03-04T00:00:00",
+        "wert": 81.0
+      },
+      {
+        "datum": "2021-03-28T00:00:00",
+        "wert": 112.0
+      },
+      {
+        "datum": "2021-05-12T00:00:00",
+        "wert": 180.0
+      },
+      {
+        "datum": "2021-07-11T00:00:00",
+        "wert": 252.0
+      },
+      {
+        "datum": "2021-10-09T00:00:00",
+        "wert": 333.0
+      },
+      {
+        "datum": "2022-02-11T00:00:00",
+        "wert": 405.0
+      },
+      {
+        "datum": "2022-08-05T00:00:00",
+        "wert": 481.0
+      },
+      {
+        "datum": "2026-03-06T00:00:00",
+        "wert": 486.0
+      },
+      {
+        "datum": "2026-07-01T00:00:00",
+        "wert": 435.0
+      }
+    ],
+    "id": "cj_21_0003_M_Thranduil",
+    "in_experiment": false,
+    "ipid": "Thranduil | Callitrix jacchus | 11.02.2021 | DPZ",
+    "max_spermaproben": 100,
+    "name": "Thranduil",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "OTOF-",
+    "project_entry_date": "20.04.2026",
+    "project_history": [
+      {
+        "entry_date": "",
+        "leave_date": "20.04.2026",
+        "project": "OTOF",
+        "severity": ""
+      }
+    ],
+    "project_severity": "",
+    "recovery_time": 60,
+    "ref_weight": 486,
+    "rolle": "sperm_donor",
+    "samenspender": "Oropher | Callitrix jacchus | 25.05.2015 | Iluvatar",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [
+      {
+        "count": 1250000000.0,
+        "datum": "2025-09-18T00:00:00",
+        "motility": 89.0,
+        "progressive": 82.0
+      },
+      {
+        "count": 1350000000.0,
+        "datum": "2025-09-25T00:00:00",
+        "motility": 91.0,
+        "progressive": 85.0
+      },
+      {
+        "count": 1300000000.0,
+        "datum": "2025-10-02T00:00:00",
+        "motility": 88.0,
+        "progressive": 81.0
+      },
+      {
+        "count": 125000000.0,
+        "datum": "2026-07-01T00:00:00",
+        "motility": 72.0,
+        "progressive": 51.0
+      }
+    ],
+    "ziehmutter": "Olga | Callitrix jacchus | 20.06.2015 | Iluvatar",
+    "ziehvater": "Anton | Callitrix jacchus | 25.05.2015 | Iluvatar"
+  }
+}

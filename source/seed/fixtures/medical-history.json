@@ -1,0 +1,2696 @@
+{
+  "animals": {
+    "AAA | Unknown species | 01.01.2010": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Anode (SV0 - no severity)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "566e82b1-d768-4855-8bf1-075a21d9961e",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Anode (SV0 - no severity)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Anode",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "severity_changed",
+          "id": "9d443973-c92f-431e-98e9-dcdf34d21a01",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in Anode changed from undefined to SV0 - no severity",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "experiment_started",
+          "id": "189c0dff-ee6c-4602-9ba1-8452e2582d93",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Anode (SV0 - no severity)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "46063a1c-a5a3-40c0-a172-8bcdcc702e1e",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Anode (SV0 - no severity)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Benode (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "e13738fb-3030-48e0-8207-f8d8b1b529ac",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Benode (SV2 - mild or very mild)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Benode",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "severity_changed",
+          "id": "4b54cbbf-c973-4539-a79a-5756f7a8d9e7",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in Benode changed from SV2 - mild or very mild to SV3 - moderate",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Benode (SV3 - moderate)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "89fb3e0d-e561-40dc-82fe-f44ec123955d",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Benode (SV3 - moderate)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Cenode (SV1 - non-recovery)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "106ef386-4baf-484d-9256-2ff0ade7dc94",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Cenode (SV1 - non-recovery)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "AAA | Unknown species | 01.01.2010",
+      "name": "AAA"
+    },
+    "Adele | Papio hamadryas anubis | 04.03.1998 | Morgoth": {
+      "animal_id": "pha_98_0001_F_Adele",
+      "documents": [],
+      "entries": [],
+      "ipid": "Adele | Papio hamadryas anubis | 04.03.1998 | Morgoth",
+      "name": "Adele"
+    },
+    "Albrecht | Macaca mulatta | 04.03.2017 | Aulë": {
+      "animal_id": "mm_17_0001_M_Albrecht",
+      "documents": [],
+      "entries": [],
+      "ipid": "Albrecht | Macaca mulatta | 04.03.2017 | Aulë",
+      "name": "Albrecht"
+    },
+    "Animal_A | Callitrix jacchus | 03.01.2012": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_A (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_assigned",
+          "id": "fabad5e4-841f-4ad5-951b-249094749380",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Project_A (SV2 - mild or very mild)",
+          "signature": "Administrator Administratorrson",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_A",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "severity_changed",
+          "id": "1b67b5c5-5bea-4690-af94-d0aee1610a67",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in Project_A changed from undefined to SV2 - mild or very mild",
+          "signature": "Administrator Administratorrson",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_A (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_left",
+          "id": "74dc5b9c-1768-4091-8012-752713e26328",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Project_A (SV2 - mild or very mild)",
+          "signature": "Administrator Administratorrson",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_B (SV3 - moderate)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_assigned",
+          "id": "53434037-f1d4-432c-9495-7e6a77bf5584",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Project_B (SV3 - moderate)",
+          "signature": "Administrator Administratorrson",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_B",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "severity_changed",
+          "id": "94101760-dc25-4c76-b111-b506cfbbea3d",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in Project_B changed from SV3 - moderate to SV4 - severe",
+          "signature": "Administrator Administratorrson",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_A (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_assigned",
+          "id": "9b1e4bba-9bda-4222-9662-45003014b580",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Project_A (SV2 - mild or very mild)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_A",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "severity_changed",
+          "id": "5378ab55-794b-45b4-9236-455a0bdbdd18",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in Project_A changed from undefined to SV2 - mild or very mild",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_A (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_left",
+          "id": "14037fe9-b6e0-402f-a5d6-7bcb067e74ad",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Project_A (SV2 - mild or very mild)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_C (SV4 - severe)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_assigned",
+          "id": "aea3de82-520d-4870-b59e-fc28a998aa8d",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Project_C (SV4 - severe)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Animal_A | Callitrix jacchus | 03.01.2012",
+      "name": "Animal_A"
+    },
+    "Animal_A! | Unknown species | 04.01.2013": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "49b77e2f-33e3-4f03-835f-644da2000f11",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: A (SV2 - mild or very mild)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "severity_changed",
+          "id": "470ae131-93eb-4662-aedf-e65c4c16114f",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in A changed from undefined to SV2 - mild or very mild",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "0f59456b-25a5-411c-ac97-8b126498dedc",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: A (SV2 - mild or very mild)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "B",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "d946e1c8-d892-49d0-8834-e5468e24c95c",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: B",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "f1e359de-e11e-4db0-a18f-df220068a4ae",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: A (SV2 - mild or very mild)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q (SV3 - moderate)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "508f2aae-0a41-40bc-9850-b50ddbdcefb8",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Q (SV3 - moderate)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "a2c35091-0f1e-425a-a6ee-fc9710e81545",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: A (SV2 - mild or very mild)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q (SV3 - moderate)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "4cd23803-5e3f-4aa6-8114-ea7c50bcd990",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Q (SV3 - moderate)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "f4b11360-d855-43df-aa6d-f940bd28a4ba",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: A (SV2 - mild or very mild)",
+          "signature": "Administrator Administratorrson",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q (SV3 - moderate)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "93c96724-e646-40c0-8949-aef9aa4cad72",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Q (SV3 - moderate)",
+          "signature": "Administrator Administratorrson",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "bdaf2795-202e-47ad-9fdf-09756b77e181",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: A (SV2 - mild or very mild)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q (SV3 - moderate)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "1599bd7f-3c33-4501-83f4-bae334a30a85",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Q (SV3 - moderate)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "d6803ace-62e1-483d-bc0b-d8a8e46d52a9",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: A (SV2 - mild or very mild)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q (SV3 - moderate)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "b8fa2a2a-1465-4519-95c5-1874900a8775",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Q (SV3 - moderate)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "severity_changed",
+          "id": "e5f715a4-ed32-4750-9072-4c959000373f",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in A changed from SV2 - mild or very mild to SV3 - moderate",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "severity_changed",
+          "id": "c19eaa0e-6b4a-451b-a9e1-c6b8c471c0c2",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in A changed from SV2 - mild or very mild to SV3 - moderate",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A (SV3 - moderate)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "d4f3c4a0-1cc3-4034-8a7f-b5c8a48853e5",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: A (SV3 - moderate)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q (SV4 - severe)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "8f928804-e934-4fbb-9f8d-31ab06694415",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Q (SV4 - severe)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Animal_A! | Unknown species | 04.01.2013",
+      "name": "Animal_A!"
+    },
+    "Animal_A_ | Unknown species | 05.01.2014": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_A_ (SV0 - no severity)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_assigned",
+          "id": "f159858b-07a6-47dc-9045-0fea2dbdfdfb",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Project_A_ (SV0 - no severity)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_A_",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "severity_changed",
+          "id": "3901d20b-61e7-4d09-b721-e3d3994feae4",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in Project_A_ changed from undefined to SV0 - no severity",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_A_ (SV0 - no severity)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_left",
+          "id": "7caca477-691a-4e68-a55f-f5cd16494fb1",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Project_A_ (SV0 - no severity)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_C_ (SV4 - severe)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_assigned",
+          "id": "5b5ae414-9741-491d-8d7a-f39b1e15b3cc",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Project_C_ (SV4 - severe)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "experiment_started",
+          "id": "676f1000-4c18-4bc2-ada5-93b0e688ded4",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_C_ (SV4 - severe)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_left",
+          "id": "2f116e30-41de-40f6-81eb-daf78ec95d7b",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Project_C_ (SV4 - severe)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_A_",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_assigned",
+          "id": "a6f22cf8-bdf7-464e-bb6b-1327033d831c",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Project_A_",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Animal_A_ | Unknown species | 05.01.2014",
+      "name": "Animal_A_"
+    },
+    "Animal_BB | Unknown species | 17.01.2026": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q (SV4 - severe)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "a5228103-76ce-4e7f-a21a-ab88a64eab7f",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Q (SV4 - severe)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "severity_changed",
+          "id": "f55d8eb7-d527-4c6f-9b20-24b58745bbda",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in Q changed from undefined to SV4 - severe",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Animal_BB | Unknown species | 17.01.2026",
+      "name": "Animal_BB"
+    },
+    "Animal_B_ | Unknown species | 06.01.2015": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_B_ (SV0 - no severity)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_assigned",
+          "id": "e1c05b44-5ce0-4faa-a9c0-a0d31f4075c8",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Project_B_ (SV0 - no severity)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_B_",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "severity_changed",
+          "id": "8aabf210-1bb9-4ea5-9b6e-f35c7b48ef65",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in Project_B_ changed from undefined to SV0 - no severity",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "experiment_started",
+          "id": "3b35e555-0b1e-4a7f-8df3-1229de0603fe",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Animal_B_ | Unknown species | 06.01.2015",
+      "name": "Animal_B_"
+    },
+    "Animal_C | Unknown species | 07.01.2016": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_C (SV0 - no severity)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "project_assigned",
+          "id": "ac886930-f5a8-4c8b-bba3-ce91416a813f",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Project_C (SV0 - no severity)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Project_C",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-15",
+          "entry_type": "severity_changed",
+          "id": "131cfa35-db7f-49c6-b48f-82ee280db295",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in Project_C changed from undefined to SV0 - no severity",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Animal_C | Unknown species | 07.01.2016",
+      "name": "Animal_C"
+    },
+    "Anton | Callitrix jacchus | 25.05.2015 | Iluvatar": {
+      "animal_id": "cj_15_0003_M_Anton",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "a210e81b-ba9e-40d3-a02f-79d30436355e",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "a6fb1ddb-931f-433d-b4f9-d387e772fd7a",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Anton | Callitrix jacchus | 25.05.2015 | Iluvatar",
+      "name": "Anton"
+    },
+    "Aragorn I | Callitrix jacchus | 07.02.2018 | DPZ": {
+      "animal_id": "cj_18_0004_M_Aragorn_I",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "3e4a335d-db5b-400f-a617-e8bdb747b338",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "c9637147-18be-4aab-9810-05dce6c23cd3",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Aragorn I | Callitrix jacchus | 07.02.2018 | DPZ",
+      "name": "Aragorn I"
+    },
+    "Aragorn II | Callitrix jacchus | 11.02.2021 | DPZ": {
+      "animal_id": "cj_21_0002_M_Aragorn_II",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "534f481c-07c8-4df2-80bb-41b77cde70ec",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "b6c687bc-a04f-42b7-b5c0-b6e7ba00bf4e",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Aragorn II | Callitrix jacchus | 11.02.2021 | DPZ",
+      "name": "Aragorn II"
+    },
+    "Arwen | Callitrix jacchus | 23.02.2015 | DPZ": {
+      "animal_id": "cj_15_0001_F_Arwen",
+      "documents": [
+        {
+          "original_name": "file_csv.png",
+          "path": "Plugins\\Medi_Track\\medi_track\\Arwen _ Callitrix jacchus _ 23.02.2015\\file_csv.png",
+          "title": "file_csv.png"
+        }
+      ],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "8cbb0bbb-7270-4e36-9fbb-57720aa6ab38",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "932f975d-d4e8-443c-8347-8ce75c409d1e",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Arwen | Callitrix jacchus | 23.02.2015 | DPZ",
+      "name": "Arwen"
+    },
+    "Aurore | Papio hamadryas anubis | 04.09.2023 | Morgoth": {
+      "animal_id": "pha_23_0010_F_Aurore",
+      "documents": [],
+      "entries": [],
+      "ipid": "Aurore | Papio hamadryas anubis | 04.09.2023 | Morgoth",
+      "name": "Aurore"
+    },
+    "Azog | Papio hamadryas anubis | 04.04.2010 | DPZ": {
+      "animal_id": "pha_10_0005_M_Azog",
+      "documents": [
+        {
+          "original_name": "file_csv.png",
+          "path": "Plugins\\Medi_Track\\medi_track\\Azog _ Papio hamadryas anubis _ 04.04.2010\\file_csv.png",
+          "title": "file_csv.png"
+        },
+        {
+          "original_name": "file_img.png",
+          "path": "Plugins\\Medi_Track\\medi_track\\Azog _ Papio hamadryas anubis _ 04.04.2010\\file_img.png",
+          "title": "file_img.png"
+        }
+      ],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Anode",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-07-20",
+          "entry_type": "project_assigned",
+          "id": "553fd269-d43b-4672-8c58-4b865071edc3",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Anode",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Zucht",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-07-20",
+          "entry_type": "project_assigned",
+          "id": "59b662ab-f719-4941-b8d9-88baedc194f1",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Zucht",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Zucht",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-07-20",
+          "entry_type": "project_left",
+          "id": "6526f0c2-e2af-4ba2-bb6c-344e540b30c1",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Zucht",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Oakshield",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-07-20",
+          "entry_type": "project_assigned",
+          "id": "94ca755d-1197-4d1b-b580-d4cf3f383926",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Oakshield",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-07-20",
+          "entry_type": "experiment_started",
+          "id": "5cbffd57-8c5a-4da2-b113-5c01aad718f9",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Oakshield",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-07-20",
+          "entry_type": "project_left",
+          "id": "d6813f3d-adc9-40a7-8946-062760d362a2",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Oakshield",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-07-20",
+          "entry_type": "experiment_ended",
+          "id": "4df9e5a9-748c-4d93-82cb-314b1dae075a",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Oakshield",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-07-21",
+          "entry_type": "project_assigned",
+          "id": "f8402b7a-8a5d-4731-9881-59342cf6e7ca",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Oakshield",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "actor_role": "manager",
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-07-21",
+          "entry_type": "experiment_started",
+          "id": "eaf82155-17cf-4873-84e9-f3548d37dfa1",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "manager",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Azog | Papio hamadryas anubis | 04.04.2010 | DPZ",
+      "name": "Azog"
+    },
+    "Balcmeg | Papio hamadryas anubis | 04.06.2002 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Balcmeg | Papio hamadryas anubis | 04.06.2002 | DPZ",
+      "name": "Balcmeg"
+    },
+    "Balin | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Balin | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Balin"
+    },
+    "Beate I | Macaca mulatta | 04.03.2017 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Beate I | Macaca mulatta | 04.03.2017 | Aulë",
+      "name": "Beate I"
+    },
+    "Beate II | Macaca mulatta | 04.03.2020 | Aulë": {
+      "animal_id": "mm_20_0003_F_Beate_II",
+      "documents": [],
+      "entries": [],
+      "ipid": "Beate II | Macaca mulatta | 04.03.2020 | Aulë",
+      "name": "Beate II"
+    },
+    "Beatrice | Papio hamadryas anubis | 04.03.2002 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Beatrice | Papio hamadryas anubis | 04.03.2002 | Morgoth",
+      "name": "Beatrice"
+    },
+    "Bifur | Macaca mulatta | 04.03.2023 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Bifur | Macaca mulatta | 04.03.2023 | DPZ",
+      "name": "Bifur"
+    },
+    "Blanche | Papio hamadryas anubis | 04.04.2002 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Blanche | Papio hamadryas anubis | 04.04.2002 | Morgoth",
+      "name": "Blanche"
+    },
+    "Bodyguard | Papio hamadryas anubis | 04.04.2018 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Bodyguard | Papio hamadryas anubis | 04.04.2018 | DPZ",
+      "name": "Bodyguard"
+    },
+    "Bofur | Macaca mulatta | 04.03.2023 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Bofur | Macaca mulatta | 04.03.2023 | DPZ",
+      "name": "Bofur"
+    },
+    "Boldog | Papio hamadryas anubis | 04.03.1998 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Boldog | Papio hamadryas anubis | 04.03.1998 | Morgoth",
+      "name": "Boldog"
+    },
+    "Bolg | Papio hamadryas anubis | 04.04.2014 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Bolg | Papio hamadryas anubis | 04.04.2014 | DPZ",
+      "name": "Bolg"
+    },
+    "Bombur | Macaca mulatta | 04.03.2023 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Bombur | Macaca mulatta | 04.03.2023 | DPZ",
+      "name": "Bombur"
+    },
+    "Camille | Papio hamadryas anubis | 04.03.2006 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Camille | Papio hamadryas anubis | 04.03.2006 | Morgoth",
+      "name": "Camille"
+    },
+    "Cecile | Papio hamadryas anubis | 04.04.2006 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Cecile | Papio hamadryas anubis | 04.04.2006 | Morgoth",
+      "name": "Cecile"
+    },
+    "Celebrian | Callitrix jacchus | 06.05.2007 | DPZ": {
+      "animal_id": "cj_07_0004_F_Celebrian",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "a668f033-1ead-47d6-8cc9-a80ea1577dd3",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "e3f7ab2a-cc80-40c1-9abb-4ffe85700d14",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Celebrian | Callitrix jacchus | 06.05.2007 | DPZ",
+      "name": "Celebrian"
+    },
+    "Claudia | Macaca mulatta | 04.03.2023 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Claudia | Macaca mulatta | 04.03.2023 | Aulë",
+      "name": "Claudia"
+    },
+    "Dain II | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Dain II | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Dain II"
+    },
+    "Delphine | Papio hamadryas anubis | 04.03.2010 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Delphine | Papio hamadryas anubis | 04.03.2010 | Morgoth",
+      "name": "Delphine"
+    },
+    "Diane | Papio hamadryas anubis | 04.04.2010 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Diane | Papio hamadryas anubis | 04.04.2010 | Morgoth",
+      "name": "Diane"
+    },
+    "Dis | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Dis | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Dis"
+    },
+    "Dori | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Dori | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Dori"
+    },
+    "Dorothea | Macaca mulatta | 04.03.2020 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Dorothea | Macaca mulatta | 04.03.2020 | Aulë",
+      "name": "Dorothea"
+    },
+    "Durin VII | Macaca mulatta | 04.03.2026 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Durin VII | Macaca mulatta | 04.03.2026 | DPZ",
+      "name": "Durin VII"
+    },
+    "Dwalin | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Dwalin | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Dwalin"
+    },
+    "Ekaterina | Callitrix jacchus | 02.04.2016 | Iluvatar": {
+      "animal_id": "cj_16_0002_F_Ekaterina",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "493d59ac-3969-4104-83e4-6bd134094750",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "f3c62378-3cea-4ed8-8592-4d82f0b4d360",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Ekaterina | Callitrix jacchus | 02.04.2016 | Iluvatar",
+      "name": "Ekaterina"
+    },
+    "Eldarion | Callitrix jacchus | 01.03.2026 | DPZ": {
+      "animal_id": "cj_26_0002_M_Eldarion",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "0f807244-bc62-4d91-8b88-04b4b1fc402a",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "1960242b-870e-4198-83a1-7b997fb6d102",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Eldarion | Callitrix jacchus | 01.03.2026 | DPZ",
+      "name": "Eldarion"
+    },
+    "Elladan | Callitrix jacchus | 23.07.2015 | DPZ": {
+      "animal_id": "cj_15_0007_M_Elladan",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "6dbee6fe-dbfd-43d5-8783-671389f48b6f",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "9d539d9a-df34-4ce1-8693-dd13d8bf9946",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Elladan | Callitrix jacchus | 23.07.2015 | DPZ",
+      "name": "Elladan"
+    },
+    "Elodie | Papio hamadryas anubis | 04.03.2014 | Morgoth": {
+      "animal_id": "pha_14_0011_F_Elodie",
+      "documents": [],
+      "entries": [],
+      "ipid": "Elodie | Papio hamadryas anubis | 04.03.2014 | Morgoth",
+      "name": "Elodie"
+    },
+    "Elrohir | Callitrix jacchus | 21.01.2016 | DPZ": {
+      "animal_id": "cj_16_0001_M_Elrohir",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "9dc0fc53-1a81-4c06-8ad9-1db3ce4b619f",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "5faf44ea-6fb1-455a-861d-aba3c5b4c1cb",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Elrohir | Callitrix jacchus | 21.01.2016 | DPZ",
+      "name": "Elrohir"
+    },
+    "Elrond | Callitrix jacchus | 04.02.2012 | DPZ": {
+      "animal_id": "cj_12_0001_M_Elrond",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "ea69deae-b195-4e48-9feb-391b3b9b0653",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "75379162-ea1c-484e-8020-13b98dc58f23",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 2,
+          "condition_key": "general.weight_loss.chronic",
+          "condition_label_snapshot": "Chronic",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-07-06",
+          "entry_type": "issue_start",
+          "id": "5896ff88-b8b0-407c-a80f-28664e2473c4",
+          "issue_id": "2d77a5f8-9425-43b0-b033-c14170415860",
+          "linked_document_ids": [],
+          "note": "",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "sick"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-07-20",
+          "entry_type": "project_left",
+          "id": "23b41b8d-f855-46f4-a2fd-a77a77432ace",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Elrond | Callitrix jacchus | 04.02.2012 | DPZ",
+      "name": "Elrond"
+    },
+    "Elros | Callitrix jacchus | 04.02.2012 | DPZ": {
+      "animal_id": "cj_12_0002_M_Elros",
+      "documents": [],
+      "entries": [],
+      "ipid": "Elros | Callitrix jacchus | 04.02.2012 | DPZ",
+      "name": "Elros"
+    },
+    "Elured | Callitrix jacchus | 20.01.2007 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Elured | Callitrix jacchus | 20.01.2007 | DPZ",
+      "name": "Elured"
+    },
+    "Elurin | Callitrix jacchus | 17.07.2007 | DPZ": {
+      "animal_id": "cj_07_0006_M_Elurin",
+      "documents": [],
+      "entries": [],
+      "ipid": "Elurin | Callitrix jacchus | 17.07.2007 | DPZ",
+      "name": "Elurin"
+    },
+    "Erika II | Macaca mulatta | 04.03.2017 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Erika II | Macaca mulatta | 04.03.2017 | Aulë",
+      "name": "Erika II"
+    },
+    "Estelle | Papio hamadryas anubis | 04.04.2014 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Estelle | Papio hamadryas anubis | 04.04.2014 | Morgoth",
+      "name": "Estelle"
+    },
+    "Fabienne | Papio hamadryas anubis | 04.04.2018 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Fabienne | Papio hamadryas anubis | 04.04.2018 | Morgoth",
+      "name": "Fabienne"
+    },
+    "Farin | Macaca mulatta | 04.03.2014 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Farin | Macaca mulatta | 04.03.2014 | DPZ",
+      "name": "Farin"
+    },
+    "Fili | Macaca mulatta | 04.03.2023 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Fili | Macaca mulatta | 04.03.2023 | DPZ",
+      "name": "Fili"
+    },
+    "Florence | Papio hamadryas anubis | 04.03.2018 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Florence | Papio hamadryas anubis | 04.03.2018 | Morgoth",
+      "name": "Florence"
+    },
+    "Frerin | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Frerin | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Frerin"
+    },
+    "Fror | Macaca mulatta | 04.03.2014 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Fror | Macaca mulatta | 04.03.2014 | DPZ",
+      "name": "Fror"
+    },
+    "Fundin | Macaca mulatta | 04.03.2017 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Fundin | Macaca mulatta | 04.03.2017 | DPZ",
+      "name": "Fundin"
+    },
+    "Gaelle | Papio hamadryas anubis | 04.04.2022 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Gaelle | Papio hamadryas anubis | 04.04.2022 | Morgoth",
+      "name": "Gaelle"
+    },
+    "Gaston | Papio hamadryas anubis | 04.07.2006 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Gaston | Papio hamadryas anubis | 04.07.2006 | DPZ",
+      "name": "Gaston"
+    },
+    "Gerda | Macaca mulatta | 04.03.2014 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Gerda | Macaca mulatta | 04.03.2014 | Aulë",
+      "name": "Gerda"
+    },
+    "Gimli | Macaca mulatta | 04.03.2023 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Gimli | Macaca mulatta | 04.03.2023 | DPZ",
+      "name": "Gimli"
+    },
+    "Gisele | Papio hamadryas anubis | 04.03.2022 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Gisele | Papio hamadryas anubis | 04.03.2022 | Morgoth",
+      "name": "Gisele"
+    },
+    "Gloin II | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Gloin II | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Gloin II"
+    },
+    "Golfimbul | Papio hamadryas anubis | 04.04.2002 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Golfimbul | Papio hamadryas anubis | 04.04.2002 | Morgoth",
+      "name": "Golfimbul"
+    },
+    "Gorbag | Papio hamadryas anubis | 04.09.2010 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Gorbag | Papio hamadryas anubis | 04.09.2010 | DPZ",
+      "name": "Gorbag"
+    },
+    "Gorgol | Papio hamadryas anubis | 04.03.2002 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Gorgol | Papio hamadryas anubis | 04.03.2002 | DPZ",
+      "name": "Gorgol"
+    },
+    "Gothmog | Papio hamadryas anubis | 04.03.2026 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Gothmog | Papio hamadryas anubis | 04.03.2026 | DPZ",
+      "name": "Gothmog"
+    },
+    "Greatgoblin | Papio hamadryas anubis | 04.04.2006 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Greatgoblin | Papio hamadryas anubis | 04.04.2006 | DPZ",
+      "name": "Greatgoblin"
+    },
+    "Grishnakh | Papio hamadryas anubis | 04.03.2006 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Grishnakh | Papio hamadryas anubis | 04.03.2006 | DPZ",
+      "name": "Grishnakh"
+    },
+    "Groin | Macaca mulatta | 04.03.2017 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Groin | Macaca mulatta | 04.03.2017 | DPZ",
+      "name": "Groin"
+    },
+    "Gror | Macaca mulatta | 04.03.2014 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Gror | Macaca mulatta | 04.03.2014 | DPZ",
+      "name": "Gror"
+    },
+    "Gudrun II | Macaca mulatta | 04.03.2014 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Gudrun II | Macaca mulatta | 04.03.2014 | Aulë",
+      "name": "Gudrun II"
+    },
+    "Heike | Macaca mulatta | 04.03.2014 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Heike | Macaca mulatta | 04.03.2014 | Aulë",
+      "name": "Heike"
+    },
+    "Helene | Papio hamadryas anubis | 04.06.2010 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Helene | Papio hamadryas anubis | 04.06.2010 | Morgoth",
+      "name": "Helene"
+    },
+    "Hilda | Macaca mulatta | 04.03.2017 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Hilda | Macaca mulatta | 04.03.2017 | Aulë",
+      "name": "Hilda"
+    },
+    "Honore | Papio hamadryas anubis | 04.07.2010 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Honore | Papio hamadryas anubis | 04.07.2010 | DPZ",
+      "name": "Honore"
+    },
+    "Isabelle | Papio hamadryas anubis | 04.06.2014 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Isabelle | Papio hamadryas anubis | 04.06.2014 | Morgoth",
+      "name": "Isabelle"
+    },
+    "Isildur | Callitrix jacchus | 23.02.2015 | DPZ": {
+      "animal_id": "cj_15_0002_M_Isildur",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "541aa4f5-83a5-492c-ae84-18769b3032d4",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "4cb4b470-689d-43f4-9139-077a2b3535a7",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Isildur | Callitrix jacchus | 23.02.2015 | DPZ",
+      "name": "Isildur"
+    },
+    "Jessica | Callitrix jacchus | 06.07.2015 | Iluvatar": {
+      "animal_id": "cj_15_0006_F_Jessica",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "17232659-4a06-4d3d-a5f1-936f521d10a7",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "745b8545-8ba7-4d5d-8e21-a4ba772bce02",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Jessica | Callitrix jacchus | 06.07.2015 | Iluvatar",
+      "name": "Jessica"
+    },
+    "Joachim | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Joachim | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Joachim"
+    },
+    "Josette | Papio hamadryas anubis | 04.06.2018 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Josette | Papio hamadryas anubis | 04.06.2018 | Morgoth",
+      "name": "Josette"
+    },
+    "Josiane | Papio hamadryas anubis | 04.09.2024 | Morgoth": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Josiane | Papio hamadryas anubis | 04.09.2024 | Morgoth",
+      "name": "Josiane"
+    },
+    "Karl | Macaca mulatta | 04.03.2017 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Karl | Macaca mulatta | 04.03.2017 | DPZ",
+      "name": "Karl"
+    },
+    "Kili | Macaca mulatta | 04.03.2023 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Kili | Macaca mulatta | 04.03.2023 | DPZ",
+      "name": "Kili"
+    },
+    "Konrad II | Macaca mulatta | 04.03.2014 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Konrad II | Macaca mulatta | 04.03.2014 | DPZ",
+      "name": "Konrad II"
+    },
+    "Konstantin | Callitrix jacchus | 18.08.2020 | Iluvatar": {
+      "animal_id": "cj_20_0020_M_Konstantin",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "091b2f3d-8436-48b3-98eb-e766eedf99cc",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "b70b14e2-df6e-44c3-9786-4aa945761d18",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Konstantin | Callitrix jacchus | 18.08.2020 | Iluvatar",
+      "name": "Konstantin"
+    },
+    "Kunigunde | Macaca mulatta | 04.03.2017 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Kunigunde | Macaca mulatta | 04.03.2017 | Aulë",
+      "name": "Kunigunde"
+    },
+    "Lagduf | Papio hamadryas anubis | 04.03.2014 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Lagduf | Papio hamadryas anubis | 04.03.2014 | DPZ",
+      "name": "Lagduf"
+    },
+    "Legolas | Callitrix jacchus | 04.03.2026 | DPZ": {
+      "animal_id": "cj_26_0005_M_Legolas",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "9d81236c-adb4-490e-a8d2-aa5a459dbaf2",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "ae24be83-8454-422d-994b-2a72cde2a245",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Legolas | Callitrix jacchus | 04.03.2026 | DPZ",
+      "name": "Legolas"
+    },
+    "Lug | Papio hamadryas anubis | 04.06.2018 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Lug | Papio hamadryas anubis | 04.06.2018 | DPZ",
+      "name": "Lug"
+    },
+    "Lugdush | Papio hamadryas anubis | 04.06.2010 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Lugdush | Papio hamadryas anubis | 04.06.2010 | DPZ",
+      "name": "Lugdush"
+    },
+    "Lurz | Papio hamadryas anubis | 04.06.2022 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Lurz | Papio hamadryas anubis | 04.06.2022 | DPZ",
+      "name": "Lurz"
+    },
+    "Manfred | Macaca mulatta | 04.03.2020 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Manfred | Macaca mulatta | 04.03.2020 | Aulë",
+      "name": "Manfred"
+    },
+    "Marcel | Papio hamadryas anubis | 04.07.2014 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Marcel | Papio hamadryas anubis | 04.07.2014 | DPZ",
+      "name": "Marcel"
+    },
+    "Margarete | Macaca mulatta | 04.03.2020 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Margarete | Macaca mulatta | 04.03.2020 | Aulë",
+      "name": "Margarete"
+    },
+    "Marianne | Macaca mulatta | 04.03.2017 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Marianne | Macaca mulatta | 04.03.2017 | Aulë",
+      "name": "Marianne"
+    },
+    "Martina | Macaca mulatta | 04.03.2014 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Martina | Macaca mulatta | 04.03.2014 | Aulë",
+      "name": "Martina"
+    },
+    "Mauhur | Papio hamadryas anubis | 04.06.2018 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Mauhur | Papio hamadryas anubis | 04.06.2018 | DPZ",
+      "name": "Mauhur"
+    },
+    "Muzgash | Papio hamadryas anubis | 04.09.2014 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Muzgash | Papio hamadryas anubis | 04.09.2014 | DPZ",
+      "name": "Muzgash"
+    },
+    "Naglur-Danlo | Papio hamadryas anubis | 04.03.2022 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Naglur-Danlo | Papio hamadryas anubis | 04.03.2022 | DPZ",
+      "name": "Naglur-Danlo"
+    },
+    "Nain III | Macaca mulatta | 04.03.2017 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Nain III | Macaca mulatta | 04.03.2017 | DPZ",
+      "name": "Nain III"
+    },
+    "Noemie | Papio hamadryas anubis | 04.07.2022 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Noemie | Papio hamadryas anubis | 04.07.2022 | DPZ",
+      "name": "Noemie"
+    },
+    "Nori | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Nori | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Nori"
+    },
+    "Oin II | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Oin II | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Oin II"
+    },
+    "Olga | Callitrix jacchus | 20.06.2015 | Iluvatar": {
+      "animal_id": "cj_15_0005_F_Olga",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "d829eaa5-0037-4e69-a2d9-a19dff36af85",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "8f01bc90-6336-4406-b5a6-e83c24ef8f34",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Olga | Callitrix jacchus | 20.06.2015 | Iluvatar",
+      "name": "Olga"
+    },
+    "Orc-chieftain | Papio hamadryas anubis | 04.11.2010 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Orc-chieftain | Papio hamadryas anubis | 04.11.2010 | DPZ",
+      "name": "Orc-chieftain"
+    },
+    "Orcobal | Papio hamadryas anubis | 04.06.2006 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Orcobal | Papio hamadryas anubis | 04.06.2006 | DPZ",
+      "name": "Orcobal"
+    },
+    "Ori | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Ori | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Ori"
+    },
+    "Oropher | Callitrix jacchus | 25.05.2015 | Iluvatar": {
+      "animal_id": "cj_15_0004_M_Oropher",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "5a7f2a9b-f054-4ff0-a294-f7dade6460eb",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "6e4c8d67-8466-405f-bd73-a70e999e9716",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Oropher | Callitrix jacchus | 25.05.2015 | Iluvatar",
+      "name": "Oropher"
+    },
+    "Othrod | Papio hamadryas anubis | 04.09.2002 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Othrod | Papio hamadryas anubis | 04.09.2002 | DPZ",
+      "name": "Othrod"
+    },
+    "Petra | Macaca mulatta | 04.03.2017 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Petra | Macaca mulatta | 04.03.2017 | Aulë",
+      "name": "Petra"
+    },
+    "Rita | Macaca mulatta | 04.03.2017 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Rita | Macaca mulatta | 04.03.2017 | Aulë",
+      "name": "Rita"
+    },
+    "Rudolf | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Rudolf | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Rudolf"
+    },
+    "Shagrat | Papio hamadryas anubis | 04.03.2010 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Shagrat | Papio hamadryas anubis | 04.03.2010 | DPZ",
+      "name": "Shagrat"
+    },
+    "Simone | Macaca mulatta | 04.03.2020 | Aulë": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Simone | Macaca mulatta | 04.03.2020 | Aulë",
+      "name": "Simone"
+    },
+    "Snaga I | Papio hamadryas anubis | 04.06.2014 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Snaga I | Papio hamadryas anubis | 04.06.2014 | DPZ",
+      "name": "Snaga I"
+    },
+    "Snaga II | Papio hamadryas anubis | 04.09.2018 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Snaga II | Papio hamadryas anubis | 04.09.2018 | DPZ",
+      "name": "Snaga II"
+    },
+    "Snot | Papio hamadryas anubis | 04.04.2026 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Snot | Papio hamadryas anubis | 04.04.2026 | DPZ",
+      "name": "Snot"
+    },
+    "Svetlana | Callitrix jacchus | 03.05.2021 | Iluvatar": {
+      "animal_id": "cj_21_0004_F_Svetlana",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "83501287-b10b-4cf1-9762-1119b7672ce9",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "cacf9222-1266-4e09-aa13-01462e18e887",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Svetlana | Callitrix jacchus | 03.05.2021 | Iluvatar",
+      "name": "Svetlana"
+    },
+    "Taylor | Callitrix jacchus | 14.06.2018 | Iluvatar": {
+      "animal_id": "cj_18_0012_F_Taylor",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Crossbreeding",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "e88aec3a-7381-4dd2-9416-4e71f96216f3",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Crossbreeding",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Backcrossing",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "ec25b7ac-bdaa-47d6-a906-f18b07616b50",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Backcrossing",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Taylor | Callitrix jacchus | 14.06.2018 | Iluvatar",
+      "name": "Taylor"
+    },
+    "Testo | Callitrix jacchus | 02.02.2018": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Testo | Callitrix jacchus | 02.02.2018",
+      "name": "Testo"
+    },
+    "Thorin II | Macaca mulatta | 04.03.2020 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Thorin II | Macaca mulatta | 04.03.2020 | DPZ",
+      "name": "Thorin II"
+    },
+    "Thorin III | Macaca mulatta | 04.03.2023 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Thorin III | Macaca mulatta | 04.03.2023 | DPZ",
+      "name": "Thorin III"
+    },
+    "Thrain II | Macaca mulatta | 04.03.2017 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Thrain II | Macaca mulatta | 04.03.2017 | DPZ",
+      "name": "Thrain II"
+    },
+    "Thranduil | Callitrix jacchus | 11.02.2021 | DPZ": {
+      "animal_id": "cj_21_0003_M_Thranduil",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_left",
+          "id": "874094a9-d073-4358-bf7a-26325acb9708",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: OTOF",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "OTOF-",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-04-20",
+          "entry_type": "project_assigned",
+          "id": "27d92a35-c614-4998-86bb-f401550c2fa4",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: OTOF-",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Thranduil | Callitrix jacchus | 11.02.2021 | DPZ",
+      "name": "Thranduil"
+    },
+    "Thror | Macaca mulatta | 04.03.2014 | DPZ": {
+      "animal_id": "mm_14_0010_M_Thror",
+      "documents": [],
+      "entries": [],
+      "ipid": "Thror | Macaca mulatta | 04.03.2014 | DPZ",
+      "name": "Thror"
+    },
+    "Ufthak | Papio hamadryas anubis | 04.03.2018 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Ufthak | Papio hamadryas anubis | 04.03.2018 | DPZ",
+      "name": "Ufthak"
+    },
+    "Ugluk | Papio hamadryas anubis | 04.06.2014 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Ugluk | Papio hamadryas anubis | 04.06.2014 | DPZ",
+      "name": "Ugluk"
+    },
+    "Wilhelm | Macaca mulatta | 04.03.2017 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Wilhelm | Macaca mulatta | 04.03.2017 | DPZ",
+      "name": "Wilhelm"
+    },
+    "Yellowfang | Papio hamadryas anubis | 04.04.2022 | DPZ": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [],
+      "ipid": "Yellowfang | Papio hamadryas anubis | 04.04.2022 | DPZ",
+      "name": "Yellowfang"
+    },
+    "Zeta | Unknown species | 16.01.2025": {
+      "animal_id": "",
+      "documents": [],
+      "entries": [
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Zeta-1",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "d1b5a4f7-579c-4868-bd28-87be0533186b",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Zeta-1",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Zeta-1",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "severity_changed",
+          "id": "71c4cf83-4a58-4dfe-8d26-07888f300b5a",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in Zeta-1 changed from undefined to SV0 - no severity",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Zeta-1 (SV0 - no severity)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "56d79218-ca91-4a59-b80b-dda7db3f2e66",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Zeta-1 (SV0 - no severity)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "f1d13de7-168c-439e-aadc-ecc42e6f663b",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Q",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "severity_changed",
+          "id": "02c57166-88f8-4f1f-8a69-39709dde775e",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Severity in Q changed from undefined to SV2 - mild or very mild",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q (SV2 - mild or very mild)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "c69e6f3a-fb0e-416d-b876-7ee11854e7d9",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: Q (SV2 - mild or very mild)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A (SV4 - severe)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "f5acc7f5-09eb-4574-b59f-036a17c65812",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: A (SV4 - severe)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "A (SV4 - severe)",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_left",
+          "id": "f38a350b-18a8-41a7-afe8-b95d84f4016f",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Left project: A (SV4 - severe)",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "Q",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "project_assigned",
+          "id": "e4a9caf9-9e17-4fbd-b7d1-9b5c64cb0c4c",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "Assigned to project: Q",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        },
+        {
+          "condition_depth": 0,
+          "condition_key": "",
+          "condition_label_snapshot": "",
+          "condition_language": "en",
+          "condition_path_keys": [],
+          "condition_path_label_snapshot": [],
+          "date": "2026-06-16",
+          "entry_type": "experiment_started",
+          "id": "a98e56e2-9951-4a71-9fde-90bde6a2faba",
+          "issue_id": "",
+          "linked_document_ids": [],
+          "note": "",
+          "signature": "Dr. Manager Plansdottir",
+          "status_type": "other"
+        }
+      ],
+      "ipid": "Zeta | Unknown species | 16.01.2025",
+      "name": "Zeta"
+    }
+  },
+  "version": "1.7"
+}

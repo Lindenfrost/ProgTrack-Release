@@ -1,0 +1,6 @@
+{
+  "Mus": {"offsets": [0, 7, 14, 28, 56, 120], "values": [1.5, 5.5, 11, 18, 23, 27]},
+  "Callitrix": {"offsets": [0, 21, 45, 90, 150, 240, 365, 600], "values": [37, 78, 108, 155, 210, 285, 370, null], "adult_female": 440, "adult_male": 480},
+  "Macaca": {"offsets": [0, 30, 90, 180, 365, 730, 1460], "values": [480, 760, 1200, 2100, 3500, 5000, null], "adult_female": 6500, "adult_male": 9000},
+  "Papio": {"offsets": [0, 30, 90, 180, 365, 730, 1460], "values": [800, 1300, 2400, 4500, 8000, 12000, null], "adult_female": 14000, "adult_male": 22000}
+}

@@ -1,0 +1,97 @@
+{
+  "additional_founder_pairs": [
+    [
+      "Gerontius",
+      "Adamanta"
+    ],
+    [
+      "Balbo",
+      "Berylla"
+    ],
+    [
+      "Mungo",
+      "Laura"
+    ],
+    [
+      "Hildigrim",
+      "Rosa"
+    ],
+    [
+      "Fortinbras",
+      "Lalia"
+    ],
+    [
+      "Gorbadoc",
+      "Mirabella"
+    ],
+    [
+      "Bandobras",
+      "Mariana"
+    ]
+  ],
+  "canonical_pairs": [
+    [
+      "Drogo",
+      "Primula"
+    ],
+    [
+      "Hamfast",
+      "Bell"
+    ],
+    [
+      "Saradoc",
+      "Esmeralda"
+    ],
+    [
+      "Paladin",
+      "Eglantine"
+    ]
+  ],
+  "generation_starts": {
+    "1": "2019-09-01",
+    "2": "2020-02-01",
+    "3": "2020-08-01"
+  },
+  "hobbit_males": [
+    "Fosco",
+    "Posco",
+    "Dudo",
+    "Tobold",
+    "Doderic",
+    "Seredic",
+    "Isembard",
+    "Adalgrim",
+    "Hobson",
+    "Tolman",
+    "Holman",
+    "Falco"
+  ],
+  "portuguese_females": [
+    "Mariana",
+    "Beatriz",
+    "Ines",
+    "Leonor",
+    "Catarina",
+    "Teresa",
+    "Matilde",
+    "Joana",
+    "Carolina",
+    "Madalena",
+    "Clara",
+    "Luisa"
+  ],
+  "surnames": [
+    "Baggins",
+    "Took",
+    "Brandybuck",
+    "Gamgee",
+    "Bolger",
+    "Boffin",
+    "Chubb",
+    "Goodbody",
+    "Grubb",
+    "Hornblower",
+    "Bracegirdle",
+    "Burrows"
+  ]
+}

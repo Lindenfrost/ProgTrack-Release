@@ -241,6 +241,13 @@ hold ownership, safe paths, and checksums.
 A truly empty backend imports the fictional `progtrack_seed.ptdb`
 automatically. An existing database is left unchanged.
 
+Seed authoring is defined by `source/seed/manifest.json`, with reviewed fixtures
+and scenario recipes in that directory. Rebuild with
+`python source/build_sample_seed.py`; use `--check` to verify the generated
+artifacts without replacing them. Generation does not require the old JSON
+archive or a previous seed package and never updates the active database.
+See [seed authoring and verification](source/seed/README.md).
+
 ## Animal identity and ID conventions
 
 An animal's immutable identity consists of:

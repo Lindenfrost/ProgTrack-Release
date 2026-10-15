@@ -1,0 +1,4947 @@
+{
+  "Aegnor | Callitrix jacchus | 17.04.2005 | DPZ": {
+    "_base_name": "Aegnor",
+    "abnormal_current": false,
+    "birth_date": "17.04.2005",
+    "chip_nr": "G433WSHS",
+    "daten": [],
+    "death_date": "16.04.2012",
+    "display_name": "Aegnor",
+    "edits": {},
+    "eizellspenderin": "Earwen | Callitrix jacchus | 03.08.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 460
+    },
+    "generated_id_absolute_sequence": 70,
+    "generated_id_sequence": 5,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2005-04-17T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2005-05-08T00:00:00",
+        "wert": 76.0
+      },
+      {
+        "datum": "2005-06-01T00:00:00",
+        "wert": 106.0
+      },
+      {
+        "datum": "2005-07-16T00:00:00",
+        "wert": 152.0
+      },
+      {
+        "datum": "2005-09-14T00:00:00",
+        "wert": 204.0
+      },
+      {
+        "datum": "2005-12-13T00:00:00",
+        "wert": 272.0
+      },
+      {
+        "datum": "2006-04-17T00:00:00",
+        "wert": 355.0
+      },
+      {
+        "datum": "2006-10-09T00:00:00",
+        "wert": 460.0
+      },
+      {
+        "datum": "2007-05-17T00:00:00",
+        "wert": 463.0
+      },
+      {
+        "datum": "2007-12-23T00:00:00",
+        "wert": 464.0
+      },
+      {
+        "datum": "2008-09-18T00:00:00",
+        "wert": 456.0
+      },
+      {
+        "datum": "2009-09-03T00:00:00",
+        "wert": 460.0
+      },
+      {
+        "datum": "2010-10-08T00:00:00",
+        "wert": 462.0
+      },
+      {
+        "datum": "2012-04-16T00:00:00",
+        "wert": 460.0
+      }
+    ],
+    "id": "cj_05_0005_M_Aegnor",
+    "in_experiment": false,
+    "ipid": "Aegnor | Callitrix jacchus | 17.04.2005 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Aegnor",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 460,
+    "rolle": "breeding_animal",
+    "samenspender": "Finarfin | Callitrix jacchus | 06.07.2003 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "verpaart_mit": "",
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Amras | Callitrix jacchus | 02.11.2006 | DPZ": {
+    "_base_name": "Amras",
+    "abnormal_current": false,
+    "birth_date": "02.11.2006",
+    "chip_nr": "J3ZWLLCQ",
+    "daten": [],
+    "death_date": "02.11.2014",
+    "display_name": "Amras",
+    "edits": {},
+    "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 483
+    },
+    "generated_id_absolute_sequence": 84,
+    "generated_id_sequence": 8,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2006-11-02T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2006-11-23T00:00:00",
+        "wert": 79.2
+      },
+      {
+        "datum": "2006-12-17T00:00:00",
+        "wert": 110.7
+      },
+      {
+        "datum": "2007-01-31T00:00:00",
+        "wert": 159.0
+      },
+      {
+        "datum": "2007-04-01T00:00:00",
+        "wert": 213.7
+      },
+      {
+        "datum": "2007-06-30T00:00:00",
+        "wert": 285.3
+      },
+      {
+        "datum": "2007-11-02T00:00:00",
+        "wert": 373.2
+      },
+      {
+        "datum": "2008-04-25T00:00:00",
+        "wert": 483.0
+      },
+      {
+        "datum": "2008-12-01T00:00:00",
+        "wert": 482.0
+      },
+      {
+        "datum": "2009-07-09T00:00:00",
+        "wert": 479.0
+      },
+      {
+        "datum": "2010-04-05T00:00:00",
+        "wert": 482.0
+      },
+      {
+        "datum": "2011-03-21T00:00:00",
+        "wert": 482.0
+      },
+      {
+        "datum": "2012-04-24T00:00:00",
+        "wert": 487.0
+      },
+      {
+        "datum": "2014-11-02T00:00:00",
+        "wert": 485.0
+      }
+    ],
+    "id": "cj_06_0008_M_Amras",
+    "in_experiment": false,
+    "ipid": "Amras | Callitrix jacchus | 02.11.2006 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Amras",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 483,
+    "rolle": "breeding_animal",
+    "samenspender": "Feanor | Callitrix jacchus | 13.03.2002 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Amrod | Callitrix jacchus | 22.05.2006 | DPZ": {
+    "_base_name": "Amrod",
+    "abnormal_current": false,
+    "birth_date": "22.05.2006",
+    "chip_nr": "KSKVEP33",
+    "daten": [],
+    "death_date": "21.05.2013",
+    "display_name": "Amrod",
+    "edits": {},
+    "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 478
+    },
+    "generated_id_absolute_sequence": 81,
+    "generated_id_sequence": 5,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2006-05-22T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2006-06-12T00:00:00",
+        "wert": 78.7
+      },
+      {
+        "datum": "2006-07-06T00:00:00",
+        "wert": 109.9
+      },
+      {
+        "datum": "2006-08-20T00:00:00",
+        "wert": 157.7
+      },
+      {
+        "datum": "2006-10-19T00:00:00",
+        "wert": 211.7
+      },
+      {
+        "datum": "2007-01-17T00:00:00",
+        "wert": 282.5
+      },
+      {
+        "datum": "2007-05-22T00:00:00",
+        "wert": 369.4
+      },
+      {
+        "datum": "2007-11-13T00:00:00",
+        "wert": 478.0
+      },
+      {
+        "datum": "2008-06-20T00:00:00",
+        "wert": 480.0
+      },
+      {
+        "datum": "2009-01-26T00:00:00",
+        "wert": 474.0
+      },
+      {
+        "datum": "2009-10-23T00:00:00",
+        "wert": 479.0
+      },
+      {
+        "datum": "2010-10-08T00:00:00",
+        "wert": 480.0
+      },
+      {
+        "datum": "2011-11-12T00:00:00",
+        "wert": 478.0
+      },
+      {
+        "datum": "2013-05-21T00:00:00",
+        "wert": 479.0
+      }
+    ],
+    "id": "cj_06_0005_M_Amrod",
+    "in_experiment": false,
+    "ipid": "Amrod | Callitrix jacchus | 22.05.2006 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Amrod",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 478,
+    "rolle": "breeding_animal",
+    "samenspender": "Feanor | Callitrix jacchus | 13.03.2002 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Anaire | Callitrix jacchus | 20.08.2001 | Iluvatar": {
+    "_base_name": "Anaire",
+    "abnormal_current": false,
+    "birth_date": "20.08.2001",
+    "chip_nr": "E9W5MLDY",
+    "daten": [],
+    "death_date": "19.08.2008",
+    "display_name": "Anaire",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 420
+    },
+    "generated_id_absolute_sequence": 38,
+    "generated_id_sequence": 2,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2001-08-20T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2001-09-10T00:00:00",
+        "wert": 74.0
+      },
+      {
+        "datum": "2001-10-04T00:00:00",
+        "wert": 101.0
+      },
+      {
+        "datum": "2001-11-18T00:00:00",
+        "wert": 142.4
+      },
+      {
+        "datum": "2002-01-17T00:00:00",
+        "wert": 189.3
+      },
+      {
+        "datum": "2002-04-17T00:00:00",
+        "wert": 250.6
+      },
+      {
+        "datum": "2002-08-20T00:00:00",
+        "wert": 325.9
+      },
+      {
+        "datum": "2003-02-11T00:00:00",
+        "wert": 420.0
+      },
+      {
+        "datum": "2003-09-19T00:00:00",
+        "wert": 419.0
+      },
+      {
+        "datum": "2004-04-26T00:00:00",
+        "wert": 417.0
+      },
+      {
+        "datum": "2005-01-21T00:00:00",
+        "wert": 422.0
+      },
+      {
+        "datum": "2006-01-06T00:00:00",
+        "wert": 424.0
+      },
+      {
+        "datum": "2007-02-10T00:00:00",
+        "wert": 416.0
+      },
+      {
+        "datum": "2008-08-19T00:00:00",
+        "wert": 421.0
+      }
+    ],
+    "id": "cj_01_0002_F_Anaire",
+    "in_experiment": false,
+    "ipid": "Anaire | Callitrix jacchus | 20.08.2001 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Anaire",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 420,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Angrod | Callitrix jacchus | 26.07.2005 | DPZ": {
+    "_base_name": "Angrod",
+    "abnormal_current": false,
+    "birth_date": "26.07.2005",
+    "chip_nr": "EBY8BDDF",
+    "daten": [],
+    "death_date": "26.07.2013",
+    "display_name": "Angrod",
+    "edits": {},
+    "eizellspenderin": "Earwen | Callitrix jacchus | 03.08.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 488
+    },
+    "generated_id_absolute_sequence": 74,
+    "generated_id_sequence": 9,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2005-07-26T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2005-08-16T00:00:00",
+        "wert": 80.5
+      },
+      {
+        "datum": "2005-09-09T00:00:00",
+        "wert": 112.4
+      },
+      {
+        "datum": "2005-10-24T00:00:00",
+        "wert": 161.1
+      },
+      {
+        "datum": "2005-12-23T00:00:00",
+        "wert": 216.3
+      },
+      {
+        "datum": "2006-03-23T00:00:00",
+        "wert": 288.5
+      },
+      {
+        "datum": "2006-07-26T00:00:00",
+        "wert": 377.2
+      },
+      {
+        "datum": "2007-01-17T00:00:00",
+        "wert": 488.0
+      },
+      {
+        "datum": "2007-08-25T00:00:00",
+        "wert": 492.0
+      },
+      {
+        "datum": "2008-04-01T00:00:00",
+        "wert": 492.0
+      },
+      {
+        "datum": "2008-12-27T00:00:00",
+        "wert": 489.0
+      },
+      {
+        "datum": "2009-12-12T00:00:00",
+        "wert": 486.0
+      },
+      {
+        "datum": "2011-01-16T00:00:00",
+        "wert": 491.0
+      },
+      {
+        "datum": "2013-07-26T00:00:00",
+        "wert": 490.0
+      }
+    ],
+    "id": "cj_05_0009_M_Angrod",
+    "in_experiment": false,
+    "ipid": "Angrod | Callitrix jacchus | 26.07.2005 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Angrod",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 488,
+    "rolle": "breeding_animal",
+    "samenspender": "Finarfin | Callitrix jacchus | 06.07.2003 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Aredhel | Callitrix jacchus | 22.01.2005 | DPZ": {
+    "_base_name": "Aredhel",
+    "abnormal_current": false,
+    "birth_date": "22.01.2005",
+    "chip_nr": "19EB7QGZ",
+    "daten": [],
+    "death_date": "22.01.2012",
+    "display_name": "Aredhel",
+    "edits": {},
+    "eizellspenderin": "Anaire | Callitrix jacchus | 20.08.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 386
+    },
+    "generated_id_absolute_sequence": 67,
+    "generated_id_sequence": 2,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2005-01-22T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2005-02-12T00:00:00",
+        "wert": 70.7
+      },
+      {
+        "datum": "2005-03-08T00:00:00",
+        "wert": 95.3
+      },
+      {
+        "datum": "2005-04-22T00:00:00",
+        "wert": 133.1
+      },
+      {
+        "datum": "2005-06-21T00:00:00",
+        "wert": 175.8
+      },
+      {
+        "datum": "2005-09-19T00:00:00",
+        "wert": 231.6
+      },
+      {
+        "datum": "2006-01-22T00:00:00",
+        "wert": 300.2
+      },
+      {
+        "datum": "2006-07-16T00:00:00",
+        "wert": 386.0
+      },
+      {
+        "datum": "2007-02-21T00:00:00",
+        "wert": 389.0
+      },
+      {
+        "datum": "2007-09-29T00:00:00",
+        "wert": 389.0
+      },
+      {
+        "datum": "2008-06-25T00:00:00",
+        "wert": 387.0
+      },
+      {
+        "datum": "2009-06-10T00:00:00",
+        "wert": 384.0
+      },
+      {
+        "datum": "2010-07-15T00:00:00",
+        "wert": 388.0
+      },
+      {
+        "datum": "2012-01-22T00:00:00",
+        "wert": 384.0
+      }
+    ],
+    "id": "cj_05_0002_F_Aredhel",
+    "in_experiment": false,
+    "ipid": "Aredhel | Callitrix jacchus | 22.01.2005 | DPZ",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Aredhel",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 386,
+    "rolle": "breeding_animal",
+    "samenspender": "Fingolfin | Callitrix jacchus | 01.08.2002 | DPZ",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Argon | Callitrix jacchus | 16.07.2005 | DPZ": {
+    "_base_name": "Argon",
+    "abnormal_current": false,
+    "birth_date": "16.07.2005",
+    "chip_nr": "39BP7CPS",
+    "daten": [],
+    "death_date": "16.07.2013",
+    "display_name": "Argon",
+    "edits": {},
+    "eizellspenderin": "Anaire | Callitrix jacchus | 20.08.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 436
+    },
+    "generated_id_absolute_sequence": 73,
+    "generated_id_sequence": 8,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2005-07-16T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2005-08-06T00:00:00",
+        "wert": 74.6
+      },
+      {
+        "datum": "2005-08-30T00:00:00",
+        "wert": 102.8
+      },
+      {
+        "datum": "2005-10-14T00:00:00",
+        "wert": 146.1
+      },
+      {
+        "datum": "2005-12-13T00:00:00",
+        "wert": 195.0
+      },
+      {
+        "datum": "2006-03-13T00:00:00",
+        "wert": 259.1
+      },
+      {
+        "datum": "2006-07-16T00:00:00",
+        "wert": 337.7
+      },
+      {
+        "datum": "2007-01-07T00:00:00",
+        "wert": 436.0
+      },
+      {
+        "datum": "2007-08-15T00:00:00",
+        "wert": 433.0
+      },
+      {
+        "datum": "2008-03-22T00:00:00",
+        "wert": 440.0
+      },
+      {
+        "datum": "2008-12-17T00:00:00",
+        "wert": 436.0
+      },
+      {
+        "datum": "2009-12-02T00:00:00",
+        "wert": 439.0
+      },
+      {
+        "datum": "2011-01-06T00:00:00",
+        "wert": 435.0
+      },
+      {
+        "datum": "2013-07-16T00:00:00",
+        "wert": 436.0
+      }
+    ],
+    "id": "cj_05_0008_M_Argon",
+    "in_experiment": false,
+    "ipid": "Argon | Callitrix jacchus | 16.07.2005 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Argon",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 436,
+    "rolle": "breeding_animal",
+    "samenspender": "Fingolfin | Callitrix jacchus | 01.08.2002 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Ashley | Callitrix jacchus | 16.05.2004 | Iluvatar": {
+    "_base_name": "Ashley",
+    "abnormal_current": false,
+    "birth_date": "16.05.2004",
+    "chip_nr": "PWUM4O2N",
+    "daten": [],
+    "death_date": "16.05.2011",
+    "display_name": "Ashley",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 463
+    },
+    "generated_id_absolute_sequence": 58,
+    "generated_id_sequence": 4,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2004-05-16T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2004-06-06T00:00:00",
+        "wert": 77.2
+      },
+      {
+        "datum": "2004-06-30T00:00:00",
+        "wert": 107.4
+      },
+      {
+        "datum": "2004-08-14T00:00:00",
+        "wert": 153.5
+      },
+      {
+        "datum": "2004-10-13T00:00:00",
+        "wert": 205.8
+      },
+      {
+        "datum": "2005-01-11T00:00:00",
+        "wert": 274.2
+      },
+      {
+        "datum": "2005-05-16T00:00:00",
+        "wert": 358.1
+      },
+      {
+        "datum": "2005-11-07T00:00:00",
+        "wert": 463.0
+      },
+      {
+        "datum": "2006-06-15T00:00:00",
+        "wert": 460.0
+      },
+      {
+        "datum": "2007-01-21T00:00:00",
+        "wert": 465.0
+      },
+      {
+        "datum": "2007-10-18T00:00:00",
+        "wert": 467.0
+      },
+      {
+        "datum": "2008-10-02T00:00:00",
+        "wert": 463.0
+      },
+      {
+        "datum": "2009-11-06T00:00:00",
+        "wert": 467.0
+      },
+      {
+        "datum": "2011-05-16T00:00:00",
+        "wert": 462.0
+      }
+    ],
+    "id": "cj_04_0004_F_Ashley",
+    "in_experiment": false,
+    "ipid": "Ashley | Callitrix jacchus | 16.05.2004 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Ashley",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 463,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Beren | Callitrix jacchus | 25.08.2001 | Iluvatar": {
+    "_base_name": "Beren",
+    "abnormal_current": false,
+    "birth_date": "25.08.2001",
+    "chip_nr": "EG1SSXRK",
+    "daten": [],
+    "death_date": "24.08.2008",
+    "display_name": "Beren",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 440
+    },
+    "generated_id_absolute_sequence": 39,
+    "generated_id_sequence": 3,
+    "genotype": "H-/H-",
+    "gewicht": [
+      {
+        "datum": "2001-08-25T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2001-09-15T00:00:00",
+        "wert": 75.9
+      },
+      {
+        "datum": "2001-10-09T00:00:00",
+        "wert": 104.3
+      },
+      {
+        "datum": "2001-11-23T00:00:00",
+        "wert": 147.9
+      },
+      {
+        "datum": "2002-01-22T00:00:00",
+        "wert": 197.2
+      },
+      {
+        "datum": "2002-04-22T00:00:00",
+        "wert": 261.8
+      },
+      {
+        "datum": "2002-08-25T00:00:00",
+        "wert": 341.0
+      },
+      {
+        "datum": "2003-02-16T00:00:00",
+        "wert": 440.0
+      },
+      {
+        "datum": "2003-09-24T00:00:00",
+        "wert": 439.0
+      },
+      {
+        "datum": "2004-05-01T00:00:00",
+        "wert": 436.0
+      },
+      {
+        "datum": "2005-01-26T00:00:00",
+        "wert": 440.0
+      },
+      {
+        "datum": "2006-01-11T00:00:00",
+        "wert": 440.0
+      },
+      {
+        "datum": "2007-02-15T00:00:00",
+        "wert": 437.0
+      },
+      {
+        "datum": "2008-08-24T00:00:00",
+        "wert": 442.0
+      }
+    ],
+    "id": "cj_01_0003_M_Beren",
+    "in_experiment": false,
+    "ipid": "Beren | Callitrix jacchus | 25.08.2001 | Iluvatar",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Beren",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 440,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Brittany | Callitrix jacchus | 14.08.2004 | Iluvatar": {
+    "_base_name": "Brittany",
+    "abnormal_current": false,
+    "birth_date": "14.08.2004",
+    "chip_nr": "RWX840KM",
+    "daten": [],
+    "death_date": "14.08.2011",
+    "display_name": "Brittany",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 389
+    },
+    "generated_id_absolute_sequence": 62,
+    "generated_id_sequence": 8,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2004-08-14T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2004-09-04T00:00:00",
+        "wert": 70.1
+      },
+      {
+        "datum": "2004-09-28T00:00:00",
+        "wert": 95.0
+      },
+      {
+        "datum": "2004-11-12T00:00:00",
+        "wert": 133.2
+      },
+      {
+        "datum": "2005-01-11T00:00:00",
+        "wert": 176.4
+      },
+      {
+        "datum": "2005-04-11T00:00:00",
+        "wert": 232.9
+      },
+      {
+        "datum": "2005-08-14T00:00:00",
+        "wert": 302.3
+      },
+      {
+        "datum": "2006-02-05T00:00:00",
+        "wert": 389.0
+      },
+      {
+        "datum": "2006-09-13T00:00:00",
+        "wert": 385.0
+      },
+      {
+        "datum": "2007-04-21T00:00:00",
+        "wert": 385.0
+      },
+      {
+        "datum": "2008-01-16T00:00:00",
+        "wert": 389.0
+      },
+      {
+        "datum": "2008-12-31T00:00:00",
+        "wert": 388.0
+      },
+      {
+        "datum": "2010-02-04T00:00:00",
+        "wert": 388.0
+      },
+      {
+        "datum": "2011-08-14T00:00:00",
+        "wert": 391.0
+      }
+    ],
+    "id": "cj_04_0008_F_Brittany",
+    "in_experiment": false,
+    "ipid": "Brittany | Callitrix jacchus | 14.08.2004 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Brittany",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 389,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Caranthir | Callitrix jacchus | 23.06.2005 | DPZ": {
+    "_base_name": "Caranthir",
+    "abnormal_current": false,
+    "birth_date": "23.06.2005",
+    "chip_nr": "1UH9T9JN",
+    "daten": [],
+    "death_date": "22.06.2012",
+    "display_name": "Caranthir",
+    "edits": {},
+    "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 467
+    },
+    "generated_id_absolute_sequence": 72,
+    "generated_id_sequence": 7,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2005-06-23T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2005-07-14T00:00:00",
+        "wert": 78.5
+      },
+      {
+        "datum": "2005-08-07T00:00:00",
+        "wert": 108.9
+      },
+      {
+        "datum": "2005-09-21T00:00:00",
+        "wert": 155.4
+      },
+      {
+        "datum": "2005-11-20T00:00:00",
+        "wert": 208.0
+      },
+      {
+        "datum": "2006-02-18T00:00:00",
+        "wert": 276.8
+      },
+      {
+        "datum": "2006-06-23T00:00:00",
+        "wert": 361.3
+      },
+      {
+        "datum": "2006-12-15T00:00:00",
+        "wert": 467.0
+      },
+      {
+        "datum": "2007-07-23T00:00:00",
+        "wert": 470.0
+      },
+      {
+        "datum": "2008-02-28T00:00:00",
+        "wert": 463.0
+      },
+      {
+        "datum": "2008-11-24T00:00:00",
+        "wert": 463.0
+      },
+      {
+        "datum": "2009-11-09T00:00:00",
+        "wert": 465.0
+      },
+      {
+        "datum": "2010-12-14T00:00:00",
+        "wert": 466.0
+      },
+      {
+        "datum": "2012-06-22T00:00:00",
+        "wert": 464.0
+      }
+    ],
+    "id": "cj_05_0007_M_Caranthir",
+    "in_experiment": false,
+    "ipid": "Caranthir | Callitrix jacchus | 23.06.2005 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Caranthir",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 467,
+    "rolle": "breeding_animal",
+    "samenspender": "Feanor | Callitrix jacchus | 13.03.2002 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Celeborn | Callitrix jacchus | 29.08.2004 | Iluvatar": {
+    "_base_name": "Celeborn",
+    "abnormal_current": false,
+    "birth_date": "29.08.2004",
+    "chip_nr": "YEHJEGRY",
+    "daten": [],
+    "death_date": "29.08.2018",
+    "display_name": "Celeborn",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 440
+    },
+    "generated_id_absolute_sequence": 63,
+    "generated_id_sequence": 9,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2004-08-29T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2004-09-19T00:00:00",
+        "wert": 75.0
+      },
+      {
+        "datum": "2004-10-13T00:00:00",
+        "wert": 103.5
+      },
+      {
+        "datum": "2004-11-27T00:00:00",
+        "wert": 147.2
+      },
+      {
+        "datum": "2005-01-26T00:00:00",
+        "wert": 196.6
+      },
+      {
+        "datum": "2005-04-26T00:00:00",
+        "wert": 261.3
+      },
+      {
+        "datum": "2005-08-29T00:00:00",
+        "wert": 340.7
+      },
+      {
+        "datum": "2006-02-20T00:00:00",
+        "wert": 440.0
+      },
+      {
+        "datum": "2006-09-28T00:00:00",
+        "wert": 436.0
+      },
+      {
+        "datum": "2007-05-06T00:00:00",
+        "wert": 439.0
+      },
+      {
+        "datum": "2008-01-31T00:00:00",
+        "wert": 441.0
+      },
+      {
+        "datum": "2009-01-15T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2010-02-19T00:00:00",
+        "wert": 440.0
+      },
+      {
+        "datum": "2018-08-29T00:00:00",
+        "wert": 441.0
+      }
+    ],
+    "id": "cj_04_0009_M_Celeborn",
+    "in_experiment": false,
+    "ipid": "Celeborn | Callitrix jacchus | 29.08.2004 | Iluvatar",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Celeborn",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 440,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Celebrimbor | Callitrix jacchus | 26.09.2007 | DPZ": {
+    "_base_name": "Celebrimbor",
+    "abnormal_current": false,
+    "birth_date": "26.09.2007",
+    "chip_nr": "E121CX2P",
+    "daten": [],
+    "death_date": "25.09.2016",
+    "display_name": "Celebrimbor",
+    "edits": {},
+    "eizellspenderin": "Ashley | Callitrix jacchus | 16.05.2004 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 455
+    },
+    "generated_id_absolute_sequence": 92,
+    "generated_id_sequence": 8,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2007-09-26T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2007-10-17T00:00:00",
+        "wert": 76.4
+      },
+      {
+        "datum": "2007-11-10T00:00:00",
+        "wert": 106.0
+      },
+      {
+        "datum": "2007-12-25T00:00:00",
+        "wert": 151.3
+      },
+      {
+        "datum": "2008-02-23T00:00:00",
+        "wert": 202.6
+      },
+      {
+        "datum": "2008-05-23T00:00:00",
+        "wert": 269.7
+      },
+      {
+        "datum": "2008-09-25T00:00:00",
+        "wert": 352.0
+      },
+      {
+        "datum": "2009-03-19T00:00:00",
+        "wert": 455.0
+      },
+      {
+        "datum": "2009-10-25T00:00:00",
+        "wert": 452.0
+      },
+      {
+        "datum": "2010-06-02T00:00:00",
+        "wert": 459.0
+      },
+      {
+        "datum": "2011-02-27T00:00:00",
+        "wert": 459.0
+      },
+      {
+        "datum": "2012-02-12T00:00:00",
+        "wert": 453.0
+      },
+      {
+        "datum": "2013-03-18T00:00:00",
+        "wert": 453.0
+      },
+      {
+        "datum": "2016-09-25T00:00:00",
+        "wert": 453.0
+      }
+    ],
+    "id": "cj_07_0008_M_Celebrimbor",
+    "in_experiment": false,
+    "ipid": "Celebrimbor | Callitrix jacchus | 26.09.2007 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Celebrimbor",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 455,
+    "rolle": "breeding_animal",
+    "samenspender": "Curufin | Callitrix jacchus | 10.12.2005 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Celegorm | Callitrix jacchus | 08.01.2005 | DPZ": {
+    "_base_name": "Celegorm",
+    "abnormal_current": false,
+    "birth_date": "08.01.2005",
+    "chip_nr": "6CC5UB2W",
+    "daten": [],
+    "death_date": "08.01.2012",
+    "display_name": "Celegorm",
+    "edits": {},
+    "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 481
+    },
+    "generated_id_absolute_sequence": 66,
+    "generated_id_sequence": 1,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2005-01-08T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2005-01-29T00:00:00",
+        "wert": 79.9
+      },
+      {
+        "datum": "2005-02-22T00:00:00",
+        "wert": 111.2
+      },
+      {
+        "datum": "2005-04-08T00:00:00",
+        "wert": 159.2
+      },
+      {
+        "datum": "2005-06-07T00:00:00",
+        "wert": 213.5
+      },
+      {
+        "datum": "2005-09-05T00:00:00",
+        "wert": 284.6
+      },
+      {
+        "datum": "2006-01-08T00:00:00",
+        "wert": 371.9
+      },
+      {
+        "datum": "2006-07-02T00:00:00",
+        "wert": 481.0
+      },
+      {
+        "datum": "2007-02-07T00:00:00",
+        "wert": 478.0
+      },
+      {
+        "datum": "2007-09-15T00:00:00",
+        "wert": 480.0
+      },
+      {
+        "datum": "2008-06-11T00:00:00",
+        "wert": 484.0
+      },
+      {
+        "datum": "2009-05-27T00:00:00",
+        "wert": 478.0
+      },
+      {
+        "datum": "2010-07-01T00:00:00",
+        "wert": 484.0
+      },
+      {
+        "datum": "2012-01-08T00:00:00",
+        "wert": 483.0
+      }
+    ],
+    "id": "cj_05_0001_M_Celegorm",
+    "in_experiment": false,
+    "ipid": "Celegorm | Callitrix jacchus | 08.01.2005 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Celegorm",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 481,
+    "rolle": "breeding_animal",
+    "samenspender": "Feanor | Callitrix jacchus | 13.03.2002 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Curufin | Callitrix jacchus | 10.12.2005 | DPZ": {
+    "_base_name": "Curufin",
+    "abnormal_current": false,
+    "birth_date": "10.12.2005",
+    "chip_nr": "HHJEW0RS",
+    "daten": [],
+    "death_date": "10.12.2013",
+    "display_name": "Curufin",
+    "edits": {},
+    "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 473
+    },
+    "generated_id_absolute_sequence": 76,
+    "generated_id_sequence": 11,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2005-12-10T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2005-12-31T00:00:00",
+        "wert": 79.1
+      },
+      {
+        "datum": "2006-01-24T00:00:00",
+        "wert": 109.9
+      },
+      {
+        "datum": "2006-03-10T00:00:00",
+        "wert": 157.0
+      },
+      {
+        "datum": "2006-05-09T00:00:00",
+        "wert": 210.4
+      },
+      {
+        "datum": "2006-08-07T00:00:00",
+        "wert": 280.2
+      },
+      {
+        "datum": "2006-12-10T00:00:00",
+        "wert": 365.9
+      },
+      {
+        "datum": "2007-06-03T00:00:00",
+        "wert": 473.0
+      },
+      {
+        "datum": "2008-01-09T00:00:00",
+        "wert": 469.0
+      },
+      {
+        "datum": "2008-08-16T00:00:00",
+        "wert": 474.0
+      },
+      {
+        "datum": "2009-05-13T00:00:00",
+        "wert": 470.0
+      },
+      {
+        "datum": "2010-04-28T00:00:00",
+        "wert": 476.0
+      },
+      {
+        "datum": "2011-06-02T00:00:00",
+        "wert": 472.0
+      },
+      {
+        "datum": "2013-12-10T00:00:00",
+        "wert": 474.0
+      }
+    ],
+    "id": "cj_05_0011_M_Curufin",
+    "in_experiment": false,
+    "ipid": "Curufin | Callitrix jacchus | 10.12.2005 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Curufin",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 473,
+    "rolle": "breeding_animal",
+    "samenspender": "Feanor | Callitrix jacchus | 13.03.2002 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Dior | Callitrix jacchus | 09.05.2004 | DPZ": {
+    "_base_name": "Dior",
+    "abnormal_current": false,
+    "birth_date": "09.05.2004",
+    "chip_nr": "8BXT4OLL",
+    "daten": [],
+    "death_date": "09.05.2013",
+    "display_name": "Dior",
+    "edits": {},
+    "eizellspenderin": "Luthien | Callitrix jacchus | 29.07.2002 | DPZ",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 490
+    },
+    "generated_id_absolute_sequence": 57,
+    "generated_id_sequence": 3,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2004-05-09T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2004-05-30T00:00:00",
+        "wert": 79.8
+      },
+      {
+        "datum": "2004-06-23T00:00:00",
+        "wert": 111.9
+      },
+      {
+        "datum": "2004-08-07T00:00:00",
+        "wert": 161.0
+      },
+      {
+        "datum": "2004-10-06T00:00:00",
+        "wert": 216.5
+      },
+      {
+        "datum": "2005-01-04T00:00:00",
+        "wert": 289.2
+      },
+      {
+        "datum": "2005-05-09T00:00:00",
+        "wert": 378.4
+      },
+      {
+        "datum": "2005-10-31T00:00:00",
+        "wert": 490.0
+      },
+      {
+        "datum": "2006-06-08T00:00:00",
+        "wert": 492.0
+      },
+      {
+        "datum": "2007-01-14T00:00:00",
+        "wert": 488.0
+      },
+      {
+        "datum": "2007-10-11T00:00:00",
+        "wert": 490.0
+      },
+      {
+        "datum": "2008-09-25T00:00:00",
+        "wert": 488.0
+      },
+      {
+        "datum": "2009-10-30T00:00:00",
+        "wert": 492.0
+      },
+      {
+        "datum": "2013-05-09T00:00:00",
+        "wert": 491.0
+      }
+    ],
+    "id": "cj_04_0003_M_Dior",
+    "in_experiment": false,
+    "ipid": "Dior | Callitrix jacchus | 09.05.2004 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Dior",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 490,
+    "rolle": "breeding_animal",
+    "samenspender": "Beren | Callitrix jacchus | 25.08.2001 | Iluvatar",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Earendil | Callitrix jacchus | 14.02.2010 | DPZ": {
+    "_base_name": "Earendil",
+    "abnormal_current": false,
+    "birth_date": "14.02.2010",
+    "chip_nr": "PHRCYUND",
+    "daten": [],
+    "death_date": "14.02.2024",
+    "display_name": "Earendil",
+    "edits": {},
+    "eizellspenderin": "Idril | Callitrix jacchus | 14.02.2007 | DPZ",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 452
+    },
+    "generated_id_absolute_sequence": 98,
+    "generated_id_sequence": 2,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2010-02-14T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2010-03-07T00:00:00",
+        "wert": 76.2
+      },
+      {
+        "datum": "2010-03-31T00:00:00",
+        "wert": 105.5
+      },
+      {
+        "datum": "2010-05-15T00:00:00",
+        "wert": 150.5
+      },
+      {
+        "datum": "2010-07-14T00:00:00",
+        "wert": 201.4
+      },
+      {
+        "datum": "2010-10-12T00:00:00",
+        "wert": 268.0
+      },
+      {
+        "datum": "2011-02-14T00:00:00",
+        "wert": 349.8
+      },
+      {
+        "datum": "2011-08-08T00:00:00",
+        "wert": 452.0
+      },
+      {
+        "datum": "2012-03-15T00:00:00",
+        "wert": 452.0
+      },
+      {
+        "datum": "2012-10-21T00:00:00",
+        "wert": 398.6
+      },
+      {
+        "datum": "2013-07-18T00:00:00",
+        "wert": 452.0
+      },
+      {
+        "datum": "2014-07-03T00:00:00",
+        "wert": 455.0
+      },
+      {
+        "datum": "2015-08-07T00:00:00",
+        "wert": 456.0
+      },
+      {
+        "datum": "2024-02-14T00:00:00",
+        "wert": 452.0
+      }
+    ],
+    "id": "cj_10_0002_M_Earendil",
+    "in_experiment": false,
+    "ipid": "Earendil | Callitrix jacchus | 14.02.2010 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Earendil",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 452,
+    "rolle": "breeding_animal",
+    "samenspender": "Tuor | Callitrix jacchus | 17.10.2007 | Iluvatar",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Earwen | Callitrix jacchus | 03.08.2001 | Iluvatar": {
+    "_base_name": "Earwen",
+    "abnormal_current": false,
+    "birth_date": "03.08.2001",
+    "chip_nr": "2ZTT6XXS",
+    "daten": [],
+    "death_date": "03.08.2015",
+    "display_name": "Earwen",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 502
+    },
+    "generated_id_absolute_sequence": 37,
+    "generated_id_sequence": 1,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2001-08-03T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2001-08-24T00:00:00",
+        "wert": 84.7
+      },
+      {
+        "datum": "2001-09-17T00:00:00",
+        "wert": 120.2
+      },
+      {
+        "datum": "2001-11-01T00:00:00",
+        "wert": 174.7
+      },
+      {
+        "datum": "2001-12-31T00:00:00",
+        "wert": 236.4
+      },
+      {
+        "datum": "2002-03-31T00:00:00",
+        "wert": 317.1
+      },
+      {
+        "datum": "2002-08-03T00:00:00",
+        "wert": 416.2
+      },
+      {
+        "datum": "2003-01-25T00:00:00",
+        "wert": 540.0
+      },
+      {
+        "datum": "2003-09-02T00:00:00",
+        "wert": 540.0
+      },
+      {
+        "datum": "2004-04-09T00:00:00",
+        "wert": 522.9
+      },
+      {
+        "datum": "2005-01-04T00:00:00",
+        "wert": 502.0
+      },
+      {
+        "datum": "2005-12-20T00:00:00",
+        "wert": 503.0
+      },
+      {
+        "datum": "2007-01-24T00:00:00",
+        "wert": 500.0
+      },
+      {
+        "datum": "2015-08-03T00:00:00",
+        "wert": 504.0
+      }
+    ],
+    "id": "cj_01_0001_F_Earwen",
+    "in_experiment": false,
+    "ipid": "Earwen | Callitrix jacchus | 03.08.2001 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Earwen",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 502,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Elenwe | Callitrix jacchus | 19.12.2004 | Iluvatar": {
+    "_base_name": "Elenwe",
+    "abnormal_current": false,
+    "birth_date": "19.12.2004",
+    "chip_nr": "67NRY3Z5",
+    "daten": [],
+    "death_date": "19.12.2013",
+    "display_name": "Elenwe",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 390
+    },
+    "generated_id_absolute_sequence": 65,
+    "generated_id_sequence": 11,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2004-12-19T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2005-01-09T00:00:00",
+        "wert": 71.1
+      },
+      {
+        "datum": "2005-02-02T00:00:00",
+        "wert": 96.0
+      },
+      {
+        "datum": "2005-03-19T00:00:00",
+        "wert": 134.2
+      },
+      {
+        "datum": "2005-05-18T00:00:00",
+        "wert": 177.4
+      },
+      {
+        "datum": "2005-08-16T00:00:00",
+        "wert": 233.9
+      },
+      {
+        "datum": "2005-12-19T00:00:00",
+        "wert": 303.3
+      },
+      {
+        "datum": "2006-06-12T00:00:00",
+        "wert": 390.0
+      },
+      {
+        "datum": "2007-01-18T00:00:00",
+        "wert": 391.0
+      },
+      {
+        "datum": "2007-08-26T00:00:00",
+        "wert": 389.0
+      },
+      {
+        "datum": "2008-05-22T00:00:00",
+        "wert": 387.0
+      },
+      {
+        "datum": "2009-05-07T00:00:00",
+        "wert": 388.0
+      },
+      {
+        "datum": "2010-06-11T00:00:00",
+        "wert": 390.0
+      },
+      {
+        "datum": "2013-12-19T00:00:00",
+        "wert": 390.0
+      }
+    ],
+    "id": "cj_04_0011_F_Elenwe",
+    "in_experiment": false,
+    "ipid": "Elenwe | Callitrix jacchus | 19.12.2004 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Elenwe",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 390,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Elwing | Callitrix jacchus | 08.01.2008 | DPZ": {
+    "_base_name": "Elwing",
+    "abnormal_current": false,
+    "birth_date": "08.01.2008",
+    "chip_nr": "VH5QBLO1",
+    "daten": [],
+    "death_date": "07.01.2015",
+    "display_name": "Elwing",
+    "edits": {},
+    "eizellspenderin": "Nimloth | Callitrix jacchus | 06.09.2004 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 387
+    },
+    "generated_id_absolute_sequence": 94,
+    "generated_id_sequence": 1,
+    "genotype": "WT/H-",
+    "gewicht": [
+      {
+        "datum": "2008-01-08T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2008-01-29T00:00:00",
+        "wert": 69.9
+      },
+      {
+        "datum": "2008-02-22T00:00:00",
+        "wert": 94.7
+      },
+      {
+        "datum": "2008-04-07T00:00:00",
+        "wert": 132.6
+      },
+      {
+        "datum": "2008-06-06T00:00:00",
+        "wert": 175.6
+      },
+      {
+        "datum": "2008-09-04T00:00:00",
+        "wert": 231.8
+      },
+      {
+        "datum": "2009-01-07T00:00:00",
+        "wert": 300.7
+      },
+      {
+        "datum": "2009-07-01T00:00:00",
+        "wert": 387.0
+      },
+      {
+        "datum": "2010-02-06T00:00:00",
+        "wert": 390.0
+      },
+      {
+        "datum": "2010-09-14T00:00:00",
+        "wert": 389.0
+      },
+      {
+        "datum": "2011-06-11T00:00:00",
+        "wert": 390.0
+      },
+      {
+        "datum": "2012-05-26T00:00:00",
+        "wert": 383.0
+      },
+      {
+        "datum": "2013-06-30T00:00:00",
+        "wert": 389.0
+      },
+      {
+        "datum": "2015-01-07T00:00:00",
+        "wert": 384.0
+      }
+    ],
+    "id": "cj_08_0001_F_Elwing",
+    "in_experiment": false,
+    "ipid": "Elwing | Callitrix jacchus | 08.01.2008 | DPZ",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Elwing",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 387,
+    "rolle": "breeding_animal",
+    "samenspender": "Dior | Callitrix jacchus | 09.05.2004 | DPZ",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Eol | Callitrix jacchus | 30.04.2004 | Iluvatar": {
+    "_base_name": "Eol",
+    "abnormal_current": false,
+    "birth_date": "30.04.2004",
+    "chip_nr": "SUABEC9U",
+    "daten": [],
+    "death_date": "30.04.2012",
+    "display_name": "Eol",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 443
+    },
+    "generated_id_absolute_sequence": 56,
+    "generated_id_sequence": 2,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2004-04-30T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2004-05-21T00:00:00",
+        "wert": 76.2
+      },
+      {
+        "datum": "2004-06-14T00:00:00",
+        "wert": 104.8
+      },
+      {
+        "datum": "2004-07-29T00:00:00",
+        "wert": 148.8
+      },
+      {
+        "datum": "2004-09-27T00:00:00",
+        "wert": 198.4
+      },
+      {
+        "datum": "2004-12-26T00:00:00",
+        "wert": 263.4
+      },
+      {
+        "datum": "2005-04-30T00:00:00",
+        "wert": 343.2
+      },
+      {
+        "datum": "2005-10-22T00:00:00",
+        "wert": 443.0
+      },
+      {
+        "datum": "2006-05-30T00:00:00",
+        "wert": 447.0
+      },
+      {
+        "datum": "2007-01-05T00:00:00",
+        "wert": 439.0
+      },
+      {
+        "datum": "2007-10-02T00:00:00",
+        "wert": 439.0
+      },
+      {
+        "datum": "2008-09-16T00:00:00",
+        "wert": 441.0
+      },
+      {
+        "datum": "2009-10-21T00:00:00",
+        "wert": 441.0
+      },
+      {
+        "datum": "2012-04-30T00:00:00",
+        "wert": 441.0
+      }
+    ],
+    "id": "cj_04_0002_M_Eol",
+    "in_experiment": false,
+    "ipid": "Eol | Callitrix jacchus | 30.04.2004 | Iluvatar",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Eol",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 443,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Feanor | Callitrix jacchus | 13.03.2002 | DPZ": {
+    "_base_name": "Feanor",
+    "abnormal_current": false,
+    "birth_date": "13.03.2002",
+    "chip_nr": "LBVE1DUQ",
+    "daten": [],
+    "death_date": "13.03.2011",
+    "display_name": "Feanor",
+    "edits": {},
+    "eizellspenderin": "Miriel | Callitrix jacchus | 08.01.2000 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 496
+    },
+    "generated_id_absolute_sequence": 45,
+    "generated_id_sequence": 5,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2002-03-13T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2002-04-03T00:00:00",
+        "wert": 80.4
+      },
+      {
+        "datum": "2002-04-27T00:00:00",
+        "wert": 112.9
+      },
+      {
+        "datum": "2002-06-11T00:00:00",
+        "wert": 162.6
+      },
+      {
+        "datum": "2002-08-10T00:00:00",
+        "wert": 218.9
+      },
+      {
+        "datum": "2002-11-08T00:00:00",
+        "wert": 292.6
+      },
+      {
+        "datum": "2003-03-13T00:00:00",
+        "wert": 383.0
+      },
+      {
+        "datum": "2003-09-04T00:00:00",
+        "wert": 496.0
+      },
+      {
+        "datum": "2004-04-11T00:00:00",
+        "wert": 497.0
+      },
+      {
+        "datum": "2004-11-17T00:00:00",
+        "wert": 444.1
+      },
+      {
+        "datum": "2005-08-14T00:00:00",
+        "wert": 499.0
+      },
+      {
+        "datum": "2006-07-30T00:00:00",
+        "wert": 496.0
+      },
+      {
+        "datum": "2007-09-03T00:00:00",
+        "wert": 496.0
+      },
+      {
+        "datum": "2011-03-13T00:00:00",
+        "wert": 500.0
+      }
+    ],
+    "id": "cj_02_0005_M_Feanor",
+    "in_experiment": false,
+    "ipid": "Feanor | Callitrix jacchus | 13.03.2002 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Feanor",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 496,
+    "rolle": "breeding_animal",
+    "samenspender": "Finwe | Callitrix jacchus | 15.05.2000 | Iluvatar",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Finarfin | Callitrix jacchus | 06.07.2003 | DPZ": {
+    "_base_name": "Finarfin",
+    "abnormal_current": false,
+    "birth_date": "06.07.2003",
+    "chip_nr": "H4WKO225",
+    "daten": [],
+    "death_date": "05.07.2018",
+    "display_name": "Finarfin",
+    "edits": {},
+    "eizellspenderin": "Indis | Callitrix jacchus | 05.03.2000 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 467
+    },
+    "generated_id_absolute_sequence": 54,
+    "generated_id_sequence": 2,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2003-07-06T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2003-07-27T00:00:00",
+        "wert": 78.5
+      },
+      {
+        "datum": "2003-08-20T00:00:00",
+        "wert": 108.9
+      },
+      {
+        "datum": "2003-10-04T00:00:00",
+        "wert": 155.4
+      },
+      {
+        "datum": "2003-12-03T00:00:00",
+        "wert": 208.0
+      },
+      {
+        "datum": "2004-03-02T00:00:00",
+        "wert": 276.8
+      },
+      {
+        "datum": "2004-07-05T00:00:00",
+        "wert": 361.3
+      },
+      {
+        "datum": "2004-12-27T00:00:00",
+        "wert": 467.0
+      },
+      {
+        "datum": "2005-08-04T00:00:00",
+        "wert": 463.0
+      },
+      {
+        "datum": "2006-03-12T00:00:00",
+        "wert": 467.0
+      },
+      {
+        "datum": "2006-12-07T00:00:00",
+        "wert": 471.0
+      },
+      {
+        "datum": "2007-11-22T00:00:00",
+        "wert": 470.0
+      },
+      {
+        "datum": "2008-12-26T00:00:00",
+        "wert": 465.0
+      },
+      {
+        "datum": "2018-07-05T00:00:00",
+        "wert": 466.0
+      }
+    ],
+    "id": "cj_03_0002_M_Finarfin",
+    "in_experiment": false,
+    "ipid": "Finarfin | Callitrix jacchus | 06.07.2003 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Finarfin",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 467,
+    "rolle": "breeding_animal",
+    "samenspender": "Finwe | Callitrix jacchus | 15.05.2000 | Iluvatar",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Findis | Callitrix jacchus | 02.05.2002 | DPZ": {
+    "_base_name": "Findis",
+    "abnormal_current": false,
+    "birth_date": "02.05.2002",
+    "chip_nr": "ONTR2R3M",
+    "daten": [],
+    "death_date": "02.05.2011",
+    "display_name": "Findis",
+    "edits": {},
+    "eizellspenderin": "Indis | Callitrix jacchus | 05.03.2000 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 444
+    },
+    "generated_id_absolute_sequence": 48,
+    "generated_id_sequence": 8,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2002-05-02T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2002-05-23T00:00:00",
+        "wert": 76.3
+      },
+      {
+        "datum": "2002-06-16T00:00:00",
+        "wert": 105.0
+      },
+      {
+        "datum": "2002-07-31T00:00:00",
+        "wert": 149.0
+      },
+      {
+        "datum": "2002-09-29T00:00:00",
+        "wert": 198.8
+      },
+      {
+        "datum": "2002-12-28T00:00:00",
+        "wert": 264.0
+      },
+      {
+        "datum": "2003-05-02T00:00:00",
+        "wert": 344.0
+      },
+      {
+        "datum": "2003-10-24T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2004-05-31T00:00:00",
+        "wert": 446.0
+      },
+      {
+        "datum": "2005-01-06T00:00:00",
+        "wert": 448.0
+      },
+      {
+        "datum": "2005-10-03T00:00:00",
+        "wert": 441.0
+      },
+      {
+        "datum": "2006-09-18T00:00:00",
+        "wert": 447.0
+      },
+      {
+        "datum": "2007-10-23T00:00:00",
+        "wert": 441.0
+      },
+      {
+        "datum": "2011-05-02T00:00:00",
+        "wert": 446.0
+      }
+    ],
+    "id": "cj_02_0008_F_Findis",
+    "in_experiment": false,
+    "ipid": "Findis | Callitrix jacchus | 02.05.2002 | DPZ",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Findis",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 444,
+    "rolle": "breeding_animal",
+    "samenspender": "Finwe | Callitrix jacchus | 15.05.2000 | Iluvatar",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Finduilas | Callitrix jacchus | 23.01.2010 | DPZ": {
+    "_base_name": "Finduilas",
+    "abnormal_current": false,
+    "birth_date": "23.01.2010",
+    "chip_nr": "P3YNPGEH",
+    "daten": [],
+    "death_date": "22.01.2017",
+    "display_name": "Finduilas",
+    "edits": {},
+    "eizellspenderin": "Jennifer | Callitrix jacchus | 08.07.2007 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 447
+    },
+    "generated_id_absolute_sequence": 97,
+    "generated_id_sequence": 1,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2010-01-23T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2010-02-13T00:00:00",
+        "wert": 75.7
+      },
+      {
+        "datum": "2010-03-09T00:00:00",
+        "wert": 104.7
+      },
+      {
+        "datum": "2010-04-23T00:00:00",
+        "wert": 149.1
+      },
+      {
+        "datum": "2010-06-22T00:00:00",
+        "wert": 199.4
+      },
+      {
+        "datum": "2010-09-20T00:00:00",
+        "wert": 265.2
+      },
+      {
+        "datum": "2011-01-23T00:00:00",
+        "wert": 346.0
+      },
+      {
+        "datum": "2011-07-17T00:00:00",
+        "wert": 447.0
+      },
+      {
+        "datum": "2012-02-22T00:00:00",
+        "wert": 445.0
+      },
+      {
+        "datum": "2012-09-29T00:00:00",
+        "wert": 443.0
+      },
+      {
+        "datum": "2013-06-26T00:00:00",
+        "wert": 450.0
+      },
+      {
+        "datum": "2014-06-11T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2015-07-16T00:00:00",
+        "wert": 445.0
+      },
+      {
+        "datum": "2017-01-22T00:00:00",
+        "wert": 447.0
+      }
+    ],
+    "id": "cj_10_0001_F_Finduilas",
+    "in_experiment": false,
+    "ipid": "Finduilas | Callitrix jacchus | 23.01.2010 | DPZ",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Finduilas",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 447,
+    "rolle": "breeding_animal",
+    "samenspender": "Orodreth | Callitrix jacchus | 07.08.2007 | DPZ",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Fingolfin | Callitrix jacchus | 01.08.2002 | DPZ": {
+    "_base_name": "Fingolfin",
+    "abnormal_current": false,
+    "birth_date": "01.08.2002",
+    "chip_nr": "7DOMI4XZ",
+    "daten": [],
+    "death_date": "01.08.2011",
+    "display_name": "Fingolfin",
+    "edits": {},
+    "eizellspenderin": "Indis | Callitrix jacchus | 05.03.2000 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 452
+    },
+    "generated_id_absolute_sequence": 51,
+    "generated_id_sequence": 11,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2002-08-01T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2002-08-22T00:00:00",
+        "wert": 76.2
+      },
+      {
+        "datum": "2002-09-15T00:00:00",
+        "wert": 105.5
+      },
+      {
+        "datum": "2002-10-30T00:00:00",
+        "wert": 150.5
+      },
+      {
+        "datum": "2002-12-29T00:00:00",
+        "wert": 201.4
+      },
+      {
+        "datum": "2003-03-29T00:00:00",
+        "wert": 268.0
+      },
+      {
+        "datum": "2003-08-01T00:00:00",
+        "wert": 349.8
+      },
+      {
+        "datum": "2004-01-23T00:00:00",
+        "wert": 452.0
+      },
+      {
+        "datum": "2004-08-30T00:00:00",
+        "wert": 456.0
+      },
+      {
+        "datum": "2005-04-07T00:00:00",
+        "wert": 449.0
+      },
+      {
+        "datum": "2006-01-02T00:00:00",
+        "wert": 449.0
+      },
+      {
+        "datum": "2006-12-18T00:00:00",
+        "wert": 450.0
+      },
+      {
+        "datum": "2008-01-22T00:00:00",
+        "wert": 453.0
+      },
+      {
+        "datum": "2011-08-01T00:00:00",
+        "wert": 455.0
+      }
+    ],
+    "id": "cj_02_0011_M_Fingolfin",
+    "in_experiment": false,
+    "ipid": "Fingolfin | Callitrix jacchus | 01.08.2002 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Fingolfin",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 452,
+    "rolle": "breeding_animal",
+    "samenspender": "Finwe | Callitrix jacchus | 15.05.2000 | Iluvatar",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Fingon | Callitrix jacchus | 25.05.2004 | DPZ": {
+    "_base_name": "Fingon",
+    "abnormal_current": false,
+    "birth_date": "25.05.2004",
+    "chip_nr": "LFM6S1GX",
+    "daten": [],
+    "death_date": "25.05.2012",
+    "display_name": "Fingon",
+    "edits": {},
+    "eizellspenderin": "Anaire | Callitrix jacchus | 20.08.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 484
+    },
+    "generated_id_absolute_sequence": 59,
+    "generated_id_sequence": 5,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2004-05-25T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2004-06-15T00:00:00",
+        "wert": 80.2
+      },
+      {
+        "datum": "2004-07-09T00:00:00",
+        "wert": 111.7
+      },
+      {
+        "datum": "2004-08-23T00:00:00",
+        "wert": 160.0
+      },
+      {
+        "datum": "2004-10-22T00:00:00",
+        "wert": 214.7
+      },
+      {
+        "datum": "2005-01-20T00:00:00",
+        "wert": 286.3
+      },
+      {
+        "datum": "2005-05-25T00:00:00",
+        "wert": 374.2
+      },
+      {
+        "datum": "2005-11-16T00:00:00",
+        "wert": 484.0
+      },
+      {
+        "datum": "2006-06-24T00:00:00",
+        "wert": 481.0
+      },
+      {
+        "datum": "2007-01-30T00:00:00",
+        "wert": 484.0
+      },
+      {
+        "datum": "2007-10-27T00:00:00",
+        "wert": 483.0
+      },
+      {
+        "datum": "2008-10-11T00:00:00",
+        "wert": 481.0
+      },
+      {
+        "datum": "2009-11-15T00:00:00",
+        "wert": 480.0
+      },
+      {
+        "datum": "2012-05-25T00:00:00",
+        "wert": 482.0
+      }
+    ],
+    "id": "cj_04_0005_M_Fingon",
+    "in_experiment": false,
+    "ipid": "Fingon | Callitrix jacchus | 25.05.2004 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Fingon",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 484,
+    "rolle": "breeding_animal",
+    "samenspender": "Fingolfin | Callitrix jacchus | 01.08.2002 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Finrod | Callitrix jacchus | 12.08.2005 | DPZ": {
+    "_base_name": "Finrod",
+    "abnormal_current": false,
+    "birth_date": "12.08.2005",
+    "chip_nr": "V7JF8M0G",
+    "daten": [],
+    "death_date": "12.08.2013",
+    "display_name": "Finrod",
+    "edits": {},
+    "eizellspenderin": "Earwen | Callitrix jacchus | 03.08.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 454
+    },
+    "generated_id_absolute_sequence": 75,
+    "generated_id_sequence": 10,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2005-08-12T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2005-09-02T00:00:00",
+        "wert": 77.3
+      },
+      {
+        "datum": "2005-09-26T00:00:00",
+        "wert": 106.7
+      },
+      {
+        "datum": "2005-11-10T00:00:00",
+        "wert": 151.8
+      },
+      {
+        "datum": "2006-01-09T00:00:00",
+        "wert": 202.8
+      },
+      {
+        "datum": "2006-04-09T00:00:00",
+        "wert": 269.6
+      },
+      {
+        "datum": "2006-08-12T00:00:00",
+        "wert": 351.5
+      },
+      {
+        "datum": "2007-02-03T00:00:00",
+        "wert": 454.0
+      },
+      {
+        "datum": "2007-09-11T00:00:00",
+        "wert": 450.0
+      },
+      {
+        "datum": "2008-04-18T00:00:00",
+        "wert": 456.0
+      },
+      {
+        "datum": "2009-01-13T00:00:00",
+        "wert": 451.0
+      },
+      {
+        "datum": "2009-12-29T00:00:00",
+        "wert": 454.0
+      },
+      {
+        "datum": "2011-02-02T00:00:00",
+        "wert": 451.0
+      },
+      {
+        "datum": "2013-08-12T00:00:00",
+        "wert": 454.0
+      }
+    ],
+    "id": "cj_05_0010_M_Finrod",
+    "in_experiment": false,
+    "ipid": "Finrod | Callitrix jacchus | 12.08.2005 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Finrod",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 454,
+    "rolle": "breeding_animal",
+    "samenspender": "Finarfin | Callitrix jacchus | 06.07.2003 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Finwe | Callitrix jacchus | 15.05.2000 | Iluvatar": {
+    "_base_name": "Finwe",
+    "abnormal_current": false,
+    "birth_date": "15.05.2000",
+    "chip_nr": "9975708Q",
+    "daten": [],
+    "death_date": "15.05.2007",
+    "display_name": "Finwe",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 499
+    },
+    "generated_id_absolute_sequence": 34,
+    "generated_id_sequence": 3,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2000-05-15T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2000-06-05T00:00:00",
+        "wert": 81.6
+      },
+      {
+        "datum": "2000-06-29T00:00:00",
+        "wert": 114.2
+      },
+      {
+        "datum": "2000-08-13T00:00:00",
+        "wert": 164.2
+      },
+      {
+        "datum": "2000-10-12T00:00:00",
+        "wert": 220.7
+      },
+      {
+        "datum": "2001-01-10T00:00:00",
+        "wert": 294.7
+      },
+      {
+        "datum": "2001-05-15T00:00:00",
+        "wert": 385.5
+      },
+      {
+        "datum": "2001-11-06T00:00:00",
+        "wert": 499.0
+      },
+      {
+        "datum": "2002-06-14T00:00:00",
+        "wert": 495.0
+      },
+      {
+        "datum": "2003-01-20T00:00:00",
+        "wert": 501.0
+      },
+      {
+        "datum": "2003-10-17T00:00:00",
+        "wert": 502.0
+      },
+      {
+        "datum": "2004-10-01T00:00:00",
+        "wert": 498.0
+      },
+      {
+        "datum": "2005-11-05T00:00:00",
+        "wert": 497.0
+      },
+      {
+        "datum": "2007-05-15T00:00:00",
+        "wert": 502.0
+      }
+    ],
+    "id": "cj_00_0003_M_Finwe",
+    "in_experiment": false,
+    "ipid": "Finwe | Callitrix jacchus | 15.05.2000 | Iluvatar",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Finwe",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 499,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Galadriel | Callitrix jacchus | 17.06.2005 | DPZ": {
+    "_base_name": "Galadriel",
+    "abnormal_current": false,
+    "birth_date": "17.06.2005",
+    "chip_nr": "TTDQSWYY",
+    "daten": [],
+    "death_date": "17.06.2018",
+    "display_name": "Galadriel",
+    "edits": {},
+    "eizellspenderin": "Earwen | Callitrix jacchus | 03.08.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 509
+    },
+    "generated_id_absolute_sequence": 71,
+    "generated_id_sequence": 6,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2005-06-17T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2005-07-08T00:00:00",
+        "wert": 85.8
+      },
+      {
+        "datum": "2005-08-01T00:00:00",
+        "wert": 121.6
+      },
+      {
+        "datum": "2005-09-15T00:00:00",
+        "wert": 176.3
+      },
+      {
+        "datum": "2005-11-14T00:00:00",
+        "wert": 238.2
+      },
+      {
+        "datum": "2006-02-12T00:00:00",
+        "wert": 319.2
+      },
+      {
+        "datum": "2006-06-17T00:00:00",
+        "wert": 418.7
+      },
+      {
+        "datum": "2006-12-09T00:00:00",
+        "wert": 543.0
+      },
+      {
+        "datum": "2007-07-17T00:00:00",
+        "wert": 543.0
+      },
+      {
+        "datum": "2008-02-22T00:00:00",
+        "wert": 453.9
+      },
+      {
+        "datum": "2008-11-18T00:00:00",
+        "wert": 509.0
+      },
+      {
+        "datum": "2009-11-03T00:00:00",
+        "wert": 509.0
+      },
+      {
+        "datum": "2010-12-08T00:00:00",
+        "wert": 509.0
+      },
+      {
+        "datum": "2018-06-17T00:00:00",
+        "wert": 509.0
+      }
+    ],
+    "id": "cj_05_0006_F_Galadriel",
+    "in_experiment": false,
+    "ipid": "Galadriel | Callitrix jacchus | 17.06.2005 | DPZ",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Galadriel",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 509,
+    "rolle": "breeding_animal",
+    "samenspender": "Finarfin | Callitrix jacchus | 06.07.2003 | DPZ",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Gil-galad | Callitrix jacchus | 06.07.2010 | DPZ": {
+    "_base_name": "Gil-galad",
+    "abnormal_current": false,
+    "birth_date": "06.07.2010",
+    "chip_nr": "9X8NK6ZH",
+    "daten": [],
+    "death_date": "06.07.2018",
+    "display_name": "Gil-galad",
+    "edits": {},
+    "eizellspenderin": "Jennifer | Callitrix jacchus | 08.07.2007 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 477
+    },
+    "generated_id_absolute_sequence": 106,
+    "generated_id_sequence": 10,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2010-07-06T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2010-07-27T00:00:00",
+        "wert": 78.6
+      },
+      {
+        "datum": "2010-08-20T00:00:00",
+        "wert": 109.7
+      },
+      {
+        "datum": "2010-10-04T00:00:00",
+        "wert": 157.4
+      },
+      {
+        "datum": "2010-12-03T00:00:00",
+        "wert": 211.3
+      },
+      {
+        "datum": "2011-03-03T00:00:00",
+        "wert": 282.0
+      },
+      {
+        "datum": "2011-07-06T00:00:00",
+        "wert": 368.6
+      },
+      {
+        "datum": "2011-12-28T00:00:00",
+        "wert": 477.0
+      },
+      {
+        "datum": "2012-08-04T00:00:00",
+        "wert": 475.0
+      },
+      {
+        "datum": "2013-03-12T00:00:00",
+        "wert": 475.0
+      },
+      {
+        "datum": "2013-12-07T00:00:00",
+        "wert": 479.0
+      },
+      {
+        "datum": "2014-11-22T00:00:00",
+        "wert": 475.0
+      },
+      {
+        "datum": "2015-12-27T00:00:00",
+        "wert": 475.0
+      },
+      {
+        "datum": "2018-07-06T00:00:00",
+        "wert": 480.0
+      }
+    ],
+    "id": "cj_10_0010_M_Gil_galad",
+    "in_experiment": false,
+    "ipid": "Gil-galad | Callitrix jacchus | 06.07.2010 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Gil-galad",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 477,
+    "rolle": "breeding_animal",
+    "samenspender": "Orodreth | Callitrix jacchus | 07.08.2007 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Idril | Callitrix jacchus | 14.02.2007 | DPZ": {
+    "_base_name": "Idril",
+    "abnormal_current": false,
+    "birth_date": "14.02.2007",
+    "chip_nr": "C21DW2ZP",
+    "daten": [],
+    "death_date": "14.02.2015",
+    "display_name": "Idril",
+    "edits": {},
+    "eizellspenderin": "Elenwe | Callitrix jacchus | 19.12.2004 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 445
+    },
+    "generated_id_absolute_sequence": 87,
+    "generated_id_sequence": 3,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2007-02-14T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2007-03-07T00:00:00",
+        "wert": 75.5
+      },
+      {
+        "datum": "2007-03-31T00:00:00",
+        "wert": 104.3
+      },
+      {
+        "datum": "2007-05-15T00:00:00",
+        "wert": 148.6
+      },
+      {
+        "datum": "2007-07-14T00:00:00",
+        "wert": 198.6
+      },
+      {
+        "datum": "2007-10-12T00:00:00",
+        "wert": 264.1
+      },
+      {
+        "datum": "2008-02-14T00:00:00",
+        "wert": 344.5
+      },
+      {
+        "datum": "2008-08-07T00:00:00",
+        "wert": 445.0
+      },
+      {
+        "datum": "2009-03-15T00:00:00",
+        "wert": 448.0
+      },
+      {
+        "datum": "2009-10-21T00:00:00",
+        "wert": 448.0
+      },
+      {
+        "datum": "2010-07-18T00:00:00",
+        "wert": 448.0
+      },
+      {
+        "datum": "2011-07-03T00:00:00",
+        "wert": 449.0
+      },
+      {
+        "datum": "2012-08-06T00:00:00",
+        "wert": 443.0
+      },
+      {
+        "datum": "2015-02-14T00:00:00",
+        "wert": 445.0
+      }
+    ],
+    "id": "cj_07_0003_F_Idril",
+    "in_experiment": false,
+    "ipid": "Idril | Callitrix jacchus | 14.02.2007 | DPZ",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Idril",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 445,
+    "rolle": "breeding_animal",
+    "samenspender": "Turgon | Callitrix jacchus | 03.08.2004 | DPZ",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Indis | Callitrix jacchus | 05.03.2000 | Iluvatar": {
+    "_base_name": "Indis",
+    "abnormal_current": false,
+    "birth_date": "05.03.2000",
+    "chip_nr": "406V1TCY",
+    "daten": [],
+    "death_date": "05.03.2008",
+    "display_name": "Indis",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 500
+    },
+    "generated_id_absolute_sequence": 33,
+    "generated_id_sequence": 2,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2000-03-05T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2000-03-26T00:00:00",
+        "wert": 84.7
+      },
+      {
+        "datum": "2000-04-19T00:00:00",
+        "wert": 120.4
+      },
+      {
+        "datum": "2000-06-03T00:00:00",
+        "wert": 175.0
+      },
+      {
+        "datum": "2000-08-02T00:00:00",
+        "wert": 236.8
+      },
+      {
+        "datum": "2000-10-31T00:00:00",
+        "wert": 317.7
+      },
+      {
+        "datum": "2001-03-05T00:00:00",
+        "wert": 416.9
+      },
+      {
+        "datum": "2001-08-27T00:00:00",
+        "wert": 541.0
+      },
+      {
+        "datum": "2002-04-04T00:00:00",
+        "wert": 541.0
+      },
+      {
+        "datum": "2002-11-10T00:00:00",
+        "wert": 522.6
+      },
+      {
+        "datum": "2003-08-07T00:00:00",
+        "wert": 500.0
+      },
+      {
+        "datum": "2004-07-22T00:00:00",
+        "wert": 498.0
+      },
+      {
+        "datum": "2005-08-26T00:00:00",
+        "wert": 501.0
+      },
+      {
+        "datum": "2008-03-05T00:00:00",
+        "wert": 500.0
+      }
+    ],
+    "id": "cj_00_0002_F_Indis",
+    "in_experiment": false,
+    "ipid": "Indis | Callitrix jacchus | 05.03.2000 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Indis",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 500,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Irime | Callitrix jacchus | 18.01.2003 | DPZ": {
+    "_base_name": "Irime",
+    "abnormal_current": false,
+    "birth_date": "18.01.2003",
+    "chip_nr": "SCJXPZ6X",
+    "daten": [],
+    "death_date": "17.01.2010",
+    "display_name": "Irime",
+    "edits": {},
+    "eizellspenderin": "Indis | Callitrix jacchus | 05.03.2000 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 467
+    },
+    "generated_id_absolute_sequence": 53,
+    "generated_id_sequence": 1,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2003-01-18T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2003-02-08T00:00:00",
+        "wert": 77.6
+      },
+      {
+        "datum": "2003-03-04T00:00:00",
+        "wert": 108.0
+      },
+      {
+        "datum": "2003-04-18T00:00:00",
+        "wert": 154.6
+      },
+      {
+        "datum": "2003-06-17T00:00:00",
+        "wert": 207.4
+      },
+      {
+        "datum": "2003-09-15T00:00:00",
+        "wert": 276.4
+      },
+      {
+        "datum": "2004-01-18T00:00:00",
+        "wert": 361.1
+      },
+      {
+        "datum": "2004-07-11T00:00:00",
+        "wert": 467.0
+      },
+      {
+        "datum": "2005-02-16T00:00:00",
+        "wert": 469.0
+      },
+      {
+        "datum": "2005-09-24T00:00:00",
+        "wert": 464.0
+      },
+      {
+        "datum": "2006-06-21T00:00:00",
+        "wert": 469.0
+      },
+      {
+        "datum": "2007-06-06T00:00:00",
+        "wert": 468.0
+      },
+      {
+        "datum": "2008-07-10T00:00:00",
+        "wert": 463.0
+      },
+      {
+        "datum": "2010-01-17T00:00:00",
+        "wert": 464.0
+      }
+    ],
+    "id": "cj_03_0001_F_Irime",
+    "in_experiment": false,
+    "ipid": "Irime | Callitrix jacchus | 18.01.2003 | DPZ",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Irime",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 467,
+    "rolle": "breeding_animal",
+    "samenspender": "Finwe | Callitrix jacchus | 15.05.2000 | Iluvatar",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Jennifer | Callitrix jacchus | 08.07.2007 | Iluvatar": {
+    "_base_name": "Jennifer",
+    "abnormal_current": false,
+    "birth_date": "08.07.2007",
+    "chip_nr": "HYQJPNBI",
+    "daten": [],
+    "death_date": "07.07.2014",
+    "display_name": "Jennifer",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 393
+    },
+    "generated_id_absolute_sequence": 89,
+    "generated_id_sequence": 5,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2007-07-08T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2007-07-29T00:00:00",
+        "wert": 70.5
+      },
+      {
+        "datum": "2007-08-22T00:00:00",
+        "wert": 95.7
+      },
+      {
+        "datum": "2007-10-06T00:00:00",
+        "wert": 134.3
+      },
+      {
+        "datum": "2007-12-05T00:00:00",
+        "wert": 177.9
+      },
+      {
+        "datum": "2008-03-04T00:00:00",
+        "wert": 235.1
+      },
+      {
+        "datum": "2008-07-07T00:00:00",
+        "wert": 305.3
+      },
+      {
+        "datum": "2008-12-29T00:00:00",
+        "wert": 393.0
+      },
+      {
+        "datum": "2009-08-06T00:00:00",
+        "wert": 391.0
+      },
+      {
+        "datum": "2010-03-14T00:00:00",
+        "wert": 394.0
+      },
+      {
+        "datum": "2010-12-09T00:00:00",
+        "wert": 394.0
+      },
+      {
+        "datum": "2011-11-24T00:00:00",
+        "wert": 389.0
+      },
+      {
+        "datum": "2012-12-28T00:00:00",
+        "wert": 394.0
+      },
+      {
+        "datum": "2014-07-07T00:00:00",
+        "wert": 389.0
+      }
+    ],
+    "id": "cj_07_0005_F_Jennifer",
+    "in_experiment": false,
+    "ipid": "Jennifer | Callitrix jacchus | 08.07.2007 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Jennifer",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 393,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Luthien | Callitrix jacchus | 29.07.2002 | DPZ": {
+    "_base_name": "Luthien",
+    "abnormal_current": false,
+    "birth_date": "29.07.2002",
+    "chip_nr": "B6UDIAP4",
+    "daten": [],
+    "death_date": "29.07.2011",
+    "display_name": "Luthien",
+    "edits": {},
+    "eizellspenderin": "Melian | Callitrix jacchus | 29.06.2000 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 456
+    },
+    "generated_id_absolute_sequence": 50,
+    "generated_id_sequence": 10,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2002-07-29T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2002-08-19T00:00:00",
+        "wert": 77.4
+      },
+      {
+        "datum": "2002-09-12T00:00:00",
+        "wert": 107.0
+      },
+      {
+        "datum": "2002-10-27T00:00:00",
+        "wert": 152.3
+      },
+      {
+        "datum": "2002-12-26T00:00:00",
+        "wert": 203.6
+      },
+      {
+        "datum": "2003-03-26T00:00:00",
+        "wert": 270.7
+      },
+      {
+        "datum": "2003-07-29T00:00:00",
+        "wert": 353.0
+      },
+      {
+        "datum": "2004-01-20T00:00:00",
+        "wert": 456.0
+      },
+      {
+        "datum": "2004-08-27T00:00:00",
+        "wert": 455.0
+      },
+      {
+        "datum": "2005-04-04T00:00:00",
+        "wert": 454.0
+      },
+      {
+        "datum": "2005-12-30T00:00:00",
+        "wert": 452.0
+      },
+      {
+        "datum": "2006-12-15T00:00:00",
+        "wert": 455.0
+      },
+      {
+        "datum": "2008-01-19T00:00:00",
+        "wert": 454.0
+      },
+      {
+        "datum": "2011-07-29T00:00:00",
+        "wert": 457.0
+      }
+    ],
+    "id": "cj_02_0010_F_Luthien",
+    "in_experiment": false,
+    "ipid": "Luthien | Callitrix jacchus | 29.07.2002 | DPZ",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Luthien",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 456,
+    "rolle": "breeding_animal",
+    "samenspender": "Thingol | Callitrix jacchus | 17.08.2000 | Iluvatar",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Madison | Callitrix jacchus | 31.12.2012 | Iluvatar": {
+    "_base_name": "Madison",
+    "abnormal_current": false,
+    "birth_date": "31.12.2012",
+    "chip_nr": "IMH0YGJM",
+    "daten": [],
+    "death_date": "31.12.2020",
+    "display_name": "Madison",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 447
+    },
+    "generated_id_absolute_sequence": 120,
+    "generated_id_sequence": 3,
+    "genotype": "H-/H-",
+    "gewicht": [
+      {
+        "datum": "2012-12-31T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2013-01-21T00:00:00",
+        "wert": 75.7
+      },
+      {
+        "datum": "2013-02-14T00:00:00",
+        "wert": 104.7
+      },
+      {
+        "datum": "2013-03-31T00:00:00",
+        "wert": 149.1
+      },
+      {
+        "datum": "2013-05-30T00:00:00",
+        "wert": 199.4
+      },
+      {
+        "datum": "2013-08-28T00:00:00",
+        "wert": 265.2
+      },
+      {
+        "datum": "2013-12-31T00:00:00",
+        "wert": 346.0
+      },
+      {
+        "datum": "2014-06-24T00:00:00",
+        "wert": 447.0
+      },
+      {
+        "datum": "2015-01-30T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2015-09-07T00:00:00",
+        "wert": 446.0
+      },
+      {
+        "datum": "2016-06-03T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2017-05-19T00:00:00",
+        "wert": 447.0
+      },
+      {
+        "datum": "2018-06-23T00:00:00",
+        "wert": 443.0
+      },
+      {
+        "datum": "2020-12-31T00:00:00",
+        "wert": 446.0
+      }
+    ],
+    "id": "cj_12_0003_F_Madison",
+    "in_experiment": false,
+    "ipid": "Madison | Callitrix jacchus | 31.12.2012 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Madison",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 447,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Maedhros | Callitrix jacchus | 25.02.2004 | DPZ": {
+    "_base_name": "Maedhros",
+    "abnormal_current": false,
+    "birth_date": "25.02.2004",
+    "chip_nr": "WG598OE6",
+    "daten": [],
+    "death_date": "24.02.2011",
+    "display_name": "Maedhros",
+    "edits": {},
+    "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 442
+    },
+    "generated_id_absolute_sequence": 55,
+    "generated_id_sequence": 1,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2004-02-25T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2004-03-17T00:00:00",
+        "wert": 76.1
+      },
+      {
+        "datum": "2004-04-10T00:00:00",
+        "wert": 104.7
+      },
+      {
+        "datum": "2004-05-25T00:00:00",
+        "wert": 148.5
+      },
+      {
+        "datum": "2004-07-24T00:00:00",
+        "wert": 198.0
+      },
+      {
+        "datum": "2004-10-22T00:00:00",
+        "wert": 262.9
+      },
+      {
+        "datum": "2005-02-24T00:00:00",
+        "wert": 342.5
+      },
+      {
+        "datum": "2005-08-18T00:00:00",
+        "wert": 442.0
+      },
+      {
+        "datum": "2006-03-26T00:00:00",
+        "wert": 444.0
+      },
+      {
+        "datum": "2006-11-01T00:00:00",
+        "wert": 397.8
+      },
+      {
+        "datum": "2007-07-29T00:00:00",
+        "wert": 443.0
+      },
+      {
+        "datum": "2008-07-13T00:00:00",
+        "wert": 442.0
+      },
+      {
+        "datum": "2009-08-17T00:00:00",
+        "wert": 443.0
+      },
+      {
+        "datum": "2011-02-24T00:00:00",
+        "wert": 443.0
+      }
+    ],
+    "id": "cj_04_0001_M_Maedhros",
+    "in_experiment": false,
+    "ipid": "Maedhros | Callitrix jacchus | 25.02.2004 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Maedhros",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 442,
+    "rolle": "breeding_animal",
+    "samenspender": "Feanor | Callitrix jacchus | 13.03.2002 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Maeglin | Callitrix jacchus | 22.01.2007 | DPZ": {
+    "_base_name": "Maeglin",
+    "abnormal_current": false,
+    "birth_date": "22.01.2007",
+    "chip_nr": "1CS03Z2L",
+    "daten": [],
+    "death_date": "22.01.2016",
+    "display_name": "Maeglin",
+    "edits": {},
+    "eizellspenderin": "Aredhel | Callitrix jacchus | 22.01.2005 | DPZ",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 460
+    },
+    "generated_id_absolute_sequence": 86,
+    "generated_id_sequence": 2,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2007-01-22T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2007-02-12T00:00:00",
+        "wert": 77.8
+      },
+      {
+        "datum": "2007-03-08T00:00:00",
+        "wert": 107.7
+      },
+      {
+        "datum": "2007-04-22T00:00:00",
+        "wert": 153.4
+      },
+      {
+        "datum": "2007-06-21T00:00:00",
+        "wert": 205.2
+      },
+      {
+        "datum": "2007-09-19T00:00:00",
+        "wert": 272.9
+      },
+      {
+        "datum": "2008-01-22T00:00:00",
+        "wert": 356.1
+      },
+      {
+        "datum": "2008-07-15T00:00:00",
+        "wert": 460.0
+      },
+      {
+        "datum": "2009-02-20T00:00:00",
+        "wert": 458.0
+      },
+      {
+        "datum": "2009-09-28T00:00:00",
+        "wert": 459.0
+      },
+      {
+        "datum": "2010-06-25T00:00:00",
+        "wert": 458.0
+      },
+      {
+        "datum": "2011-06-10T00:00:00",
+        "wert": 461.0
+      },
+      {
+        "datum": "2012-07-14T00:00:00",
+        "wert": 457.0
+      },
+      {
+        "datum": "2016-01-22T00:00:00",
+        "wert": 461.0
+      }
+    ],
+    "id": "cj_07_0002_M_Maeglin",
+    "in_experiment": false,
+    "ipid": "Maeglin | Callitrix jacchus | 22.01.2007 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Maeglin",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 460,
+    "rolle": "breeding_animal",
+    "samenspender": "Eol | Callitrix jacchus | 30.04.2004 | Iluvatar",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Maglor | Callitrix jacchus | 12.07.2004 | DPZ": {
+    "_base_name": "Maglor",
+    "abnormal_current": false,
+    "birth_date": "12.07.2004",
+    "chip_nr": "LFTG1PFR",
+    "daten": [],
+    "death_date": "12.07.2013",
+    "display_name": "Maglor",
+    "edits": {},
+    "eizellspenderin": "Nerdanel | Callitrix jacchus | 08.09.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 449
+    },
+    "generated_id_absolute_sequence": 60,
+    "generated_id_sequence": 6,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2004-07-12T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2004-08-02T00:00:00",
+        "wert": 76.8
+      },
+      {
+        "datum": "2004-08-26T00:00:00",
+        "wert": 105.8
+      },
+      {
+        "datum": "2004-10-10T00:00:00",
+        "wert": 150.4
+      },
+      {
+        "datum": "2004-12-09T00:00:00",
+        "wert": 200.8
+      },
+      {
+        "datum": "2005-03-09T00:00:00",
+        "wert": 266.8
+      },
+      {
+        "datum": "2005-07-12T00:00:00",
+        "wert": 347.8
+      },
+      {
+        "datum": "2006-01-03T00:00:00",
+        "wert": 449.0
+      },
+      {
+        "datum": "2006-08-11T00:00:00",
+        "wert": 448.0
+      },
+      {
+        "datum": "2007-03-19T00:00:00",
+        "wert": 450.0
+      },
+      {
+        "datum": "2007-12-14T00:00:00",
+        "wert": 447.0
+      },
+      {
+        "datum": "2008-11-28T00:00:00",
+        "wert": 451.0
+      },
+      {
+        "datum": "2010-01-02T00:00:00",
+        "wert": 452.0
+      },
+      {
+        "datum": "2013-07-12T00:00:00",
+        "wert": 450.0
+      }
+    ],
+    "id": "cj_04_0006_M_Maglor",
+    "in_experiment": false,
+    "ipid": "Maglor | Callitrix jacchus | 12.07.2004 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Maglor",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 449,
+    "rolle": "breeding_animal",
+    "samenspender": "Feanor | Callitrix jacchus | 13.03.2002 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Melian | Callitrix jacchus | 29.06.2000 | Iluvatar": {
+    "_base_name": "Melian",
+    "abnormal_current": false,
+    "birth_date": "29.06.2000",
+    "chip_nr": "OTUYMRTR",
+    "daten": [],
+    "death_date": "29.06.2012",
+    "display_name": "Melian",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 425
+    },
+    "generated_id_absolute_sequence": 35,
+    "generated_id_sequence": 4,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2000-06-29T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2000-07-20T00:00:00",
+        "wert": 73.6
+      },
+      {
+        "datum": "2000-08-13T00:00:00",
+        "wert": 101.0
+      },
+      {
+        "datum": "2000-09-27T00:00:00",
+        "wert": 143.1
+      },
+      {
+        "datum": "2000-11-26T00:00:00",
+        "wert": 190.7
+      },
+      {
+        "datum": "2001-02-24T00:00:00",
+        "wert": 253.0
+      },
+      {
+        "datum": "2001-06-29T00:00:00",
+        "wert": 329.4
+      },
+      {
+        "datum": "2001-12-21T00:00:00",
+        "wert": 425.0
+      },
+      {
+        "datum": "2002-07-29T00:00:00",
+        "wert": 428.0
+      },
+      {
+        "datum": "2003-03-06T00:00:00",
+        "wert": 429.0
+      },
+      {
+        "datum": "2003-12-01T00:00:00",
+        "wert": 424.0
+      },
+      {
+        "datum": "2004-11-15T00:00:00",
+        "wert": 428.0
+      },
+      {
+        "datum": "2005-12-20T00:00:00",
+        "wert": 421.0
+      },
+      {
+        "datum": "2012-06-29T00:00:00",
+        "wert": 429.0
+      }
+    ],
+    "id": "cj_00_0004_F_Melian",
+    "in_experiment": false,
+    "ipid": "Melian | Callitrix jacchus | 29.06.2000 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Melian",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 425,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Miriel | Callitrix jacchus | 08.01.2000 | Iluvatar": {
+    "_base_name": "Miriel",
+    "abnormal_current": false,
+    "birth_date": "08.01.2000",
+    "chip_nr": "MZ7T9DRR",
+    "daten": [],
+    "death_date": "08.01.2008",
+    "display_name": "Miriel",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 454
+    },
+    "generated_id_absolute_sequence": 32,
+    "generated_id_sequence": 1,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2000-01-08T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2000-01-29T00:00:00",
+        "wert": 77.3
+      },
+      {
+        "datum": "2000-02-22T00:00:00",
+        "wert": 106.7
+      },
+      {
+        "datum": "2000-04-07T00:00:00",
+        "wert": 151.8
+      },
+      {
+        "datum": "2000-06-06T00:00:00",
+        "wert": 202.8
+      },
+      {
+        "datum": "2000-09-04T00:00:00",
+        "wert": 269.6
+      },
+      {
+        "datum": "2001-01-07T00:00:00",
+        "wert": 351.5
+      },
+      {
+        "datum": "2001-07-01T00:00:00",
+        "wert": 454.0
+      },
+      {
+        "datum": "2002-02-06T00:00:00",
+        "wert": 456.0
+      },
+      {
+        "datum": "2002-09-14T00:00:00",
+        "wert": 452.0
+      },
+      {
+        "datum": "2003-06-11T00:00:00",
+        "wert": 450.0
+      },
+      {
+        "datum": "2004-05-26T00:00:00",
+        "wert": 458.0
+      },
+      {
+        "datum": "2005-06-30T00:00:00",
+        "wert": 454.0
+      },
+      {
+        "datum": "2008-01-08T00:00:00",
+        "wert": 457.0
+      }
+    ],
+    "id": "cj_00_0001_F_Miriel",
+    "in_experiment": false,
+    "ipid": "Miriel | Callitrix jacchus | 08.01.2000 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Miriel",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 454,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Nerdanel | Callitrix jacchus | 08.09.2001 | Iluvatar": {
+    "_base_name": "Nerdanel",
+    "abnormal_current": false,
+    "birth_date": "08.09.2001",
+    "chip_nr": "H3UQKCC4",
+    "daten": [],
+    "death_date": "07.09.2008",
+    "display_name": "Nerdanel",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 514
+    },
+    "generated_id_absolute_sequence": 40,
+    "generated_id_sequence": 4,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2001-09-08T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2001-09-29T00:00:00",
+        "wert": 84.7
+      },
+      {
+        "datum": "2001-10-23T00:00:00",
+        "wert": 120.2
+      },
+      {
+        "datum": "2001-12-07T00:00:00",
+        "wert": 174.7
+      },
+      {
+        "datum": "2002-02-05T00:00:00",
+        "wert": 236.4
+      },
+      {
+        "datum": "2002-05-06T00:00:00",
+        "wert": 317.1
+      },
+      {
+        "datum": "2002-09-08T00:00:00",
+        "wert": 416.2
+      },
+      {
+        "datum": "2003-03-02T00:00:00",
+        "wert": 540.0
+      },
+      {
+        "datum": "2003-10-08T00:00:00",
+        "wert": 540.0
+      },
+      {
+        "datum": "2004-05-15T00:00:00",
+        "wert": 528.3
+      },
+      {
+        "datum": "2005-02-09T00:00:00",
+        "wert": 514.0
+      },
+      {
+        "datum": "2006-01-25T00:00:00",
+        "wert": 513.0
+      },
+      {
+        "datum": "2007-03-01T00:00:00",
+        "wert": 514.0
+      },
+      {
+        "datum": "2008-09-07T00:00:00",
+        "wert": 516.0
+      }
+    ],
+    "id": "cj_01_0004_F_Nerdanel",
+    "in_experiment": false,
+    "ipid": "Nerdanel | Callitrix jacchus | 08.09.2001 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Nerdanel",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 514,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Nimloth | Callitrix jacchus | 06.09.2004 | Iluvatar": {
+    "_base_name": "Nimloth",
+    "abnormal_current": false,
+    "birth_date": "06.09.2004",
+    "chip_nr": "77OID0XE",
+    "daten": [],
+    "death_date": "06.09.2013",
+    "display_name": "Nimloth",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 6,
+      "max_pregnancies": 8,
+      "ref_weight": 437
+    },
+    "generated_id_absolute_sequence": 64,
+    "generated_id_sequence": 10,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2004-09-06T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2004-09-27T00:00:00",
+        "wert": 74.7
+      },
+      {
+        "datum": "2004-10-21T00:00:00",
+        "wert": 103.0
+      },
+      {
+        "datum": "2004-12-05T00:00:00",
+        "wert": 146.4
+      },
+      {
+        "datum": "2005-02-03T00:00:00",
+        "wert": 195.4
+      },
+      {
+        "datum": "2005-05-04T00:00:00",
+        "wert": 259.7
+      },
+      {
+        "datum": "2005-09-06T00:00:00",
+        "wert": 338.5
+      },
+      {
+        "datum": "2006-02-28T00:00:00",
+        "wert": 437.0
+      },
+      {
+        "datum": "2006-10-06T00:00:00",
+        "wert": 440.0
+      },
+      {
+        "datum": "2007-05-14T00:00:00",
+        "wert": 441.0
+      },
+      {
+        "datum": "2008-02-08T00:00:00",
+        "wert": 434.0
+      },
+      {
+        "datum": "2009-01-23T00:00:00",
+        "wert": 433.0
+      },
+      {
+        "datum": "2010-02-27T00:00:00",
+        "wert": 435.0
+      },
+      {
+        "datum": "2013-09-06T00:00:00",
+        "wert": 441.0
+      }
+    ],
+    "id": "cj_04_0010_F_Nimloth",
+    "in_experiment": false,
+    "ipid": "Nimloth | Callitrix jacchus | 06.09.2004 | Iluvatar",
+    "max_geburten": 6,
+    "max_pregnancies": 8,
+    "name": "Nimloth",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 437,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Orodreth | Callitrix jacchus | 07.08.2007 | DPZ": {
+    "_base_name": "Orodreth",
+    "abnormal_current": false,
+    "birth_date": "07.08.2007",
+    "chip_nr": "ADN12IXD",
+    "daten": [],
+    "death_date": "06.08.2014",
+    "display_name": "Orodreth",
+    "edits": {},
+    "eizellspenderin": "Brittany | Callitrix jacchus | 14.08.2004 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 485
+    },
+    "generated_id_absolute_sequence": 91,
+    "generated_id_sequence": 7,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2007-08-07T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2007-08-28T00:00:00",
+        "wert": 79.3
+      },
+      {
+        "datum": "2007-09-21T00:00:00",
+        "wert": 111.0
+      },
+      {
+        "datum": "2007-11-05T00:00:00",
+        "wert": 159.6
+      },
+      {
+        "datum": "2008-01-04T00:00:00",
+        "wert": 214.5
+      },
+      {
+        "datum": "2008-04-03T00:00:00",
+        "wert": 286.4
+      },
+      {
+        "datum": "2008-08-06T00:00:00",
+        "wert": 374.7
+      },
+      {
+        "datum": "2009-01-28T00:00:00",
+        "wert": 485.0
+      },
+      {
+        "datum": "2009-09-05T00:00:00",
+        "wert": 481.0
+      },
+      {
+        "datum": "2010-04-13T00:00:00",
+        "wert": 484.0
+      },
+      {
+        "datum": "2011-01-08T00:00:00",
+        "wert": 484.0
+      },
+      {
+        "datum": "2011-12-24T00:00:00",
+        "wert": 483.0
+      },
+      {
+        "datum": "2013-01-27T00:00:00",
+        "wert": 483.0
+      },
+      {
+        "datum": "2014-08-06T00:00:00",
+        "wert": 481.0
+      }
+    ],
+    "id": "cj_07_0007_M_Orodreth",
+    "in_experiment": false,
+    "ipid": "Orodreth | Callitrix jacchus | 07.08.2007 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Orodreth",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Zucht",
+    "project_severity": "",
+    "ref_weight": 485,
+    "rolle": "breeding_animal",
+    "samenspender": "Angrod | Callitrix jacchus | 26.07.2005 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Thingol | Callitrix jacchus | 17.08.2000 | Iluvatar": {
+    "_base_name": "Thingol",
+    "abnormal_current": false,
+    "birth_date": "17.08.2000",
+    "chip_nr": "UB9H74RX",
+    "daten": [],
+    "death_date": "17.08.2013",
+    "display_name": "Thingol",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 459
+    },
+    "generated_id_absolute_sequence": 36,
+    "generated_id_sequence": 5,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2000-08-17T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2000-09-07T00:00:00",
+        "wert": 77.7
+      },
+      {
+        "datum": "2000-10-01T00:00:00",
+        "wert": 107.5
+      },
+      {
+        "datum": "2000-11-15T00:00:00",
+        "wert": 153.2
+      },
+      {
+        "datum": "2001-01-14T00:00:00",
+        "wert": 204.8
+      },
+      {
+        "datum": "2001-04-14T00:00:00",
+        "wert": 272.4
+      },
+      {
+        "datum": "2001-08-17T00:00:00",
+        "wert": 355.3
+      },
+      {
+        "datum": "2002-02-08T00:00:00",
+        "wert": 459.0
+      },
+      {
+        "datum": "2002-09-16T00:00:00",
+        "wert": 458.0
+      },
+      {
+        "datum": "2003-04-24T00:00:00",
+        "wert": 401.9
+      },
+      {
+        "datum": "2004-01-19T00:00:00",
+        "wert": 459.0
+      },
+      {
+        "datum": "2005-01-03T00:00:00",
+        "wert": 459.0
+      },
+      {
+        "datum": "2006-02-07T00:00:00",
+        "wert": 461.0
+      },
+      {
+        "datum": "2013-08-17T00:00:00",
+        "wert": 462.0
+      }
+    ],
+    "id": "cj_00_0005_M_Thingol",
+    "in_experiment": false,
+    "ipid": "Thingol | Callitrix jacchus | 17.08.2000 | Iluvatar",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Thingol",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 459,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Tuor | Callitrix jacchus | 17.10.2007 | Iluvatar": {
+    "_base_name": "Tuor",
+    "abnormal_current": false,
+    "birth_date": "17.10.2007",
+    "chip_nr": "W9KPB0V1",
+    "daten": [],
+    "death_date": "16.10.2016",
+    "display_name": "Tuor",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 434
+    },
+    "generated_id_absolute_sequence": 93,
+    "generated_id_sequence": 9,
+    "genotype": "H-/H-",
+    "gewicht": [
+      {
+        "datum": "2007-10-17T00:00:00",
+        "wert": 37.0
+      },
+      {
+        "datum": "2007-11-07T00:00:00",
+        "wert": 75.3
+      },
+      {
+        "datum": "2007-12-01T00:00:00",
+        "wert": 103.3
+      },
+      {
+        "datum": "2008-01-15T00:00:00",
+        "wert": 146.3
+      },
+      {
+        "datum": "2008-03-15T00:00:00",
+        "wert": 194.9
+      },
+      {
+        "datum": "2008-06-13T00:00:00",
+        "wert": 258.4
+      },
+      {
+        "datum": "2008-10-16T00:00:00",
+        "wert": 336.4
+      },
+      {
+        "datum": "2009-04-09T00:00:00",
+        "wert": 434.0
+      },
+      {
+        "datum": "2009-11-15T00:00:00",
+        "wert": 437.0
+      },
+      {
+        "datum": "2010-06-23T00:00:00",
+        "wert": 432.0
+      },
+      {
+        "datum": "2011-03-20T00:00:00",
+        "wert": 434.0
+      },
+      {
+        "datum": "2012-03-04T00:00:00",
+        "wert": 433.0
+      },
+      {
+        "datum": "2013-04-08T00:00:00",
+        "wert": 430.0
+      },
+      {
+        "datum": "2016-10-16T00:00:00",
+        "wert": 435.0
+      }
+    ],
+    "id": "cj_07_0009_M_Tuor",
+    "in_experiment": false,
+    "ipid": "Tuor | Callitrix jacchus | 17.10.2007 | Iluvatar",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Tuor",
+    "origin": "Iluvatar",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 434,
+    "rolle": "breeding_animal",
+    "samenspender": "",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Turgon | Callitrix jacchus | 03.08.2004 | DPZ": {
+    "_base_name": "Turgon",
+    "abnormal_current": false,
+    "birth_date": "03.08.2004",
+    "chip_nr": "0S8NR4DF",
+    "daten": [],
+    "death_date": "03.08.2013",
+    "display_name": "Turgon",
+    "edits": {},
+    "eizellspenderin": "Anaire | Callitrix jacchus | 20.08.2001 | Iluvatar",
+    "events": [],
+    "experimental_limits": {
+      "max_geburten": 5,
+      "max_pregnancies": 6,
+      "ref_weight": 468
+    },
+    "generated_id_absolute_sequence": 61,
+    "generated_id_sequence": 7,
+    "genotype": "WT/WT",
+    "gewicht": [
+      {
+        "datum": "2004-08-03T00:00:00",
+        "wert": 36.0
+      },
+      {
+        "datum": "2004-08-24T00:00:00",
+        "wert": 77.7
+      },
+      {
+        "datum": "2004-09-17T00:00:00",
+        "wert": 108.2
+      },
+      {
+        "datum": "2004-11-01T00:00:00",
+        "wert": 154.9
+      },
+      {
+        "datum": "2004-12-31T00:00:00",
+        "wert": 207.8
+      },
+      {
+        "datum": "2005-03-31T00:00:00",
+        "wert": 276.9
+      },
+      {
+        "datum": "2005-08-03T00:00:00",
+        "wert": 361.8
+      },
+      {
+        "datum": "2006-01-25T00:00:00",
+        "wert": 468.0
+      },
+      {
+        "datum": "2006-09-02T00:00:00",
+        "wert": 471.0
+      },
+      {
+        "datum": "2007-04-10T00:00:00",
+        "wert": 470.0
+      },
+      {
+        "datum": "2008-01-05T00:00:00",
+        "wert": 465.0
+      },
+      {
+        "datum": "2008-12-20T00:00:00",
+        "wert": 466.0
+      },
+      {
+        "datum": "2010-01-24T00:00:00",
+        "wert": 467.0
+      },
+      {
+        "datum": "2013-08-03T00:00:00",
+        "wert": 471.0
+      }
+    ],
+    "id": "cj_04_0007_M_Turgon",
+    "in_experiment": false,
+    "ipid": "Turgon | Callitrix jacchus | 03.08.2004 | DPZ",
+    "max_geburten": 5,
+    "max_pregnancies": 6,
+    "name": "Turgon",
+    "origin": "DPZ",
+    "pdg": [],
+    "pdg_formula": "",
+    "project": "Crossbreeding",
+    "project_severity": "",
+    "ref_weight": 468,
+    "rolle": "breeding_animal",
+    "samenspender": "Fingolfin | Callitrix jacchus | 01.08.2002 | DPZ",
+    "severity": "",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Callitrix jacchus",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  }
+}

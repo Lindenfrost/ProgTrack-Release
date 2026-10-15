@@ -1,0 +1,313 @@
+{
+  "projects": {
+    "Anode": {
+      "animals_config": {
+        "approved_count": 0,
+        "departed_with_sev_no_legal": 0,
+        "roles": []
+      },
+      "arrive": {
+        "abstract": "",
+        "animal_care": "",
+        "background": "",
+        "blinding": "",
+        "data_access": "",
+        "declaration_interests": "",
+        "ethical_statement": "",
+        "experimental_animals": "",
+        "experimental_procedures": "",
+        "housing_husbandry": "",
+        "inclusion_exclusion": "",
+        "interpretation": "",
+        "objectives": "",
+        "outcome_measures": "",
+        "protocol_registration": "",
+        "randomisation": "",
+        "results": "",
+        "sample_size": "",
+        "statistical_methods": "",
+        "study_design": ""
+      },
+      "assoc_users": {
+        "applicant_login": "",
+        "planning_login": "",
+        "staff_logins": []
+      },
+      "created_at": "16.06.2026 16:55",
+      "created_by": "Dr. Manager Plansdottir",
+      "iacuc": {
+        "approved": "",
+        "authorization_nr": "",
+        "authorized": "",
+        "di_login": "",
+        "internal_number": "",
+        "pi_login": "",
+        "protocol_id": "",
+        "purpose": "",
+        "short_title": "Anode",
+        "unit": "",
+        "welfare_login": "Veti"
+      },
+      "modified_at": "23.07.2026 11:43",
+      "modified_by": "Dr. Manager Plansdottir",
+      "summary": {
+        "comment": "",
+        "contact1_login": "",
+        "contact2_login": "",
+        "contacts_other_logins": [],
+        "species": "Callitrix jacchus",
+        "title": ""
+      }
+    },
+    "Backcrossing": {
+      "animals_config": {
+        "approved_count": 0,
+        "departed_with_sev_no_legal": 0,
+        "roles": []
+      },
+      "arrive": {
+        "abstract": "",
+        "animal_care": "",
+        "background": "",
+        "blinding": "",
+        "data_access": "",
+        "declaration_interests": "",
+        "ethical_statement": "",
+        "experimental_animals": "",
+        "experimental_procedures": "",
+        "housing_husbandry": "",
+        "inclusion_exclusion": "",
+        "interpretation": "",
+        "objectives": "",
+        "outcome_measures": "",
+        "protocol_registration": "",
+        "randomisation": "",
+        "results": "",
+        "sample_size": "",
+        "statistical_methods": "",
+        "study_design": ""
+      },
+      "assoc_users": {
+        "applicant_login": "Admin",
+        "planning_login": "Researcher",
+        "staff_logins": [
+          "Keeper"
+        ]
+      },
+      "created_at": "20.04.2026 10:50",
+      "created_by": "Dr. Manager Plansdottir",
+      "iacuc": {
+        "approved": "",
+        "authorization_nr": "",
+        "authorized": "",
+        "di_login": "",
+        "internal_number": "",
+        "pi_login": "",
+        "protocol_id": "",
+        "purpose": "",
+        "short_title": "Backcrossing",
+        "unit": "",
+        "welfare_login": ""
+      },
+      "modified_at": "15.06.2026 14:48",
+      "modified_by": "Dr. Manager Plansdottir",
+      "summary": {
+        "comment": "",
+        "contact1_login": "",
+        "contact2_login": "",
+        "contacts_other_logins": [],
+        "species": "Callitrix jacchus",
+        "title": ""
+      }
+    },
+    "Crossbreeding": {
+      "animals_config": {},
+      "arrive": {},
+      "assoc_users": {},
+      "created_at": "",
+      "created_by": "",
+      "iacuc": {},
+      "modified_at": "",
+      "modified_by": "",
+      "summary": {}
+    },
+    "OTOF-": {
+      "animals_config": {
+        "approved_count": 0,
+        "departed_with_sev_no_legal": 0,
+        "roles": []
+      },
+      "arrive": {
+        "abstract": "",
+        "animal_care": "",
+        "background": "",
+        "blinding": "",
+        "data_access": "",
+        "declaration_interests": "",
+        "ethical_statement": "",
+        "experimental_animals": "",
+        "experimental_procedures": "",
+        "housing_husbandry": "",
+        "inclusion_exclusion": "",
+        "interpretation": "",
+        "objectives": "",
+        "outcome_measures": "",
+        "protocol_registration": "",
+        "randomisation": "",
+        "results": "",
+        "sample_size": "",
+        "statistical_methods": "",
+        "study_design": ""
+      },
+      "assoc_users": {
+        "applicant_login": "",
+        "planning_login": "",
+        "staff_logins": []
+      },
+      "created_at": "20.04.2026 10:49",
+      "created_by": "Dr. Manager Plansdottir",
+      "iacuc": {
+        "approved": "",
+        "authorization_nr": "",
+        "authorized": "",
+        "di_login": "",
+        "internal_number": "",
+        "pi_login": "",
+        "protocol_id": "",
+        "purpose": "",
+        "short_title": "OTOF-",
+        "unit": "",
+        "welfare_login": ""
+      },
+      "modified_at": "07.07.2026 10:01",
+      "modified_by": "Administrator Administratorrson",
+      "summary": {
+        "comment": "",
+        "contact1_login": "",
+        "contact2_login": "",
+        "contacts_other_logins": [],
+        "species": "Callitrix jacchus",
+        "title": ""
+      }
+    },
+    "Oakshield": {
+      "animals_config": {
+        "approved_count": 0,
+        "departed_with_sev_no_legal": 0,
+        "roles": []
+      },
+      "arrive": {
+        "abstract": "",
+        "animal_care": "",
+        "background": "",
+        "blinding": "",
+        "data_access": "",
+        "declaration_interests": "",
+        "ethical_statement": "",
+        "experimental_animals": "",
+        "experimental_procedures": "",
+        "housing_husbandry": "",
+        "inclusion_exclusion": "",
+        "interpretation": "",
+        "objectives": "",
+        "outcome_measures": "",
+        "protocol_registration": "",
+        "randomisation": "",
+        "results": "",
+        "sample_size": "",
+        "statistical_methods": "",
+        "study_design": ""
+      },
+      "assoc_users": {
+        "applicant_login": "",
+        "planning_login": "",
+        "staff_logins": []
+      },
+      "created_at": "20.07.2026 11:12",
+      "created_by": "Dr. Manager Plansdottir",
+      "iacuc": {
+        "approved": "",
+        "authorization_nr": "",
+        "authorized": "",
+        "di_login": "",
+        "internal_number": "",
+        "pi_login": "",
+        "protocol_id": "",
+        "purpose": "",
+        "short_title": "Oakshield",
+        "unit": "",
+        "welfare_login": ""
+      },
+      "modified_at": "20.07.2026 11:13",
+      "modified_by": "Dr. Manager Plansdottir",
+      "summary": {
+        "comment": "",
+        "contact1_login": "",
+        "contact2_login": "",
+        "contacts_other_logins": [],
+        "species": "Papio hamadryas anubis",
+        "title": ""
+      }
+    },
+    "Zucht": {
+      "animals_config": {
+        "approved_count": 0,
+        "departed_with_sev_no_legal": 0,
+        "roles": []
+      },
+      "arrive": {
+        "abstract": "",
+        "animal_care": "",
+        "background": "",
+        "blinding": "",
+        "data_access": "",
+        "declaration_interests": "",
+        "ethical_statement": "",
+        "experimental_animals": "",
+        "experimental_procedures": "",
+        "housing_husbandry": "",
+        "inclusion_exclusion": "",
+        "interpretation": "",
+        "objectives": "",
+        "outcome_measures": "",
+        "protocol_registration": "",
+        "randomisation": "",
+        "results": "",
+        "sample_size": "",
+        "statistical_methods": "",
+        "study_design": ""
+      },
+      "assoc_users": {
+        "applicant_login": "",
+        "planning_login": "",
+        "staff_logins": []
+      },
+      "created_at": "22.07.2026 14:24",
+      "created_by": "Administrator Administratorrson",
+      "iacuc": {
+        "approved": "",
+        "authorization_nr": "",
+        "authorized": "",
+        "di_login": "",
+        "internal_number": "",
+        "pi_login": "",
+        "protocol_id": "",
+        "purpose": "",
+        "short_title": "Zucht",
+        "unit": "",
+        "welfare_login": ""
+      },
+      "modified_at": "22.07.2026 14:24",
+      "modified_by": "Administrator Administratorrson",
+      "summary": {
+        "comment": "",
+        "contact1_login": "",
+        "contact2_login": "",
+        "contacts_other_logins": [],
+        "species": "Callitrix jacchus",
+        "title": ""
+      }
+    }
+  },
+  "version": 1
+}

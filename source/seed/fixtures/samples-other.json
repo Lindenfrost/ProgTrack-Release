@@ -1,0 +1,40 @@
+[
+  {
+    "animal_name": "Elrond | Callitrix jacchus | 04.02.2012 | DPZ",
+    "collection_date": "01.01.2000",
+    "id": "cj_99652953",
+    "sample_number": "002",
+    "sex": "Male",
+    "species": "Callitrix jacchus",
+    "vollblut_aliquot_locations": "[{\"unit\": \"\", \"storage\": \"\"}]",
+    "vollblut_checked": true,
+    "vollblut_comment": "",
+    "vollblut_num_aliquots": 1,
+    "vollblut_warning": false
+  },
+  {
+    "animal_name": "Olga | Callitrix jacchus | 20.06.2015 | Iluvatar",
+    "collection_date": "01.01.2025",
+    "id": "cj_43933065",
+    "sample_number": "003",
+    "sex": "Female",
+    "species": "Callitrix jacchus",
+    "vollblut_aliquot_locations": "[{\"unit\": \"\", \"storage\": \"\"}]",
+    "vollblut_checked": true,
+    "vollblut_comment": "",
+    "vollblut_num_aliquots": 1,
+    "vollblut_warning": false
+  },
+  {
+    "animal_name": "Olga | Callitrix jacchus | 20.06.2015 | Iluvatar",
+    "collection_date": "01.07.2026",
+    "id": "cj_15_0005_F_Olga",
+    "sample_number": "",
+    "saved": true,
+    "sex": "Female",
+    "species": "cj",
+    "urin_aliquot_locations": "[{\"unit\": \"\", \"storage\": \"\"}]",
+    "urin_checked": true,
+    "urin_num_aliquots": 1
+  }
+]

@@ -1,0 +1,68 @@
+{
+  "records": [
+    {
+      "cage_ids": [
+        "cage_mm_01"
+      ],
+      "cages": "Macaca Colony Unit/Colony Room A/Aviary MM-01",
+      "date": "20/07/2026",
+      "date_sort": "2026-07-20",
+      "scope_id": "room_macaca_a",
+      "scope_name": "Colony Room A",
+      "scope_type": "room",
+      "unit_id": "room_macaca_a",
+      "unit_name": "Room: Colony Room A",
+      "user": "Dr. Manager Plansdottir"
+    },
+    {
+      "cage_ids": [
+        "cage_pa_01"
+      ],
+      "cages": "Papio Colony Unit/Colony Room A/Aviary PA-01",
+      "date": "20/07/2026",
+      "date_sort": "2026-07-20",
+      "scope_id": "cage_pa_01",
+      "scope_name": "Aviary PA-01",
+      "scope_type": "cage",
+      "unit_id": "cage_pa_01",
+      "unit_name": "Cage: Aviary PA-01",
+      "user": "Dr. Manager Plansdottir"
+    },
+    {
+      "cage_ids": [
+        "cage_cj_family_01",
+        "cage_cj_family_02",
+        "cage_cj_family_03",
+        "cage_cj_family_04",
+        "cage_cj_family_05",
+        "cage_cj_family_06",
+        "cage_cj_family_07"
+      ],
+      "cages": "Breeding Unit/Family Aviaries/C-01\nBreeding Unit/Family Aviaries/C-02\nBreeding Unit/Family Aviaries/C-03\nBreeding Unit/Family Aviaries/C-04\nBreeding Unit/Family Aviaries/C-05\nBreeding Unit/Family Aviaries/C-06\nBreeding Unit/Family Aviaries/C-07",
+      "date": "21/07/2026",
+      "date_sort": "2026-07-21",
+      "scope_id": "room_callitrix_families",
+      "scope_name": "Family Aviaries",
+      "scope_type": "room",
+      "unit_id": "room_callitrix_families",
+      "unit_name": "Room: Family Aviaries",
+      "user": "Dr. Manager Plansdottir"
+    },
+    {
+      "cage_ids": [
+        "cage_mm_01",
+        "cage_mm_02",
+        "cage_mm_03"
+      ],
+      "cages": "Macaca Colony Unit/Colony Room A/Aviary MM-01\nMacaca Colony Unit/Colony Room B/Aviary MM-02\nMacaca Colony Unit/Colony Room C/Aviary MM-03",
+      "date": "22/07/2026",
+      "date_sort": "2026-07-22",
+      "scope_id": "unit_macaca_colony",
+      "scope_name": "Macaca Colony Unit",
+      "scope_type": "unit",
+      "unit_id": "unit_macaca_colony",
+      "unit_name": "Unit: Macaca Colony Unit",
+      "user": "Dr. Manager Plansdottir"
+    }
+  ]
+}

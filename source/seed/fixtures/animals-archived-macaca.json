@@ -1,0 +1,2816 @@
+{
+  "Adelheid | Macaca mulatta | 04.03.1969 | Aulë": {
+    "_base_name": "Adelheid",
+    "abnormal_current": false,
+    "birth_date": "04.03.1969",
+    "chip_nr": "XH2DHSXR",
+    "daten": [],
+    "death_date": "04.03.1980",
+    "display_name": "Adelheid",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 7,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1969-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1969-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1969-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1969-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1970-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1971-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1973-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_69_0001_F_Adelheid",
+    "in_experiment": false,
+    "ipid": "Adelheid | Macaca mulatta | 04.03.1969 | Aulë",
+    "name": "Adelheid",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Anneliese | Macaca mulatta | 04.03.2011 | Aulë": {
+    "_base_name": "Anneliese",
+    "abnormal_current": false,
+    "birth_date": "04.03.2011",
+    "chip_nr": "S7OVLZ0U",
+    "daten": [],
+    "death_date": "04.03.2022",
+    "display_name": "Anneliese",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 110,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2011-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2011-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2011-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2011-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2012-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2013-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2015-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_11_0002_F_Anneliese",
+    "in_experiment": false,
+    "ipid": "Anneliese | Macaca mulatta | 04.03.2011 | Aulë",
+    "name": "Anneliese",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Bernhard | Macaca mulatta | 04.03.1969 | DPZ": {
+    "_base_name": "Bernhard",
+    "abnormal_current": false,
+    "birth_date": "04.03.1969",
+    "chip_nr": "LOUCBXAX",
+    "daten": [],
+    "death_date": "04.03.1980",
+    "display_name": "Bernhard",
+    "edits": {},
+    "eizellspenderin": "Irmgard I | Macaca mulatta | 04.03.1966 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 8,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1969-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1969-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1969-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1969-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1970-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1971-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1973-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_69_0002_M_Bernhard",
+    "in_experiment": false,
+    "ipid": "Bernhard | Macaca mulatta | 04.03.1969 | DPZ",
+    "name": "Bernhard",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Durin II | Macaca mulatta | 04.03.1966 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Borin | Macaca mulatta | 04.03.2011 | DPZ": {
+    "_base_name": "Borin",
+    "abnormal_current": false,
+    "birth_date": "04.03.2011",
+    "chip_nr": "CF90ERJX",
+    "daten": [],
+    "death_date": "04.03.2022",
+    "display_name": "Borin",
+    "edits": {},
+    "eizellspenderin": "Helga | Macaca mulatta | 04.03.2008 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 111,
+    "generated_id_sequence": 3,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2011-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2011-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2011-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2011-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2012-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2013-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2015-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_11_0003_M_Borin",
+    "in_experiment": false,
+    "ipid": "Borin | Macaca mulatta | 04.03.2011 | DPZ",
+    "name": "Borin",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Nain II | Macaca mulatta | 04.03.2008 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Brigitte | Macaca mulatta | 04.03.1987 | Aulë": {
+    "_base_name": "Brigitte",
+    "abnormal_current": false,
+    "birth_date": "04.03.1987",
+    "chip_nr": "1MFNUEOO",
+    "daten": [],
+    "death_date": "04.03.1998",
+    "display_name": "Brigitte",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 19,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1987-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1987-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1987-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1987-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1988-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1989-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1991-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_87_0001_F_Brigitte",
+    "in_experiment": false,
+    "ipid": "Brigitte | Macaca mulatta | 04.03.1987 | Aulë",
+    "name": "Brigitte",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Dain I | Macaca mulatta | 04.03.2011 | DPZ": {
+    "_base_name": "Dain I",
+    "abnormal_current": false,
+    "birth_date": "04.03.2011",
+    "chip_nr": "9ECOE9PZ",
+    "daten": [],
+    "death_date": "04.03.2022",
+    "display_name": "Dain I",
+    "edits": {},
+    "eizellspenderin": "Helga | Macaca mulatta | 04.03.2008 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 114,
+    "generated_id_sequence": 6,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2011-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2011-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2011-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2011-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2012-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2013-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2015-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_11_0006_M_Dain_I",
+    "in_experiment": false,
+    "ipid": "Dain I | Macaca mulatta | 04.03.2011 | DPZ",
+    "name": "Dain I",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Nain II | Macaca mulatta | 04.03.2008 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Dieter | Macaca mulatta | 04.03.2011 | DPZ": {
+    "_base_name": "Dieter",
+    "abnormal_current": false,
+    "birth_date": "04.03.2011",
+    "chip_nr": "MF0L344Q",
+    "daten": [],
+    "death_date": "04.03.2022",
+    "display_name": "Dieter",
+    "edits": {},
+    "eizellspenderin": "Helga | Macaca mulatta | 04.03.2008 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 112,
+    "generated_id_sequence": 4,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2011-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2011-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2011-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2011-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2012-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2013-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2015-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_11_0004_M_Dieter",
+    "in_experiment": false,
+    "ipid": "Dieter | Macaca mulatta | 04.03.2011 | DPZ",
+    "name": "Dieter",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Nain II | Macaca mulatta | 04.03.2008 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Dietmar | Macaca mulatta | 04.03.2011 | DPZ": {
+    "_base_name": "Dietmar",
+    "abnormal_current": false,
+    "birth_date": "04.03.2011",
+    "chip_nr": "Z558B5VW",
+    "daten": [],
+    "death_date": "04.03.2022",
+    "display_name": "Dietmar",
+    "edits": {},
+    "eizellspenderin": "Helga | Macaca mulatta | 04.03.2008 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 113,
+    "generated_id_sequence": 5,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2011-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2011-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2011-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2011-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2012-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2013-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2015-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_11_0005_M_Dietmar",
+    "in_experiment": false,
+    "ipid": "Dietmar | Macaca mulatta | 04.03.2011 | DPZ",
+    "name": "Dietmar",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Nain II | Macaca mulatta | 04.03.2008 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Durin I | Macaca mulatta | 04.03.1960 | Aulë": {
+    "_base_name": "Durin I",
+    "abnormal_current": false,
+    "birth_date": "04.03.1960",
+    "chip_nr": "B8FYSLQ7",
+    "daten": [],
+    "death_date": "04.03.1971",
+    "display_name": "Durin I",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 1,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1960-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1960-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1960-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1960-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1961-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1962-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1964-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_60_0001_M_Durin_I",
+    "in_experiment": false,
+    "ipid": "Durin I | Macaca mulatta | 04.03.1960 | Aulë",
+    "name": "Durin I",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Durin II | Macaca mulatta | 04.03.1966 | DPZ": {
+    "_base_name": "Durin II",
+    "abnormal_current": false,
+    "birth_date": "04.03.1966",
+    "chip_nr": "MQ8QMRXU",
+    "daten": [],
+    "death_date": "04.03.1977",
+    "display_name": "Durin II",
+    "edits": {},
+    "eizellspenderin": "Ingrid | Macaca mulatta | 04.03.1963 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 5,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1966-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1966-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1966-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1966-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1967-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1968-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1970-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_66_0001_M_Durin_II",
+    "in_experiment": false,
+    "ipid": "Durin II | Macaca mulatta | 04.03.1966 | DPZ",
+    "name": "Durin II",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Hartmut | Macaca mulatta | 04.03.1963 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Durin III | Macaca mulatta | 04.03.1972 | DPZ": {
+    "_base_name": "Durin III",
+    "abnormal_current": false,
+    "birth_date": "04.03.1972",
+    "chip_nr": "EV8UR0BI",
+    "daten": [],
+    "death_date": "04.03.1983",
+    "display_name": "Durin III",
+    "edits": {},
+    "eizellspenderin": "Adelheid | Macaca mulatta | 04.03.1969 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 9,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1972-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1972-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1972-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1972-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1973-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1974-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1976-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_72_0001_M_Durin_III",
+    "in_experiment": false,
+    "ipid": "Durin III | Macaca mulatta | 04.03.1972 | DPZ",
+    "name": "Durin III",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Bernhard | Macaca mulatta | 04.03.1969 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Durin IV | Macaca mulatta | 04.03.1978 | DPZ": {
+    "_base_name": "Durin IV",
+    "abnormal_current": false,
+    "birth_date": "04.03.1978",
+    "chip_nr": "FMP65H2C",
+    "daten": [],
+    "death_date": "04.03.1989",
+    "display_name": "Durin IV",
+    "edits": {},
+    "eizellspenderin": "Mathilde | Macaca mulatta | 04.03.1975 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 13,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1978-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1978-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1978-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1978-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1979-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1980-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1982-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_78_0001_M_Durin_IV",
+    "in_experiment": false,
+    "ipid": "Durin IV | Macaca mulatta | 04.03.1978 | DPZ",
+    "name": "Durin IV",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Konrad I | Macaca mulatta | 04.03.1975 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Durin V | Macaca mulatta | 04.03.1984 | DPZ": {
+    "_base_name": "Durin V",
+    "abnormal_current": false,
+    "birth_date": "04.03.1984",
+    "chip_nr": "XOP4UISG",
+    "daten": [],
+    "death_date": "04.03.1995",
+    "display_name": "Durin V",
+    "edits": {},
+    "eizellspenderin": "Gerlinde | Macaca mulatta | 04.03.1981 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 17,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1984-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1984-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1984-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1984-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1985-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1986-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1988-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_84_0001_M_Durin_V",
+    "in_experiment": false,
+    "ipid": "Durin V | Macaca mulatta | 04.03.1984 | DPZ",
+    "name": "Durin V",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Eckhard | Macaca mulatta | 04.03.1981 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Durin VI | Macaca mulatta | 04.03.1990 | DPZ": {
+    "_base_name": "Durin VI",
+    "abnormal_current": false,
+    "birth_date": "04.03.1990",
+    "chip_nr": "SKJSKYS5",
+    "daten": [],
+    "death_date": "04.03.2001",
+    "display_name": "Durin VI",
+    "edits": {},
+    "eizellspenderin": "Brigitte | Macaca mulatta | 04.03.1987 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 21,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1990-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1990-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1990-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1990-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1991-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1992-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1994-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_90_0001_M_Durin_VI",
+    "in_experiment": false,
+    "ipid": "Durin VI | Macaca mulatta | 04.03.1990 | DPZ",
+    "name": "Durin VI",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Rudiger | Macaca mulatta | 04.03.1987 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Eckhard | Macaca mulatta | 04.03.1981 | DPZ": {
+    "_base_name": "Eckhard",
+    "abnormal_current": false,
+    "birth_date": "04.03.1981",
+    "chip_nr": "86XXSGCB",
+    "daten": [],
+    "death_date": "04.03.1992",
+    "display_name": "Eckhard",
+    "edits": {},
+    "eizellspenderin": "Gudrun I | Macaca mulatta | 04.03.1978 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 15,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1981-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1981-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1981-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1981-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1982-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1983-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1985-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_81_0001_M_Eckhard",
+    "in_experiment": false,
+    "ipid": "Eckhard | Macaca mulatta | 04.03.1981 | DPZ",
+    "name": "Eckhard",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Durin IV | Macaca mulatta | 04.03.1978 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Elke | Macaca mulatta | 04.03.2011 | Aulë": {
+    "_base_name": "Elke",
+    "abnormal_current": false,
+    "birth_date": "04.03.2011",
+    "chip_nr": "8HQY47MQ",
+    "daten": [],
+    "death_date": "04.03.2022",
+    "display_name": "Elke",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 115,
+    "generated_id_sequence": 7,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2011-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2011-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2011-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2011-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2012-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2013-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2015-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_11_0007_F_Elke",
+    "in_experiment": false,
+    "ipid": "Elke | Macaca mulatta | 04.03.2011 | Aulë",
+    "name": "Elke",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Erika I | Macaca mulatta | 04.03.1999 | Aulë": {
+    "_base_name": "Erika I",
+    "abnormal_current": false,
+    "birth_date": "04.03.1999",
+    "chip_nr": "K2JU8KQE",
+    "daten": [],
+    "death_date": "04.03.2010",
+    "display_name": "Erika I",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 30,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1999-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1999-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1999-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1999-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2000-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2001-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2003-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_99_0002_F_Erika_I",
+    "in_experiment": false,
+    "ipid": "Erika I | Macaca mulatta | 04.03.1999 | Aulë",
+    "name": "Erika I",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Gerlinde | Macaca mulatta | 04.03.1981 | Aulë": {
+    "_base_name": "Gerlinde",
+    "abnormal_current": false,
+    "birth_date": "04.03.1981",
+    "chip_nr": "IAITPWMI",
+    "daten": [],
+    "death_date": "04.03.1992",
+    "display_name": "Gerlinde",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 16,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1981-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1981-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1981-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1981-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1982-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1983-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1985-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_81_0002_F_Gerlinde",
+    "in_experiment": false,
+    "ipid": "Gerlinde | Macaca mulatta | 04.03.1981 | Aulë",
+    "name": "Gerlinde",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Gertrud | Macaca mulatta | 04.03.1960 | Aulë": {
+    "_base_name": "Gertrud",
+    "abnormal_current": false,
+    "birth_date": "04.03.1960",
+    "chip_nr": "FA5Y48WM",
+    "daten": [],
+    "death_date": "04.03.1971",
+    "display_name": "Gertrud",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 2,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1960-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1960-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1960-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1960-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1961-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1962-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1964-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_60_0002_F_Gertrud",
+    "in_experiment": false,
+    "ipid": "Gertrud | Macaca mulatta | 04.03.1960 | Aulë",
+    "name": "Gertrud",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Gloin I | Macaca mulatta | 04.03.2002 | DPZ": {
+    "_base_name": "Gloin I",
+    "abnormal_current": false,
+    "birth_date": "04.03.2002",
+    "chip_nr": "0T5NBRYO",
+    "daten": [],
+    "death_date": "04.03.2013",
+    "display_name": "Gloin I",
+    "edits": {},
+    "eizellspenderin": "Erika I | Macaca mulatta | 04.03.1999 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 42,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2002-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2002-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2002-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2002-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2003-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2004-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2006-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_02_0002_M_Gloin_I",
+    "in_experiment": false,
+    "ipid": "Gloin I | Macaca mulatta | 04.03.2002 | DPZ",
+    "name": "Gloin I",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Thorin I | Macaca mulatta | 04.03.1999 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Gudrun I | Macaca mulatta | 04.03.1978 | Aulë": {
+    "_base_name": "Gudrun I",
+    "abnormal_current": false,
+    "birth_date": "04.03.1978",
+    "chip_nr": "0VX5IW4B",
+    "daten": [],
+    "death_date": "04.03.1989",
+    "display_name": "Gudrun I",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 14,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1978-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1978-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1978-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1978-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1979-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1980-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1982-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_78_0002_F_Gudrun_I",
+    "in_experiment": false,
+    "ipid": "Gudrun I | Macaca mulatta | 04.03.1978 | Aulë",
+    "name": "Gudrun I",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Hannelore | Macaca mulatta | 04.03.1990 | Aulë": {
+    "_base_name": "Hannelore",
+    "abnormal_current": false,
+    "birth_date": "04.03.1990",
+    "chip_nr": "OUOROG60",
+    "daten": [],
+    "death_date": "04.03.2001",
+    "display_name": "Hannelore",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 22,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1990-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1990-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1990-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1990-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1991-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1992-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1994-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_90_0002_F_Hannelore",
+    "in_experiment": false,
+    "ipid": "Hannelore | Macaca mulatta | 04.03.1990 | Aulë",
+    "name": "Hannelore",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Hartmut | Macaca mulatta | 04.03.1963 | DPZ": {
+    "_base_name": "Hartmut",
+    "abnormal_current": false,
+    "birth_date": "04.03.1963",
+    "chip_nr": "VSUOG813",
+    "daten": [],
+    "death_date": "04.03.1974",
+    "display_name": "Hartmut",
+    "edits": {},
+    "eizellspenderin": "Gertrud | Macaca mulatta | 04.03.1960 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 3,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1963-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1963-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1963-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1963-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1964-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1965-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1967-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_63_0001_M_Hartmut",
+    "in_experiment": false,
+    "ipid": "Hartmut | Macaca mulatta | 04.03.1963 | DPZ",
+    "name": "Hartmut",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Durin I | Macaca mulatta | 04.03.1960 | Aulë",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Helga | Macaca mulatta | 04.03.2008 | Aulë": {
+    "_base_name": "Helga",
+    "abnormal_current": false,
+    "birth_date": "04.03.2008",
+    "chip_nr": "C6NV1YEF",
+    "daten": [],
+    "death_date": "04.03.2019",
+    "display_name": "Helga",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 95,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2008-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2008-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2008-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2008-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2009-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2010-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2012-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_08_0002_F_Helga",
+    "in_experiment": false,
+    "ipid": "Helga | Macaca mulatta | 04.03.2008 | Aulë",
+    "name": "Helga",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Hildegard | Macaca mulatta | 04.03.1972 | Aulë": {
+    "_base_name": "Hildegard",
+    "abnormal_current": false,
+    "birth_date": "04.03.1972",
+    "chip_nr": "R0S63CPG",
+    "daten": [],
+    "death_date": "04.03.1983",
+    "display_name": "Hildegard",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 10,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1972-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1972-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1972-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1972-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1973-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1974-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1976-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_72_0002_F_Hildegard",
+    "in_experiment": false,
+    "ipid": "Hildegard | Macaca mulatta | 04.03.1972 | Aulë",
+    "name": "Hildegard",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Ingrid | Macaca mulatta | 04.03.1963 | Aulë": {
+    "_base_name": "Ingrid",
+    "abnormal_current": false,
+    "birth_date": "04.03.1963",
+    "chip_nr": "X3JKVJBK",
+    "daten": [],
+    "death_date": "04.03.1974",
+    "display_name": "Ingrid",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 4,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1963-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1963-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1963-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1963-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1964-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1965-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1967-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_63_0002_F_Ingrid",
+    "in_experiment": false,
+    "ipid": "Ingrid | Macaca mulatta | 04.03.1963 | Aulë",
+    "name": "Ingrid",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Irmgard I | Macaca mulatta | 04.03.1966 | Aulë": {
+    "_base_name": "Irmgard I",
+    "abnormal_current": false,
+    "birth_date": "04.03.1966",
+    "chip_nr": "4BX39YI5",
+    "daten": [],
+    "death_date": "04.03.1977",
+    "display_name": "Irmgard I",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 6,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1966-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1966-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1966-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1966-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1967-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1968-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1970-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_66_0002_F_Irmgard_I",
+    "in_experiment": false,
+    "ipid": "Irmgard I | Macaca mulatta | 04.03.1966 | Aulë",
+    "name": "Irmgard I",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Irmgard II | Macaca mulatta | 04.03.2011 | Aulë": {
+    "_base_name": "Irmgard II",
+    "abnormal_current": false,
+    "birth_date": "04.03.2011",
+    "chip_nr": "7RCNYLN7",
+    "daten": [],
+    "death_date": "04.03.2022",
+    "display_name": "Irmgard II",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 116,
+    "generated_id_sequence": 8,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2011-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2011-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2011-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2011-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2012-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2013-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2015-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_11_0008_F_Irmgard_II",
+    "in_experiment": false,
+    "ipid": "Irmgard II | Macaca mulatta | 04.03.2011 | Aulë",
+    "name": "Irmgard II",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Jutta | Macaca mulatta | 04.03.2011 | Aulë": {
+    "_base_name": "Jutta",
+    "abnormal_current": false,
+    "birth_date": "04.03.2011",
+    "chip_nr": "GOXE5P9Z",
+    "daten": [],
+    "death_date": "04.03.2022",
+    "display_name": "Jutta",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 117,
+    "generated_id_sequence": 9,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2011-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2011-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2011-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2011-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2012-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2013-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2015-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_11_0009_F_Jutta",
+    "in_experiment": false,
+    "ipid": "Jutta | Macaca mulatta | 04.03.2011 | Aulë",
+    "name": "Jutta",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Konrad I | Macaca mulatta | 04.03.1975 | DPZ": {
+    "_base_name": "Konrad I",
+    "abnormal_current": false,
+    "birth_date": "04.03.1975",
+    "chip_nr": "JH1D8G37",
+    "daten": [],
+    "death_date": "04.03.1986",
+    "display_name": "Konrad I",
+    "edits": {},
+    "eizellspenderin": "Hildegard | Macaca mulatta | 04.03.1972 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 11,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1975-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1975-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1975-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1975-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1976-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1977-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1979-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_75_0001_M_Konrad_I",
+    "in_experiment": false,
+    "ipid": "Konrad I | Macaca mulatta | 04.03.1975 | DPZ",
+    "name": "Konrad I",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Durin III | Macaca mulatta | 04.03.1972 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Mathilde | Macaca mulatta | 04.03.1975 | Aulë": {
+    "_base_name": "Mathilde",
+    "abnormal_current": false,
+    "birth_date": "04.03.1975",
+    "chip_nr": "NPZHJP0O",
+    "daten": [],
+    "death_date": "04.03.1986",
+    "display_name": "Mathilde",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 12,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1975-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1975-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1975-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1975-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1976-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1977-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1979-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_75_0002_F_Mathilde",
+    "in_experiment": false,
+    "ipid": "Mathilde | Macaca mulatta | 04.03.1975 | Aulë",
+    "name": "Mathilde",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Monika | Macaca mulatta | 04.03.2002 | Aulë": {
+    "_base_name": "Monika",
+    "abnormal_current": false,
+    "birth_date": "04.03.2002",
+    "chip_nr": "Q3XE5AQN",
+    "daten": [],
+    "death_date": "04.03.2013",
+    "display_name": "Monika",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 44,
+    "generated_id_sequence": 4,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2002-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2002-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2002-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2002-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2003-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2004-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2006-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_02_0004_F_Monika",
+    "in_experiment": false,
+    "ipid": "Monika | Macaca mulatta | 04.03.2002 | Aulë",
+    "name": "Monika",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Nain I | Macaca mulatta | 04.03.1993 | DPZ": {
+    "_base_name": "Nain I",
+    "abnormal_current": false,
+    "birth_date": "04.03.1993",
+    "chip_nr": "086DZQS3",
+    "daten": [],
+    "death_date": "04.03.2004",
+    "display_name": "Nain I",
+    "edits": {},
+    "eizellspenderin": "Hannelore | Macaca mulatta | 04.03.1990 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 23,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1993-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1993-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1993-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1993-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1994-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1995-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1997-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_93_0001_M_Nain_I",
+    "in_experiment": false,
+    "ipid": "Nain I | Macaca mulatta | 04.03.1993 | DPZ",
+    "name": "Nain I",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Durin VI | Macaca mulatta | 04.03.1990 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Nain II | Macaca mulatta | 04.03.2008 | DPZ": {
+    "_base_name": "Nain II",
+    "abnormal_current": false,
+    "birth_date": "04.03.2008",
+    "chip_nr": "89MHV6L1",
+    "daten": [],
+    "death_date": "04.03.2019",
+    "display_name": "Nain II",
+    "edits": {},
+    "eizellspenderin": "Sabine | Macaca mulatta | 04.03.2005 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 96,
+    "generated_id_sequence": 3,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2008-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2008-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2008-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2008-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2009-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2010-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2012-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_08_0003_M_Nain_II",
+    "in_experiment": false,
+    "ipid": "Nain II | Macaca mulatta | 04.03.2008 | DPZ",
+    "name": "Nain II",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Oin I | Macaca mulatta | 04.03.2005 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Oin I | Macaca mulatta | 04.03.2005 | DPZ": {
+    "_base_name": "Oin I",
+    "abnormal_current": false,
+    "birth_date": "04.03.2005",
+    "chip_nr": "CWSE3NLP",
+    "daten": [],
+    "death_date": "04.03.2016",
+    "display_name": "Oin I",
+    "edits": {},
+    "eizellspenderin": "Monika | Macaca mulatta | 04.03.2002 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 69,
+    "generated_id_sequence": 4,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2005-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2005-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2005-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2005-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2006-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2007-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2009-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_05_0004_M_Oin_I",
+    "in_experiment": false,
+    "ipid": "Oin I | Macaca mulatta | 04.03.2005 | DPZ",
+    "name": "Oin I",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Gloin I | Macaca mulatta | 04.03.2002 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Renate | Macaca mulatta | 04.03.1996 | Aulë": {
+    "_base_name": "Renate",
+    "abnormal_current": false,
+    "birth_date": "04.03.1996",
+    "chip_nr": "J13FTXIY",
+    "daten": [],
+    "death_date": "04.03.2007",
+    "display_name": "Renate",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 25,
+    "generated_id_sequence": 1,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1996-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1996-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1996-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1996-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1997-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1998-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2000-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_96_0001_F_Renate",
+    "in_experiment": false,
+    "ipid": "Renate | Macaca mulatta | 04.03.1996 | Aulë",
+    "name": "Renate",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Rudiger | Macaca mulatta | 04.03.1987 | DPZ": {
+    "_base_name": "Rudiger",
+    "abnormal_current": false,
+    "birth_date": "04.03.1987",
+    "chip_nr": "S1PGRYPW",
+    "daten": [],
+    "death_date": "04.03.1998",
+    "display_name": "Rudiger",
+    "edits": {},
+    "eizellspenderin": "Walburga | Macaca mulatta | 04.03.1984 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 20,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1987-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1987-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1987-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1987-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1988-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1989-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1991-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_87_0002_M_Rudiger",
+    "in_experiment": false,
+    "ipid": "Rudiger | Macaca mulatta | 04.03.1987 | DPZ",
+    "name": "Rudiger",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Durin V | Macaca mulatta | 04.03.1984 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Sabine | Macaca mulatta | 04.03.2005 | Aulë": {
+    "_base_name": "Sabine",
+    "abnormal_current": false,
+    "birth_date": "04.03.2005",
+    "chip_nr": "W2AORG3X",
+    "daten": [],
+    "death_date": "04.03.2016",
+    "display_name": "Sabine",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 68,
+    "generated_id_sequence": 3,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "2005-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "2005-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "2005-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "2005-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2006-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2007-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2009-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_05_0003_F_Sabine",
+    "in_experiment": false,
+    "ipid": "Sabine | Macaca mulatta | 04.03.2005 | Aulë",
+    "name": "Sabine",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Thorin I | Macaca mulatta | 04.03.1999 | DPZ": {
+    "_base_name": "Thorin I",
+    "abnormal_current": false,
+    "birth_date": "04.03.1999",
+    "chip_nr": "G9DUTP9J",
+    "daten": [],
+    "death_date": "04.03.2010",
+    "display_name": "Thorin I",
+    "edits": {},
+    "eizellspenderin": "Renate | Macaca mulatta | 04.03.1996 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 31,
+    "generated_id_sequence": 3,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1999-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1999-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1999-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1999-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "2000-03-03T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "2001-03-03T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2003-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_99_0003_M_Thorin_I",
+    "in_experiment": false,
+    "ipid": "Thorin I | Macaca mulatta | 04.03.1999 | DPZ",
+    "name": "Thorin I",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Thrain I | Macaca mulatta | 04.03.1996 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Thrain I | Macaca mulatta | 04.03.1996 | DPZ": {
+    "_base_name": "Thrain I",
+    "abnormal_current": false,
+    "birth_date": "04.03.1996",
+    "chip_nr": "3V06GI43",
+    "daten": [],
+    "death_date": "04.03.2007",
+    "display_name": "Thrain I",
+    "edits": {},
+    "eizellspenderin": "Ursula | Macaca mulatta | 04.03.1993 | Aulë",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 26,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1996-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1996-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1996-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1996-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1997-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1998-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "2000-03-03T00:00:00",
+        "wert": 9000.0
+      }
+    ],
+    "id": "mm_96_0002_M_Thrain_I",
+    "in_experiment": false,
+    "ipid": "Thrain I | Macaca mulatta | 04.03.1996 | DPZ",
+    "name": "Thrain I",
+    "origin": "DPZ",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "Nain I | Macaca mulatta | 04.03.1993 | DPZ",
+    "severity": "SV0",
+    "sex": "Male",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Ursula | Macaca mulatta | 04.03.1993 | Aulë": {
+    "_base_name": "Ursula",
+    "abnormal_current": false,
+    "birth_date": "04.03.1993",
+    "chip_nr": "SRY1N3NY",
+    "daten": [],
+    "death_date": "04.03.2004",
+    "display_name": "Ursula",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 24,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1993-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1993-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1993-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1993-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1994-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1995-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1997-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_93_0002_F_Ursula",
+    "in_experiment": false,
+    "ipid": "Ursula | Macaca mulatta | 04.03.1993 | Aulë",
+    "name": "Ursula",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  },
+  "Walburga | Macaca mulatta | 04.03.1984 | Aulë": {
+    "_base_name": "Walburga",
+    "abnormal_current": false,
+    "birth_date": "04.03.1984",
+    "chip_nr": "JWOT19O5",
+    "daten": [],
+    "death_date": "04.03.1995",
+    "display_name": "Walburga",
+    "edits": {},
+    "eizellspenderin": "",
+    "events": [],
+    "experimental_limits": {},
+    "generated_id_absolute_sequence": 18,
+    "generated_id_sequence": 2,
+    "genotype": "",
+    "gewicht": [
+      {
+        "datum": "1984-03-04T00:00:00",
+        "wert": 480
+      },
+      {
+        "datum": "1984-04-03T00:00:00",
+        "wert": 760
+      },
+      {
+        "datum": "1984-06-02T00:00:00",
+        "wert": 1200
+      },
+      {
+        "datum": "1984-08-31T00:00:00",
+        "wert": 2100
+      },
+      {
+        "datum": "1985-03-04T00:00:00",
+        "wert": 3500
+      },
+      {
+        "datum": "1986-03-04T00:00:00",
+        "wert": 5000
+      },
+      {
+        "datum": "1988-03-03T00:00:00",
+        "wert": 6500.0
+      }
+    ],
+    "id": "mm_84_0002_F_Walburga",
+    "in_experiment": false,
+    "ipid": "Walburga | Macaca mulatta | 04.03.1984 | Aulë",
+    "name": "Walburga",
+    "origin": "Aulë",
+    "pdg": [],
+    "project": "",
+    "project_severity": "SV0",
+    "rolle": "offspring",
+    "samenspender": "",
+    "severity": "SV0",
+    "sex": "Female",
+    "sick": false,
+    "sick_end_date": null,
+    "sick_start_date": null,
+    "sick_times": [],
+    "special_status": "",
+    "species": "Macaca mulatta",
+    "sperm": [],
+    "ziehmutter": "",
+    "ziehvater": ""
+  }
+}
