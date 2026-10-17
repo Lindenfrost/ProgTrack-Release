@@ -116,7 +116,7 @@ def egg_stage_data(spec: dict[str, Any]) -> dict[str, Any]:
         "in_vivo_m2_fertilized": spec["in_vivo_m2_fertilized"],
         "in_vitro_m2_fertilized": spec["fertilized"],
         "embryos_from_in_vivo_m2": 0, "embryos_from_in_vitro_m2": spec["embryos"],
-        "frozen_from_in_vivo_m2": 0, "frozen_from_in_vitro_m2": 0,
+        "frozen_from_in_vivo_m2": 0, "frozen_from_in_vitro_m2": spec.get("frozen_embryos", 0),
         "comments": "Fictional IVF example; only in-vitro-matured MII produce embryos.",
     }
 
@@ -157,16 +157,25 @@ def build_flow(scenario: dict[str, Any], core: dict[str, Any]) -> dict[str, Any]
         embryos = []
         for index in range(cycle["embryos"]):
             implanted = cycle["outcome"] in {"birth", "abortion"} and index == 0
+            frozen = index >= cycle["embryos"] - cycle.get("frozen_embryos", 0)
             embryo = {
                 "embryo_id": f"OTOF_{cycle['key'].replace('-', '_')}_E{index + 1:03d}",
                 "egg_donor_name": egg, "egg_donation_date": cycle["egg_date"],
                 "sperm_donor_name": sperm, "sperm_donation_id": cycle["sperm_date"],
-                "stage": "in_vitro_m2", "implanted": implanted, "cryopreserved": False,
-                "freeze_date": None, "comment": f"Fictional IVF {cycle['outcome']} cycle {cycle['key']}.",
+                "stage": "in_vitro_m2", "implanted": implanted, "cryopreserved": frozen,
+                "freeze_date": cycle.get("freeze_date") if frozen else None,
+                "comment": f"Fictional IVF {cycle['outcome']} cycle {cycle['key']}.",
             }
             if cycle["offspring"] and implanted:
                 embryo["offspring_ipid"] = scenario[cycle["offspring"]]
-            embryos.append(embryo)
+            if frozen:
+                if implanted or embryo.get("offspring_ipid"):
+                    raise ValueError("A frozen seed embryo cannot own an implanted offspring")
+                freezer = manual["transfers_by_id"].setdefault("freezer_main", {
+                    "surrogate_name": "FREEZER", "transfer_date": None, "embryos": []})
+                freezer["embryos"].append(embryo)
+            else:
+                embryos.append(embryo)
         manual["transfers_by_id"][cycle["transfer_id"]] = {
             "surrogate_name": cycle["surrogate_ipid"], "transfer_date": cycle["transfer_date"] + "T00:00:00",
             "embryos": embryos,
@@ -174,7 +183,7 @@ def build_flow(scenario: dict[str, Any], core: dict[str, Any]) -> dict[str, Any]
         manual.setdefault(cycle["surrogate_ipid"], {"transfers": {}})["transfers"][cycle["transfer_id"]] = {
             "embryo_count": len(embryos), "implanted_count": sum(e["implanted"] for e in embryos),
         }
-        manual["total_embryo_count"] += len(embryos)
+        manual["total_embryo_count"] += cycle["embryos"]
     return {"version": "3.0", "last_updated": SEED_CREATED, "manual_data": manual}
 
 

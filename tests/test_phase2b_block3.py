@@ -59,7 +59,7 @@ class Block3Tests(unittest.TestCase):
             "weight_marker": "not-a-marker",
             "custom_events": {"future.event": {"color": "#123456"}},
         })
-        self.assertEqual(normalized["prog_color"], "#DC143C")
+        self.assertEqual(normalized["prog_color"], self.main.QColor("#DC143C").name())
         self.assertEqual(normalized["weight_marker"], "^")
         self.assertEqual(normalized["custom_events"]["future.event"]["color"], "#123456")
         self.assertIn("blood_color", normalized)
@@ -81,7 +81,7 @@ class Block3Tests(unittest.TestCase):
         host.master_track = Master(True, {"style_settings": {"prog_color": "#222222"}})
         self.assertEqual(host._load_user_style_settings()["prog_color"], "#222222")
         host.master_track = Master(False)
-        self.assertEqual(host._load_user_style_settings()["prog_color"], "#DC143C")
+        self.assertEqual(host._load_user_style_settings()["prog_color"], self.main.QColor("#DC143C").name())
         host._save_user_style_settings({"prog_color": "#333333"})
         self.assertNotIn(("preferences", "style:default_user"), host.backend.records.data)
 

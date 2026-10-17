@@ -415,6 +415,7 @@ class _OrganizationalUnitsEditor(QWidget):
         self.messages = messages
         self.user_db = user_db
         self._selected_id = ""
+        self._catalogue_revision = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 6, 0, 0)
@@ -509,9 +510,14 @@ class _OrganizationalUnitsEditor(QWidget):
         if parent is not None:
             parent.updateGeometry()
 
-    def refresh(self) -> bool:
+    def refresh(self, *, expected_deleted_id: str = "") -> bool:
         try:
-            units = self.service.load()
+            units, revision = self.service.load_with_revision()
+            if expected_deleted_id and expected_deleted_id in units:
+                raise ValueError(self._text(
+                    "units.delete.stale_catalogue",
+                    "The refreshed catalogue still contains the deleted Unit {unit_id}. Reload the list before editing.",
+                ).format(unit_id=expected_deleted_id))
         except Exception as exc:
             QMessageBox.warning(
                 self,
@@ -525,7 +531,8 @@ class _OrganizationalUnitsEditor(QWidget):
                 ).format(error=str(exc)),
             )
             return False
-        self.table.blockSignals(True)
+        self._catalogue_revision = revision
+        previously_blocked = self.table.blockSignals(True)
         self.table.setRowCount(0)
         for unit_id, unit in sorted(units.items(), key=lambda item: item[0]):
             row = self.table.rowCount()
@@ -536,10 +543,41 @@ class _OrganizationalUnitsEditor(QWidget):
             self.table.setItem(row, 2, QTableWidgetItem(status))
             if unit_id == self._selected_id:
                 self.table.selectRow(row)
-        self.table.blockSignals(False)
-        if not self._selected_id:
+        self.table.blockSignals(previously_blocked)
+        if self._selected_id not in units:
             self._new()
+        else:
+            # Selection signals were blocked during the snapshot replacement.
+            # Refresh the fields from that same snapshot, not a second read.
+            selected = units[self._selected_id]
+            self.id_edit.setText(self._selected_id)
+            self.id_edit.setReadOnly(True)
+            self.name_edit.setText(selected.display_name)
+            self.archive_button.setText(self._text("units.restore", "Restore")
+                if selected.archived else self._text("units.archive", "Archive"))
+        self._apply_field_access()
         return True
+
+    def _apply_field_access(self) -> None:
+        for field in (self.id_edit, self.name_edit):
+            protected = not self.authorized or (field is self.id_edit and bool(self._selected_id))
+            field.setReadOnly(protected)
+            field.setStyleSheet('min-width: 0; background: #f0f0f0; color: #666;'
+                               if protected else '')
+
+    def _mutation_error(self, error: Exception) -> str:
+        from Plugins.core.backend.errors import ConflictError
+        if isinstance(error, PermissionError):
+            return self._text("units.permission_denied", "You do not have permission to manage organizational Units.")
+        if isinstance(error, ConflictError):
+            return self._text("units.assignment_changed", "The Unit catalogue or assignment changed. Reopen this dialog.")
+        validation = {
+            "Invalid organizational unit ID.": "units.invalid_id",
+            "An organizational unit with this ID already exists.": "units.duplicate_id",
+            "The organizational unit name cannot be empty.": "units.empty_name",
+            "Unknown organizational unit.": "units.unknown_id",
+        }
+        return self._text(validation[str(error)], str(error)) if str(error) in validation else str(error)
 
     def _select_current(self) -> None:
         rows = self.table.selectionModel().selectedRows()
@@ -555,14 +593,17 @@ class _OrganizationalUnitsEditor(QWidget):
             self._text("units.restore", "Restore") if unit and unit.archived
             else self._text("units.archive", "Archive")
         )
+        self._apply_field_access()
 
     def _new(self) -> None:
         self._selected_id = ""
         self.table.clearSelection()
+        self.table.setCurrentItem(None)
         self.id_edit.clear()
         self.id_edit.setReadOnly(False)
         self.name_edit.clear()
         self.archive_button.setText(self._text("units.archive", "Archive"))
+        self._apply_field_access()
 
     def _save(self) -> None:
         try:
@@ -572,6 +613,7 @@ class _OrganizationalUnitsEditor(QWidget):
                     self.name_edit.text(),
                     actor=self.actor,
                     authorized=self.authorized,
+                    expected_revision=self._catalogue_revision,
                 )
             else:
                 created = self.service.create(
@@ -579,34 +621,45 @@ class _OrganizationalUnitsEditor(QWidget):
                     self.name_edit.text(),
                     actor=self.actor,
                     authorized=self.authorized,
+                    expected_revision=self._catalogue_revision,
                 )
                 self._selected_id = created.unit_id
-        except (ValueError, OSError) as exc:
-            QMessageBox.warning(self, self._text("units.save_failed.title", "Cannot save organizational unit"), str(exc))
+        except Exception as exc:
+            QMessageBox.warning(self, self._text("units.save_failed.title", "Cannot save organizational unit"), self._mutation_error(exc))
             return
-        if self.user_db is not None:
-            self.user_db.load()
-        self.refresh()
+        self._refresh_after_mutation()
 
     def _toggle_archive(self) -> None:
         if not self._selected_id:
             return
-        current = self.service.get(self._selected_id)
-        if current is None:
-            return
         try:
+            current = self.service.get(self._selected_id)
+            if current is None:
+                raise ValueError("Unknown organizational unit.")
             self.service.set_archived(
                 self._selected_id,
                 not current.archived,
                 actor=self.actor,
                 authorized=self.authorized,
+                expected_revision=self._catalogue_revision,
             )
-        except (ValueError, OSError) as exc:
-            QMessageBox.warning(self, self._text("units.save_failed.title", "Cannot save organizational unit"), str(exc))
+        except Exception as exc:
+            QMessageBox.warning(self, self._text("units.save_failed.title", "Cannot save organizational unit"), self._mutation_error(exc))
             return
+        self._refresh_after_mutation()
+
+    def _refresh_after_mutation(self) -> None:
+        error = None
         if self.user_db is not None:
-            self.user_db.load()
+            try:
+                self.user_db.load()
+            except Exception as exc:
+                error = exc
         self.refresh()
+        if error is not None:
+            QMessageBox.warning(self, self._text("units.refresh_failed.title", "Cannot refresh organizational units"),
+                self._text("units.user_refresh_failed",
+                    "The Unit change was saved, but user assignments could not be refreshed. Reopen user management before editing users. Details: {error}").format(error=str(error)))
 
     def _delete(self) -> None:
         if not self._selected_id:
@@ -616,6 +669,8 @@ class _OrganizationalUnitsEditor(QWidget):
             self,
             self._text("units.delete.title", "Delete organizational unit"),
             self._text("units.delete.confirm", "Delete this unit and unassign its users?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
@@ -624,6 +679,7 @@ class _OrganizationalUnitsEditor(QWidget):
                 unit_id,
                 actor=self.actor,
                 authorized=self.authorized,
+                expected_revision=self._catalogue_revision,
             )
             if not deleted:
                 raise ValueError(
@@ -639,20 +695,23 @@ class _OrganizationalUnitsEditor(QWidget):
                     "units.delete_failed.title",
                     "Cannot delete organizational unit",
                 ),
-                str(exc),
+                self._mutation_error(exc),
             )
             self.refresh()
             return
 
         # The backend commit succeeded, so remove this row immediately even if
         # a subsequent catalogue refresh is temporarily unavailable.
-        self._selected_id = ""
-        self._new()
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item is not None and str(item.text()) == unit_id:
-                self.table.removeRow(row)
-                break
+        previously_blocked = self.table.blockSignals(True)
+        try:
+            for row in range(self.table.rowCount()):
+                item = self.table.item(row, 0)
+                if item is not None and str(item.text()) == unit_id:
+                    self.table.removeRow(row)
+                    break
+            self._new()
+        finally:
+            self.table.blockSignals(previously_blocked)
 
         user_load_error = None
         if self.user_db is not None:
@@ -660,8 +719,8 @@ class _OrganizationalUnitsEditor(QWidget):
                 self.user_db.load()
             except Exception as exc:
                 user_load_error = exc
-        refreshed = self.refresh()
-        if user_load_error is not None and refreshed:
+        self.refresh(expected_deleted_id=unit_id)
+        if user_load_error is not None:
             QMessageBox.warning(
                 self,
                 self._text(
@@ -669,8 +728,8 @@ class _OrganizationalUnitsEditor(QWidget):
                     "Cannot refresh organizational units",
                 ),
                 self._text(
-                    "units.refresh_failed.message",
-                    "The Unit list could not be refreshed. The displayed list may be out of date. Details: {error}",
+                    "units.delete.user_refresh_failed",
+                    "The Unit was deleted, but user assignments could not be refreshed. Reopen user management before editing users. Details: {error}",
                 ).format(error=str(user_load_error)),
             )
 
@@ -701,6 +760,8 @@ class InstitutionBrandingDialog(QDialog):
         self.user_db = user_db
         if authorization is not None:
             self.service.authorization = authorization
+            if self.units_service is not None:
+                self.units_service.authorization = authorization
         self._remove_logo = False
         self._logo_source_path: Path | None = None
         self._logo_controls_compact: bool | None = None

@@ -354,6 +354,9 @@ class MasterTrackPlugin:
         if not user:
             self._set_guest()
             return
+        invalidate = getattr(getattr(self, "app", None), "_prepare_actor_transition", None)
+        if callable(invalidate):
+            invalidate()
         self._current_username = username
         self._current_role = user["role"]
         self._effective_timeout_minutes = self._resolve_effective_timeout(user.get("jobs", []))
@@ -369,6 +372,9 @@ class MasterTrackPlugin:
         self.audit("login", username)
 
     def _set_guest(self) -> None:
+        invalidate = getattr(getattr(self, "app", None), "_prepare_actor_transition", None)
+        if callable(invalidate):
+            invalidate()
         self._current_username = None
         self._current_role = ROLE_GUEST
         logger.info("Running in Guest (read-only) mode")
@@ -382,11 +388,11 @@ class MasterTrackPlugin:
             self.audit("logout", self._current_username)
         self._set_guest()
 
-    def login_interactive(self) -> bool:
+    def login_interactive(self, *, save_session: bool = True) -> bool:
         """Show login dialog interactively (e.g. from Ctrl+L). Returns True on success."""
         from .dialogs import LoginDialog
 
-        if self.is_logged_in:
+        if self.is_logged_in and save_session:
             self.save_session()
 
         dlg = LoginDialog(self.app, self.app.messages, self.user_db)

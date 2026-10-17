@@ -59,6 +59,24 @@ No command imports into or changes the active installation.
 
 ## Reproduction and FlowTrack
 
+`scenarios/experiment-enrollments.json` pins project entry and experiment
+admission for all 19 currently experimental animals by immutable identity.
+Admission begins with the first experimental monitoring or before the first
+intervention, never before birth/project entry. Legolas is assigned on
+20 April 2026 and admitted the next day. Ringbearer admissions precede the
+September 2024 surgeries; their former Shire memberships end at the individual
+project-transfer dates. Azog's completed experiment and 21 July 2026 readmission
+are retained, including existing historical IDs. These are authored fictional
+dates, not a reconstruction of real institutional history.
+
+The compiler aligns Core project dates/lifecycle events and daily Reports notes,
+Project Track's active/former memberships, and Medi Track's corresponding
+entries. It corrects the old OTOF spelling-change artifact rather than inventing
+a project exit. Stable deterministic IDs prevent duplicate admissions on rebuild.
+Identity, procedures, biological relationships and current experiment flags are
+unchanged. Missing enrollments, dates after monitoring/procedures and inconsistent
+cross-plugin projections fail validation.
+
 `scenarios/reproduction.json` is the authority for collections, fertilization,
 transfers and outcomes. Each cycle generates Core FSH/retrieval, sperm sample
 and donation, transfer/verification and outcome records, plus the current
@@ -78,7 +96,7 @@ donations supply inseminated/fertilized/embryo counts for both branches.
 In-vivo MII counts are deliberately low (0-2 per collection), with a few
 fertilizations but **zero** resulting embryos. All 21 embryos arise from
 IVF-fertilized, in-vitro-matured MII (`in_vitro_m2` in the existing schema).
-No embryos are frozen in these scenarios; both frozen counters are explicit 0.
+The Tiffany/Boromir cycle retains four transferred embryos (including the implanted Boromir record) and two non-implanted embryos in `freezer_main`, frozen on 18 October 2024. Production remains six; no offspring or donor identity changes. Freezer is storage, not a transfer occurrence; its embryos require freeze dates, not a fabricated transfer date. Runtime usable yield counts current transferred plus frozen canonical IDs, never all produced/unassigned embryos. Historical cryopreservation may remain true after thawed transfer; the current container owns allocation.
 This is a fictional seed design rule, not a scientific or runtime restriction.
 Ekaterina's separate collection includes low-yield stage counts but no
 fertilization/embryos or invented parentage links. Thranduil's three unused

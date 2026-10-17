@@ -21,6 +21,7 @@ from .generators import add_mouse_colony, add_shire_colony, normalize_mouse_publ
 from .projections import domain_records, _normalise_seed_project_assignments, _apply_otof_example_experiment_status, _normalise_seed_partner_relationships
 from .reproduction import add_reproduction_scenarios, assign_seed_event_ids
 from .validation import audit_seed_sources, validate
+from .enrollments import apply_experiment_enrollments, project_experiment_enrollments
 
 _IMPORT_SOURCE_HASHES = source_hashes()
 
@@ -54,7 +55,9 @@ def build_bundle() -> SeedBundle:
         for animal in core[section].values():
             synchronize_experimental_limits(animal, canonical_role_value(animal.get("rolle"), default="unknown"), prefer_flat=True, prune_unsupported=True, replace_nonpositive=True)
     complete_scientific_histories(core)
+    apply_experiment_enrollments(core)
     domains = domain_records(core, keys, scenario)
+    project_experiment_enrollments(core, domains)
     assign_seed_event_ids(core)
     domains[("seed", "metadata")].update({
         "source_schema": MANIFEST["schema"], "source_hashes": before,

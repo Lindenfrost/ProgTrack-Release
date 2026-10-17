@@ -236,8 +236,8 @@ class PdGCapability:
         Returns:
             Tuple (pdg_tab, conv_tab) widgets or (pdg_tab, None) if add_unified_prog=False
         """
-        from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QTableWidget, 
-                                     QTableWidgetItem, QLabel, QHeaderView, QPushButton)
+        from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QTableWidget,
+                                     QTableWidgetItem, QLabel, QHeaderView, QPushButton, QAbstractItemView)
         from PyQt6.QtCore import Qt
         
         DATE_FORMAT = '%d.%m.%Y'
@@ -316,6 +316,7 @@ class PdGCapability:
         
         # Create a table for converted values
         conv_table = QTableWidget()
+        conv_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         conv_table.setColumnCount(3)
         conv_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         conv_table.setHorizontalHeaderLabels([
@@ -378,6 +379,9 @@ class PdGCapability:
                     conv_item = QTableWidgetItem("-")
                 conv_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 conv_table.setItem(i, 2, conv_item)
+                for column in range(conv_table.columnCount()):
+                    item = conv_table.item(i, column)
+                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             if parent_app and hasattr(parent_app, "_cap_table_viewport"):
                 parent_app._cap_table_viewport(conv_table, len(sorted_records))
         
@@ -404,6 +408,9 @@ class PdGCapability:
         
         # Refresh button
         refresh_btn = QPushButton(self._plugin.app.messages.get("pdg_converter.button.refresh", "Refresh"))
+        # This action only re-reads/recalculates the display. Keep it usable
+        # when Core freezes actual mutation controls in a read-only editor.
+        refresh_btn.setProperty("progtrack_view_only_action", True)
         refresh_btn.clicked.connect(lambda: (refresh_unified_table(), update_info()))
         conv_layout.addWidget(refresh_btn)
         

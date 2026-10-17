@@ -17,6 +17,7 @@ from Plugins.core.identity_conventions import render_animal_id
 from .config import *
 from .common import *
 from .generators import researcher_record_dates
+from .enrollments import enrollment_errors
 import math
 
 
@@ -58,8 +59,13 @@ def event_date_audit(value: Any, path: str = "$", container: str = "") -> dict[s
             fields = ("date_sort", "date")
         elif "sample_number" in value and "animal_name" in value:
             fields = ("collection_date",)
+        elif container == "freezer_main":
+            # Storage is not a transfer occurrence; each freezing has its own date.
+            fields = ()
         elif isinstance(value.get("embryos"), list) or ("transfer_date" in value and value.get("embryos")):
             fields = ("transfer_date",)
+        elif value.get("cryopreserved") is True:
+            fields = ("freeze_date",)
         if fields:
             checked += 1
             if not any(valid_date(value.get(field)) for field in fields):
@@ -155,8 +161,8 @@ def donor_stage_errors(core: dict[str, Any], manual: dict[str, Any]) -> list[str
                     for t in manual.get("transfers_by_id", {}).values()
                     for e in t.get("embryos", [])
                 )
-                if row["embryos_from_in_vitro_m2"] != linked:
-                    errors.append(f"Donor embryo production differs from linked embryo nodes: {label}")
+                if row["embryos_from_in_vitro_m2"] < linked:
+                    errors.append(f"Linked embryo nodes exceed donor production: {label}")
                 if role == "egg_cell_donor":
                     if row["m2_isolated"] > REPRODUCTION["in_vivo_m2_limit_per_collection"]:
                         errors.append(f"Seed in-vivo MII exceeds the low-count limit: {label}")
@@ -165,8 +171,11 @@ def donor_stage_errors(core: dict[str, Any], manual: dict[str, Any]) -> list[str
                             or row["embryos_from_in_vitro_m2"] > row["in_vitro_m2_fertilized"]
                             or row["in_vivo_m2_fertilized"] > row["m2_isolated"]):
                         errors.append(f"Impossible egg-donor stage counts: {label}")
-                    if row["frozen_from_in_vivo_m2"] or row["frozen_from_in_vitro_m2"]:
-                        errors.append(f"This seed has no cryopreserved embryos: {label}")
+                    frozen = sum(
+                        e.get("egg_donor_name") == ipid and e.get("egg_donation_date") == stamp
+                        for e in manual.get("transfers_by_id", {}).get("freezer_main", {}).get("embryos", []))
+                    if row["frozen_from_in_vivo_m2"] or row["frozen_from_in_vitro_m2"] != frozen:
+                        errors.append(f"Frozen donor counts differ from canonical freezer: {label}")
                 else:
                     sample = next((s for s in entries if parse_record_date(s["datum"]).isoformat() == stamp), {})
                     if row.get("sample_id") != sample.get("sample_id"):
@@ -188,6 +197,8 @@ def flow_errors(core: dict[str, Any], flow: dict[str, Any], scenario: dict[str, 
     errors.extend(donor_stage_errors(core, manual))
     transfers = manual.get("transfers_by_id", {})
     expected = {c["transfer_id"] for c in scenario["cycles"] if c["transfer_date"]}
+    if any(c.get("frozen_embryos") for c in scenario["cycles"]):
+        expected.add("freezer_main")
     if set(transfers) != expected:
         errors.append("Flow transfer catalogue does not match the declared reproductive cycles")
     seen_embryos = set()
@@ -236,7 +247,18 @@ def flow_errors(core: dict[str, Any], flow: dict[str, Any], scenario: dict[str, 
             errors.append(f"Flow transfer recipient mismatch: {label}")
         if not any(e.get("event_type") == "embryo_transfer" and parse_record_date(e.get("datum")) == transfer_day for e in animals[cycle["surrogate_ipid"]].get("events", [])):
             errors.append(f"Flow transfer has no matching Core transfer: {label}")
-        embryos = transfer.get("embryos", [])
+        frozen = [e for e in transfers.get("freezer_main", {}).get("embryos", [])
+                  if e.get("egg_donor_name") == egg and e.get("egg_donation_date") == cycle["egg_date"]]
+        expected_frozen = cycle.get("frozen_embryos", 0)
+        if len(frozen) != expected_frozen or len(transfer.get("embryos", [])) != cycle["embryos"] - expected_frozen:
+            errors.append(f"Flow transfer/freezer allocation differs from recipe: {label}")
+        for embryo in frozen:
+            if (not embryo.get("cryopreserved") or embryo.get("implanted") or embryo.get("offspring_ipid")
+                    or parse_record_date(embryo.get("freeze_date")) != parse_record_date(cycle.get("freeze_date"))
+                    or parse_record_date(embryo.get("freeze_date")) is None
+                    or parse_record_date(embryo.get("freeze_date")) < sperm_day):
+                errors.append(f"Invalid seed freezing/provenance: {label}")
+        embryos = transfer.get("embryos", []) + frozen
         if len(embryos) != cycle["embryos"]:
             errors.append(f"Flow embryo count mismatch: {label}")
         for embryo in embryos:
@@ -250,6 +272,12 @@ def flow_errors(core: dict[str, Any], flow: dict[str, Any], scenario: dict[str, 
             child = embryo.get("offspring_ipid")
             if child and (child not in animals or animals[child].get("eizellspenderin") != egg or animals[child].get("samenspender") != sperm or animals[child].get("ziehmutter") != cycle["surrogate_ipid"]):
                 errors.append(f"Flow embryo {embryo_id} conflicts with Core offspring parentage")
+    all_embryos = [e for t in transfers.values() for e in t.get("embryos", [])]
+    if len(all_embryos) != len(seen_embryos) or {e.get("embryo_id") for e in all_embryos} != seen_embryos:
+        errors.append("Unmatched or duplicated Flow embryo allocation")
+    freezer = transfers.get("freezer_main")
+    if freezer and (freezer.get("surrogate_name") != "FREEZER" or freezer.get("transfer_date") is not None):
+        errors.append("Freezer storage must not be a surrogate transfer")
     paired_sperm_dates = {(c["sperm_donor"], c["sperm_date"]) for c in scenario["cycles"]}
     for donor, data in manual.get("sperm_donors", {}).items():
         for stamp, metrics in data.get("donations", {}).items():
@@ -282,10 +310,16 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any], scenario
     report = _validate_existing(core, records, scenario)
     report["event_date_audit"] = dates
     report["errors"].extend(measurement_errors(core))
+    report["errors"].extend(enrollment_errors(core, records))
+    report["counts"]["experimental_animals_with_enrollment_dates"] = sum(
+        bool(record.get("in_experiment"))
+        for section in ("animals", "archived_animals")
+        for record in core[section].values()
+    )
     flow = records[("reproduction", "flow")]
     report["errors"].extend(flow_errors(core, flow, scenario))
     report["valid"] = not report["errors"]
-    report["counts"].update({"flow_transfers": len(flow["manual_data"]["transfers_by_id"]), "flow_embryos": flow["manual_data"]["total_embryo_count"], "reproductive_collections": len(scenario["cycles"])})
+    report["counts"].update({"flow_transfers": sum(key != "freezer_main" for key in flow["manual_data"]["transfers_by_id"]), "flow_frozen_embryos": len(flow["manual_data"]["transfers_by_id"].get("freezer_main", {}).get("embryos", [])), "flow_embryos": flow["manual_data"]["total_embryo_count"], "reproductive_collections": len(scenario["cycles"])})
     egg_rows = [row for donor in flow["manual_data"]["egg_donors"].values()
                 for row in donor["surgeries"].values()]
     report["counts"].update({

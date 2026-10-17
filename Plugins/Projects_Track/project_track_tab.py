@@ -481,28 +481,44 @@ class ProjectTrackTab(QWidget):
                 str(getattr(unit, 'unit_id', '') or '').casefold(),
             )
         )
+        # Disambiguate only rows that will actually be visible, including a
+        # retained archived/inactive assignment, not hidden historical Units.
+        visible_units = list(assignable)
+        retained = (units or {}).get(selected_id)
+        if retained is not None and not any(unit.unit_id == selected_id for unit in assignable):
+            visible_units.append(retained)
         name_counts = {}
-        for unit in assignable:
+        for unit in visible_units:
             key = str(getattr(unit, 'display_name', '') or '').strip().casefold()
             name_counts[key] = name_counts.get(key, 0) + 1
 
-        for unit in assignable:
+        def display_label(unit):
             unit_id = str(unit.unit_id)
             display_name = str(unit.display_name or unit_id)
-            label = (
+            return (
                 f'{display_name} ({unit_id})'
                 if name_counts.get(display_name.strip().casefold(), 0) > 1
                 else display_name
             )
-            combo.addItem(label, unit_id)
+
+        for unit in assignable:
+            combo.addItem(display_label(unit), str(unit.unit_id))
 
         selected_index = combo.findData(selected_id)
         if selected_id and selected_index < 0:
-            label = _m(
-                self._messages,
-                'project.iacuc.unit.unavailable',
-                'Unavailable: {unit}',
-            ).replace('{unit}', selected_id)
+            if retained is not None:
+                status = (
+                    _m(self._messages, 'project.iacuc.unit.archived', 'Archived')
+                    if retained.archived
+                    else _m(self._messages, 'project.iacuc.unit.inactive', 'Inactive')
+                )
+                label = f'{display_label(retained)} ({status})'
+            else:
+                label = _m(
+                    self._messages,
+                    'project.iacuc.unit.unavailable',
+                    'Unavailable: {unit}',
+                ).replace('{unit}', selected_id)
             combo.insertItem(1, label, selected_id)
             selected_index = 1
             model_item = combo.model().item(selected_index)

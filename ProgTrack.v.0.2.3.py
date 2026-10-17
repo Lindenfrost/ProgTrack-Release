@@ -48,6 +48,7 @@ import hashlib
 import tempfile
 import errno
 import time
+from contextlib import contextmanager
 import warnings
 import re
 import platform
@@ -64,6 +65,7 @@ from Plugins.core.project_visibility import (
     is_unrestricted_project_role,
     visible_projects_for_user,
 )
+from Plugins.core.ui_operations import AfterDialogUpdates
 from Plugins.core.platform_helpers import default_export_directory, default_save_path
 from Plugins.core.runtime_paths import (
     BackendProfile,
@@ -97,7 +99,9 @@ from Plugins.core.measurement_input import (
     MeasurementValidator, format_measurement, parse_measurement,
 )
 from Plugins.core.animal_dialog_sections import AnimalDialogSection
-from Plugins.core.authorization import AuthorizationService, CanonicalUnitService
+from Plugins.core.authorization import (
+    AuthorizationService, CanonicalUnitService, organizational_owner_id,
+)
 from Plugins.core.plugin_manager import PluginManager
 from Plugins.core.animal_identity import (
     animal_base_name,
@@ -115,6 +119,7 @@ from Plugins.core.animal_reference_rewrite import (
 )
 from Plugins.core.animal_roles import (
     ALL_DIALOG_BLOCKS,
+    GLOBAL_EVENT_CATALOG,
     COLOR_KEYS_BY_MODE,
     COLOR_MODE_SINGLE,
     REPRESENTATION_ICON,
@@ -918,16 +923,21 @@ def _set_shared_icon(box: QMessageBox, mtype: str):
 
 # Monkey-patch all static QMessageBox methods
 for _mt in ("warning", "information", "critical", "question"):
-    _orig = getattr(QMessageBox, _mt)
     @staticmethod
-    def _override(parent, title, text, buttons=QMessageBox.StandardButton.Ok, _mt=_mt, _orig=_orig):
+    def _override(parent, title, text, buttons=None,
+                  defaultButton=QMessageBox.StandardButton.NoButton, *, _mt=_mt):
         msg = QMessageBox(parent)
         msg.setWindowTitle(title)
         msg.setText(text)
         _set_shared_icon(msg, _mt)
-        # preserve any custom buttons passed in
-        if hasattr(msg, "setStandardButtons"):
-            msg.setStandardButtons(buttons)
+        # Preserve Qt's method-specific defaults and the fifth positional
+        # defaultButton argument, not an OK-only default for questions.
+        if buttons is None:
+            buttons = (QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                       if _mt == "question" else QMessageBox.StandardButton.Ok)
+        msg.setStandardButtons(buttons)
+        if defaultButton != QMessageBox.StandardButton.NoButton:
+            msg.setDefaultButton(defaultButton)
         return msg.exec()
     setattr(QMessageBox, _mt, _override)
 
@@ -964,6 +974,52 @@ def _safe_date2num(d: datetime) -> Optional[float]:
         return n
     except Exception:
         return None
+
+
+class _EventLineLabelLayout(Artist):
+    """Measure rightward label slots before the figure draws its axes.
+
+    Offscreen labels keep their slots: panning the existing date viewport can
+    reveal the entire rightward content instead of piling it up at an edge.
+    One figure-owned artist avoids draw-event recursion, timers and per-label
+    callbacks. Every pass starts from immutable event dates, not prior offsets.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.set_zorder(-1)
+        self.set_in_layout(False)
+        self.entries = []
+        self.right_extent_by_axis = {}
+
+    def add_label(self, label, date):
+        self.entries.append((label, float(mdates.date2num(date))))
+
+    def draw(self, renderer):
+        grouped = {}
+        self.right_extent_by_axis = {}
+        for order, (label, date) in enumerate(self.entries):
+            if label.get_visible() and label.axes.get_visible():
+                grouped.setdefault(label.axes, []).append((date, order, label))
+        gap = renderer.points_to_pixels(3)
+        for axis, entries in grouped.items():
+            previous_right = -float('inf')
+            for date, _order, label in sorted(entries, key=lambda item: item[:2]):
+                label.set_x(date)
+                transform = label.get_transform()
+                anchor = transform.transform(label.get_position())
+                bounds = label.get_window_extent(renderer)
+                left = max(anchor[0] + gap, previous_right + gap)
+                # Move only in X; retain the original font, text, rotation and Y.
+                target = (anchor[0] + max(0.0, left - bounds.x0), anchor[1])
+                label.set_x(transform.inverted().transform(target)[0])
+                bounds = label.get_window_extent(renderer)
+                previous_right = bounds.x1
+            # This is display content, not an event date or an autoscale input.
+            self.right_extent_by_axis[axis] = float(
+                axis.transData.inverted().transform((previous_right + gap, axis.bbox.y0))[0]
+            )
+        self.stale = False
 
 # # ================================================================ #
 # # 6. Helper Functions                                                #
@@ -1589,6 +1645,9 @@ class StyleSettingsDialog(QDialog):
         self._dialog_base_minimum = QSize(560, 360)
         self._tab_fit_in_progress = False
         self._tab_fit_pending = False
+        self._tab_fit_timer = QTimer(self)
+        self._tab_fit_timer.setSingleShot(True)
+        self._tab_fit_timer.timeout.connect(self._apply_scheduled_tab_fit)
         self._last_tab_target_sizes: Dict[int, QSize] = {}
         self._branding_units_restore_size: Optional[QSize] = None
         
@@ -1630,12 +1689,18 @@ class StyleSettingsDialog(QDialog):
         
         self._init_ui()
         self._load_current_settings()
+        # Capture normalized UI values, not raw stored defaults. Merely
+        # opening/accepting any Conventions tab must not rewrite configuration.
+        self._opening_style_settings = copy.deepcopy(self.get_settings())
+        self._opening_identity_settings = self._identity_settings()
+        self._opening_role_rows = copy.deepcopy(self._role_rows_from_table(validate=False))
+        self._opening_preset_settings = self._prepared_preset_settings()
         install_dialog_geometry_guard(
             self,
             minimum=self._dialog_base_minimum,
         )
         self._on_conventions_tab_changed(self.tabs.currentIndex())
-        QTimer.singleShot(0, self._schedule_current_tab_fit)
+        self._schedule_current_tab_fit()
 
     def _steroid_track_active(self) -> bool:
         """Return whether Steroid_track is currently active in the parent app."""
@@ -2333,12 +2398,11 @@ class StyleSettingsDialog(QDialog):
         if self._tab_fit_pending:
             return
         self._tab_fit_pending = True
+        self._tab_fit_timer.start(0)
 
-        def apply_fit() -> None:
-            self._tab_fit_pending = False
-            self._fit_current_tab()
-
-        QTimer.singleShot(0, apply_fit)
+    def _apply_scheduled_tab_fit(self) -> None:
+        self._tab_fit_pending = False
+        self._fit_current_tab()
 
     def _on_institution_units_toggled(self, expanded: bool) -> None:
         """Refit the Conventions window around the expanded Institution editor."""
@@ -4030,6 +4094,35 @@ class StyleSettingsDialog(QDialog):
             parent=self,
         )
 
+    def _identity_settings(self):
+        if not hasattr(self, "_id_component_combos"):
+            return None
+        conventions = copy.deepcopy(getattr(self, "_identity_conventions", {}))
+        components = [str(combo.currentData() or "") for combo in self._id_component_combos
+                      if str(combo.currentData() or "")]
+        conventions["animal_id_components"] = components
+        conventions["animal_id_pattern"] = pattern_from_components(components)
+        conventions.pop("default_offspring_origin", None)
+        species = self._species_catalog_editor.values()
+        conventions["species"] = species
+        conventions["animal_origins"] = self._origin_catalog_editor.values()
+        conventions["genotypes"] = self._genotype_catalog_editor.values(species)
+        for key, edit in self._lifecycle_catalog_edits.items():
+            conventions[key] = edit.values()
+        return conventions
+
+    def _prepared_preset_settings(self):
+        return self._role_block_preset_registry.prepare_payload(
+            self._custom_role_block_presets,
+            experimental_blocks=self._custom_experimental_blocks,
+            event_definitions=[normalize_event_definition(item)
+                               for item in self._custom_experimental_blocks
+                               if isinstance(item, dict)],
+        )
+
+    def style_settings_changed(self):
+        return self.get_settings() != self._opening_style_settings
+
     def accept(self):
         identity_components = None
         if hasattr(self, "_id_component_combos"):
@@ -4066,6 +4159,10 @@ class StyleSettingsDialog(QDialog):
                         event_definitions=self._custom_event_definitions,
                     )
                 )
+                if (self._accepted_role_definitions == self._opening_role_rows
+                        and self._staged_role_block_preset_payload == self._opening_preset_settings):
+                    self._accepted_role_definitions = None
+                    self._staged_role_block_preset_payload = None
             except ValueError as exc:
                 QMessageBox.warning(
                     self,
@@ -4084,19 +4181,9 @@ class StyleSettingsDialog(QDialog):
                 )
                 return
         if hasattr(self, "_id_component_combos"):
-            conventions = dict(getattr(self, "_identity_conventions", {}))
-            conventions["animal_id_components"] = identity_components
-            conventions["animal_id_pattern"] = pattern_from_components(
-                identity_components or []
-            )
-            conventions.pop("default_offspring_origin", None)
-            species = self._species_catalog_editor.values()
-            conventions["species"] = species
-            conventions["animal_origins"] = self._origin_catalog_editor.values()
-            conventions["genotypes"] = self._genotype_catalog_editor.values(species)
-            for key, edit in self._lifecycle_catalog_edits.items():
-                conventions[key] = edit.values()
-            self.parent_app._save_identity_conventions(conventions)
+            conventions = self._identity_settings()
+            if conventions != self._opening_identity_settings:
+                self.parent_app._save_identity_conventions(conventions)
         if (
             hasattr(self, "_branding_editor")
             and bool(getattr(
@@ -4366,6 +4453,54 @@ class _ClickableLabel(QLabel):
         super().mousePressEvent(event)
 
 
+def _actor_backend_read_identity(app) -> tuple:
+    """Cheap identity guard for synchronous read projections, not authorization."""
+    master = getattr(app, "master_track", None)
+    return (
+        id(getattr(app, "backend", None)), id(master),
+        id(getattr(app, "authorization", None)),
+        getattr(master, "current_username", None),
+        getattr(master, "current_role", None),
+        "master_track" in getattr(app, "_disabled_plugins", set()),
+    )
+
+
+@contextmanager
+def _sidebar_read_snapshot(app):
+    """One fresh project scope per synchronous projection, never per row."""
+    previous = getattr(app, "_sidebar_read_context", None)
+    identity = _actor_backend_read_identity(app)
+    if previous is not None and previous[0] == identity:
+        yield
+        return
+    context = [identity, None, None]
+    app._sidebar_read_context = context
+    try:
+        scope = app._project_visibility_scope(fresh=True)
+        context[1] = (bool(scope[0]), frozenset(scope[1]))
+        yield
+    finally:
+        app._sidebar_read_context = previous
+
+
+def _with_sidebar_snapshot(method):
+    @functools.wraps(method)
+    def run(self, *args, **kwargs):
+        if getattr(self, "_ui_update_depth", 0):
+            return method(self, *args, **kwargs)
+        with _sidebar_read_snapshot(self):
+            return method(self, *args, **kwargs)
+    return run
+
+
+def _batched_ui_update(method):
+    @functools.wraps(method)
+    def run(self, *args, **kwargs):
+        with self._batch_ui_updates():
+            return method(self, *args, **kwargs)
+    return run
+
+
 class _IdleResetFilter(QtCore.QObject):
     """Event filter that resets Master_Track idle timer on user interaction."""
 
@@ -4387,6 +4522,90 @@ class _IdleResetFilter(QtCore.QObject):
 
 # # ================================================================ #
 class ProgTrackApp(QtWidgets.QMainWindow):
+    @contextmanager
+    def _batch_ui_updates(self):
+        """Apply state first, publish one final sidebar and active view."""
+        outermost = not getattr(self, "_ui_update_depth", 0)
+        blockers = []
+        tabs = getattr(self, "main_tabs", None)
+        previous_page = tabs.currentWidget() if tabs is not None else None
+        if outermost:
+            controls = {id(value): value for value in self.__dict__.values()
+                        if isinstance(value, (QtWidgets.QAbstractButton, QTabWidget, QTabBar))}
+            blockers = [QSignalBlocker(value) for value in controls.values()]
+        self._ui_update_depth = getattr(self, "_ui_update_depth", 0) + 1
+        try:
+            yield
+        finally:
+            self._ui_update_depth -= 1
+            if self._ui_update_depth == 0:
+                flags = self.__dict__.pop("_ui_update_flags", set())
+                if tabs is not None and tabs.currentWidget() is not previous_page:
+                    self._ui_update_depth = 1
+                    try:
+                        self._on_tab_changed(tabs.currentIndex())
+                    finally:
+                        self._ui_update_depth = 0
+                        flags.update(self.__dict__.pop("_ui_update_flags", set()))
+                for blocker in reversed(blockers):
+                    blocker.unblock()
+                if flags:
+                    with _sidebar_read_snapshot(self):
+                        tab = getattr(self, "category_tab", None)
+                        blocker = QSignalBlocker(tab) if tab is not None else None
+                        try:
+                            if "rebuild" in flags:
+                                self._rebuild_category_tabs()
+                            elif "count" in flags:
+                                self._update_category_tab_visibility()
+                            # Reconnect category-specific controls without
+                            # publishing an intermediate list/view.
+                            if tab is not None and "category" in flags:
+                                self._ui_update_depth = 1
+                                try:
+                                    self._on_category_selected(tab.currentIndex())
+                                finally:
+                                    self._ui_update_depth = 0
+                                    flags.update(self.__dict__.pop("_ui_update_flags", set()))
+                        finally:
+                            if blocker is not None:
+                                blocker.unblock()
+                        if flags & {"list", "rebuild", "count"}:
+                            self._refresh_list(force_heritage_visible="heritage" in flags)
+                        if "select" in flags:
+                            self._on_select()
+                        elif "plot" in flags:
+                            self._plot_selected()
+
+    def _defer_ui_update(self, *flags):
+        if not getattr(self, "_ui_update_depth", 0):
+            return False
+        self.__dict__.setdefault("_ui_update_flags", set()).update(flags)
+        return True
+
+    def _queue_view_update(self, key, callback):
+        updates = getattr(self, "_after_dialog_updates", None)
+        if updates is None:
+            updates = self._after_dialog_updates = AfterDialogUpdates(
+                self, lambda: (_actor_backend_read_identity(self),
+                               getattr(self, "_view_session_epoch", 0)))
+        updates.schedule(key, callback)
+
+    def _invalidate_pending_view_updates(self):
+        self._view_session_epoch = getattr(self, "_view_session_epoch", 0) + 1
+        updates = getattr(self, "_after_dialog_updates", None)
+        if updates is not None:
+            updates.cancel()
+
+    def _prepare_actor_transition(self):
+        """Clear outgoing sensitive state before Master changes its identity."""
+        self._invalidate_pending_view_updates()
+        if any(hasattr(self, name) for name in
+               ("report_save_timer", "report_table", "report_current_animal")):
+            self._prepare_reports_for_user_context_change()
+        if getattr(self, "lst", None) is not None:
+            self._clear_session_animal_selection()
+
     # Declarative ownership for Plot visibility controls.  Applicability is
     # role based and uses the existing role-block/data gates below; saved
     # booleans remain keyed by these stable semantic names.
@@ -5453,20 +5672,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """
         if not isinstance(record, Mapping):
             return False
-        owner = ""
-        for field in (
-            "organization_unit_id",
-            "organizational_unit_id",
-            "workgroup_id",
-        ):
-            value = str(record.get(field, "") or "").strip()
-            if value:
-                owner = value
-                break
+        owner = organizational_owner_id(record)
         if not owner:
             return True
         authorization = getattr(self, "authorization", None)
-        if authorization is None or bool(getattr(authorization, "trusted_local", False)):
+        if authorization is None:
+            return (
+                getattr(self, "master_track", None) is None
+                or "master_track" in getattr(self, "_disabled_plugins", set())
+            )
+        if bool(getattr(authorization, "trusted_local", False)):
             return True
         checker = getattr(authorization, "can_read_unit", None)
         if callable(checker):
@@ -5734,6 +5949,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not events_visible and getattr(annotation, '_progtrack_event_tooltip', False):
             annotation.remove()
             self._annotation = None
+        highlight_point = self.__dict__.get('_highlight_point')
+        if highlight_point and not highlight_point[-1].get_visible():
+            highlight = self.__dict__.get('_highlight_scatter')
+            if highlight is not None:
+                highlight.remove()
+            self._highlight_point = self._highlight_scatter = None
         # The mode helper owns which progesterone sub-mode is active, but
         # role applicability is owned here.  This prevents a stale blood/PdG
         # artist from surviving a role switch to a role without progesterone.
@@ -5870,6 +6091,36 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return None
         return point
 
+    @staticmethod
+    def _plot_marker_highlight(artist, day, value, *, fallback_marker='o'):
+        """Enlarge the rendered marker, never guess its shape from event type."""
+        axis = artist.axes
+        if isinstance(artist, PathCollection):
+            paths, offsets, sizes = artist.get_paths(), artist.get_offsets(), artist.get_sizes()
+            if not paths or not len(offsets):
+                return None
+            highlight = PathCollection(
+                [paths[0]], sizes=[max(80.0, float(sizes[0]) * 2.25) if len(sizes) else 80.0],
+                offsets=[offsets[0]], offset_transform=artist.get_offset_transform(),
+                facecolors='yellow', edgecolors='black', linewidths=1,
+                alpha=0.9, zorder=9999, transform=artist.get_transform(),
+                clip_on=artist.get_clip_on(),
+            )
+            axis.add_collection(highlight, autolim=False)
+            highlight.set_clip_box(artist.get_clip_box())
+            highlight.set_clip_path(artist.get_clip_path())
+            return highlight
+        marker = artist.get_marker()
+        if marker is None or isinstance(marker, str) and marker in ('None', '', ' '):
+            marker = fallback_marker
+        return axis.scatter(
+            [mdates.date2num(day)], [value], marker=marker,
+            s=max(80.0, float(artist.get_markersize()) ** 2 * 2.25),
+            facecolors='yellow', edgecolors='black', alpha=0.9,
+            zorder=9999, transform=artist.get_transform(),
+            clip_on=artist.get_clip_on(),
+        )
+
     def _plot_event_tooltip_contexts(self, animal_data, entries, *, scoped, active_period):
         """Build immutable, chronological event projections; do not write records.
 
@@ -5995,6 +6246,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if event_context is not None:
             label, count, maximum, historical, _period, _role = event_context
             usage = str(count) if maximum is None else f"{count}/{maximum}"
+            if extra.get('compact_event'):
+                text = f"{date_str} - {label}({usage})"
+                if historical:
+                    context = [self.messages.get('plot.event.historical', 'historical')]
+                    if _period:
+                        period = (self.messages.get('plot.tooltip.unassigned_period', 'unassigned')
+                                  if _period == 'unassigned' else _period)
+                        context.append(f"{self.messages.get('plot.tooltip.event_period', 'Period')}: {period}")
+                    if _role:
+                        context.append(f"{self.messages.get('plot.tooltip.recorded_role', 'Recorded role')}: {_role}")
+                    text += '\n' + '\n'.join(context)
+                return text
             history = (f" ({self.messages.get('plot.event.historical', 'historical')})"
                        if historical else '')
             return f"{date_label}: {date_str}\n{label} ({usage}){history}"
@@ -6086,6 +6349,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         defaults = self._get_default_style_settings()
         source = settings if isinstance(settings, dict) else {}
         normalized = dict(defaults)
+        # Defaults must use the same representation as supplied colours;
+        # otherwise the first two logins each rewrite an unchanged snapshot.
+        for key, value in defaults.items():
+            if key.endswith("_color") and QColor(str(value)).isValid():
+                normalized[key] = QColor(str(value)).name()
         valid_markers = {
             "o", "s", "^", "v", "D", "*", "P", "X", "+", "x", ".", "<", ">"
         }
@@ -6666,6 +6934,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self._init_all_plugins_deferred(step)
                 QtWidgets.QApplication.processEvents()
             self._plugins_loaded = True
+
+        # The initial settings load precedes Master Track authentication.
+        # Bind the effective style to the resulting user/Guest before UI
+        # construction or queued first plots; Conventions is not a loader.
+        self._apply_style_settings(self._load_user_style_settings())
 
         # ------------------------
         # 7.1 Menu Bar Setup
@@ -7689,11 +7962,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------
     def _show_message_raw(
         self, title: str, message: str, msg_type: str = "warning",
-        buttons: Optional[QMessageBox.StandardButton] = None
+        buttons: Optional[QMessageBox.StandardButton] = None,
+        *, plain_text: bool = False,
     ) -> int:
         """Display a message box with specified title, message, and custom icon."""
         msg = QMessageBox(self)
         msg.setWindowTitle(title)
+        if plain_text:
+            msg.setTextFormat(Qt.TextFormat.PlainText)
         msg.setText(message)
         msg.setIcon(QMessageBox.Icon.NoIcon)
         # core uses keys like "warning", "info", "question", "error", "deletion"
@@ -8528,12 +8804,24 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             raise ValueError(unavailable)
         return records
 
-    def _core_parent_candidate_visible(self, record: Mapping[str, Any]) -> bool:
+    def _core_parent_candidate_visible(
+        self, record: Mapping[str, Any], *,
+        project_scope: Optional[tuple[bool, frozenset[str]]] = None,
+        unit_visibility: Optional[Dict[str, bool]] = None,
+    ) -> bool:
         """Apply project and organizational-Unit visibility to one candidate."""
         project_checker = getattr(self, "_animal_visible_to_current_user", None)
-        if callable(project_checker):
+        if project_scope is not None:
+            if not animal_visible_by_project_scope(record, *project_scope):
+                return False
+        elif callable(project_checker):
             try:
-                if not bool(project_checker(record)):
+                # Command-time checks never reuse the dialog's read snapshot
+                # or a potentially stale session association cache.
+                scope_loader = getattr(self, "_project_visibility_scope", None)
+                allowed = (animal_visible_by_project_scope(record, *scope_loader(fresh=True))
+                           if callable(scope_loader) else bool(project_checker(record)))
+                if not allowed:
                     return False
             except Exception:
                 logging.getLogger(__name__).warning(
@@ -8544,7 +8832,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         unit_checker = getattr(self, "_record_in_unit_scope", None)
         if callable(unit_checker):
             try:
-                if not bool(unit_checker(record)):
+                owner = organizational_owner_id(record)
+                if unit_visibility is not None and owner:
+                    if owner not in unit_visibility:
+                        unit_visibility[owner] = bool(unit_checker(record))
+                    allowed = unit_visibility[owner]
+                else:
+                    allowed = bool(unit_checker(record))
+                if not allowed:
                     return False
             except Exception:
                 logging.getLogger(__name__).warning(
@@ -8554,14 +8849,34 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return False
         return True
 
-    def _core_parentage_records(self) -> Dict[str, Dict[str, Any]]:
+    def _core_parentage_records(
+        self, *, snapshot_records: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
         """Return the Core-owned animal identity view used by parent pickers.
 
         Parentage is Core data.  This helper deliberately reads active and
         archived Core animals only; Heritage-owned dummies are never silently
         offered as Core parents.
         """
-        records = self._load_core_parentage_records()
+        read_identity = _actor_backend_read_identity(self)
+        records = (snapshot_records if snapshot_records is not None
+                   else self._load_core_parentage_records())
+
+        # This is a synchronous read operation, not a session/global cache.
+        # Recompute from current permissions/associations on EVERY open rather
+        # than trusting the session's project-visibility cache. No context is
+        # retained across the modal interaction or reused by a Save command.
+        project_scope = None
+        scope_loader = getattr(self, "_project_visibility_scope", None)
+        if callable(scope_loader):
+            try:
+                unrestricted, projects = scope_loader(fresh=True)
+                project_scope = bool(unrestricted), frozenset(projects)
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "Could not acquire parent-candidate project visibility", exc_info=True)
+                return {}
+        unit_visibility: Dict[str, bool] = {}
 
         # Parent candidates must obey the same project and organizational-Unit
         # visibility policy as the rest of the Core UI.  Filtering here (at
@@ -8569,14 +8884,23 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # searchable combo before the commit-time validator rejects it.
         visible: Dict[str, Dict[str, Any]] = {}
         for key, value in records.items():
-            if self._core_parent_candidate_visible(value):
+            if self._core_parent_candidate_visible(
+                value, project_scope=project_scope, unit_visibility=unit_visibility,
+            ):
                 visible[key] = value
+        if _actor_backend_read_identity(self) != read_identity:
+            # Do not publish a mixed actor/backend projection if a service
+            # callback changed the context during synchronous construction.
+            return {}
         records = visible
         return records
 
-    def _core_parentage_revision(self) -> str:
+    def _core_parentage_revision(
+        self, *, snapshot_records: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> str:
         """Return a stable snapshot token for the Core parentage projection."""
-        snapshot_records = self._load_core_parentage_records(required=True)
+        if snapshot_records is None:
+            snapshot_records = self._load_core_parentage_records(required=True)
         records: Dict[str, Any] = {}
         # The token protects both parentage and the candidate/visibility
         # catalogue used to validate it.  Include identity, lifecycle,
@@ -8600,10 +8924,29 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         species_widget: Optional[QComboBox] = None,
         strict_species: bool = False,
         lock_committed: bool = False,
+        dialog: Optional[QDialog] = None,
     ) -> Tuple[QGroupBox, Dict[str, AnimalRelationshipCombo]]:
         """Build Core-owned, searchable parent selectors independent of Heritage."""
+        read_identity = _actor_backend_read_identity(self)
         source = record if isinstance(record, Mapping) else {}
-        records = self._core_parentage_records()
+        # The revision and picker directory must describe the SAME opening
+        # snapshot. Consume it once; do not leave an unfiltered directory on
+        # the dialog or reuse it for command-time validation.
+        snapshot_records = None
+        if dialog is not None:
+            snapshot_records = dialog.__dict__.pop("_core_parentage_snapshot", None)
+            identity = dialog.__dict__.pop("_core_parentage_snapshot_identity", None)
+            if identity is not None and identity != _actor_backend_read_identity(self):
+                raise ValueError(self.messages.get(
+                    "heritage_track.error.parentage_backend_unavailable",
+                    "Core parentage data is unavailable. Reload and try again."))
+        records = self._core_parentage_records(snapshot_records=snapshot_records)
+        if read_identity != _actor_backend_read_identity(self):
+            # Even retained committed references belong to the opening actor;
+            # an empty candidate result alone cannot protect those fallbacks.
+            raise ValueError(self.messages.get(
+                "heritage_track.error.parentage_backend_unavailable",
+                "Core parentage data is unavailable. Reload and try again."))
         target_key = str(animal_name or "").strip()
         normalize_species_value = getattr(self, "_normalize_species_value", None)
         if not callable(normalize_species_value):
@@ -9056,7 +9399,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Attach identity and Core parentage snapshot metadata."""
         dlg.setProperty("animal_dialog_role", str(role or "").strip())
         dlg.setProperty("animal_dialog_mode", "edit" if editing else "new")
-        dlg.setProperty("core_parentage_revision", self._core_parentage_revision())
+        read_identity = _actor_backend_read_identity(self)
+        snapshot_records = self._load_core_parentage_records(required=True)
+        dlg.setProperty("core_parentage_revision", self._core_parentage_revision(
+            snapshot_records=snapshot_records))
+        dlg._core_parentage_snapshot = snapshot_records
+        dlg._core_parentage_snapshot_identity = read_identity
+        dlg._core_parentage_read_identity = read_identity
 
     def _heritage_parentage_ui_available(self) -> bool:
         """Return whether Core pedigree controls may be shown.
@@ -9492,6 +9841,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             category_tab.update()
 
     def _rebuild_category_tabs(self) -> None:
+        if self._defer_ui_update("rebuild", "list", "category"):
+            return
         tab = getattr(self, "category_tab", None)
         if tab is None:
             return
@@ -9501,7 +9852,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             previous_idx, getattr(self, "_category_custom_role_values", [])
         )
         categories, custom_values = self._category_tab_categories()
-        tab.blockSignals(True)
+        previously_blocked = tab.blockSignals(True)
         while tab.count():
             tab.removeTab(0)
         built_in_values = (
@@ -9551,13 +9902,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if self._category_descriptor_for_index(candidate, custom_values) == previous_descriptor:
                 target_idx = candidate
                 break
-        tab.setCurrentIndex(min(max(target_idx, 0), max(tab.count() - 1, 0)))
         if hasattr(self, 'animals'):
             self._update_category_tab_visibility()
+        # Do not scroll the restored selection past an empty, long-label role
+        # before hiding it: QTabBar can retain that transient scroll offset.
+        if tab.isTabVisible(target_idx):
+            tab.setCurrentIndex(target_idx)
         restored_idx = tab.currentIndex()
-        tab.blockSignals(False)
+        tab.blockSignals(previously_blocked)
         self._sync_heritage_category_tab_state()
-        if restored_idx != previous_idx and tab.currentIndex() == restored_idx:
+        if not previously_blocked and restored_idx != previous_idx and tab.currentIndex() == restored_idx:
             tab.currentChanged.emit(tab.currentIndex())
 
     def _build_sidebar(self) -> QVBoxLayout:
@@ -9925,8 +10279,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._refresh_list()
         self._apply_master_button_states()
 
+    @_with_sidebar_snapshot
     def _update_category_tab_visibility(self) -> None:
         """Hide category tabs that currently have no animals; keep All tab visible."""
+        if self._defer_ui_update("count", "list"):
+            return
         if not hasattr(self, 'category_tab') or self.category_tab is None:
             return
 
@@ -11508,11 +11865,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             species_widget.textChanged.connect(rebuild)
 
     def _load_project_records_for_visibility(self) -> Dict[str, Dict[str, Any]]:
+        context = getattr(self, "_sidebar_read_context", None)
+        if context is not None and context[0] == _actor_backend_read_identity(self) and context[2] is not None:
+            return context[2]
         data = self.backend.records.get("projects", "catalog", default={})
         projects = data.get("projects", {}) if isinstance(data, dict) else {}
-        return {str(k): v for k, v in projects.items() if isinstance(v, dict)}
+        records = {str(k): v for k, v in projects.items() if isinstance(v, dict)}
+        if context is not None and context[0] == _actor_backend_read_identity(self):
+            context[2] = records
+        return records
 
-    def _project_visibility_scope(self) -> tuple[bool, set[str]]:
+    def _project_visibility_scope(self, *, fresh: bool = False) -> tuple[bool, set[str]]:
+        context = getattr(self, "_sidebar_read_context", None)
+        if context is not None and context[1] is not None and context[0] == _actor_backend_read_identity(self):
+            return context[1][0], set(context[1][1])
         mt = getattr(self, 'master_track', None)
         mt_disabled = "master_track" in getattr(self, '_disabled_plugins', set())
         if mt is None or mt_disabled:
@@ -11523,6 +11889,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         can_view_all = mt.can("project.view_all") if hasattr(mt, 'can') else False
         if can_view_all or is_unrestricted_project_role(role):
             return True, set(self._load_project_names())
+
+        if fresh:
+            # Read-only operation snapshot: bypass potentially stale session
+            # associations without writing session data while opening a picker.
+            return visible_projects_for_user(
+                self._load_project_records_for_visibility(), username, role,
+                can_view_all_projects=can_view_all,
+            )
 
         cache = mt.get_project_visibility_cache() if hasattr(mt, 'get_project_visibility_cache') else {"dirty": True}
         cached_projects = set(cache.get("projects") or [])
@@ -11871,6 +12245,27 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return definition
         return None
 
+    @staticmethod
+    def _custom_event_applies_to_blocks(definition, blocks) -> bool:
+        """An active global definition grants a quota only through a role block."""
+        block_id = str(definition.get("block_id") or definition.get("limit_block") or "").strip()
+        event_type = str(definition.get("event_type") or "").strip()
+        return bool(definition.get("active", True)) and (
+            block_id in blocks or event_type in blocks
+        )
+
+    @staticmethod
+    def _custom_event_maximum(definition, animal_data):
+        """Resolve one applicable quota, preserving an explicit numeric zero."""
+        block_id = str(definition.get("block_id") or definition.get("limit_block")
+                       or definition.get("max_field") or "").strip()
+        limits = animal_data.get("experimental_limits", {})
+        maximum = limits.get(block_id) if isinstance(limits, dict) else None
+        if maximum is None:
+            field = str(definition.get("max_field") or definition.get("limit_block") or "").strip()
+            maximum = animal_data.get(field) if field else None
+        return definition.get("default_maximum") if maximum is None else maximum
+
     def _active_custom_event_definitions_for_role(
         self, role_value: str, mode: str = "edit"
     ) -> List[Dict[str, Any]]:
@@ -11879,9 +12274,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return []
         definitions = []
         for definition in self._custom_event_definitions(include_retired=False):
-            block_id = str(definition.get("block_id") or definition.get("limit_block") or "")
-            event_type = str(definition.get("event_type") or "")
-            if block_id in blocks or event_type in blocks:
+            if self._custom_event_applies_to_blocks(definition, blocks):
                 definitions.append(definition)
         return definitions
 
@@ -11893,9 +12286,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 values.add(value)
         return values
 
-    def _custom_event_appearance(self, event_type: str) -> Dict[str, Any]:
+    def _custom_event_appearance(self, event_type: str, *, definition=None) -> Dict[str, Any]:
         event_type = str(event_type or "").strip()
-        definition = self._custom_event_definition_for_type(event_type) or {}
+        if definition is None:
+            definition = self._custom_event_definition_for_type(event_type) or {}
         active_definition = (
             definition if bool(definition.get("active", True)) else None
         )
@@ -11924,9 +12318,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             "configured": bool(event_type in EVENT_STYLE_METADATA or active_definition),
         }
 
-    def _custom_event_snapshot(self, event_type: str) -> Dict[str, Any]:
-        definition = self._custom_event_definition_for_type(event_type) or {}
-        appearance = self._custom_event_appearance(event_type)
+    def _custom_event_snapshot(self, event_type: str, *, definition=None) -> Dict[str, Any]:
+        if definition is None:
+            definition = self._custom_event_definition_for_type(event_type) or {}
+        appearance = self._custom_event_appearance(event_type, definition=definition)
         return {
             "id": str(definition.get("id") or event_type),
             "stable_id": str(definition.get("stable_id") or ""),
@@ -11980,65 +12375,133 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 )
         return violations
 
-    def _custom_event_limit_additions_allowed(
-        self, previous: Dict[str, Any], candidate: Dict[str, Any]
-    ) -> List[str]:
-        previous_role = self._animal_role_value(previous)
-        candidate_role = self._animal_role_value(candidate)
-        previous_events = self._events_recorded_in_role(previous, previous_role)
-        candidate_events = []
-        previous_ids = {
-            str(event.get("event_id") or "")
-            for event in (previous.get("events", []) if isinstance(previous, dict) else [])
-            if isinstance(event, dict) and event.get("event_id")
-        }
-        for event in (candidate.get("events", []) if isinstance(candidate, dict) else []):
+    def _event_save_projection(self, previous, candidate):
+        """Preview the existing period/role policy without mutating saved state."""
+        before, after = copy.deepcopy(previous), copy.deepcopy(candidate)
+        ensure_project_periods(before)
+        prior = {str(e.get("event_id")): e for e in before.get("events", [])
+                 if isinstance(e, dict) and e.get("event_id")}
+        role = self._animal_role_value(after)
+        synchronize_experimental_limits(after, role, prefer_flat=True, prune_unsupported=True)
+        additions = []
+        for event in after.get("events", []):
             if not isinstance(event, dict):
                 continue
-            # Legacy carried-forward rows without an explicit role belong to
-            # the prior role; unpersisted rows belong to the role being saved.
-            fallback_role = (
-                previous_role
-                if str(event.get("event_id") or "") in previous_ids
-                else candidate_role
-            )
-            if event_matches_recording_role(
-                event, candidate_role, fallback_role=fallback_role
-            ):
-                candidate_events.append(event)
-        violations = []
-        for block in self._custom_experimental_block_definitions(include_retired=False):
-            if str(block.get("kind") or "limiting") != "limiting":
+            original = prior.get(str(event.get("event_id") or ""))
+            if original is None:
+                additions.append(event)
+            else:
+                for key in ("project_period_id", "project_period_project",
+                            "project_period_start", "project_period_end"):
+                    if key in original:
+                        event.setdefault(key, original[key])
+            event.setdefault("recorded_role", self._animal_role_value(before) if original else role)
+        old_project = str(before.get("project") or "").strip()
+        new_project = str(after.get("project") or "").strip()
+        if old_project != new_project:
+            # Match _log_project_change's record-local period identity, but do
+            # not call its Medi/audit/UI side effects for an unaccepted save.
+            today = datetime.now().strftime(DATE_FORMAT)
+            history = copy.deepcopy(before.get("project_history") or [])
+            if old_project:
+                history.append({"project": old_project,
+                    "entry_date": before.get("project_entry_date", ""),
+                    "leave_date": today, "period_id": current_period_id(before)})
+            after["project_history"] = history
+            after.pop("project_period_id", None)
+            if new_project:
+                after["project_entry_date"] = today
+                after["project_period_id"] = make_project_period_id(new_project, today, "", len(history))
+        ensure_project_periods(after)
+        return before, after, additions
+
+    def _event_save_limit_overruns(
+        self, previous: Dict[str, Any], candidate: Dict[str, Any]
+    ) -> List[Tuple[str, int, int]]:
+        before, after, additions = self._event_save_projection(previous, candidate)
+        if not additions:
+            return []
+        role = self._animal_role_value(after)
+        scoped = self._events_in_current_project_period(after, role)
+        added_ids = {id(e) for e in additions}
+        types = {str(e.get("event_type") or "").strip().casefold()
+                 for e in scoped if id(e) in added_ids}
+        old_events = self._events_recorded_in_role(before, role)
+        if has_project_context(after):
+            active = current_period_id(after)
+            old_events = [e for e in old_events if str(e.get("project_period_id") or "") == active]
+        violations, checked = [], set()
+        definitions = self._active_custom_event_definitions_for_role(role)
+        for event_type in sorted(types):
+            definition = self._custom_event_definition_for_type(event_type)
+            if not definition and not GLOBAL_EVENT_CATALOG.get(event_type, {}).get("limit_block"):
                 continue
-            block_id = str(block.get("id") or block.get("stable_id") or "")
-            event_ids = {str(block.get("event_type") or "")}
-            for definition in self._custom_event_definitions(include_retired=True):
-                if str(definition.get("block_id") or definition.get("limit_block") or "") == block_id:
-                    event_type = str(definition.get("event_type") or "").strip()
-                    if event_type:
-                        event_ids.add(event_type)
-            old_count = sum(
-                1 for event in previous_events
-                if isinstance(event, dict) and str(event.get("event_type") or "") in event_ids
-            )
-            new_count = sum(
-                1 for event in candidate_events
-                if isinstance(event, dict) and str(event.get("event_type") or "") in event_ids
-            )
-            if new_count <= old_count:
+            group = {event_type}
+            if definition:
+                block_id = definition.get("block_id") or definition.get("limit_block")
+                if block_id:
+                    group.update(str(d.get("event_type") or "").strip().casefold()
+                        for d in definitions if (d.get("block_id") or d.get("limit_block")) == block_id
+                        and str(d.get("kind") or "limiting").casefold() == "limiting")
+            key = frozenset(group)
+            if key in checked:
                 continue
-            limits = candidate.get("experimental_limits", {})
-            maximum = limits.get(block_id) if isinstance(limits, dict) else None
-            if maximum is None:
-                field = str(block.get("max_field") or "")
-                maximum = candidate.get(field) if field else block.get("default_maximum", 0)
-            try:
-                maximum = int(maximum)
-            except (TypeError, ValueError):
-                maximum = 0
-            if new_count > maximum:
-                violations.append(f"{block.get('name') or block_id}: {new_count}/{maximum}")
+            checked.add(key)
+            maximum = self._get_report_event_max(event_type, after)
+            if (not isinstance(maximum, (int, float)) or isinstance(maximum, bool)
+                    or not math.isfinite(maximum) or maximum < 0):
+                continue
+            def count(events):
+                return sum(str(e.get("event_type") or "").strip().casefold() in group
+                           for e in events)
+            prospective = count(scoped)
+            if prospective > maximum and prospective > count(old_events):
+                labels = []
+                for token in sorted(group):
+                    item = self._custom_event_definition_for_type(token) or {}
+                    label = self._get_report_event_label(token, self.messages)
+                    labels.append(self.messages.get(item.get("label_key"), label))
+                label = ", ".join(labels)
+                violations.append((label, maximum, prospective))
         return violations
+
+    def _confirm_new_animal_events(self, previous, candidate) -> bool:
+        """Only the two specified warnings are overridable; no writes here."""
+        _before, _after, additions = self._event_save_projection(previous, candidate)
+        if not additions:
+            return True
+        title = self.messages["confirm.event_save.title"]
+        buttons = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        if not bool(candidate.get("in_experiment", False)):
+            message = self.messages["confirm.event_save.outside_experiment"].format(count=len(additions))
+            if self._show_message_raw(title, message, "question", buttons=buttons,
+                                      plain_text=True) != QMessageBox.StandardButton.Yes:
+                return False
+        violations = self._event_save_limit_overruns(previous, candidate)
+        if violations:
+            details = "\n".join(self.messages["confirm.event_save.limit_item"].format(
+                event=label, maximum=format_measurement(maximum), count=count)
+                for label, maximum, count in violations)
+            message = self.messages["confirm.event_save.over_limits"].format(details=details)
+            if self._show_message_raw(title, message, "question", buttons=buttons,
+                                      plain_text=True) != QMessageBox.StandardButton.Yes:
+                return False
+        return True
+
+    def _connect_event_save_button(self, button, dialog, callback):
+        """Guard the entire attempt, including nested modal events/double clicks."""
+        def save_once():
+            if dialog.property("event_save_running"):
+                return
+            dialog.setProperty("event_save_running", True)
+            button.setEnabled(False)
+            try:
+                callback()
+            finally:
+                if dialog.result() != QDialog.DialogCode.Accepted:
+                    dialog.setProperty("event_save_running", False)
+                    button.setEnabled(True)
+        button.clicked.connect(save_once)
 
     def _role_block_enabled(self, role_value: str, block_id: str, mode: str = "edit") -> bool:
         if block_id in REQUIRED_DIALOG_BLOCKS:
@@ -13489,10 +13952,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return
 
         def _run_post_save_updates():
-            if QApplication.activeModalWidget() is not None:
-                self._save_trace("post_animal_project_updates.run.modal_wait", animal_name=animal_name)
-                QTimer.singleShot(250, _run_post_save_updates)
-                return
             try:
                 self._save_trace("post_animal_project_updates.run.enter", animal_name=animal_name)
                 logging.info(
@@ -13535,13 +13994,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             except Exception:
                 self._save_trace("post_animal_project_updates.run.exception", animal_name=animal_name)
                 logging.exception("Post-save project updates failed for %s", animal_name)
+                raise
 
-        self._save_trace("post_animal_project_updates.timer.before", animal_name=animal_name)
-        QTimer.singleShot(250, _run_post_save_updates)
-        self._save_trace("post_animal_project_updates.timer.after", animal_name=animal_name)
+        # Required domain history runs after commit under the saving actor.
+        self.__dict__.setdefault("_pending_project_save_updates", []).append(
+            (_actor_backend_read_identity(self), _run_post_save_updates))
 
     def _save_trace(self, step: str, **fields: Any) -> None:
-        """Write crash-resistant save diagnostics with immediate flush/fsync."""
+        """Opt-in technical diagnostics; mandatory clinical audit is separate."""
+        if os.environ.get("PROGTRACK_SAVE_TRACE", "").strip().lower() not in {"1", "true", "yes"}:
+            return
         try:
             LOG_DIR.mkdir(parents=True, exist_ok=True)
             safe_fields = []
@@ -13563,7 +14025,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             with open(path, "a", encoding="utf-8") as trace_file:
                 trace_file.write(line + "\n")
                 trace_file.flush()
-                os.fsync(trace_file.fileno())
+                if os.environ.get("PROGTRACK_SAVE_TRACE_FSYNC", "") == "1":
+                    os.fsync(trace_file.fileno())
             logging.info("SAVE_TRACE %s %s", step, " ".join(safe_fields))
         except Exception:
             pass
@@ -13939,15 +14402,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if typ_lower == 'progesterone':
             return self._experimental_limit_value(animal_data, 'max_messungen', '?')
         custom = self._custom_event_definition_for_type(typ_lower)
-        if custom and str(custom.get("kind") or "limiting") == "limiting":
-            block_id = str(custom.get("block_id") or custom.get("limit_block") or "")
-            limits = animal_data.get("experimental_limits", {})
-            if isinstance(limits, dict) and block_id in limits:
-                return limits.get(block_id)
-            field = str(custom.get("max_field") or custom.get("limit_block") or "")
-            if field:
-                return animal_data.get(field, custom.get("default_maximum", "?"))
-            return custom.get("default_maximum", "?")
+        if custom and str(custom.get("kind") or "limiting").casefold() == "limiting":
+            blocks = set(self._role_dialog_blocks(self._animal_role_value(animal_data), "edit"))
+            if self._custom_event_applies_to_blocks(custom, blocks):
+                return self._custom_event_maximum(custom, animal_data)
         return None
     
     def _get_reproduction_status(self, animal_data: Dict[str, Any], date: datetime.date) -> str:
@@ -13993,12 +14451,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Return statistics for dynamic event/limit blocks stored in the backend."""
         if not isinstance(animal_data, dict):
             return []
+        definitions = self._custom_event_definitions(include_retired=True)
+        if not definitions:
+            return []
         events = self._events_in_current_project_period(animal_data)
-        limits = animal_data.get("experimental_limits", {})
-        if not isinstance(limits, dict):
-            limits = {}
+        blocks = set(self._role_dialog_blocks(self._animal_role_value(animal_data), "edit"))
         result: List[str] = []
-        for definition in self._custom_event_definitions(include_retired=True):
+        for definition in definitions:
             event_type = str(definition.get("event_type") or "").strip()
             identifiers = {event_type.casefold()} if event_type else set()
             if not identifiers:
@@ -14010,34 +14469,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if raw in identifiers or normalized.casefold() in identifiers:
                     count += 1
 
-            block_id = str(
-                definition.get("block_id")
-                or definition.get("limit_block")
-                or definition.get("max_field")
-                or ""
-            ).strip()
-            maximum = limits.get(block_id) if block_id else None
-            if maximum is None:
-                field = str(
-                    definition.get("max_field")
-                    or definition.get("limit_block")
-                    or ""
-                ).strip()
-                if field:
-                    maximum = animal_data.get(field)
+            applicable = self._custom_event_applies_to_blocks(definition, blocks)
             kind = str(definition.get("kind") or "limiting").casefold()
-            if maximum is None and kind == "limiting":
-                maximum = definition.get("default_maximum")
+            maximum = (self._custom_event_maximum(definition, animal_data)
+                       if applicable and kind == "limiting" else None)
             if count == 0 and maximum is None:
                 continue
             label = str(
                 definition.get("name")
                 or definition.get("label")
                 or event_type
-                or block_id
                 or "Custom event"
             )
-            if kind == "limiting":
+            if applicable and kind == "limiting":
                 suffix = "?" if maximum is None else str(maximum)
                 result.append(f"{label}: {count}/{suffix}")
             else:
@@ -15140,8 +15584,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             callback()
         return True
 
+    @_with_sidebar_snapshot
     def _refresh_list(self, update_tab_visibility: bool = False, force_heritage_visible: bool = False) -> None:
         """Publish a sidebar rebuild without intermediate deselection callbacks."""
+        flags = {"list"}
+        if update_tab_visibility:
+            flags.update(("rebuild", "category"))
+        if force_heritage_visible:
+            flags.add("heritage")
+        if self._defer_ui_update(*flags):
+            return
         if not hasattr(self, 'lst') or self.lst is None:
             return
         with QSignalBlocker(self.lst):
@@ -15162,15 +15614,22 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Only update tab visibility when explicitly requested (e.g. after add/edit/delete)
             # This is expensive as it iterates over all animals
             if update_tab_visibility:
-                before_descriptor = self._category_descriptor_for_index(
-                    self.category_tab.currentIndex(),
-                    getattr(self, "_category_custom_role_values", []),
-                )
-                self._rebuild_category_tabs()
-                before_idx = self.category_tab.currentIndex()
-                self._update_category_tab_visibility()
-                if self.category_tab.currentIndex() != before_idx:
-                    return
+                # The rebuild already performs the one visibility count.
+                # Block its category signal until this projection is complete.
+                previous_index = self.category_tab.currentIndex()
+                previous_descriptor = self._category_descriptor_for_index(previous_index)
+                with QSignalBlocker(self.category_tab):
+                    self._rebuild_category_tabs()
+                if (self.category_tab.currentIndex() != previous_index or
+                        self._category_descriptor_for_index(self.category_tab.currentIndex()) != previous_descriptor):
+                    # Rewire the final category's controls, but this method
+                    # already owns its single row projection below.
+                    self._ui_update_depth = 1
+                    try:
+                        self._on_category_selected(self.category_tab.currentIndex())
+                    finally:
+                        self._ui_update_depth = 0
+                        self.__dict__.pop("_ui_update_flags", None)
         
         # Canonical application selection is the source of truth.  The
         # currently selected rows are only the visible part of that state and
@@ -15702,6 +16161,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _exec_animal_editor_dialog(self, dlg) -> bool:
         """Run an editor and finalize its selection/plot only after it closes."""
+        # A layout without parent controls must not carry the unfiltered
+        # construction snapshot into its modal lifetime either.
+        dlg.__dict__.pop("_core_parentage_snapshot", None)
+        dlg.__dict__.pop("_core_parentage_snapshot_identity", None)
+        read_identity = dlg.__dict__.pop("_core_parentage_read_identity", None)
+        if read_identity is not None and read_identity != _actor_backend_read_identity(self):
+            dlg.reject()
+            return False
         dlg.exec()
         saved_identity = getattr(
             dlg, "_progtrack_successful_animal_edit", None
@@ -15839,6 +16306,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _on_select(self) -> None:
         """Handle list selection changes: update selection and replot."""
+        if self._defer_ui_update("select"):
+            return
         # Check if UI is initialized
         if not hasattr(self, 'lst') or self.lst is None:
             return
@@ -16644,6 +17113,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         return features
 
     def _plot_selected(self) -> None:
+        if self._defer_ui_update("plot"):
+            return
 
         # Initialize storage for sperm hover overlay dots
         self.sperm_overlay_dots = []
@@ -16844,6 +17315,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         fig = Figure(figsize=(10, 3 * n))
         axes = fig.subplots(n, 1, sharex=True)
         fig.subplots_adjust(hspace=0.7, bottom=0.2)
+        event_label_layout = _EventLineLabelLayout()
+        fig.add_artist(event_label_layout)
+        fig._progtrack_event_label_layout = event_label_layout
         self.current_figure = fig
         if n == 1:
             axes = [axes]
@@ -16885,6 +17359,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             prog_vals_for_ctx = []
             pdg_vals_for_ctx: list = []
             pdg_ax = None
+            weight_ax = None
 
  
             # --- If absolutely no data: show an empty graph with no axes/labels ---
@@ -17546,7 +18021,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         self.hover_data.append((dt, TRI_Y, ax, typ, name, symbol))
                     else:
                         # All line event labels use weight axis for placement
-                        if 'weight_ax' in locals():
+                        if weight_ax is not None:
                             axis_plot = weight_ax
                             y_min, y_max = weight_ax.get_ylim()
                             y_pos = (y_min + y_max) / 2
@@ -17581,7 +18056,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             else:
                                 txt = f"{lab} ({idxs[typ]}/{denom})"
                         ev_text = axis_plot.text(
-                            dt + timedelta(days=0.1),
+                            dt,
                             y_pos,
                             txt,
                             rotation=90,
@@ -17599,6 +18074,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         events_chk = self._get_current_events_checkbox()
                         ev_text.set_visible(events_chk is not None and events_chk.isChecked())
                         self.ev_texts.append(ev_text)
+                        event_label_layout.add_label(ev_text, dt)
         # After plotting events, sanity-clamp x-limits once
         try:
             self._clamp_xlims(ax)
@@ -17804,11 +18280,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ------------------------
         # 7.18.12 Hover tooltip handler (visible lines only)
         # ------------------------
-        def clear_event_hover():
-            annotation = self._annotation
-            if getattr(annotation, '_progtrack_event_hover', False):
-                annotation.remove()
-                self._annotation = None
+        def clear_plot_highlight(_event=None):
+            if self._highlight_scatter is not None:
+                self._highlight_scatter.remove()
+                self._highlight_scatter = None
+                self._highlight_point = None
                 fig.canvas.draw_idle()
 
         def event_tooltip_text(entry, mouse_y):
@@ -17825,7 +18301,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if context is not None:
                         text = self._format_tooltip(
                             typ, event_day, None, name,
-                            extra={'event_context': context},
+                            extra={'event_context': context, 'compact_event': True},
                         )
                     elif str(typ).casefold() in {'fsh', 'progesterone', 'progesteron'}:
                         # Keep the established built-in tooltip for these
@@ -17855,20 +18331,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     continue
                 other = self._plot_event_display_point(line, d, v, mouse_y)
                 if other is not None and np.hypot(*(other - point)) <= 1.0:
-                    text = self._format_tooltip(typ, d, None, name, extra={'event_context': context})
+                    text = self._format_tooltip(typ, d, None, name,
+                                                extra={'event_context': context, 'compact_event': True})
                     matches.append((name, text))
             if len(matches) == 1:
                 return matches[0][1]
             return '\n\n'.join(f"{self._display_name(name)} — {text}" for name, text in matches)
 
-        def event_annotation(point, text, *, hover=False):
-            fx, fy = fig.transFigure.inverted().transform(point)
-            annotation = fig.text(
-                fx, fy, text, transform=fig.transFigure, clip_on=False, zorder=9999,
-                bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.9)
-            )
-            annotation._progtrack_event_tooltip = True
-            annotation._progtrack_event_hover = hover
+        def position_event_annotation(annotation, point):
+            previous = annotation.get_position()
+            annotation.set_position(fig.transFigure.inverted().transform(point))
             # Keep the tooltip readable near the canvas boundary after zoom
             # or resize; its anchor must not push text beyond the canvas.
             bounds = annotation.get_window_extent(fig.canvas.get_renderer())
@@ -17878,7 +18350,30 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             dx += max(0, fig.bbox.x0 + margin - (bounds.x0 + dx))
             dy += max(0, fig.bbox.y0 + margin - (bounds.y0 + dy))
             annotation.set_position(fig.transFigure.inverted().transform(point + (dx, dy)))
+            return not np.allclose(previous, annotation.get_position(), atol=1e-9, rtol=0)
+
+        def event_annotation(point, text):
+            annotation = fig.text(
+                0, 0, text, transform=fig.transFigure, clip_on=False, zorder=9999,
+                bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.9)
+            )
+            annotation._progtrack_event_tooltip = True
+            position_event_annotation(annotation, point)
             return annotation
+
+        def fit_clicked_event(_event=None):
+            annotation = self._annotation
+            entry = getattr(annotation, '_progtrack_event_anchor', None)
+            if entry is None:
+                return
+            artist, day, value = entry
+            point = self._plot_event_display_point(artist, day, value)
+            if point is None:
+                annotation.remove()
+                self._annotation = None
+                fig.canvas.draw_idle()
+            elif position_event_annotation(annotation, point):
+                fig.canvas.draw_idle()
 
         def on_move(event):
             # Handle horizontal panning if active
@@ -17902,7 +18397,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 return
             
             if event.inaxes is None:
-                clear_event_hover()
+                clear_plot_highlight()
                 return
 
             closest = None
@@ -17969,53 +18464,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self._highlight_point = None
                 self._highlight_scatter = None
                 event.canvas.draw_idle()
-            if closest and (
-                getattr(closest[5], '_progtrack_event_context', None) is not None
-                or getattr(closest[5], '_progtrack_coincident_event_items', None)
-            ):
-                d, v, axis, _typ, _subject, artist = closest
-                if self._annotation:
-                    self._annotation.remove()
-                point = self._plot_event_display_point(artist, d, v, event.y)
-                self._annotation = event_annotation(point, event_tooltip_text(closest, event.y), hover=True)
-                event.canvas.draw_idle()
-                return
-            clear_event_hover()
             if closest and self._highlight_point != closest:
                 d, v, ax_h, dtype, name_h, line = closest
                 self._highlight_point = closest
-                # draw hover-highlight using the artist's own coordinate system
-                if hasattr(line, "get_offsets"):
-                    x_off, y_off = line.get_offsets()[0]
-                    trans = line.get_offset_transform()
-                    mark = 'v' if dtype in ('fsh','progesterone') else 'o'
-                    size = 150 if dtype in ('fsh','progesterone') else 80
-                    self._highlight_scatter = ax_h.scatter(
-                        [x_off], [y_off],
-                        marker=mark, s=size,
-                        facecolors='yellow', edgecolors='black',
-                        alpha=0.9, zorder=9999, transform=trans
-                    )
-                else:
-                    # Use the actual marker from the line being hovered over
-                    marker = line.get_marker() if hasattr(line, 'get_marker') else 'o'
-                    # Handle pdg_conv which has marker=None on the line but uses scatter overlays
-                    # Also handle cases where marker might be 'None' string or None
-                    if marker == 'None' or marker is None:
-                        if dtype == 'pdg_conv':
-                            marker = getattr(self, 'combined_marker', 'o')
-                        elif dtype == 'pdg':
-                            marker = getattr(self, 'pdg_marker', 's')
-                        elif dtype == 'progesterone':
-                            marker = getattr(self, 'blood_marker', 'o')
-                        else:
-                            marker = 'o'
-                    self._highlight_scatter = ax_h.scatter(
-                        [d], [v],
-                        marker=marker, s=100,
-                        facecolors='yellow', edgecolors='black',
-                        alpha=0.9, zorder=9999
-                    )
+                fallback = {'pdg_conv': 'combined_marker', 'pdg': 'pdg_marker',
+                            'progesterone': 'blood_marker'}.get(dtype)
+                self._highlight_scatter = self._plot_marker_highlight(
+                    line, d, v, fallback_marker=getattr(self, fallback, 'o') if fallback else 'o')
 
                 event.canvas.draw_idle()
         # ------------------------
@@ -18213,6 +18668,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             if event_context is not None or grouped_event_items:
                 self._annotation = event_annotation(np.array((disp_x, disp_y)), text)
+                self._annotation._progtrack_event_anchor = (line, d, v)
             else:
                 self._annotation = fig.text(
                     fig_x, fig_y, text, transform=fig.transFigure,
@@ -18259,6 +18715,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._mpl_cids.append(fig.canvas.mpl_connect('scroll_event', on_scroll))
         self._mpl_cids.append(fig.canvas.mpl_connect('button_press_event', on_click))
         self._mpl_cids.append(fig.canvas.mpl_connect('motion_notify_event', on_move))
+        self._mpl_cids.append(fig.canvas.mpl_connect('figure_leave_event', clear_plot_highlight))
+        self._mpl_cids.append(fig.canvas.mpl_connect('draw_event', fit_clicked_event))
         self._mpl_cids.append(fig.canvas.mpl_connect('button_release_event', on_release))
         # self._mpl_cids.append(fig.canvas.mpl_connect('pick_event', on_pick)) 
 
@@ -20802,38 +21260,38 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         dialog = StyleSettingsDialog(self, self.messages)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            # Apply the new style settings
-            new_settings = dialog.get_settings()
-            new_roles = dialog.get_role_definitions()
-            preset_payload = dialog.get_role_block_preset_payload()
-            expected_revisions = dialog.get_configuration_revisions()
+            self._apply_accepted_conventions(dialog)
+
+    @_batched_ui_update
+    def _apply_accepted_conventions(self, dialog):
+        new_settings = dialog.get_settings()
+        new_roles = dialog.get_role_definitions()
+        preset_payload = dialog.get_role_block_preset_payload()
+        expected_revisions = dialog.get_configuration_revisions()
+        style_changed = dialog.style_settings_changed()
+        if style_changed:
             self._apply_style_settings(new_settings)
-            # Save per-user style settings
             self._save_user_style_settings(new_settings)
-            if new_roles is not None and self._save_animal_role_definitions(
-                new_roles,
-                preset_payload=preset_payload,
-                expected_revisions=expected_revisions,
-            ):
-                self._refresh_list(update_tab_visibility=True)
-            # Refresh the plot to show new colors/styles
-            if hasattr(self, 'selected_animals') and self.selected_animals:
-                self._plot_selected()
+        if new_roles is not None and self._save_animal_role_definitions(
+            new_roles,
+            preset_payload=preset_payload,
+            expected_revisions=expected_revisions,
+        ):
+            self._refresh_list(update_tab_visibility=True)
+        if style_changed and getattr(self, 'selected_animals', None):
+            self._plot_selected()
 
     def _can_manage_institution_settings(self) -> bool:
+        policy = getattr(self, "authorization", None)
+        if policy is not None:
+            return bool(policy.can("core.manage_institution_settings", write=True))
         mt = getattr(self, "master_track", None)
         if not mt or not getattr(mt, "is_logged_in", False):
             return False
         checker = getattr(mt, "can", None)
         if callable(checker):
             return bool(checker("core.manage_institution_settings"))
-        # Compatibility for test doubles and older embedded Master Track
-        # objects.  The real plugin always takes the canonical permission path
-        # above; this fallback never grants access without the old equivalent
-        # role/job context.
-        role = str(getattr(mt, "current_role", "") or "").casefold()
-        jobs = set(getattr(mt, "get_assigned_jobs", lambda: [])() or [])
-        return role in {"lord", "master"} or "manager" in jobs
+        return False
 
     def _can_manage_institution_branding(self) -> bool:
         """Compatibility alias for callers using the former helper name."""
@@ -20869,7 +21327,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             actor,
             authorized=True,
             units_authorized=True,
-            units_service=CanonicalUnitService(self.backend),
+            units_service=CanonicalUnitService(self.backend, app_authorization),
             user_db=getattr(mt, "user_db", None),
             authorization=app_authorization,
             messages=self.messages,
@@ -21059,7 +21517,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         self.main_tabs.setTabText(i, self.messages.get("tab.medi_track", "Medi Track"))
 
         # Re-apply visibility state for all plugins (after text update to match correctly)
-        all_plugins = {"animal_reports", "flow_track", "heritage_track", "cage_track", "medi_track", "projects_track"}
+        all_plugins = ({"animal_reports", "flow_track", "heritage_track", "cage_track", "medi_track", "projects_track"}
+                       if not getattr(self, "_ui_update_depth", 0) else set())
         disabled = getattr(self, '_disabled_plugins', set())
         for pkey in all_plugins:
             self._apply_plugin_state(pkey, pkey not in disabled)
@@ -21105,7 +21564,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if pt_w and hasattr(pt_w, 'update_language'):
             pt_w.update_language(self.messages)
 
-        if getattr(self, "current_canvas", None):
+        if getattr(self, "current_canvas", None) and not getattr(self, "_ui_update_depth", 0):
             self.current_canvas.draw_idle()
 
     def _setup_menus(self):
@@ -21530,6 +21989,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 lst.clearSelection()
                 lst.setCurrentRow(-1)
 
+    @_batched_ui_update
     def _do_master_logout(self):
         """Log out, save session, revert to Guest mode, refresh UI."""
         mt = getattr(self, 'master_track', None)
@@ -21547,13 +22007,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._clear_session_animal_selection()
         # Revert to global disabled_plugins (Guest defaults)
         self._disabled_plugins = self._load_disabled_plugins()
-        # Reload language from global settings (guest mode doesn't persist changes)
-        self.lang = self._get_global_language_fallback()
-        self._load_messages(self.lang)
-        self._refresh_ui()
-        # Apply the guest/default snapshot only after the session is closed.
-        # This prevents the outgoing user's colours from leaking into guest UI.
+        # Bind Guest defaults before language/menu callbacks can paint.
         self._reload_user_style_settings()
+        # Reload language from global settings (guest mode doesn't persist changes)
+        guest_lang = self._get_global_language_fallback()
+        if guest_lang != self.lang:
+            self.lang = guest_lang
+            self._load_messages(self.lang)
+            self._refresh_ui()
+        else:
+            self._setup_menus()
         # Reset display checkboxes to defaults for guest mode
         if hasattr(self, 'chk_prog'):
             self.chk_prog.setChecked(True)
@@ -21584,12 +22047,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if ntw:
             ntw.refresh_master_name()
 
+    @_batched_ui_update
     def _do_master_login(self):
         """Show login dialog, apply user session on success."""
         mt = getattr(self, 'master_track', None)
         if not mt:
             return
-        if mt.login_interactive():
+        if getattr(mt, "is_logged_in", False):
+            self._save_master_session()
+        if mt.login_interactive(save_session=False):
             self._clear_session_animal_selection()
             heritage_plugin = getattr(self, 'heritage_plugin', None)
             if heritage_plugin is not None and callable(getattr(heritage_plugin, 'on_user_logout', None)):
@@ -21598,6 +22064,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 heritage_plugin.on_user_logout()
             self._prepare_reports_for_user_context_change()
             session = mt.load_session()
+            # Session/category/plugin callbacks below may render immediately.
+            # Apply the incoming snapshot without redrawing the outgoing view.
+            self._reload_user_style_settings()
             self._disabled_plugins = set(session.get("disabled_plugins", []))
             # Merge global master_track toggle (it is a global setting, not per-user)
             global_disabled = self._load_disabled_plugins()
@@ -21609,13 +22078,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._restore_session_ui(session)
             # Reload language from user session if set
             user_lang = session.get("language")
-            if user_lang:
+            if user_lang and user_lang != self.lang:
                 self.lang = user_lang
                 self._load_messages(self.lang)
                 self._refresh_ui()
-            # Load/apply the newly authenticated user's style before plugin
-            # callbacks and menu/state refreshes redraw their views.
-            self._reload_user_style_settings()
+            else:
+                self._setup_menus()
             self._refresh_list(update_tab_visibility=True)
             self._on_select()
             self._refresh_master_menu_states()
@@ -21813,7 +22281,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _apply_all_plugin_states(self):
         """Re-apply visibility for all toggle-able plugin tabs and sidebar."""
         for pkey in ("animal_reports", "flow_track", "heritage_track",
-                     "cage_track", "projects_track", "steroid_track"):
+                     "cage_track", "medi_track", "projects_track", "steroid_track"):
             enabled = pkey not in self._disabled_plugins
             self._apply_plugin_state(pkey, enabled)
             self._style_plugin_action(pkey, enabled)
@@ -22079,7 +22547,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Disable all interactive input widgets inside *root* (read-only mode).
 
         QPushButton texts matching 'cancel / close / schließen / abbrechen'
-        are left enabled so the user can still dismiss the dialog.
+        are left enabled so the user can still dismiss the dialog. Explicitly
+        tagged, non-mutating view actions (such as calculated-data Refresh)
+        remain enabled as well.
         """
         from PyQt6.QtWidgets import (
             QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox,
@@ -22093,7 +22563,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                QCheckBox, QRadioButton, QDateEdit, QSlider)):
                 w.setEnabled(False)
             elif isinstance(w, QPushButton):
-                if w.text().strip().lower() not in _KEEP:
+                if (w.text().strip().lower() not in _KEEP
+                        and not w.property("progtrack_view_only_action")):
                     w.setEnabled(False)
 
     def _apply_dialog_field_permissions(self, groups: dict) -> None:
@@ -22903,6 +23374,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             species_widget=species_cb,
             strict_species=not editing,
             lock_committed=not editing,
+            dialog=dlg,
         )
         partner_parent_section = self._add_parent_mode_selector(
             form, _heritage_group, heritage_parent_fields, default_mode="hide")
@@ -23505,6 +23977,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             species_widget=species_cb,
             strict_species=not editing,
             lock_committed=not editing,
+            dialog=dlg,
         )
         sperm_parent_section = self._add_parent_mode_selector(
             form, _heritage_group, heritage_parent_fields, default_mode="hide")
@@ -23957,7 +24430,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         operations).
         """
         editing = bool(name)
-        rec: Dict[str, Any] = self.animals.get(name, {}) if editing else {}
+        rec: Dict[str, Any] = copy.deepcopy(self.animals.get(name, {})) if editing else {}
         rec.setdefault('rolle', Role.OFFSPRING.value)
         synchronize_experimental_limits(rec, rec.get('rolle'))
         # Standardized dialog shell (uniform width/label alignment)
@@ -24107,6 +24580,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 species_widget=species_cb,
                 strict_species=not editing,
                 lock_committed=not editing,
+                dialog=dlg,
             )
             self._add_parent_mode_selector(
                 form, parents_group, offspring_parent_fields, default_mode="embryo"
@@ -24382,7 +24856,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("offspring.save.identity_resolved", new_name=new_name, selected_species=selected_species)
 
             # collect fields
-            rec_obj = dict(self.animals.get(name, {})) if editing else {}
+            rec_obj = copy.deepcopy(self.animals.get(name, {})) if editing else {}
             rec_obj['rolle']       = Role.OFFSPRING.value
             rec_obj['id']          = id_le.text().strip()
             rec_obj['chip_nr']     = chip_le.text().strip()
@@ -24461,11 +24935,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             append_event_payload_once(
                                 events_list, seen_event_rows, combo, event_payload
                             )
-                    except Exception:
-                        pass
+                    except (ValueError, TypeError):
+                        self._show_message_raw(
+                            self.messages.get("error.title", "Error"),
+                            self.messages.get("error.invalid_events", "Invalid events."),
+                            "error",
+                        )
+                        return
                 rec_obj['events'] = events_list
             else:
                 rec_obj['events'] = rec_obj.get('events', [])
+            if not self._confirm_new_animal_events(rec, rec_obj):
+                return
             # Ensure only necessary keys exist (no deprecated arrays for new animals)
             rec_obj.setdefault('daten', [])
             rec_obj.setdefault('pdg', [])
@@ -24523,7 +25004,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if self.reports_enabled and hasattr(self, 'report_current_animal'):
                 if self.report_current_animal == new_name:
                     self._update_report_table()
-        save_btn2.clicked.connect(on_save_offspring)
+        self._connect_event_save_button(save_btn2, dlg, on_save_offspring)
         layout.addWidget(save_btn2)
 
         self._apply_dialog_width(dlg)
@@ -24552,7 +25033,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         and females can track pregnancies and births.
         """
         editing = (name is not None)
-        rec: Dict[str, Any] = {} if not editing else dict(self.animals.get(name, {}))
+        rec: Dict[str, Any] = {} if not editing else copy.deepcopy(self.animals.get(name, {}))
         
         # Seed defaults
         rec.setdefault('rolle', Role.ZUCHTTIER.value)
@@ -24774,6 +25255,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 species_widget=species_cb,
                 strict_species=not editing,
                 lock_committed=not editing,
+                dialog=dlg,
             )
         zuchttier_limits_section = self._wrap_form_rows_in_section(
             form, self.messages.get("dialog.experimental_limits.title", "Experimental limits"),
@@ -25049,7 +25531,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("zuchttier.save.identity_resolved", new_name=new_name, selected_species=selected_species)
             
             # Collect fields
-            rec_obj = dict(self.animals.get(name, {})) if editing else {}
+            rec_obj = copy.deepcopy(self.animals.get(name, {})) if editing else {}
             animal_id, generated_id_meta = self._id_for_animal_dialog(
                 id_le,
                 name=_orig_name,
@@ -25138,12 +25620,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             append_event_payload_once(
                                 events_list, seen_event_rows, combo, event_payload
                             )
-                    except Exception:
-                        pass
+                    except (ValueError, TypeError):
+                        self._show_message_raw(
+                            self.messages.get("error.title", "Error"),
+                            self.messages.get("error.invalid_events", "Invalid events."),
+                            "error",
+                        )
+                        return
                 rec_obj['events'] = events_list
             else:
                 rec_obj['events'] = rec_obj.get('events', [])
             
+            if not self._confirm_new_animal_events(rec, rec_obj):
+                return
             # Ensure necessary keys exist
             rec_obj.setdefault('daten', [])
             rec_obj.setdefault('pdg', [])
@@ -25203,7 +25692,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if self.report_current_animal == new_name:
                     self._update_report_table()
         
-        save_btn.clicked.connect(on_save_zuchttier)
+        self._connect_event_save_button(save_btn, dlg, on_save_zuchttier)
         layout.addWidget(save_btn)
         
         self._apply_dialog_width(dlg)
@@ -25233,7 +25722,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         role_value = canonical_role_value(role_value, default=Role.EXPERIMENTAL.value)
         if role_value not in {Role.EXPERIMENTAL.value, ROLE_VALUE_EXPERIMENTAL_OFFSPRING}:
             role_value = Role.EXPERIMENTAL.value
-        rec: Dict[str, Any] = {} if not editing else dict(self.animals.get(name, {}))
+        rec: Dict[str, Any] = {} if not editing else copy.deepcopy(self.animals.get(name, {}))
         rec.setdefault('rolle', role_value)
         if editing and canonical_role_value(rec.get('rolle')) == ROLE_VALUE_EXPERIMENTAL_OFFSPRING:
             role_value = ROLE_VALUE_EXPERIMENTAL_OFFSPRING
@@ -25439,6 +25928,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 species_widget=species_cb,
                 strict_species=not editing,
                 lock_committed=not editing,
+                dialog=dlg,
             )
         vt_limits_section = self._wrap_form_rows_in_section(
             form, self.messages.get("dialog.experimental_limits.title", "Experimental limits"),
@@ -25692,10 +26182,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         append_event_payload_once(
                             events_list, seen_event_rows, ev_c, event_payload
                         )
-                except Exception:
-                    pass
+                except (ValueError, TypeError):
+                    self._show_message_raw(
+                        self.messages.get("error.title", "Error"),
+                        self.messages.get("error.invalid_events", "Invalid events."),
+                        "error",
+                    )
+                    return
 
-            rec_obj = dict(self.animals.get(name, {})) if editing else {}
+            rec_obj = copy.deepcopy(self.animals.get(name, {})) if editing else {}
             animal_id, generated_id_meta = self._id_for_animal_dialog(
                 id_le,
                 name=_orig_name,
@@ -25765,6 +26260,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if new_in_exp_vt is None:
                 return
             rec_obj['in_experiment'] = new_in_exp_vt
+            if not self._confirm_new_animal_events(rec, rec_obj):
+                return
             self._save_trace(
                 "versuchstier.save.record_built",
                 new_name=new_name,
@@ -25811,7 +26308,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             dlg.accept()
             self._save_trace("versuchstier.save.dialog_accept.after", new_name=new_name)
 
-        save_btn.clicked.connect(on_save_versuchstier)
+        self._connect_event_save_button(save_btn, dlg, on_save_versuchstier)
         layout.addWidget(save_btn)
         self._apply_dialog_width(dlg)
         # ── Field-level permissions ───────────────────────────────────────────
@@ -25843,7 +26340,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._show_permission_denied()
             return
 
-        rec: Dict[str, Any] = {} if creating else dict(self.animals.get(name, {}))
+        rec: Dict[str, Any] = {} if creating else copy.deepcopy(self.animals.get(name, {}))
         role_value = canonical_role_value(role_value or rec.get("rolle"), default=Role.UNKNOWN.value)
         rec["rolle"] = role_value
         synchronize_experimental_limits(rec, role_value)
@@ -25981,6 +26478,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 species_widget=species_cb,
                 strict_species=creating,
                 lock_committed=creating,
+                dialog=dlg,
             )
             basic_parent_section = self._add_parent_mode_selector(
                 form, parents_group, parent_fields, default_mode="hide")
@@ -26050,6 +26548,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             abnormal_chk.setChecked(bool(rec.get("abnormal_current", False)))
             in_exp_chk.setChecked(bool(rec.get("in_experiment", False)))
             in_exp_chk.setVisible(self._is_projects_track_active())
+            in_exp_chk.setEnabled(self._master_can(
+                'project.unset_in_experiment' if rec.get('in_experiment') else 'project.set_in_experiment'))
             for widget in (sick_chk, abnormal_chk, in_exp_chk):
                 health_l.addWidget(widget)
             health_l.addStretch()
@@ -26083,6 +26583,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # not offered for new entry, while existing retired records remain in
         # ``events`` and are preserved on save.
         custom_event_widgets = []
+        represented_custom_event_ids = set()
         custom_event_tab = None
         active_custom_events = self._active_custom_event_definitions_for_role(
             role_value, mode=dialog_mode
@@ -26123,6 +26624,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             def add_custom_event_row(data=None):
                 source_event = event_source_for_editor_row(data)
+                if isinstance(data, dict) and source_event.get("event_id"):
+                    represented_custom_event_ids.add(str(source_event["event_id"]))
                 row = QHBoxLayout()
                 date_edit = QLineEdit(
                     str((data.get("datum") or data.get("date") or ""))
@@ -26292,7 +26795,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 self._show_message_raw(self.messages.get("error.title", "Error"), str(exc), "error")
                 return
 
-            rec_obj = dict(rec)
+            rec_obj = copy.deepcopy(rec)
             animal_id, generated_id_meta = self._id_for_animal_dialog(
                 id_le,
                 name=base_name,
@@ -26333,8 +26836,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if not self._capture_death_lifecycle(rec_obj, rec):
                 return
             old_in_experiment = bool(rec.get("in_experiment", False))
+            requested_in_experiment = bool(rec_obj.get("in_experiment", False))
+            if requested_in_experiment != old_in_experiment:
+                permission = ('project.unset_in_experiment' if old_in_experiment
+                              else 'project.set_in_experiment')
+                if not self._master_can(permission):
+                    requested_in_experiment = old_in_experiment
             new_in_experiment = self._coerce_in_experiment_for_project(
-                bool(rec_obj.get("in_experiment", False)),
+                requested_in_experiment,
                 str(rec_obj.get("project") or ""),
                 old_in_experiment=old_in_experiment,
                 old_project=str(rec.get("project") or ""),
@@ -26358,12 +26867,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if definition_field == limit_field and block_id:
                         existing_experimental_limits[block_id] = int(widget.value())
             rec_obj["experimental_limits"] = existing_experimental_limits
-            if custom_event_widgets:
-                represented_event_ids = {
-                    str(getattr(combo, "_progtrack_source_event", {}).get("event_id") or "")
-                    for _date_edit, combo, _row in custom_event_widgets
-                    if str(getattr(combo, "_progtrack_source_event", {}).get("event_id") or "")
-                }
+            if custom_event_tab is not None:
+                # Ownership belongs to the editor's original rows, including
+                # rows the user removed. Only events never represented by this
+                # editor may be carried forward outside the surviving widgets.
                 retained_events = []
                 seen_event_rows = set()
                 for event in rec_obj.get("events", []) or []:
@@ -26372,7 +26879,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         continue
                     if not event.get("event_id"):
                         ensure_event_record_id(event)
-                    if str(event.get("event_id")) not in represented_event_ids:
+                    if str(event.get("event_id")) not in represented_custom_event_ids:
                         retained_events.append(event)
                 for date_edit, event_combo, _row in custom_event_widgets:
                     try:
@@ -26404,16 +26911,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         retained_events, seen_event_rows, event_combo, entry
                     )
                 rec_obj["events"] = retained_events
-                violations = self._custom_event_limit_additions_allowed(rec, rec_obj)
-                if violations:
-                    self._show_message_raw(
-                        self.messages.get("error.title", "Error"),
-                        self.messages.get(
-                            "error.custom_event_limit",
-                            "Experimental event limit exceeded: {details}",
-                        ).format(details="; ".join(violations)),
-                    )
-                    return
+            if not self._confirm_new_animal_events(rec, rec_obj):
+                return
             if parent_fields:
                 try:
                     self._apply_core_parentage_if_changed(
@@ -26468,7 +26967,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 dlg._progtrack_successful_animal_edit = (name, new_key)
             dlg.accept()
 
-        save_btn.clicked.connect(on_save_basic_role)
+        self._connect_event_save_button(save_btn, dlg, on_save_basic_role)
         self._apply_dialog_field_permissions({
             'core.edit_animal_identity': [
                 name_le, species_cb, id_le, chip_le, origin_le,
@@ -26501,7 +27000,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         - Edit (name!=None): tabs are visible.
         """
         creating = (name is None)
-        rec: Dict[str, Any] = {} if creating else dict(self.animals.get(name, {}))
+        rec: Dict[str, Any] = {} if creating else copy.deepcopy(self.animals.get(name, {}))
         # Normalize/seed fields
         role_now = self._animal_role_value(rec, default=default_role or Role.SPENDER.value)
         if creating and default_role in (Role.SPENDER.value, Role.AMME.value):
@@ -26776,6 +27275,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             species_widget=species_cb,
             strict_species=creating,
             lock_committed=creating,
+            dialog=dlg,
         )
         female_parent_section = self._add_parent_mode_selector(
             form, _heritage_group, heritage_parent_fields, default_mode="hide")
@@ -26989,7 +27489,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         # ---------------- Save (single standard button) ----------------
         save_btn = QPushButton(self.messages.get("button.save", "Save"))
+        event_save_original = copy.deepcopy(rec)
+
         def on_save() -> None:
+            nonlocal rec
+            rec = copy.deepcopy(event_save_original)
             pdg_w = []
             if steroid_active and self.has_pdg_plugin:
                 for i in range(tabs.count()):
@@ -27245,23 +27749,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             "error",
                         )
                         return
-                candidate_events = new_events
-                candidate_record = dict(rec)
-                candidate_record["events"] = candidate_events
-                limit_violations = self._custom_event_limit_additions_allowed(rec, candidate_record)
-                if limit_violations:
-                    self._show_message(
-                        self.messages.get("error.title", "Error"),
-                        self.messages.get(
-                            "error.custom_event_limit",
-                            "Experimental event limit exceeded: "
-                        ) + ", ".join(limit_violations),
-                        "warning",
-                    )
-                    return
-                rec["events"] = candidate_events
+                rec["events"] = new_events
             else:
                 rec["events"] = rec.get("events", [])
+            if not self._confirm_new_animal_events(event_save_original, rec):
+                return
             self._save_trace(
                 "female_like.save.measurements_events_done",
                 new_name=new_name,
@@ -27363,12 +27855,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self._update_report_table()
                     self._save_trace("female_like.save.report_update.after", key=key)
 
-        save_btn.clicked.connect(on_save)
+        self._connect_event_save_button(save_btn, dlg, on_save)
         v.addWidget(save_btn)
         
         self._apply_dialog_width(dlg)
         # ── Field-level permissions ───────────────────────────────────────────
-        _pdg_extra = list(_pdg_tabs) if isinstance(_pdg_tabs, (list, tuple)) else []
+        # The hook returns (raw PdG inputs, calculated Unified Prog. view).
+        # Only raw inputs require research-data write permission. Visibility
+        # of the calculated view remains role/capability-owned above.
+        _pdg_inputs = list(_pdg_tabs[:1]) if isinstance(_pdg_tabs, (list, tuple)) else []
         self._apply_dialog_field_permissions({
             'core.edit_animal_identity': [
                 name_le, species_cb, id_le, chip_le, origin_le,
@@ -27383,7 +27878,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 _prog_tab, role_cb if creating else None, genotype_le, ref_w_le,
                 maxop_le, maxe_le, rec_le, maxpr_le, maxb_le,
                 maxm_le, maxp_le, maxfsh_le,
-            ] + _pdg_extra,
+            ] + _pdg_inputs,
         })
         if read_only:
             self._freeze_dialog_inputs(dlg)
@@ -28309,16 +28804,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         before_snapshot: Dict[str, Any],
         after_snapshot: Dict[str, Any],
     ) -> None:
-        """Run data-save audit after modal dialogs have closed."""
+        """Audit committed snapshots now, under the saving actor."""
         self._save_trace("audit_snapshot_diff.safe.enter")
-        if QApplication.activeModalWidget() is not None:
-            self._save_trace("audit_snapshot_diff.safe.modal_wait")
-            QTimer.singleShot(
-                250,
-                lambda before=before_snapshot, after=after_snapshot:
-                    self._audit_data_snapshot_diff_when_safe(before, after)
-            )
-            return
         try:
             self._save_trace("audit_snapshot_diff.before")
             self._audit_data_snapshot_diff(before_snapshot, after_snapshot)
@@ -28326,24 +28813,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         except Exception as audit_error:
             self._save_trace("audit_snapshot_diff.exception", error=audit_error)
             logging.error(f"Failed to audit data diff after save: {audit_error}")
+            raise
 
     def _run_post_persistence_sync(
         self,
         audit_snapshots: Optional[Tuple[Dict[str, Any], Dict[str, Any]]] = None,
     ) -> None:
-        """Run plugin sync work after modal dialogs have closed."""
+        """Audit now; coalesce only replaceable view invalidation."""
         self._save_trace(
             "post_persistence_sync.enter",
             has_audit_snapshots=audit_snapshots is not None,
         )
-        if QApplication.activeModalWidget() is not None:
-            self._save_trace("post_persistence_sync.modal_wait")
-            QTimer.singleShot(
-                250,
-                lambda snapshots=audit_snapshots:
-                    self._run_post_persistence_sync(snapshots)
-            )
-            return
 
         logging.info("Post-persistence plugin sync begin")
         if audit_snapshots is not None:
@@ -28352,31 +28832,42 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._audit_data_snapshot_diff_when_safe(before_snapshot, after_snapshot)
             self._save_trace("post_persistence_sync.audit.after")
 
-        if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
-            try:
-                self._save_trace("post_persistence_sync.heritage.before")
-                # Heritage projects Core records at read time.  Notify its
-                # read-model cache after Core persistence; never mirror Core
-                # identity/parent fields into the Heritage animal namespace.
-                self.heritage_plugin.notify_core_records_changed(set(self.animals))
-                self._save_trace("post_persistence_sync.heritage.after")
-            except Exception as e:
-                self._save_trace("post_persistence_sync.heritage.exception", error=e)
-                logging.error(f"Heritage_Track sync during persistence save failed: {e}")
+        def update_views():
+            if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
+                try:
+                    self._save_trace("post_persistence_sync.heritage.before")
+                    # Heritage projects Core records at read time.  Notify its
+                    # read-model cache after Core persistence; never mirror Core
+                    # identity/parent fields into the Heritage animal namespace.
+                    self.heritage_plugin.notify_core_records_changed(set(self.animals))
+                    self._save_trace("post_persistence_sync.heritage.after")
+                except Exception as e:
+                    self._save_trace("post_persistence_sync.heritage.exception", error=e)
+                    logging.error(f"Heritage_Track sync during persistence save failed: {e}")
 
-        if getattr(self, 'has_cage_track_plugin', False) and getattr(self, 'cage_track_plugin', None):
-            try:
-                self._save_trace("post_persistence_sync.cage.before")
-                self.cage_track_plugin.sync_animal_data(self.animals)
-                self._save_trace("post_persistence_sync.cage.after")
-            except Exception as e:
-                self._save_trace("post_persistence_sync.cage.exception", error=e)
-                logging.error(f"Cage_Track sync during persistence save failed: {e}")
-        logging.info("Post-persistence plugin sync completed")
-        self._save_trace("post_persistence_sync.exit")
+            if getattr(self, 'has_cage_track_plugin', False) and getattr(self, 'cage_track_plugin', None):
+                try:
+                    self._save_trace("post_persistence_sync.cage.before")
+                    self.cage_track_plugin.sync_animal_data(self.animals)
+                    self._save_trace("post_persistence_sync.cage.after")
+                except Exception as e:
+                    self._save_trace("post_persistence_sync.cage.exception", error=e)
+                    logging.error(f"Cage_Track sync during persistence save failed: {e}")
+            logging.info("Post-persistence plugin sync completed")
+            self._save_trace("post_persistence_sync.exit")
+
+        self._queue_view_update("core-projections", update_views)
 
     def _save_persistence(self, defer_post_save_work: bool = False):
         """Persist backend data after enriching dynamic event snapshots."""
+        pending = self.__dict__.pop("_pending_project_save_updates", [])
+        if getattr(self, "read_only_mode", False):
+            return
+        definitions = {}
+        for definition in self._custom_event_definitions(include_retired=True):
+            token = str(definition.get("event_type") or "").strip().casefold()
+            if token:
+                definitions.setdefault(token, definition)
         for _record in list(self.animals.values()) + list(self.archived.values()):
             if isinstance(_record, dict):
                 ensure_project_periods(_record)
@@ -28388,19 +28879,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 )
             for _event in _record.get("events", []) if isinstance(_record, dict) else []:
                 _event_type = str(_event.get("event_type") or "") if isinstance(_event, dict) else ""
-                if _event_type and self._custom_event_definition_for_type(_event_type):
-                    if isinstance(_event, dict) and not _event.get("custom_event_snapshot"):
-                        _event["custom_event_snapshot"] = self._custom_event_snapshot(_event_type)
+                definition = definitions.get(_event_type.strip().casefold())
+                if definition and not _event.get("custom_event_snapshot"):
+                    _event["custom_event_snapshot"] = self._custom_event_snapshot(
+                        _event_type, definition=definition)
         self._save_trace("save_persistence.enter", defer_post_save_work=defer_post_save_work)
         logging.info(
             "Persistence save begin; defer_post_save_work=%s",
             defer_post_save_work,
         )
         data = {'animals': self.animals, 'archived_animals': self.archived}
-        audit_snapshots = self._write_json(
-            data,
-            audit_after_save=not defer_post_save_work,
-        )
+        try:
+            audit_snapshots = self._write_json(data, audit_after_save=True)
+        except Exception:
+            self.__dict__.pop("_pending_project_save_updates", None)
+            raise
         self._save_trace(
             "save_persistence.write_json.after",
             defer_post_save_work=defer_post_save_work,
@@ -28410,18 +28903,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             "Persistence JSON save completed; defer_post_save_work=%s",
             defer_post_save_work,
         )
-        if defer_post_save_work:
-            self._save_trace("save_persistence.defer_timer.before")
-            QTimer.singleShot(
-                250,
-                lambda snapshots=audit_snapshots:
-                    self._run_post_persistence_sync(snapshots)
-            )
-            self._save_trace("save_persistence.defer_timer.after")
-        else:
-            self._save_trace("save_persistence.sync_now.before")
-            self._run_post_persistence_sync()
-            self._save_trace("save_persistence.sync_now.after")
+        # Required history stays ordered on this actor's stack. The backend
+        # diff preserves unrelated records if metadata needs a second commit.
+        for identity, callback in pending:
+            if identity != _actor_backend_read_identity(self):
+                raise RuntimeError("Save actor/backend changed before project follow-up")
+            callback()
+        self._run_post_persistence_sync(audit_snapshots)
 
     # ------------------------
     # 7.27.5 Archive the currently selected animal
@@ -28991,6 +29479,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------
     def closeEvent(self, event):
         """Handle application close event - save session and release file lock."""
+        self._invalidate_pending_view_updates()
         # Save Master_Track session before closing
         self._save_master_session()
 

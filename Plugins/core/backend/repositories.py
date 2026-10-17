@@ -131,7 +131,8 @@ class DomainRecordRepository:
             row = _fetchone(
                 connection,
                 f"SELECT revision FROM domain_records "
-                f"WHERE namespace={mark} AND record_id={mark}",
+                f"WHERE namespace={mark} AND record_id={mark}"
+                + (" FOR UPDATE" if self.adapter.dialect != "sqlite" else ""),
                 (namespace, record_id),
             )
             if row is None:
@@ -164,6 +165,7 @@ class DomainRecordRepository:
         records: Iterable[tuple[str, str, Any]],
         *,
         expected_revisions: dict[tuple[str, str], int | None] | None = None,
+        audit_events: Iterable[dict[str, Any]] = (),
     ) -> dict[tuple[str, str], int]:
         """Replace several domain records in one adapter transaction.
 
@@ -173,6 +175,7 @@ class DomainRecordRepository:
         partially updated coordinated configuration.
         """
         batch = list(records)
+        events = list(audit_events)
         if not batch:
             return {}
         expected = expected_revisions or {}
@@ -191,11 +194,12 @@ class DomainRecordRepository:
         revisions: dict[tuple[str, str], int] = {}
         with self.adapter.transaction(write=True) as connection:
             current: dict[tuple[str, str], int] = {}
-            for namespace, record_id, _serialized in prepared:
+            for namespace, record_id, _serialized in sorted(prepared):
                 row = _fetchone(
                     connection,
                     f"SELECT revision FROM domain_records "
-                    f"WHERE namespace={mark} AND record_id={mark}",
+                    f"WHERE namespace={mark} AND record_id={mark}"
+                    + (" FOR UPDATE" if self.adapter.dialect != "sqlite" else ""),
                     (namespace, record_id),
                 )
                 revision = 0 if row is None else int(
@@ -230,7 +234,15 @@ class DomainRecordRepository:
                         (serialized, next_revision, timestamp, namespace, record_id),
                     )
                 revisions[(namespace, record_id)] = next_revision
+            for event in events:
+                AuditRepository(self.adapter)._append_in_transaction(connection, **event)
         return revisions
+
+    def put_many_audited(self, records, *, expected_revisions, audit_events):
+        """Commit coordinated records and their audit evidence, or neither."""
+        return self.put_many(
+            records, expected_revisions=expected_revisions, audit_events=audit_events
+        )
 
     def delete(self, namespace: str, record_id: str) -> bool:
         mark = _placeholder(self.adapter)
@@ -405,29 +417,40 @@ class AuditRepository:
         payload: Any,
         correlation_id: str = "",
     ) -> str:
+        with self.adapter.transaction(write=True) as connection:
+            return self._append_in_transaction(
+                connection, actor_login=actor_login, category=category, action=action,
+                entity_type=entity_type, entity_id=entity_id, payload=payload,
+                correlation_id=correlation_id,
+            )
+
+    def _append_in_transaction(
+        self, connection: Any, *, actor_login: str, category: str, action: str,
+        entity_type: str, entity_id: str, payload: Any, correlation_id: str = "",
+    ) -> str:
+        """Use the caller's transaction; never commit an audit separately."""
         event_id = str(uuid.uuid4())
         mark = _placeholder(self.adapter)
         json_mark = _json_placeholder(self.adapter)
-        with self.adapter.transaction(write=True) as connection:
-            _execute(
-                connection,
-                "INSERT INTO audit_events("
-                "event_id,occurred_at,actor_login,category,action,entity_type,"
-                "entity_id,correlation_id,payload_json) VALUES("
-                + ",".join([mark] * 8 + [json_mark])
-                + ")",
-                (
-                    event_id,
-                    now_text(),
-                    actor_login,
-                    category,
-                    action,
-                    entity_type,
-                    entity_id,
-                    correlation_id or event_id,
-                    dumps(payload),
-                ),
-            )
+        _execute(
+            connection,
+            "INSERT INTO audit_events("
+            "event_id,occurred_at,actor_login,category,action,entity_type,"
+            "entity_id,correlation_id,payload_json) VALUES("
+            + ",".join([mark] * 8 + [json_mark])
+            + ")",
+            (
+                event_id,
+                now_text(),
+                actor_login,
+                category,
+                action,
+                entity_type,
+                entity_id,
+                correlation_id or event_id,
+                dumps(payload),
+            ),
+        )
         return event_id
 
     def list_events(self) -> list[dict[str, Any]]:

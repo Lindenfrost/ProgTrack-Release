@@ -11,6 +11,9 @@
     "reproduction": {
       "path": "scenarios/reproduction.json"
     },
+    "experiment-enrollments": {
+      "path": "scenarios/experiment-enrollments.json"
+    },
     "event-identities": {
       "path": "fixtures/event-identities.json"
     },
@@ -82,6 +85,10 @@
   },
   "scenarios": [
     {
+      "id": "experiment-enrollment-history",
+      "description": "All 19 currently experimental animals have authored project-entry and experiment-start dates, consistent across Core, Project Track, Medi Track and Reports; prior completed periods are retained."
+    },
+    {
       "id": "complete-identity",
       "description": "Canonical identity, references, roles and experimental limits for all active and archived animals."
     },
@@ -127,7 +134,7 @@
     },
     {
       "id": "complete-donor-stage-counts",
-      "description": "Every egg collection and sperm sample has complete stage metrics. In-vivo MII is limited to 0-2 per collection and never produces embryos; all 21 embryos arise from IVF-fertilized in-vitro MII. Collection-only/unused samples have no fabricated fertilization or embryo links."
+      "description": "Every egg collection and sperm sample has complete stage metrics. Tiffany/Boromir has four transferred and two frozen linked embryos, retaining all six produced and biological parentage. In-vivo MII is limited to 0-2 per collection and never produces embryos; all 21 embryos arise from IVF-fertilized in-vitro MII. Collection-only/unused samples have no fabricated fertilization or embryo links."
     },
     {
       "id": "mus-musculus-ringbearer-colony",

@@ -1,0 +1,26 @@
+{
+  "schema": "progtrack-seed-enrollments/1",
+  "project_actor": "Manager",
+  "experiment_actor": "Researcher",
+  "animals": {
+    "Alaine | Callitrix jacchus | 30.09.2019 | DPZ": {"project": "OTOF-", "project_entered": "2024-08-05", "experiment_started": "2024-08-22"},
+    "Amanda | Callitrix jacchus | 19.05.2018 | DPZ": {"project": "OTOF-", "project_entered": "2024-07-30", "experiment_started": "2024-08-16"},
+    "Azog | Papio hamadryas anubis | 04.04.2010 | DPZ": {"project": "Oakshield", "project_entered": "2026-07-21", "experiment_started": "2026-07-21", "preserve_history": true},
+    "Denethor | Callitrix jacchus | 08.02.2018 | DPZ": {"project": "OTOF-", "project_entered": "2024-09-16", "experiment_started": "2024-10-04"},
+    "Ekaterina | Callitrix jacchus | 02.04.2016 | Iluvatar": {"project": "OTOF-", "project_entered": "2025-07-07", "experiment_started": "2025-07-24"},
+    "Frodo | Mus musculus | 10.01.2024 | DPZ": {"project": "Ringbearer", "project_entered": "2024-09-01", "experiment_started": "2024-09-08"},
+    "Heather | Callitrix jacchus | 26.07.2018 | DPZ": {"project": "OTOF-", "project_entered": "2024-08-02", "experiment_started": "2024-08-19"},
+    "Lauren | Callitrix jacchus | 03.10.2019 | DPZ": {"project": "OTOF-", "project_entered": "2024-07-24", "experiment_started": "2024-08-10"},
+    "Legolas | Callitrix jacchus | 04.03.2026 | DPZ": {"project": "OTOF-", "project_entered": "2026-04-20", "experiment_started": "2026-04-21"},
+    "Megan | Callitrix jacchus | 22.08.2019 | DPZ": {"project": "OTOF-", "project_entered": "2024-07-21", "experiment_started": "2024-08-07"},
+    "Merry | Mus musculus | 10.03.2024 | DPZ": {"project": "Ringbearer", "project_entered": "2024-09-03", "experiment_started": "2024-09-10"},
+    "Nicole | Callitrix jacchus | 09.06.2018 | DPZ": {"project": "OTOF-", "project_entered": "2024-07-18", "experiment_started": "2024-08-04"},
+    "Olga | Callitrix jacchus | 20.06.2015 | Iluvatar": {"project": "OTOF-", "project_entered": "2025-07-07", "experiment_started": "2025-07-24"},
+    "Pippin | Mus musculus | 10.04.2024 | DPZ": {"project": "Ringbearer", "project_entered": "2024-09-04", "experiment_started": "2024-09-11"},
+    "Rachel | Callitrix jacchus | 14.02.2017 | DPZ": {"project": "OTOF-", "project_entered": "2024-07-27", "experiment_started": "2024-08-13"},
+    "Sam | Mus musculus | 10.02.2024 | DPZ": {"project": "Ringbearer", "project_entered": "2024-09-02", "experiment_started": "2024-09-09"},
+    "Svetlana | Callitrix jacchus | 03.05.2021 | Iluvatar": {"project": "OTOF-", "project_entered": "2025-09-01", "experiment_started": "2025-09-21"},
+    "Thranduil | Callitrix jacchus | 11.02.2021 | DPZ": {"project": "OTOF-", "project_entered": "2025-09-01", "experiment_started": "2025-09-18"},
+    "Tiffany | Callitrix jacchus | 17.04.2017 | DPZ": {"project": "OTOF-", "project_entered": "2024-07-15", "experiment_started": "2024-08-01"}
+  }
+}

@@ -115,21 +115,7 @@ class FlowTrackWidget:
             'transfers_by_id': {},  # transfer_id -> {surrogate_name, transfer_date, embryos: []}
             'total_embryo_count': 0  # Global counter for embryo ID generation
         }
-        self.settings = {
-            'egg_donor_metric': 'usable_per_gv',  # DEFAULT: Overall usable yield per GV
-            'egg_donor_aggregation': 'total',  # DEFAULT: total across all surgeries
-            'sperm_donor_metric': 'usable_per_ivm',  # DEFAULT: Usable embryo yield per IVM M2
-            'sperm_donor_aggregation': 'total',  # DEFAULT: total across all donations
-            'surrogate_metric': 'total_implantation',  # DEFAULT: Total Implantation rate
-            'surrogate_aggregation': 'total',  # DEFAULT: total across all transfers
-            'render_full_graph': True,
-            'show_animal_names': True,
-            'show_lifebars': True,
-            'show_grid': False,
-            'snap_to_grid': False,
-            'auto_save_enabled': True,
-            'embryo_visibility': {}  # Per-node embryo visibility state
-        }
+        self.settings = self._get_default_settings()
         self.ui_preferences = {}
         self.lifebar_data = {}  # animal_name -> [{event_id, event_date, metric_name, efficiency_pct, patches, position, bounds}]
         
@@ -148,6 +134,9 @@ class FlowTrackWidget:
         # Pan/zoom state
         self.pan_active = False
         self.pan_start = None
+        self._pan_gesture = None
+        self._gesture_identity = None
+        self._gesture_mouseevent = None
         self.current_xlim = None
         self.current_ylim = None
         self.auto_fit_bounds = None  # Cache for auto-calculated bounds
@@ -307,6 +296,8 @@ class FlowTrackWidget:
         
         # Store annotation reference for tooltips (like ProgTrack weight plot)
         self._hover_annotation = None
+        self.node_label_artists = {}
+        self._install_hover_cleanup()
         
         # Connect canvas events
         self.canvas.mpl_connect('pick_event', self._on_pick)
@@ -316,6 +307,8 @@ class FlowTrackWidget:
         self.canvas.mpl_connect('button_release_event', self._on_mouse_release)
         self.canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
         self.canvas.mpl_connect('resize_event', self._on_resize)
+        self.canvas.mpl_connect('figure_leave_event', self._on_hover_leave)
+        self.canvas.mpl_connect('close_event', self._on_hover_leave)
         
         canvas_layout.addWidget(self.canvas)
         
@@ -408,34 +401,38 @@ class FlowTrackWidget:
     def _load_settings(self):
         """Load plugin settings from the configured backend (Flow_Track 3.0 schema)."""
         config = self._settings_store.load({})
-        self.settings = config.get('settings', self._get_default_settings())
+        self.settings = self._get_default_settings()
+        stored = config.get('settings', {})
+        if isinstance(stored, dict):
+            self.settings.update(stored)
+        supported = {
+            'egg_donor': ({'ivm_rate', 'fert_rate_after_ivm', 'usable_from_fert',
+                           'implantation_rate', 'usable_per_gv', 'fert_per_gv'}, 'per_surgery'),
+            'sperm_donor': ({'fert_rate_ivm', 'usable_per_ivm', 'implantation_rate',
+                             'fert_rate_in_vivo'}, 'per_donation'),
+            'surrogate': ({'total_implantation', 'transfer_success_rate'}, 'per_transfer'),
+        }
+        for role, (metrics, per_event) in supported.items():
+            if self.settings.get(role + '_metric') not in metrics:
+                self.settings[role + '_metric'] = self._get_default_settings()[role + '_metric']
+            if self.settings.get(role + '_aggregation') not in {'total', per_event}:
+                self.settings[role + '_aggregation'] = 'total'
         self.ui_preferences = config.get('ui_preferences', {})
     
     def _get_default_settings(self):
-        """Get default settings (Flow_Track 3.0 schema)."""
+        """One supported contract for initial load, controls and lifebars."""
         return {
-            'egg_lifebar': {
-                'metric': 'fertilized_to_implantation',
-                'stage': STAGE_IN_VITRO_M2,
-                'aggregation': 'total'
-            },
-            'sperm_lifebar': {
-                'metric': 'transferred_to_implantation',
-                'stage': STAGE_IN_VITRO_M2,
-                'aggregation': 'total'
-            },
-            'freezer_visible': True,
-            'show_timeline': False,
-            'max_suggestions_per_transfer': 3,
-            'suggestion_tolerance_days': 7,
-            'show_egg_donors': True,
-            'show_sperm_donors': True,
-            'show_surrogates': True,
-            'render_full_graph': True,
-            'show_animal_names': True,
-            'show_lifebars': True
+            'egg_donor_metric': 'usable_per_gv', 'egg_donor_aggregation': 'total',
+            'sperm_donor_metric': 'usable_per_ivm', 'sperm_donor_aggregation': 'total',
+            'surrogate_metric': 'total_implantation', 'surrogate_aggregation': 'total',
+            'freezer_visible': True, 'show_timeline': False,
+            'max_suggestions_per_transfer': 3, 'suggestion_tolerance_days': 7,
+            'show_egg_donors': True, 'show_sperm_donors': True, 'show_surrogates': True,
+            'render_full_graph': True, 'show_animal_names': True, 'show_lifebars': True,
+            'show_grid': False, 'snap_to_grid': False, 'auto_save_enabled': True,
+            'embryo_visibility': {},
         }
-    
+
     def _save_settings(self):
         """Save settings to the configured backend (Flow_Track 3.0 schema)."""
         try:
@@ -696,7 +693,7 @@ class FlowTrackWidget:
                 
                 # Count implanted embryos (use same transfer date)
                 implanted_count = sum(1 for embryo in transfer_data.get('embryos', []) 
-                                    if embryo.get('implanted', False))
+                                    if embryo.get('implanted') is True)
                 if implanted_count > 0:
                     implantations_by_date[date_key] = implantations_by_date.get(date_key, 0) + implanted_count
                     
@@ -880,7 +877,8 @@ class FlowTrackWidget:
         embryos = freezer_transfer.get('embryos', [])
         
         # Info label
-        info_label = QtWidgets.QLabel(self.messages.get("flow_track.freezer.list_info", f"Frozen embryos: {len(embryos)}"))
+        info_label = QtWidgets.QLabel(self.messages.get(
+            "flow_track.freezer.list_info", "Frozen embryos: {count}").format(count=len(embryos)))
         layout.addWidget(info_label)
         
         # List widget
@@ -1031,6 +1029,7 @@ class FlowTrackWidget:
             
             # Add to target (preserving cryopreserved and freeze_date)
             target_transfer['embryos'].append(embryo)
+            self._sync_transfer_count(target_transfer_id)
             
             self._save_flow_track_data()
             parent_dialog.accept()
@@ -1529,6 +1528,8 @@ class FlowTrackWidget:
     
     def _redraw_canvas(self):
         """Redraw the entire canvas with current data."""
+        self._cancel_canvas_gesture()
+        self._clear_hover_annotation(redraw=False)
         # Check if database has any animals at all
         has_animals = hasattr(self.parent_app, 'animals') and bool(self.parent_app.animals)
         
@@ -1586,6 +1587,7 @@ class FlowTrackWidget:
         # Only clear artist registries for re-registration
         self.node_artists.clear()
         self.embryo_artists.clear()
+        getattr(self, 'node_label_artists', {}).clear()
         
         # Render the flow track visualization
         self._render_flow_track()
@@ -1598,6 +1600,8 @@ class FlowTrackWidget:
     
     def _render_flow_track(self):
         """Render the complete flow track visualization."""
+        if not hasattr(self, 'node_label_artists'):
+            self.node_label_artists = {}
         # Layout constants - tight to edges to maximize canvas usage
         EGG_RAIL_X = 0.02
         SPERM_RAIL_X = 0.98
@@ -1715,7 +1719,7 @@ class FlowTrackWidget:
                     va = 'top'
                 
                 # Use annotation for consistent offset behavior
-                self.ax.annotate(
+                self.node_label_artists[animal_name] = self.ax.annotate(
                     label_text,
                     xy=(x, y),
                     xytext=(0, y_offset_points),
@@ -2373,11 +2377,11 @@ class FlowTrackWidget:
         
         # Determine which metric to show based on role
         if role == Role.SPENDER.value:
-            metric = self.settings.get('egg_donor_metric', 'in_vitro_embryo_to_implanted')
+            metric = self.settings.get('egg_donor_metric', 'usable_per_gv')
             aggregation = self.settings.get('egg_donor_aggregation', 'total')
             stats = self._calculate_egg_donor_efficiency(animal_name)
         elif role == Role.SAMENSP.value:
-            metric = self.settings.get('sperm_donor_metric', 'in_vitro_fert_to_implanted')
+            metric = self.settings.get('sperm_donor_metric', 'usable_per_ivm')
             aggregation = self.settings.get('sperm_donor_aggregation', 'total')
             stats = self._calculate_sperm_donor_efficiency(animal_name)
         elif role == Role.AMME.value:
@@ -2466,7 +2470,7 @@ class FlowTrackWidget:
             
             # Determine fill percentage and color
             if efficiency is not None:
-                fill_pct = efficiency / 100.0
+                fill_pct = min(1.0, max(0.0, efficiency / 100.0))
                 color = self._get_lifebar_color(efficiency)
             else:
                 fill_pct = 1.0
@@ -2506,6 +2510,8 @@ class FlowTrackWidget:
             self.lifebar_data[animal_name].append({
                 'event_date': bar_data['event_date'],
                 'efficiency_pct': efficiency,
+                'metric': metric,
+                'issues': stats.get('issues', []),
                 'metric_name': self._get_metric_display_name(metric),
                 'annotation': lifebar_ann,
                 'node_pos': (node_x, node_y),
@@ -2617,12 +2623,26 @@ class FlowTrackWidget:
     
     def _on_pick(self, event):
         """Handle pick events (clicks and drag initiation)."""
+        self._clear_hover_annotation()
         if not self._can("use"):
+            self._cancel_canvas_gesture()
             return
         artist = event.artist
+        if artist not in self.node_artists and artist not in self.embryo_artists:
+            return
+        if getattr(self, 'pan_active', False):
+            self._cancel_canvas_gesture()
+            return
+        if getattr(self, 'drag_active', False):
+            if getattr(self, '_gesture_mouseevent', None) is event.mouseevent:
+                return  # Overlapping picks cannot steal the first item's gesture.
+            self._cancel_canvas_gesture()
+            if not event.mouseevent.dblclick:
+                return
         
         # Double-click opens dialogs
         if event.mouseevent.dblclick:
+            self._cancel_canvas_gesture()
             if artist in self.node_artists:
                 animal_name = self.node_artists[artist]
                 # Special handling for freezer node: open freezer embryo list instead of info
@@ -2636,6 +2656,10 @@ class FlowTrackWidget:
         
         # Left-click: start drag mode, menu opens on release if no drag occurred
         elif event.mouseevent.button == 1:
+            if event.mouseevent.inaxes is not self.ax:
+                return
+            self._gesture_identity = self._hover_identity()
+            self._gesture_mouseevent = event.mouseevent
             if artist in self.node_artists:
                 animal_name = self.node_artists[artist]
                 # Store click position for drag detection
@@ -2672,16 +2696,6 @@ class FlowTrackWidget:
                 # Store menu action to execute on release if no drag
                 self.pending_menu_action = ('edit_embryo', transfer_id, embryo_id)
                 
-            else:
-                # Other draggable elements can still be dragged
-                self.drag_active = True
-                self.drag_artist = artist
-                self.is_dragging = False
-                
-                mouse_x, mouse_y = event.mouseevent.xdata, event.mouseevent.ydata
-                if artist in self.embryo_artists:
-                    self.click_start_pos = (mouse_x, mouse_y)
-        
         # Right-click toggles embryo visibility (freezer and surrogates only)
         elif event.mouseevent.button == 3:  # Right mouse button
             # Clear any pending menu action
@@ -2737,16 +2751,19 @@ class FlowTrackWidget:
         
         return suggestions
     
+    def _format_count(self, value):
+        return str(value) if value is not None else self.messages.get('flow_track.no_data', 'No data')
+
     def _format_ratio(self, ratio: Optional[float]) -> str:
         """Format ratio for display (e.g., 1.23 instead of percentage)."""
         if ratio is None:
-            return 'N/A'
+            return self.messages.get('flow_track.no_data', 'No data')
         return f"{ratio:.2f}"
     
     def _format_efficiency(self, pct: Optional[float]) -> str:
         """Format efficiency percentage with fallback for None."""
         if pct is None:
-            return 'N/A'
+            return self.messages.get('flow_track.no_data', 'No data')
         return f"{pct:.1f}%"
     
     def _calculate_surrogate_efficiency(self, animal_name: str) -> Dict[str, Any]:
@@ -2756,6 +2773,7 @@ class FlowTrackWidget:
         Returns dict with 'per_transfer' list and 'total' dict.
         """
         per_transfer = []
+        canonical, issues = self._statistics_embryos()
         total_embryos = 0
         total_implanted = 0
         total_embryos_in_vivo = 0
@@ -2774,14 +2792,15 @@ class FlowTrackWidget:
                 continue
             
             # Count embryos and implanted (v3.0: all embryos, and by stage)
-            embryos = transfer_data.get('embryos', [])
+            embryos = [embryo for tid, _transfer, embryo, allocation in canonical
+                       if tid == transfer_id and allocation == 'transferred']
             embryo_count_all = len(embryos)
             embryo_count_in_vivo = sum(1 for e in embryos if e.get('stage') == STAGE_IN_VIVO_M2)
             embryo_count_in_vitro = sum(1 for e in embryos if e.get('stage') == STAGE_IN_VITRO_M2)
             
-            implanted_count_all = sum(1 for e in embryos if e.get('implanted', False))
-            implanted_count_in_vivo = sum(1 for e in embryos if e.get('implanted', False) and e.get('stage') == STAGE_IN_VIVO_M2)
-            implanted_count_in_vitro = sum(1 for e in embryos if e.get('implanted', False) and e.get('stage') == STAGE_IN_VITRO_M2)
+            implanted_count_all = sum(1 for e in embryos if e.get('implanted') is True)
+            implanted_count_in_vivo = sum(1 for e in embryos if e.get('implanted') is True and e.get('stage') == STAGE_IN_VIVO_M2)
+            implanted_count_in_vitro = sum(1 for e in embryos if e.get('implanted') is True and e.get('stage') == STAGE_IN_VITRO_M2)
             
             if embryo_count_all == 0:
                 continue
@@ -2791,7 +2810,7 @@ class FlowTrackWidget:
             implantation_pct_in_vitro = (implanted_count_in_vitro / embryo_count_in_vitro * 100) if embryo_count_in_vitro > 0 else None
             
             # Get transfer date
-            transfer_date = transfer_data.get('transfer_date')
+            transfer_date = _flow_datetime(transfer_data.get('transfer_date'))
             
             per_transfer.append({
                 'transfer_id': transfer_id,
@@ -2830,6 +2849,7 @@ class FlowTrackWidget:
         transfer_success_rate = (successful_transfers / total_transfers * 100) if total_transfers > 0 else None
         
         return {
+            'issues': issues,
             'per_transfer': per_transfer,
             'total': {
                 'total_embryos': total_embryos,
@@ -2847,144 +2867,201 @@ class FlowTrackWidget:
             }
         }
     
-    def _calculate_sperm_donor_efficiency(self, animal_name: str) -> Dict[str, Any]:
-        """
-        Calculate efficiency metrics for sperm donor (4 metrics focused on IVM M2).
-        
-        Returns dict with 'per_donation' list and 'total' dict containing:
-        1. Fertilization rate (IVM M2): Proportion of IVM M2 oocytes that fertilize
-        2. Usable embryo yield per IVM M2: Transferable/freezable embryos per IVM M2 inseminated
-        3. Implantation rate: Proportion of transferred that implant
-        4. Fertilization rate (in vivo M2, optional): Proportion of in vivo M2 that fertilize
-        """
-        per_donation = []
-        
-        # Totals across all donations
-        total_ivm_m2_inseminated = 0
-        total_ivm_m2_fertilized = 0
-        total_transferred_ivm = 0
-        total_frozen_ivm = 0
-        total_implanted_ivm = 0
-        
-        total_in_vivo_m2_inseminated = 0
-        total_in_vivo_m2_fertilized = 0
-        
-        # Access sperm donor data
-        if animal_name not in self.manual_data.get('sperm_donors', {}):
-            return {'per_donation': [], 'total': {}}
-        
-        animal_manual = self.manual_data['sperm_donors'][animal_name]
-        donations_data = animal_manual.get('donations', {})
-        
-        for donation_id, donation_data in donations_data.items():
-            # Get user-entered data from spinboxes
-            ivm_m2_inseminated = donation_data.get('applied_to_in_vitro_m2', 0)
-            ivm_m2_fertilized = donation_data.get('fertilized_in_vitro_m2', 0)
-            
-            in_vivo_m2_inseminated = donation_data.get('applied_to_in_vivo_m2', 0)
-            in_vivo_m2_fertilized = donation_data.get('fertilized_in_vivo_m2', 0)
-            
-            # Count transferred, implanted, and frozen IVM M2 embryos
-            transferred_ivm = 0
-            frozen_ivm = 0
-            implanted_ivm = 0
-            
-            for transfer_id, transfer_data in self.manual_data.get('transfers_by_id', {}).items():
-                for embryo in transfer_data.get('embryos', []):
-                    if (embryo.get('sperm_donor_name') == animal_name and
-                        embryo.get('sperm_donation_id') == donation_id and
-                        embryo.get('stage') == STAGE_IN_VITRO_M2):  # IVM M2 only
-                        
-                        if transfer_id == FREEZER_TRANSFER_ID:
-                            frozen_ivm += 1
-                        else:
-                            transferred_ivm += 1
-                            if embryo.get('implanted', False):
-                                implanted_ivm += 1
-            
-            # Calculate 4 efficiency metrics for this donation
-            # 1. Fertilization rate (IVM M2)
-            fert_rate_ivm = (ivm_m2_fertilized / ivm_m2_inseminated * 100) if ivm_m2_inseminated > 0 else None
-            
-            # 2. Usable embryo yield per IVM M2 (ratio, not percentage)
-            usable_per_ivm = (transferred_ivm + frozen_ivm) / ivm_m2_inseminated if ivm_m2_inseminated > 0 else None
-            
-            # 3. Implantation rate
-            implantation_rate = (implanted_ivm / transferred_ivm * 100) if transferred_ivm > 0 else None
-            
-            # 4. Fertilization rate (in vivo M2, optional)
-            fert_rate_in_vivo = (in_vivo_m2_fertilized / in_vivo_m2_inseminated * 100) if in_vivo_m2_inseminated > 0 else None
-            
-            # Parse date from donation_id
-            try:
-                donation_date = datetime.fromisoformat(donation_id)
-            except (TypeError, ValueError):
-                donation_date = None
-            
-            per_donation.append({
-                'donation_id': donation_id,
-                'date': donation_date,
-                # IVM M2 data
-                'ivm_m2_inseminated': ivm_m2_inseminated,
-                'ivm_m2_fertilized': ivm_m2_fertilized,
-                'transferred_ivm': transferred_ivm,
-                'frozen_ivm': frozen_ivm,
-                'implanted_ivm': implanted_ivm,
-                # In vivo M2 data
-                'in_vivo_m2_inseminated': in_vivo_m2_inseminated,
-                'in_vivo_m2_fertilized': in_vivo_m2_fertilized,
-                # 4 efficiency metrics
-                'fert_rate_ivm': fert_rate_ivm,
-                'usable_per_ivm': usable_per_ivm,
-                'implantation_rate': implantation_rate,
-                'fert_rate_in_vivo': fert_rate_in_vivo
-            })
-            
-            # Accumulate totals
-            total_ivm_m2_inseminated += ivm_m2_inseminated
-            total_ivm_m2_fertilized += ivm_m2_fertilized
-            total_transferred_ivm += transferred_ivm
-            total_frozen_ivm += frozen_ivm
-            total_implanted_ivm += implanted_ivm
-            
-            total_in_vivo_m2_inseminated += in_vivo_m2_inseminated
-            total_in_vivo_m2_fertilized += in_vivo_m2_fertilized
-        
-        # Sort chronologically
-        per_donation.sort(key=lambda x: x['date'] if x['date'] else datetime.min)
-        
-        # Calculate total 4 efficiency metrics
-        # 1. Fertilization rate (IVM M2)
-        total_fert_rate_ivm = (total_ivm_m2_fertilized / total_ivm_m2_inseminated * 100) if total_ivm_m2_inseminated > 0 else None
-        
-        # 2. Usable embryo yield per IVM M2
-        total_usable_per_ivm = (total_transferred_ivm + total_frozen_ivm) / total_ivm_m2_inseminated if total_ivm_m2_inseminated > 0 else None
-        
-        # 3. Implantation rate
-        total_implantation_rate = (total_implanted_ivm / total_transferred_ivm * 100) if total_transferred_ivm > 0 else None
-        
-        # 4. Fertilization rate (in vivo M2)
-        total_fert_rate_in_vivo = (total_in_vivo_m2_fertilized / total_in_vivo_m2_inseminated * 100) if total_in_vivo_m2_inseminated > 0 else None
-        
-        return {
-            'per_donation': per_donation,
-            'total': {
-                # IVM M2 totals
-                'total_ivm_m2_inseminated': total_ivm_m2_inseminated,
-                'total_ivm_m2_fertilized': total_ivm_m2_fertilized,
-                'total_transferred_ivm': total_transferred_ivm,
-                'total_frozen_ivm': total_frozen_ivm,
-                'total_implanted_ivm': total_implanted_ivm,
-                # In vivo M2 totals
-                'total_in_vivo_m2_inseminated': total_in_vivo_m2_inseminated,
-                'total_in_vivo_m2_fertilized': total_in_vivo_m2_fertilized,
-                # 4 efficiency metrics
-                'fert_rate_ivm': total_fert_rate_ivm,
-                'usable_per_ivm': total_usable_per_ivm,
-                'implantation_rate': total_implantation_rate,
-                'fert_rate_in_vivo': total_fert_rate_in_vivo
+    @staticmethod
+    def _procedure_key_matches(left, right):
+        if str(left or '') == str(right or ''):
+            return bool(left is not None and right is not None)
+        a, b = _flow_datetime(left), _flow_datetime(right)
+        return a is not None and b is not None and a.date() == b.date()
+
+    def _stat_issue(self, code, detail):
+        text = self.messages.get('flow_track.statistics.' + code, {
+            'invalid': 'Missing or invalid count: {detail}',
+            'duplicate': 'Duplicate embryo identity: {detail}',
+            'conflict': 'Conflicting embryo links or locations: {detail}',
+            'link': 'Unresolved donor/procedure link: {detail}',
+            'exceeds': 'Counts exceed recorded production: {detail}',
+        }[code])
+        return text.format(detail=detail)
+
+    def _statistics_warning(self, issues):
+        if not issues:
+            return ''
+        return self.messages.get('flow_track.statistics.warning',
+                                 'Data inconsistencies: {details}').format(details='; '.join(issues))
+
+    def _statistics_embryos(self):
+        """Read-only canonical-ID projection; location, not freeze history, owns allocation."""
+        grouped, issues = {}, []
+        for transfer_id, transfer in self.manual_data.get('transfers_by_id', {}).items():
+            if not isinstance(transfer, dict):
+                issues.append(self._stat_issue('conflict', str(transfer_id)))
+                continue
+            for embryo in transfer.get('embryos', []):
+                if not isinstance(embryo, dict):
+                    issues.append(self._stat_issue('conflict', 'invalid embryo record'))
+                    continue
+                identity = str(embryo.get('embryo_id') or '').strip()
+                if not identity or embryo.get('stage') not in VALID_STAGES:
+                    issues.append(self._stat_issue('conflict', identity or 'missing embryo ID/stage'))
+                    continue
+                grouped.setdefault(identity, []).append((transfer_id, transfer, embryo))
+        records = []
+        for identity, entries in grouped.items():
+            first = entries[0]
+            if len(entries) > 1:
+                issues.append(self._stat_issue('duplicate', identity))
+                if any(item != first for item in entries[1:]):
+                    issues.append(self._stat_issue('conflict', identity))
+                    # There is no truthful unique allocation for a contradictory ID.
+                    continue
+            transfer_id, transfer, embryo = first
+            if transfer_id == FREEZER_TRANSFER_ID:
+                allocation = 'frozen'
+            elif transfer.get('surrogate_name') and _flow_datetime(transfer.get('transfer_date')):
+                allocation = 'transferred'
+            else:
+                allocation = 'unassigned'
+            records.append((transfer_id, transfer, embryo, allocation))
+            for group, rows, donor_field, key_field in (
+                ('egg_donors', 'surgeries', 'egg_donor_name', 'egg_donation_date'),
+                ('sperm_donors', 'donations', 'sperm_donor_name', 'sperm_donation_id'),
+            ):
+                donor = embryo.get(donor_field)
+                procedures = self.manual_data.get(group, {}).get(donor, {}).get(rows, {})
+                matches = [key for key in procedures
+                           if self._procedure_key_matches(key, embryo.get(key_field))]
+                if len(matches) != 1:
+                    issues.append(self._stat_issue('link', f'{identity}: {donor_field}/{key_field}'))
+            if allocation == 'frozen' and embryo.get('implanted') is True:
+                issues.append(self._stat_issue('conflict', f'{identity}: frozen/implanted'))
+        return records, list(dict.fromkeys(issues))
+
+    def _allocation_counts(self, records, animal, procedure, sperm=False, stage=STAGE_IN_VITRO_M2):
+        donor_field = 'sperm_donor_name' if sperm else 'egg_donor_name'
+        key_field = 'sperm_donation_id' if sperm else 'egg_donation_date'
+        result = dict(transferred_ivm=0, frozen_ivm=0, implanted_ivm=0, unassigned_ivm=0)
+        group, rows = ('sperm_donors', 'donations') if sperm else ('egg_donors', 'surgeries')
+        procedures = self.manual_data.get(group, {}).get(animal, {}).get(rows, {})
+        for _tid, _transfer, embryo, allocation in records:
+            matches = [key for key in procedures
+                       if self._procedure_key_matches(embryo.get(key_field), key)]
+            if len(matches) != 1:
+                continue
+            if (embryo.get(donor_field) == animal and embryo.get('stage') == stage
+                    and self._procedure_key_matches(embryo.get(key_field), procedure)):
+                result[allocation + '_ivm'] += 1
+                if allocation == 'transferred' and embryo.get('implanted') is True:
+                    result['implanted_ivm'] += 1
+        return result
+
+    @staticmethod
+    def _editable_count(value):
+        """Invalid/missing imported counts must not crash the editor or change on open."""
+        return value if type(value) is int and value >= 0 else 0
+
+    def _set_count_input(self, spin, value):
+        spin.setValue(self._editable_count(value))
+        spin._flow_count_source = value
+        spin._flow_count_edited = False
+        if type(value) is not int or value < 0:
+            spin.setSpecialValueText(self.messages.get('flow_track.no_data', 'No data'))
+        def mark_edited(*_args):
+            spin._flow_count_edited = True
+            spin.setSpecialValueText('')
+        spin.valueChanged.connect(mark_edited)
+        spin.lineEdit().textEdited.connect(mark_edited)
+
+    @staticmethod
+    def _entered_count(spin):
+        return spin.value() if spin._flow_count_edited else spin._flow_count_source
+
+    @staticmethod
+    def _stat_sum(values):
+        values = list(values)
+        return None if not values or any(value is None for value in values) else sum(values)
+
+    @staticmethod
+    def _stat_rate(numerator, denominator, percent=True):
+        if numerator is None or denominator is None or denominator <= 0:
+            return None
+        return numerator / denominator * (100 if percent else 1)
+
+    def _donor_efficiency(self, animal_name, sperm=False):
+        """Production inputs and allocation outcomes remain independent, never inferred."""
+        group, rows_key = ('sperm_donors', 'donations') if sperm else ('egg_donors', 'surgeries')
+        fields = ({
+            'ivm_m2_inseminated': 'applied_to_in_vitro_m2',
+            'ivm_m2_fertilized': 'fertilized_in_vitro_m2',
+            'in_vivo_m2_inseminated': 'applied_to_in_vivo_m2',
+            'in_vivo_m2_fertilized': 'fertilized_in_vivo_m2',
+        } if sperm else {
+            'gv_isolated': 'gv_isolated', 'ivm_m2': 'm1_to_m2',
+            'ivm_m2_fertilized': 'in_vitro_m2_fertilized',
+        })
+        fields['produced_ivm'] = 'embryos_from_in_vitro_m2'
+        records, issues = self._statistics_embryos()
+        procedures = self.manual_data.get(group, {}).get(animal_name, {}).get(rows_key, {})
+        rows = []
+        for key, data in procedures.items():
+            row = {}
+            for target, source in fields.items():
+                value = data.get(source)
+                if type(value) is not int or value < 0:
+                    issues.append(self._stat_issue('invalid', f'{animal_name}/{key}/{source}'))
+                    value = None
+                row[target] = value
+            row.update(self._allocation_counts(records, animal_name, key, sperm))
+            row['usable_ivm'] = row['transferred_ivm'] + row['frozen_ivm']
+            row['donation_id' if sperm else 'surgery_id'] = key
+            # IDs can be opaque: explicit dates/events, never parse-only identity inference.
+            stamp = data.get('date') or data.get('donation_date') or data.get('surgery_date')
+            row['date'] = _flow_datetime(stamp) or _flow_datetime(key)
+            if row['date'] is None:
+                source = getattr(self, 'sperm_donations' if sperm else 'egg_surgeries', [])
+                row['date'] = next((_flow_datetime(event.get('date')) for event in source
+                                    if str(event.get('id')) == str(key)
+                                    and event.get('animal_name') == animal_name), None)
+            chain = ([row['ivm_m2_inseminated'], row['ivm_m2_fertilized'], row['produced_ivm']]
+                     if sperm else [row['ivm_m2'], row['ivm_m2_fertilized'], row['produced_ivm']])
+            if (any(a is not None and b is not None and b > a for a, b in zip(chain, chain[1:]))
+                    or (row['produced_ivm'] is not None and row['usable_ivm'] + row['unassigned_ivm'] > row['produced_ivm'])):
+                issues.append(self._stat_issue('exceeds', f'{animal_name}/{key}'))
+            rows.append(row)
+        def metrics(row):
+            rate = self._stat_rate
+            if sperm:
+                return {
+                    'fert_rate_ivm': rate(row['ivm_m2_fertilized'], row['ivm_m2_inseminated']),
+                    'usable_per_ivm': rate(row['usable_ivm'], row['ivm_m2_inseminated'], False),
+                    'implantation_rate': rate(row['implanted_ivm'], row['transferred_ivm']),
+                    'fert_rate_in_vivo': rate(row['in_vivo_m2_fertilized'], row['in_vivo_m2_inseminated']),
+                }
+            return {
+                'ivm_rate': rate(row['ivm_m2'], row['gv_isolated']),
+                'fert_rate_after_ivm': rate(row['ivm_m2_fertilized'], row['ivm_m2']),
+                'usable_from_fert': rate(row['usable_ivm'], row['ivm_m2_fertilized']),
+                'implantation_rate': rate(row['implanted_ivm'], row['transferred_ivm']),
+                'usable_per_gv': rate(row['usable_ivm'], row['gv_isolated'], False),
+                'fert_per_gv': rate(row['ivm_m2_fertilized'], row['gv_isolated'], False),
             }
-        }
+        raw_keys = list(fields) + ['transferred_ivm', 'frozen_ivm', 'implanted_ivm',
+                                   'unassigned_ivm', 'usable_ivm']
+        pooled = {key: self._stat_sum(row[key] for row in rows) for key in raw_keys}
+        # No procedures means no entered counts, but known empty allocation.
+        for key in ('transferred_ivm', 'frozen_ivm', 'implanted_ivm', 'unassigned_ivm', 'usable_ivm'):
+            if not rows:
+                pooled[key] = 0
+        total = {'total_' + key: value for key, value in pooled.items()}
+        total.update(metrics(pooled))
+        for row in rows:
+            row.update(metrics(row))
+        rows.sort(key=lambda row: row['date'] or datetime.min)
+        return {'per_donation' if sperm else 'per_surgery': rows,
+                'total': total, 'issues': list(dict.fromkeys(issues))}
+
+    def _calculate_sperm_donor_efficiency(self, animal_name: str) -> Dict[str, Any]:
+        return self._donor_efficiency(animal_name, sperm=True)
     
     def _count_unlinked_embryos(self, sperm_donor_name: str) -> int:
         """Count embryos for sperm donor without sperm_donation_id (v3.0 schema)."""
@@ -2999,141 +3076,7 @@ class FlowTrackWidget:
         return unlinked
     
     def _calculate_egg_donor_efficiency(self, animal_name: str) -> Dict[str, Any]:
-        """
-        Calculate efficiency metrics for egg donor (6 metrics focused on IVM pathway).
-        
-        Returns dict with 'per_surgery' list and 'total' dict containing:
-        1. IVM rate: Proportion of retrieved GV oocytes that mature to IVM M2
-        2. Fertilization rate after IVM: Proportion of IVM-derived M2 that fertilize
-        3. Usable embryo yield from fertilized: Proportion of fertilized that result in transferable/freezable
-        4. Implantation rate: Proportion of transferred that implant
-        5. Overall usable yield per GV: Transferable/freezable embryos per GV retrieved
-        6. Fertilized per GV: Fertilized IVM-derived oocytes per GV retrieved
-        """
-        per_surgery = []
-        
-        # Totals across all surgeries
-        total_gv_isolated = 0
-        total_ivm_m2 = 0  # m1_to_m2
-        total_ivm_m2_fertilized = 0
-        total_transferred_ivm = 0
-        total_frozen_ivm = 0
-        total_implanted_ivm = 0
-        
-        # Access egg donor data
-        if animal_name not in self.manual_data.get('egg_donors', {}):
-            return {'per_surgery': [], 'total': {}}
-        
-        animal_manual = self.manual_data['egg_donors'][animal_name]
-        surgery_data = animal_manual.get('surgeries', {})
-        
-        for surgery_id, surg_data in surgery_data.items():
-            # Get user-entered data from spinboxes
-            gv_isolated = surg_data.get('gv_isolated', 0)
-            ivm_m2 = surg_data.get('m1_to_m2', 0)  # GV→M2 (IVM M2)
-            ivm_m2_fertilized = surg_data.get('in_vitro_m2_fertilized', 0)
-            
-            # Count transferred, implanted, and frozen from transfers_by_id (IVM-derived only)
-            transferred_ivm = 0
-            frozen_ivm = 0
-            implanted_ivm = 0
-            
-            surgery_date_str = surgery_id
-            for transfer_id, transfer_data in self.manual_data.get('transfers_by_id', {}).items():
-                for embryo in transfer_data.get('embryos', []):
-                    if (embryo.get('egg_donor_name') == animal_name and
-                        embryo.get('egg_donation_date') == surgery_date_str and
-                        embryo.get('stage') == STAGE_IN_VITRO_M2):  # IVM-derived only
-                        
-                        if transfer_id == FREEZER_TRANSFER_ID:
-                            frozen_ivm += 1
-                        else:
-                            transferred_ivm += 1
-                            if embryo.get('implanted', False):
-                                implanted_ivm += 1
-            
-            # Calculate 6 efficiency metrics for this surgery
-            # 1. IVM rate
-            ivm_rate = (ivm_m2 / gv_isolated * 100) if gv_isolated > 0 else None
-            
-            # 2. Fertilization rate after IVM
-            fert_rate_after_ivm = (ivm_m2_fertilized / ivm_m2 * 100) if ivm_m2 > 0 else None
-            
-            # 3. Usable embryo yield from fertilized
-            usable_from_fert = ((transferred_ivm + frozen_ivm) / ivm_m2_fertilized * 100) if ivm_m2_fertilized > 0 else None
-            
-            # 4. Implantation rate
-            implantation_rate = (implanted_ivm / transferred_ivm * 100) if transferred_ivm > 0 else None
-            
-            # 5. Overall usable yield per GV (ratio, not percentage)
-            usable_per_gv = (transferred_ivm + frozen_ivm) / gv_isolated if gv_isolated > 0 else None
-            
-            # 6. Fertilized per GV (ratio, not percentage)
-            fert_per_gv = ivm_m2_fertilized / gv_isolated if gv_isolated > 0 else None
-            
-            # Parse date from surgery_id
-            try:
-                surgery_date = datetime.fromisoformat(surgery_id)
-            except (TypeError, ValueError):
-                surgery_date = None
-            
-            per_surgery.append({
-                'surgery_id': surgery_id,
-                'date': surgery_date,
-                # Raw counts
-                'gv_isolated': gv_isolated,
-                'ivm_m2': ivm_m2,
-                'ivm_m2_fertilized': ivm_m2_fertilized,
-                'transferred_ivm': transferred_ivm,
-                'frozen_ivm': frozen_ivm,
-                'implanted_ivm': implanted_ivm,
-                # 6 efficiency metrics
-                'ivm_rate': ivm_rate,
-                'fert_rate_after_ivm': fert_rate_after_ivm,
-                'usable_from_fert': usable_from_fert,
-                'implantation_rate': implantation_rate,
-                'usable_per_gv': usable_per_gv,
-                'fert_per_gv': fert_per_gv
-            })
-            
-            # Accumulate totals
-            total_gv_isolated += gv_isolated
-            total_ivm_m2 += ivm_m2
-            total_ivm_m2_fertilized += ivm_m2_fertilized
-            total_transferred_ivm += transferred_ivm
-            total_frozen_ivm += frozen_ivm
-            total_implanted_ivm += implanted_ivm
-        
-        # Sort chronologically
-        per_surgery.sort(key=lambda x: x['date'] if x['date'] else datetime.min)
-        
-        # Calculate TOTAL 6 efficiency metrics
-        total_ivm_rate = (total_ivm_m2 / total_gv_isolated * 100) if total_gv_isolated > 0 else None
-        total_fert_rate_after_ivm = (total_ivm_m2_fertilized / total_ivm_m2 * 100) if total_ivm_m2 > 0 else None
-        total_usable_from_fert = ((total_transferred_ivm + total_frozen_ivm) / total_ivm_m2_fertilized * 100) if total_ivm_m2_fertilized > 0 else None
-        total_implantation_rate = (total_implanted_ivm / total_transferred_ivm * 100) if total_transferred_ivm > 0 else None
-        total_usable_per_gv = (total_transferred_ivm + total_frozen_ivm) / total_gv_isolated if total_gv_isolated > 0 else None
-        total_fert_per_gv = total_ivm_m2_fertilized / total_gv_isolated if total_gv_isolated > 0 else None
-        
-        return {
-            'per_surgery': per_surgery,
-            'total': {
-                # Raw counts
-                'total_gv_isolated': total_gv_isolated,
-                'total_ivm_m2': total_ivm_m2,
-                'total_ivm_m2_fertilized': total_ivm_m2_fertilized,
-                'total_transferred_ivm': total_transferred_ivm,
-                'total_frozen_ivm': total_frozen_ivm,
-                'total_implanted_ivm': total_implanted_ivm,
-                # 6 total efficiency metrics
-                'ivm_rate': total_ivm_rate,
-                'fert_rate_after_ivm': total_fert_rate_after_ivm,
-                'usable_from_fert': total_usable_from_fert,
-                'implantation_rate': total_implantation_rate,
-                'usable_per_gv': total_usable_per_gv,
-                'fert_per_gv': total_fert_per_gv
-            }
-        }
+        return self._donor_efficiency(animal_name)
     
     def _show_animal_info(self, animal_name):
         """Show role-specific information and data entry for clicked animal."""
@@ -3180,8 +3123,12 @@ class FlowTrackWidget:
         
         # === EFFICIENCY METRICS SECTION ===
         efficiency_data = self._calculate_egg_donor_efficiency(animal_name)
+        if efficiency_data.get('issues'):
+            warning = QtWidgets.QLabel(self._statistics_warning(efficiency_data['issues']))
+            warning.setWordWrap(True)
+            layout.addWidget(warning)
         
-        if efficiency_data['per_surgery'] or efficiency_data['total'].get('total_gv_isolated', 0) > 0:
+        if efficiency_data['per_surgery']:
             metrics_group = QtWidgets.QGroupBox(self.messages.get('flow_track.dialog.efficiency_metrics', 'EFFICIENCY METRICS'))
             metrics_layout = QtWidgets.QVBoxLayout()
             
@@ -3253,7 +3200,7 @@ class FlowTrackWidget:
             metrics_layout.addLayout(metric1_row)
             
             ivm_rate_text = f"  {self.messages.get('flow_track.dialog.egg_donor.ivm_rate_desc', 'Proportion of retrieved GV oocytes that mature to IVM M2')}\n"
-            ivm_rate_text += f"  {total.get('total_ivm_m2', 0)}/{total.get('total_gv_isolated', 0)} ({self._format_efficiency(total.get('ivm_rate'))})"
+            ivm_rate_text += f"  {self._format_count(total.get('total_ivm_m2'))}/{self._format_count(total.get('total_gv_isolated'))} ({self._format_efficiency(total.get('ivm_rate'))})"
             ivm_rate_display = QtWidgets.QLabel(ivm_rate_text, metrics_group)
             ivm_rate_display.setStyleSheet("padding: 5px;")
             ivm_rate_display.setVisible(metric_visibility.get('ivm_rate', True))
@@ -3272,7 +3219,7 @@ class FlowTrackWidget:
             metrics_layout.addLayout(metric2_row)
             
             fert_rate_text = f"  {self.messages.get('flow_track.dialog.egg_donor.fert_rate_after_ivm_desc', 'Proportion of IVM-derived M2 oocytes that fertilize successfully')}\n"
-            fert_rate_text += f"  {total.get('total_ivm_m2_fertilized', 0)}/{total.get('total_ivm_m2', 0)} ({self._format_efficiency(total.get('fert_rate_after_ivm'))})"
+            fert_rate_text += f"  {self._format_count(total.get('total_ivm_m2_fertilized'))}/{self._format_count(total.get('total_ivm_m2'))} ({self._format_efficiency(total.get('fert_rate_after_ivm'))})"
             fert_rate_display = QtWidgets.QLabel(fert_rate_text, metrics_group)
             fert_rate_display.setStyleSheet("padding: 5px;")
             fert_rate_display.setVisible(metric_visibility.get('fert_rate_after_ivm', True))
@@ -3292,7 +3239,7 @@ class FlowTrackWidget:
             
             total_usable = total.get('total_transferred_ivm', 0) + total.get('total_frozen_ivm', 0)
             usable_yield_text = f"  {self.messages.get('flow_track.dialog.egg_donor.usable_from_fert_desc', 'Proportion of fertilized IVM-derived oocytes that result in transferable/freezable embryos')}\n"
-            usable_yield_text += f"  {total_usable}/{total.get('total_ivm_m2_fertilized', 0)} ({self._format_efficiency(total.get('usable_from_fert'))})"
+            usable_yield_text += f"  {total_usable}/{self._format_count(total.get('total_ivm_m2_fertilized'))} ({self._format_efficiency(total.get('usable_from_fert'))})"
             usable_yield_display = QtWidgets.QLabel(usable_yield_text, metrics_group)
             usable_yield_display.setStyleSheet("padding: 5px;")
             usable_yield_display.setVisible(metric_visibility.get('usable_from_fert', True))
@@ -3311,7 +3258,7 @@ class FlowTrackWidget:
             metrics_layout.addLayout(metric4_row)
             
             impl_rate_text = f"  {self.messages.get('flow_track.dialog.egg_donor.implantation_rate_desc', 'Proportion of transferred embryos that implant successfully')}\n"
-            impl_rate_text += f"  {total.get('total_implanted_ivm', 0)}/{total.get('total_transferred_ivm', 0)} ({self._format_efficiency(total.get('implantation_rate'))})"
+            impl_rate_text += f"  {self._format_count(total.get('total_implanted_ivm'))}/{self._format_count(total.get('total_transferred_ivm'))} ({self._format_efficiency(total.get('implantation_rate'))})"
             impl_rate_display = QtWidgets.QLabel(impl_rate_text, metrics_group)
             impl_rate_display.setStyleSheet("padding: 5px;")
             impl_rate_display.setVisible(metric_visibility.get('implantation_rate', True))
@@ -3330,7 +3277,7 @@ class FlowTrackWidget:
             metrics_layout.addLayout(metric5_row)
             
             usable_per_gv_text = f"  {self.messages.get('flow_track.dialog.egg_donor.usable_per_gv_desc', 'Number of transferable/freezable embryos per GV oocyte retrieved')}\n"
-            usable_per_gv_text += f"  {total_usable}/{total.get('total_gv_isolated', 0)} ({self._format_ratio(total.get('usable_per_gv'))})"
+            usable_per_gv_text += f"  {total_usable}/{self._format_count(total.get('total_gv_isolated'))} ({self._format_ratio(total.get('usable_per_gv'))})"
             usable_per_gv_display = QtWidgets.QLabel(usable_per_gv_text, metrics_group)
             usable_per_gv_display.setStyleSheet("padding: 5px;")
             usable_per_gv_display.setVisible(metric_visibility.get('usable_per_gv', True))
@@ -3349,7 +3296,7 @@ class FlowTrackWidget:
             metrics_layout.addLayout(metric6_row)
             
             fert_per_gv_text = f"  {self.messages.get('flow_track.dialog.egg_donor.fert_per_gv_desc', 'Number of successfully fertilized IVM-derived oocytes per GV oocyte retrieved')}\n"
-            fert_per_gv_text += f"  {total.get('total_ivm_m2_fertilized', 0)}/{total.get('total_gv_isolated', 0)} ({self._format_ratio(total.get('fert_per_gv'))})"
+            fert_per_gv_text += f"  {self._format_count(total.get('total_ivm_m2_fertilized'))}/{self._format_count(total.get('total_gv_isolated'))} ({self._format_ratio(total.get('fert_per_gv'))})"
             fert_per_gv_display = QtWidgets.QLabel(fert_per_gv_text, metrics_group)
             fert_per_gv_display.setStyleSheet("padding: 5px;")
             fert_per_gv_display.setVisible(metric_visibility.get('fert_per_gv', True))
@@ -3468,7 +3415,7 @@ class FlowTrackWidget:
             gv_row.addWidget(gv_label)
             gv_isolated_spin = QtWidgets.QSpinBox()
             gv_isolated_spin.setRange(0, 9999)
-            gv_isolated_spin.setValue(surg_data.get('gv_isolated', 0))
+            self._set_count_input(gv_isolated_spin, surg_data.get('gv_isolated'))
             gv_isolated_spin.setMaximumWidth(70)
             gv_row.addWidget(gv_isolated_spin)
             gv_row.addStretch()
@@ -3480,7 +3427,7 @@ class FlowTrackWidget:
             m2_row.addWidget(m2_label)
             m2_isolated_spin = QtWidgets.QSpinBox()
             m2_isolated_spin.setRange(0, 9999)
-            m2_isolated_spin.setValue(surg_data.get('m2_isolated', 0))
+            self._set_count_input(m2_isolated_spin, surg_data.get('m2_isolated'))
             m2_isolated_spin.setMaximumWidth(70)
             m2_row.addWidget(m2_isolated_spin)
             m2_row.addStretch()
@@ -3511,7 +3458,7 @@ class FlowTrackWidget:
             right_layout.addWidget(gv_to_m2_label)
             m1_to_m2_spin = QtWidgets.QSpinBox()
             m1_to_m2_spin.setRange(0, 999)
-            m1_to_m2_spin.setValue(surg_data.get('m1_to_m2', 0))
+            self._set_count_input(m1_to_m2_spin, surg_data.get('m1_to_m2'))
             right_layout.addWidget(m1_to_m2_spin)
             
             # Fertilized row
@@ -3523,7 +3470,7 @@ class FlowTrackWidget:
             in_vivo_fert_layout.addWidget(in_vivo_fert_label)
             in_vivo_fert_spin = QtWidgets.QSpinBox()
             in_vivo_fert_spin.setRange(0, 999)
-            in_vivo_fert_spin.setValue(surg_data.get('in_vivo_m2_fertilized', 0))
+            self._set_count_input(in_vivo_fert_spin, surg_data.get('in_vivo_m2_fertilized'))
             in_vivo_fert_layout.addWidget(in_vivo_fert_spin)
             fert_row.addLayout(in_vivo_fert_layout)
             
@@ -3533,7 +3480,7 @@ class FlowTrackWidget:
             in_vitro_fert_layout.addWidget(in_vitro_fert_label)
             in_vitro_fert_spin = QtWidgets.QSpinBox()
             in_vitro_fert_spin.setRange(0, 999)
-            in_vitro_fert_spin.setValue(surg_data.get('in_vitro_m2_fertilized', 0))
+            self._set_count_input(in_vitro_fert_spin, surg_data.get('in_vitro_m2_fertilized'))
             in_vitro_fert_layout.addWidget(in_vitro_fert_spin)
             fert_row.addLayout(in_vitro_fert_layout)
             
@@ -3548,7 +3495,7 @@ class FlowTrackWidget:
             in_vivo_embryo_layout.addWidget(in_vivo_embryo_label)
             in_vivo_embryo_spin = QtWidgets.QSpinBox()
             in_vivo_embryo_spin.setRange(0, 999)
-            in_vivo_embryo_spin.setValue(surg_data.get('embryos_from_in_vivo_m2', 0))
+            self._set_count_input(in_vivo_embryo_spin, surg_data.get('embryos_from_in_vivo_m2'))
             in_vivo_embryo_layout.addWidget(in_vivo_embryo_spin)
             embryo_row.addLayout(in_vivo_embryo_layout)
             
@@ -3558,7 +3505,7 @@ class FlowTrackWidget:
             in_vitro_embryo_layout.addWidget(in_vitro_embryo_label)
             in_vitro_embryo_spin = QtWidgets.QSpinBox()
             in_vitro_embryo_spin.setRange(0, 999)
-            in_vitro_embryo_spin.setValue(surg_data.get('embryos_from_in_vitro_m2', 0))
+            self._set_count_input(in_vitro_embryo_spin, surg_data.get('embryos_from_in_vitro_m2'))
             in_vitro_embryo_layout.addWidget(in_vitro_embryo_spin)
             embryo_row.addLayout(in_vitro_embryo_layout)
             
@@ -3602,43 +3549,12 @@ class FlowTrackWidget:
             
             # Function to update transferred/implanted/frozen labels for this surgery
             def update_transfer_labels_for_surgery(captured_surg_key=surg_date_key, captured_animal=animal_name):
-                transferred_in_vivo = 0
-                transferred_in_vitro = 0
-                implanted_in_vivo = 0
-                implanted_in_vitro = 0
-                frozen_in_vivo = 0
-                frozen_in_vitro = 0
-                
-                logger.debug(f"Egg donor dialog: Looking for embryos with egg_donor_name={captured_animal}, egg_donation_date={captured_surg_key}")
-                
-                for transfer_id, transfer_data in self.manual_data.get('transfers_by_id', {}).items():
-                    for embryo in transfer_data.get('embryos', []):
-                        egg_name = embryo.get('egg_donor_name')
-                        egg_date = embryo.get('egg_donation_date')
-                        
-                        if (egg_name == captured_animal and egg_date == captured_surg_key):
-                            stage = embryo.get('stage')
-                            is_implanted = embryo.get('implanted', False)
-                            
-                            # Count frozen embryos separately
-                            if transfer_id == FREEZER_TRANSFER_ID:
-                                if stage == STAGE_IN_VIVO_M2:
-                                    frozen_in_vivo += 1
-                                elif stage == STAGE_IN_VITRO_M2:
-                                    frozen_in_vitro += 1
-                            else:
-                                # Count transferred (non-frozen)
-                                if stage == STAGE_IN_VIVO_M2:
-                                    transferred_in_vivo += 1
-                                    if is_implanted:
-                                        implanted_in_vivo += 1
-                                elif stage == STAGE_IN_VITRO_M2:
-                                    transferred_in_vitro += 1
-                                    if is_implanted:
-                                        implanted_in_vitro += 1
-                
-                logger.debug(f"Egg donor results: transferred_in_vivo={transferred_in_vivo}, implanted_in_vivo={implanted_in_vivo}, frozen_in_vivo={frozen_in_vivo}, transferred_in_vitro={transferred_in_vitro}, implanted_in_vitro={implanted_in_vitro}, frozen_in_vitro={frozen_in_vitro}")
-                
+                records, _issues = self._statistics_embryos()
+                vivo = self._allocation_counts(records, captured_animal, captured_surg_key, False, STAGE_IN_VIVO_M2)
+                vitro = self._allocation_counts(records, captured_animal, captured_surg_key, False)
+                transferred_in_vivo, implanted_in_vivo, frozen_in_vivo = (vivo[key] for key in ('transferred_ivm', 'implanted_ivm', 'frozen_ivm'))
+                transferred_in_vitro, implanted_in_vitro, frozen_in_vitro = (vitro[key] for key in ('transferred_ivm', 'implanted_ivm', 'frozen_ivm'))
+
                 # Display independent stats in columns (without prefixes)
                 transferred_text = self.messages.get('flow_track.dialog.egg_donor.transferred', 'transferred')
                 implanted_text = self.messages.get('flow_track.dialog.egg_donor.implanted', 'implanted')
@@ -3682,32 +3598,9 @@ class FlowTrackWidget:
             surg_frame.setLayout(surg_frame_layout)
             surgery_layout.addWidget(surg_frame)
             
-            # Connect value changes
-            def make_value_changed_handler(surgery_key, gv_spin, m2_spin, m1_m2_spin, 
-                                          in_vivo_spin, in_vitro_spin, in_vivo_emb_spin, in_vitro_emb_spin,
-                                          comments_widget, label_updater):
-                def handler():
-                    existing = self.manual_data['egg_donors'][animal_name]['surgeries'].get(surgery_key, {})
-                    self.manual_data['egg_donors'][animal_name]['surgeries'][surgery_key] = {
-                        'gv_isolated': gv_spin.value(),
-                        'm1_isolated': 0,
-                        'm2_isolated': m2_spin.value(),
-                        'm1_to_m2': m1_m2_spin.value(),
-                        'in_vivo_m2_fertilized': in_vivo_spin.value(),
-                        'in_vitro_m2_fertilized': in_vitro_spin.value(),
-                        'embryos_from_in_vivo_m2': in_vivo_emb_spin.value(),
-                        'embryos_from_in_vitro_m2': in_vitro_emb_spin.value(),
-                        'comments': comments_widget.toPlainText(),
-                        'frozen_from_in_vivo_m2': existing.get('frozen_from_in_vivo_m2', 0),
-                        'frozen_from_in_vitro_m2': existing.get('frozen_from_in_vitro_m2', 0)
-                    }
-                    label_updater()
-                return handler
-            
-            value_changed = make_value_changed_handler(surg_date_key, gv_isolated_spin,
-                                                      m2_isolated_spin, m1_to_m2_spin, in_vivo_fert_spin,
-                                                      in_vitro_fert_spin, in_vivo_embryo_spin, in_vitro_embryo_spin,
-                                                      comments_edit, update_transfer_labels_for_surgery)
+            # Allocation labels are read-only; typing must not commit production before Save.
+            def value_changed(*_args, update_labels=update_transfer_labels_for_surgery):
+                update_labels()
             gv_isolated_spin.valueChanged.connect(value_changed)
             m2_isolated_spin.valueChanged.connect(value_changed)
             m1_to_m2_spin.valueChanged.connect(value_changed)
@@ -3772,14 +3665,15 @@ class FlowTrackWidget:
                     # Preserve frozen counts from schema (not editable in UI)
                     existing = self.manual_data['egg_donors'][animal_name]['surgeries'].get(surg_key, {})
                     self.manual_data['egg_donors'][animal_name]['surgeries'][surg_key] = {
-                        'gv_isolated': widget_set['gv_isolated'].value(),
-                        'm1_isolated': 0,
-                        'm2_isolated': widget_set['m2_isolated'].value(),
-                        'm1_to_m2': widget_set['m1_to_m2'].value(),
-                        'in_vivo_m2_fertilized': widget_set['in_vivo_fert'].value(),
-                        'in_vitro_m2_fertilized': widget_set['in_vitro_fert'].value(),
-                        'embryos_from_in_vivo_m2': widget_set['in_vivo_embryos'].value(),
-                        'embryos_from_in_vitro_m2': widget_set['in_vitro_embryos'].value(),
+                        **existing,
+                        'gv_isolated': self._entered_count(widget_set['gv_isolated']),
+                        'm1_isolated': existing.get('m1_isolated', 0),
+                        'm2_isolated': self._entered_count(widget_set['m2_isolated']),
+                        'm1_to_m2': self._entered_count(widget_set['m1_to_m2']),
+                        'in_vivo_m2_fertilized': self._entered_count(widget_set['in_vivo_fert']),
+                        'in_vitro_m2_fertilized': self._entered_count(widget_set['in_vitro_fert']),
+                        'embryos_from_in_vivo_m2': self._entered_count(widget_set['in_vivo_embryos']),
+                        'embryos_from_in_vitro_m2': self._entered_count(widget_set['in_vitro_embryos']),
                         'comments': widget_set['comments'].toPlainText(),
                         'frozen_from_in_vivo_m2': existing.get('frozen_from_in_vivo_m2', 0),
                         'frozen_from_in_vitro_m2': existing.get('frozen_from_in_vitro_m2', 0)
@@ -3809,8 +3703,12 @@ class FlowTrackWidget:
         
         # === EFFICIENCY METRICS SECTION ===
         efficiency_data = self._calculate_sperm_donor_efficiency(animal_name)
+        if efficiency_data.get('issues'):
+            warning = QtWidgets.QLabel(self._statistics_warning(efficiency_data['issues']))
+            warning.setWordWrap(True)
+            layout.addWidget(warning)
         
-        if efficiency_data['per_donation'] or efficiency_data['total'].get('total_ivm_m2_inseminated', 0) > 0:
+        if efficiency_data['per_donation']:
             metrics_group = QtWidgets.QGroupBox(self.messages.get('flow_track.dialog.efficiency_metrics', 'EFFICIENCY METRICS'))
             metrics_layout = QtWidgets.QVBoxLayout()
             
@@ -3877,7 +3775,7 @@ class FlowTrackWidget:
             metrics_layout.addLayout(metric1_row)
             
             fert_ivm_text = f"  {self.messages.get('flow_track.dialog.sperm_donor.fert_rate_ivm_desc', 'Proportion of IVM-derived M2 oocytes that fertilize successfully with this sperm')}\n"
-            fert_ivm_text += f"  {total.get('total_ivm_m2_fertilized', 0)}/{total.get('total_ivm_m2_inseminated', 0)} ({self._format_efficiency(total.get('fert_rate_ivm'))})"
+            fert_ivm_text += f"  {self._format_count(total.get('total_ivm_m2_fertilized'))}/{self._format_count(total.get('total_ivm_m2_inseminated'))} ({self._format_efficiency(total.get('fert_rate_ivm'))})"
             fert_ivm_display = QtWidgets.QLabel(fert_ivm_text, metrics_group)
             fert_ivm_display.setStyleSheet("padding: 5px;")
             fert_ivm_display.setVisible(sperm_metric_visibility.get('fert_rate_ivm', True))
@@ -3897,7 +3795,7 @@ class FlowTrackWidget:
             
             total_usable_ivm = total.get('total_transferred_ivm', 0) + total.get('total_frozen_ivm', 0)
             usable_ivm_text = f"  {self.messages.get('flow_track.dialog.sperm_donor.usable_per_ivm_desc', 'Number of transferable or freezable embryos obtained per IVM-derived M2 oocyte inseminated')}\n"
-            usable_ivm_text += f"  {total_usable_ivm}/{total.get('total_ivm_m2_inseminated', 0)} ({self._format_ratio(total.get('usable_per_ivm'))})"
+            usable_ivm_text += f"  {total_usable_ivm}/{self._format_count(total.get('total_ivm_m2_inseminated'))} ({self._format_ratio(total.get('usable_per_ivm'))})"
             usable_ivm_display = QtWidgets.QLabel(usable_ivm_text, metrics_group)
             usable_ivm_display.setStyleSheet("padding: 5px;")
             usable_ivm_display.setVisible(sperm_metric_visibility.get('usable_per_ivm', True))
@@ -3916,7 +3814,7 @@ class FlowTrackWidget:
             metrics_layout.addLayout(metric3_row)
             
             impl_rate_text = f"  {self.messages.get('flow_track.dialog.sperm_donor.implantation_rate_desc', 'Proportion of transferred IVM M2 embryos that implant successfully')}\n"
-            impl_rate_text += f"  {total.get('total_implanted_ivm', 0)}/{total.get('total_transferred_ivm', 0)} ({self._format_efficiency(total.get('implantation_rate'))})"
+            impl_rate_text += f"  {self._format_count(total.get('total_implanted_ivm'))}/{self._format_count(total.get('total_transferred_ivm'))} ({self._format_efficiency(total.get('implantation_rate'))})"
             impl_rate_display = QtWidgets.QLabel(impl_rate_text, metrics_group)
             impl_rate_display.setStyleSheet("padding: 5px;")
             impl_rate_display.setVisible(sperm_metric_visibility.get('implantation_rate', True))
@@ -3935,7 +3833,7 @@ class FlowTrackWidget:
             metrics_layout.addLayout(metric4_row)
             
             fert_vivo_text = f"  {self.messages.get('flow_track.dialog.sperm_donor.fert_rate_in_vivo_desc', 'Proportion of in vivo-matured M2 oocytes that fertilize successfully')}\n"
-            fert_vivo_text += f"  {total.get('total_in_vivo_m2_fertilized', 0)}/{total.get('total_in_vivo_m2_inseminated', 0)} ({self._format_efficiency(total.get('fert_rate_in_vivo'))})"
+            fert_vivo_text += f"  {self._format_count(total.get('total_in_vivo_m2_fertilized'))}/{self._format_count(total.get('total_in_vivo_m2_inseminated'))} ({self._format_efficiency(total.get('fert_rate_in_vivo'))})"
             fert_vivo_display = QtWidgets.QLabel(fert_vivo_text, metrics_group)
             fert_vivo_display.setStyleSheet("padding: 5px;")
             fert_vivo_display.setVisible(sperm_metric_visibility.get('fert_rate_in_vivo', True))
@@ -3989,6 +3887,7 @@ class FlowTrackWidget:
                 # Get existing data (enhanced schema - separate in vivo/in vitro M2)
                 if donation_id not in self.manual_data['sperm_donors'][animal_name]['donations']:
                     self.manual_data['sperm_donors'][animal_name]['donations'][donation_id] = {
+                        **self.manual_data['sperm_donors'][animal_name]['donations'].get(donation_id, {}),
                         'applied_to_in_vivo_m2': 0,
                         'fertilized_in_vivo_m2': 0,
                         'embryos_from_in_vivo_m2': 0,
@@ -4040,7 +3939,7 @@ class FlowTrackWidget:
                 in_vivo_insem_row.addWidget(in_vivo_insem_label)
                 in_vivo_applied_spin = QtWidgets.QSpinBox()
                 in_vivo_applied_spin.setRange(0, 999)
-                in_vivo_applied_spin.setValue(donation_data.get('applied_to_in_vivo_m2', 0))
+                self._set_count_input(in_vivo_applied_spin, donation_data.get('applied_to_in_vivo_m2'))
                 in_vivo_applied_spin.setMaximumWidth(70)
                 in_vivo_insem_row.addWidget(in_vivo_applied_spin)
                 in_vivo_insem_row.addStretch()
@@ -4052,7 +3951,7 @@ class FlowTrackWidget:
                 in_vivo_fert_row.addWidget(in_vivo_fert_label)
                 in_vivo_fert_spin = QtWidgets.QSpinBox()
                 in_vivo_fert_spin.setRange(0, 999)
-                in_vivo_fert_spin.setValue(donation_data.get('fertilized_in_vivo_m2', 0))
+                self._set_count_input(in_vivo_fert_spin, donation_data.get('fertilized_in_vivo_m2'))
                 in_vivo_fert_spin.setMaximumWidth(70)
                 in_vivo_fert_row.addWidget(in_vivo_fert_spin)
                 in_vivo_fert_row.addStretch()
@@ -4064,7 +3963,7 @@ class FlowTrackWidget:
                 in_vivo_embryo_row.addWidget(in_vivo_embryo_label)
                 in_vivo_embryo_spin = QtWidgets.QSpinBox()
                 in_vivo_embryo_spin.setRange(0, 999)
-                in_vivo_embryo_spin.setValue(donation_data.get('embryos_from_in_vivo_m2', 0))
+                self._set_count_input(in_vivo_embryo_spin, donation_data.get('embryos_from_in_vivo_m2'))
                 in_vivo_embryo_spin.setMaximumWidth(70)
                 in_vivo_embryo_row.addWidget(in_vivo_embryo_spin)
                 in_vivo_embryo_row.addStretch()
@@ -4102,7 +4001,7 @@ class FlowTrackWidget:
                 in_vitro_insem_row.addWidget(in_vitro_insem_label)
                 in_vitro_applied_spin = QtWidgets.QSpinBox()
                 in_vitro_applied_spin.setRange(0, 999)
-                in_vitro_applied_spin.setValue(donation_data.get('applied_to_in_vitro_m2', 0))
+                self._set_count_input(in_vitro_applied_spin, donation_data.get('applied_to_in_vitro_m2'))
                 in_vitro_applied_spin.setMaximumWidth(70)
                 in_vitro_insem_row.addWidget(in_vitro_applied_spin)
                 in_vitro_insem_row.addStretch()
@@ -4114,7 +4013,7 @@ class FlowTrackWidget:
                 in_vitro_fert_row.addWidget(in_vitro_fert_label)
                 in_vitro_fert_spin = QtWidgets.QSpinBox()
                 in_vitro_fert_spin.setRange(0, 999)
-                in_vitro_fert_spin.setValue(donation_data.get('fertilized_in_vitro_m2', 0))
+                self._set_count_input(in_vitro_fert_spin, donation_data.get('fertilized_in_vitro_m2'))
                 in_vitro_fert_spin.setMaximumWidth(70)
                 in_vitro_fert_row.addWidget(in_vitro_fert_spin)
                 in_vitro_fert_row.addStretch()
@@ -4126,7 +4025,7 @@ class FlowTrackWidget:
                 in_vitro_embryo_row.addWidget(in_vitro_embryo_label)
                 in_vitro_embryo_spin = QtWidgets.QSpinBox()
                 in_vitro_embryo_spin.setRange(0, 999)
-                in_vitro_embryo_spin.setValue(donation_data.get('embryos_from_in_vitro_m2', 0))
+                self._set_count_input(in_vitro_embryo_spin, donation_data.get('embryos_from_in_vitro_m2'))
                 in_vitro_embryo_spin.setMaximumWidth(70)
                 in_vitro_embryo_row.addWidget(in_vitro_embryo_spin)
                 in_vitro_embryo_row.addStretch()
@@ -4171,47 +4070,12 @@ class FlowTrackWidget:
                 
                 # Function to update transferred/implanted/frozen labels for this donation
                 def update_transfer_labels_for_donation(captured_donation_id=donation_id, captured_animal=animal_name):
-                    transferred_in_vivo = 0
-                    implanted_in_vivo = 0
-                    frozen_in_vivo = 0
-                    transferred_in_vitro = 0
-                    implanted_in_vitro = 0
-                    frozen_in_vitro = 0
-                    
-                    logger.debug(f"Sperm donor dialog: Looking for embryos with sperm_donor_name={captured_animal}, sperm_donation_id={captured_donation_id}")
-                    
-                    for transfer_id, transfer_data in self.manual_data.get('transfers_by_id', {}).items():
-                        for embryo in transfer_data.get('embryos', []):
-                            sperm_name = embryo.get('sperm_donor_name')
-                            sperm_id = embryo.get('sperm_donation_id')
-                            
-                            logger.debug(f"  Checking embryo: sperm_donor_name={sperm_name}, sperm_donation_id={sperm_id}")
-                            
-                            if (sperm_name == captured_animal and sperm_id == captured_donation_id):
-                                stage = embryo.get('stage')
-                                is_implanted = embryo.get('implanted', False)
-                                
-                                logger.debug(f"    MATCH! stage={stage}, implanted={is_implanted}")
-                                
-                                # Count frozen separately
-                                if transfer_id == FREEZER_TRANSFER_ID:
-                                    if stage == STAGE_IN_VIVO_M2:
-                                        frozen_in_vivo += 1
-                                    elif stage == STAGE_IN_VITRO_M2:
-                                        frozen_in_vitro += 1
-                                else:
-                                    # Count transferred (non-frozen)
-                                    if stage == STAGE_IN_VIVO_M2:
-                                        transferred_in_vivo += 1
-                                        if is_implanted:
-                                            implanted_in_vivo += 1
-                                    elif stage == STAGE_IN_VITRO_M2:
-                                        transferred_in_vitro += 1
-                                        if is_implanted:
-                                            implanted_in_vitro += 1
-                    
-                    logger.debug(f"Sperm donor results: transferred_in_vivo={transferred_in_vivo}, implanted_in_vivo={implanted_in_vivo}, frozen_in_vivo={frozen_in_vivo}, transferred_in_vitro={transferred_in_vitro}, implanted_in_vitro={implanted_in_vitro}, frozen_in_vitro={frozen_in_vitro}")
-                    
+                    records, _issues = self._statistics_embryos()
+                    vivo = self._allocation_counts(records, captured_animal, captured_donation_id, True, STAGE_IN_VIVO_M2)
+                    vitro = self._allocation_counts(records, captured_animal, captured_donation_id, True)
+                    transferred_in_vivo, implanted_in_vivo, frozen_in_vivo = (vivo[key] for key in ('transferred_ivm', 'implanted_ivm', 'frozen_ivm'))
+                    transferred_in_vitro, implanted_in_vitro, frozen_in_vitro = (vitro[key] for key in ('transferred_ivm', 'implanted_ivm', 'frozen_ivm'))
+
                     # Display independent stats in columns (without prefixes) - matching egg donor design
                     transferred_text = self.messages.get('flow_track.dialog.sperm_donor.transferred', 'transferred')
                     implanted_text = self.messages.get('flow_track.dialog.sperm_donor.implanted', 'implanted')
@@ -4317,12 +4181,12 @@ class FlowTrackWidget:
                 for widget_set in sperm_widgets:
                     donation_id = widget_set['id']
                     self.manual_data['sperm_donors'][animal_name]['donations'][donation_id] = {
-                        'applied_to_in_vivo_m2': widget_set['in_vivo_applied'].value(),
-                        'fertilized_in_vivo_m2': widget_set['in_vivo_fert'].value(),
-                        'embryos_from_in_vivo_m2': widget_set['in_vivo_embryos'].value(),
-                        'applied_to_in_vitro_m2': widget_set['in_vitro_applied'].value(),
-                        'fertilized_in_vitro_m2': widget_set['in_vitro_fert'].value(),
-                        'embryos_from_in_vitro_m2': widget_set['in_vitro_embryos'].value()
+                        'applied_to_in_vivo_m2': self._entered_count(widget_set['in_vivo_applied']),
+                        'fertilized_in_vivo_m2': self._entered_count(widget_set['in_vivo_fert']),
+                        'embryos_from_in_vivo_m2': self._entered_count(widget_set['in_vivo_embryos']),
+                        'applied_to_in_vitro_m2': self._entered_count(widget_set['in_vitro_applied']),
+                        'fertilized_in_vitro_m2': self._entered_count(widget_set['in_vitro_fert']),
+                        'embryos_from_in_vitro_m2': self._entered_count(widget_set['in_vitro_embryos'])
                     }
                 
                 if self.settings.get('auto_save_enabled', True):
@@ -4352,6 +4216,10 @@ class FlowTrackWidget:
         
         # === EFFICIENCY METRICS SECTION ===
         efficiency_data = self._calculate_surrogate_efficiency(animal_name)
+        if efficiency_data.get('issues'):
+            warning = QtWidgets.QLabel(self._statistics_warning(efficiency_data['issues']))
+            warning.setWordWrap(True)
+            layout.addWidget(warning)
         
         if efficiency_data['per_transfer'] or efficiency_data['total'].get('total_embryos', 0) > 0:
             metrics_group = QtWidgets.QGroupBox(self.messages.get('flow_track.dialog.efficiency_metrics', 'EFFICIENCY METRICS'))
@@ -4485,7 +4353,7 @@ class FlowTrackWidget:
                     'id': f"transfer_{animal_name}_{date_str}"
                 })
         # Get or create manual data
-        if animal_name not in self.manual_data:
+        if transfers and animal_name not in self.manual_data:
             self.manual_data[animal_name] = {'transfers': {}}
         
         # Transfer list with embryo count entry
@@ -5053,8 +4921,16 @@ class FlowTrackWidget:
             self._redraw_canvas()
             logger.info(f"Updated embryo (v3.0) {embryo_id} -> {new_embryo_id}")
     
+    def _sync_transfer_count(self, transfer_id):
+        """Keep the count editor projection from undoing explicit allocation changes on redraw."""
+        transfer = self.manual_data.get('transfers_by_id', {}).get(transfer_id, {})
+        surrogate = transfer.get('surrogate_name')
+        if transfer_id != FREEZER_TRANSFER_ID and surrogate:
+            self.manual_data.setdefault(surrogate, {}).setdefault('transfers', {}).setdefault(
+                transfer_id, {})['embryo_count'] = len(transfer.get('embryos', []))
+
     def _delete_embryo(self, transfer_id, embryo_id):
-        """Delete embryo and update all related donor/surrogate counts."""
+        """Delete allocation; recalculate outcomes without rewriting production."""
         # Get transfer and embryo data
         transfer_data = self.manual_data.get('transfers_by_id', {}).get(transfer_id, {})
         embryos = transfer_data.get('embryos', [])
@@ -5064,44 +4940,10 @@ class FlowTrackWidget:
             logger.warning(f"Embryo {embryo_id} not found in transfer {transfer_id}")
             return
         
-        # Get embryo metadata before deletion
-        egg_donor_name = embryo.get('egg_donor_name')
-        egg_donation_date = embryo.get('egg_donation_date')
-        sperm_donor_name = embryo.get('sperm_donor_name')
-        sperm_donation_id = embryo.get('sperm_donation_id')
-        stage = embryo.get('stage')
-        
-        # Remove embryo from transfer
+        # Deleting allocation must not rewrite entered production/fertilization.
         embryos.remove(embryo)
-        
-        # Update egg donor counts if applicable
-        if egg_donor_name and egg_donation_date:
-            egg_donor_data = self.manual_data.get('egg_donors', {}).get(egg_donor_name, {})
-            surgery_data = egg_donor_data.get('surgeries', {}).get(egg_donation_date, {})
-            
-            if surgery_data:
-                if stage == STAGE_IN_VIVO_M2:
-                    current = surgery_data.get('embryos_from_in_vivo_m2', 0)
-                    surgery_data['embryos_from_in_vivo_m2'] = max(0, current - 1)
-                elif stage == STAGE_IN_VITRO_M2:
-                    current = surgery_data.get('embryos_from_in_vitro_m2', 0)
-                    surgery_data['embryos_from_in_vitro_m2'] = max(0, current - 1)
-                logger.info(f"Updated egg donor {egg_donor_name} counts after embryo deletion")
-        
-        # Update sperm donor counts if applicable
-        if sperm_donor_name and sperm_donation_id:
-            sperm_donor_data = self.manual_data.get('sperm_donors', {}).get(sperm_donor_name, {})
-            donation_data = sperm_donor_data.get('donations', {}).get(sperm_donation_id, {})
-            
-            if donation_data:
-                if stage == STAGE_IN_VIVO_M2:
-                    current = donation_data.get('embryos_from_in_vivo_m2', 0)
-                    donation_data['embryos_from_in_vivo_m2'] = max(0, current - 1)
-                elif stage == STAGE_IN_VITRO_M2:
-                    current = donation_data.get('embryos_from_in_vitro_m2', 0)
-                    donation_data['embryos_from_in_vitro_m2'] = max(0, current - 1)
-                logger.info(f"Updated sperm donor {sperm_donor_name} counts after embryo deletion")
-        
+        self._sync_transfer_count(transfer_id)
+
         # Save and refresh
         self._save_flow_track_data()
         self._redraw_canvas()
@@ -5119,6 +4961,7 @@ class FlowTrackWidget:
     
     def _on_resize(self, event):
         """Handle canvas resize to maintain aspect ratio without gutters."""
+        self._cancel_canvas_gesture()
         if self.current_xlim is not None and self.current_ylim is not None:
             # Re-apply aspect fill to current view
             self.current_xlim, self.current_ylim = self._apply_aspect_fill(
@@ -5130,6 +4973,7 @@ class FlowTrackWidget:
     
     def _on_scroll(self, event):
         """Handle mouse wheel zoom."""
+        self._cancel_canvas_gesture()
         if event.inaxes != self.ax:
             return
         
@@ -5162,97 +5006,119 @@ class FlowTrackWidget:
         # Use draw_idle for better performance
         self.canvas.draw_idle()
     
+    def _cancel_canvas_gesture(self):
+        """Discard transient input ownership, never positions, records or settings."""
+        self.pan_active, self.pan_start, self._pan_gesture = False, None, None
+        self.drag_active, self.drag_artist = False, None
+        self.drag_offset, self.click_start_pos = (0, 0), None
+        self.is_dragging, self.pending_menu_action = False, None
+        self._gesture_identity, self._gesture_mouseevent = None, None
+
+    def _gesture_is_current(self):
+        return self._can('use') and self._gesture_identity == self._hover_identity()
+
+    def _background_hit(self, event):
+        """Display-coordinate hit testing also protects non-pickable labels and bars."""
+        candidates = list(self.node_artists) + list(self.embryo_artists) + list(self.ax.texts)
+        candidates.extend(artist for artist in self.ax.get_children() if artist.get_picker())
+        return any(artist.get_visible() and artist.axes is self.ax and artist.contains(event)[0]
+                   for artist in candidates)
+
+    @staticmethod
+    def _gesture_button_held(event, button):
+        # Qt supplies the full held-button set; synthetic/older events use button.
+        buttons = getattr(event, 'buttons', None)
+        return buttons == {button} if buttons is not None else event.button == button
+
     def _on_mouse_press(self, event):
-        """Handle mouse button press for panning and dragging."""
-        # Middle button (2) for panning
-        if event.button == 2 and event.inaxes == self.ax:
-            self.pan_active = True
-            self.pan_start = (event.xdata, event.ydata)
-    
+        """Arm background pan only after Figure.pick has had priority."""
+        self._clear_hover_annotation()
+        if not self._can('use'):
+            self._cancel_canvas_gesture()
+            return
+        if getattr(self, 'drag_active', False) or getattr(self, 'pan_active', False):
+            if (event.button == 1 and getattr(self, 'drag_active', False)
+                    and getattr(self, '_gesture_mouseevent', None) is event):
+                return  # This press already belongs to the item selected by pick_event.
+            self._cancel_canvas_gesture()
+            return  # A second button cancels ownership rather than starting a chord.
+        if (event.inaxes is not self.ax or event.button not in (1, 2) or event.dblclick
+                or event.xdata is None or event.ydata is None):
+            return
+        if event.button == 1 and self._background_hit(event):
+            return
+        bounds = self.ax.bbox
+        if bounds.width <= 0 or bounds.height <= 0:
+            return
+        self.pan_active = True
+        self.pan_start = (event.x, event.y)
+        self._gesture_identity = self._hover_identity()
+        self._pan_gesture = {
+            'button': event.button, 'origin': self.pan_start,
+            'xlim': tuple(self.ax.get_xlim()), 'ylim': tuple(self.ax.get_ylim()),
+            'width': bounds.width, 'height': bounds.height,
+        }
+
     def _on_mouse_release(self, event):
-        """Handle mouse button release."""
-        if event.button == 2:
-            self.pan_active = False
-            self.pan_start = None
-        elif event.button == 1:
-            # Check if this was a click or a drag
-            if self.drag_active and self.drag_artist is not None:
-                if self.is_dragging:
-                    # Was a drag - apply snap-to-grid if enabled
-                    if self.drag_artist in self.node_artists:
-                        node_id = self.node_artists[self.drag_artist]
-                        if ('animal', node_id) in self.temp_positions:
-                            current_x, current_y = self.temp_positions[('animal', node_id)]
-                            snapped_x, snapped_y = self._snap_to_grid(current_x, current_y)
-                            self.temp_positions[('animal', node_id)] = (snapped_x, snapped_y)
-                    elif self.drag_artist in self.embryo_artists:
-                        transfer_id, embryo_id = self.embryo_artists[self.drag_artist]
-                        if ('embryo', embryo_id) in self.temp_positions:
-                            current_x, current_y = self.temp_positions[('embryo', embryo_id)]
-                            snapped_x, snapped_y = self._snap_to_grid(current_x, current_y)
-                            self.temp_positions[('embryo', embryo_id)] = (snapped_x, snapped_y)
-                    
-                    self._redraw_canvas()
-            
-            # Execute pending menu action if no drag occurred
-            if not self.is_dragging and self.pending_menu_action:
-                action = self.pending_menu_action[0]
-                if action == 'open_menu':
-                    _, animal_name = self.pending_menu_action
-                    # Open appropriate menu for this node
-                    if animal_name == FREEZER_NODE_NAME:
-                        self._open_freezer_embryo_list()
-                    else:
-                        self._show_animal_info(animal_name)
-                elif action == 'edit_embryo':
-                    _, transfer_id, embryo_id = self.pending_menu_action
-                    self._edit_embryo(transfer_id, embryo_id)
-                self.pending_menu_action = None
+        """Release outside axes also ends pan; background release cannot open details."""
+        if getattr(self, 'pan_active', False):
+            self._cancel_canvas_gesture()
+            return
+        if not getattr(self, 'drag_active', False):
+            return
+        if event.button != 1 or not self._gesture_is_current():
+            self._cancel_canvas_gesture()
+            return
+        artist = self.drag_artist
+        dragging = self.is_dragging
+        pending = self.pending_menu_action if event.inaxes is self.ax else None
+        self._cancel_canvas_gesture()  # Clear ownership before redraw or a modal steals focus.
+        if dragging:
+            if artist in self.node_artists:
+                key = ('animal', self.node_artists[artist])
+            elif artist in self.embryo_artists:
+                key = ('embryo', self.embryo_artists[artist][1])
             else:
-                # Clear pending action if drag occurred
-                self.pending_menu_action = None
-            
-            # Reset drag state
-            self.drag_active = False
-            self.drag_artist = None
-            self.drag_offset = (0, 0)
-            self.click_start_pos = None
-            self.is_dragging = False
-    
-    def _on_mouse_move(self, event):
-        """Handle mouse movement for panning and dragging."""
-        # Handle panning
-        if self.pan_active and self.pan_start is not None:
-            if event.inaxes != self.ax or event.xdata is None or event.ydata is None:
                 return
-            
-            # Calculate pan offset
-            dx = event.xdata - self.pan_start[0]
-            dy = event.ydata - self.pan_start[1]
-            
-            # Get current limits
-            cur_xlim = self.ax.get_xlim()
-            cur_ylim = self.ax.get_ylim()
-            
-            # Apply pan
-            new_xlim = (cur_xlim[0] - dx, cur_xlim[1] - dx)
-            new_ylim = (cur_ylim[0] - dy, cur_ylim[1] - dy)
-            
-            # Apply aspect fill to prevent gutters
-            new_xlim, new_ylim = self._apply_aspect_fill(new_xlim, new_ylim)
-            
-            self.ax.set_xlim(new_xlim)
-            self.ax.set_ylim(new_ylim)
-            
-            # Store state
-            self.current_xlim = new_xlim
-            self.current_ylim = new_ylim
-            
-            # Use draw_idle for better performance
+            if key in self.temp_positions:
+                self.temp_positions[key] = self._snap_to_grid(*self.temp_positions[key])
+            self._redraw_canvas()
+        elif pending:
+            if pending[0] == 'open_menu':
+                animal = pending[1]
+                if animal == FREEZER_NODE_NAME:
+                    self._open_freezer_embryo_list()
+                else:
+                    self._show_animal_info(animal)
+            elif pending[0] == 'edit_embryo':
+                self._edit_embryo(*pending[1:])
+
+    def _on_mouse_move(self, event):
+        """Pan from immutable press pixels/limits, independent of intermediate redraws."""
+        pan = getattr(self, '_pan_gesture', None)
+        if getattr(self, 'pan_active', False) or getattr(self, 'drag_active', False):
+            button = pan['button'] if pan else 1
+            if not self._gesture_is_current() or not self._gesture_button_held(event, button):
+                self._cancel_canvas_gesture()
+                return
+        if pan:
+            dx, dy = event.x - pan['origin'][0], event.y - pan['origin'][1]
+            if dx * dx + dy * dy < 16 and not pan.get('dragged'):
+                return
+            pan['dragged'] = True  # Once started, returning to the origin restores the viewport.
+            x0, x1 = pan['xlim']
+            y0, y1 = pan['ylim']
+            shift_x = dx * (x1 - x0) / pan['width']
+            shift_y = dy * (y1 - y0) / pan['height']
+            xlim, ylim = self._apply_aspect_fill(
+                (x0 - shift_x, x1 - shift_x), (y0 - shift_y, y1 - shift_y))
+            self.ax.set_xlim(xlim)
+            self.ax.set_ylim(ylim)
+            self.current_xlim, self.current_ylim = xlim, ylim
             self.canvas.draw_idle()
-        
-        # Handle dragging
-        elif self.drag_active and self.drag_artist is not None:
+            return
+
+        if self.drag_active and self.drag_artist is not None:
             if event.xdata is None or event.ydata is None:
                 return
             
@@ -5284,37 +5150,191 @@ class FlowTrackWidget:
                 # Just redraw the canvas without clearing (fast update during drag)
                 self.canvas.draw_idle()
     
-    def _show_hover_annotation(self, text, x, y):
-        """Show hover annotation using matplotlib like ProgTrack weight plot."""
-        # Remove old annotation
-        if self._hover_annotation:
-            self._hover_annotation.remove()
-            self._hover_annotation = None
-        
-        # Convert data coordinates to figure coordinates
-        disp_x, disp_y = self.ax.transData.transform((x, y))
-        fig_x, fig_y = self.figure.transFigure.inverted().transform((disp_x, disp_y))
-        
-        # Create annotation exactly like ProgTrack weight plot tooltips
-        self._hover_annotation = self.figure.text(
-            fig_x, fig_y,
-            text,
-            transform=self.figure.transFigure,
-            bbox=dict(boxstyle='round,pad=0.3', fc='yellow', alpha=0.9),
-            zorder=20000,
-            clip_on=False
-        )
-        
+    def _hover_identity(self):
+        app = self.parent_app
+        master = getattr(app, 'master_track', None)
+        return (id(getattr(app, 'backend', None)),
+                getattr(master, 'current_username', None),
+                getattr(app, '_view_session_epoch', 0))
+
+    def _install_hover_cleanup(self):
+        """One widget-owned guard; no per-hover Qt/Matplotlib connections."""
+        QtCore = self.parent_app.QtCore
+        owner = self
+        class HoverCleanup(QtCore.QObject):
+            def eventFilter(self, watched, event):
+                if event.type() in {QtCore.QEvent.Type.Hide, QtCore.QEvent.Type.Close,
+                                    QtCore.QEvent.Type.DeferredDelete, QtCore.QEvent.Type.FocusOut,
+                                    QtCore.QEvent.Type.WindowDeactivate}:
+                    owner._cancel_canvas_gesture()
+                if event.type() in {QtCore.QEvent.Type.Hide, QtCore.QEvent.Type.Close,
+                                    QtCore.QEvent.Type.DeferredDelete}:
+                    owner._clear_hover_annotation(redraw=False)
+                return False
+        self._hover_cleanup = HoverCleanup(self.widget)
+        self.widget.installEventFilter(self._hover_cleanup)
+        if hasattr(self.canvas, 'installEventFilter'):
+            self.canvas.installEventFilter(self._hover_cleanup)
+        self.widget.destroyed.connect(lambda *_: self._clear_hover_annotation(redraw=False))
+        self.widget.destroyed.connect(lambda *_: self._cancel_canvas_gesture())
+
+    def _clear_hover_annotation(self, redraw=True):
+        annotation = getattr(self, '_hover_annotation', None)
+        self._hover_annotation = None
+        if annotation is not None:
+            try:
+                annotation.remove()
+            except ValueError:
+                pass
+            if redraw:
+                self.canvas.draw_idle()
+
+    def _on_hover_leave(self, _event):
+        self._cancel_canvas_gesture()
+        self._clear_hover_annotation()
+
+    @staticmethod
+    def _hover_marker_bounds(artist, renderer):
+        from matplotlib.transforms import Bbox
+        x, y = artist.get_data()
+        center = artist.get_transform().transform((float(x[0]), float(y[0])))
+        radius = renderer.points_to_pixels(max(
+            artist.get_markersize() / 2 + artist.get_markeredgewidth() / 2,
+            artist.get_pickradius()))
+        return Bbox.from_bounds(center[0] - radius, center[1] - radius, 2 * radius, 2 * radius)
+
+    @staticmethod
+    def _wrap_hover_text(text, renderer, font, width):
+        """Pixel-measured wrapping, including long identity tokens; never shrink or truncate."""
+        lines = []
+        for original in text.split('\n'):
+            line = original
+            while line and renderer.get_text_width_height_descent(line, font, False)[0] > width:
+                lo, hi = 1, len(line)
+                while lo < hi:
+                    mid = (lo + hi + 1) // 2
+                    if renderer.get_text_width_height_descent(line[:mid], font, False)[0] <= width:
+                        lo = mid
+                    else:
+                        hi = mid - 1
+                cut = line.rfind(' ', 0, lo + 1)
+                if cut <= 0:
+                    cut = lo
+                lines.append(line[:cut])
+                line = line[cut:].lstrip()
+            lines.append(line)
+        return '\n'.join(lines)
+
+    def _layout_hover_annotation(self, annotation, renderer):
+        from matplotlib.transforms import Bbox
+        if annotation._flow_identity != self._hover_identity() or not self._can('use'):
+            self._clear_hover_annotation(redraw=False)
+            return False
+        source = annotation._flow_source
+        if source is not None:
+            if source.axes is not self.ax or not source.get_visible():
+                self._clear_hover_annotation(redraw=False)
+                return False
+            source_box = self._hover_marker_bounds(source, renderer)
+            point = source_box.get_points().mean(axis=0)
+        else:
+            point = self.ax.transData.transform(annotation._flow_point)
+            radius = renderer.points_to_pixels(10)
+            source_box = Bbox.from_bounds(point[0] - radius, point[1] - radius, 2 * radius, 2 * radius)
+        if not self.ax.bbox.contains(*point):
+            self._clear_hover_annotation(redraw=False)
+            return False
+
+        # Protect the owning marker's full picking radius plus its actual label/bar stack.
+        boxes = [source_box]
+        owner = annotation._flow_owner
+        label = getattr(self, 'node_label_artists', {}).get(owner)
+        associated = [label] if label is not None else []
+        for bar in self.lifebar_data.get(owner, []):
+            if 'annotation' in bar:
+                associated.append(bar['annotation'])
+        for text in associated:
+            if text.get_visible() and text.axes is self.ax:
+                text.update_bbox_position_size(renderer)
+                patch = text.get_bbox_patch()
+                boxes.append(patch.get_window_extent(renderer) if patch else text.get_window_extent(renderer))
+        stack = Bbox.union(boxes)
+        margin, gap = renderer.points_to_pixels(5), renderer.points_to_pixels(6)
+        canvas = self.figure.bbox
+        available_width = canvas.width - 2 * margin
+        padding = renderer.points_to_pixels(annotation.get_fontsize() * .3 + 1)
+        annotation.set_text(self._wrap_hover_text(
+            annotation._flow_text, renderer, annotation.get_fontproperties(),
+            max(1, available_width - 2 * padding)))
+        annotation.set_visible(True)
+        annotation.set_position(self.figure.transFigure.inverted().transform((0, 0)))
+        annotation.update_bbox_position_size(renderer)
+        measured = annotation.get_bbox_patch().get_window_extent(renderer)
+        width, height = measured.width, measured.height
+        blockers = [self._hover_marker_bounds(artist, renderer)
+                    for artist in list(self.node_artists) + list(self.embryo_artists)
+                    if artist is not source and artist.get_visible() and artist.axes is self.ax]
+        left_min, left_max = canvas.x0 + margin, canvas.x1 - margin - width
+        if left_max < left_min:
+            annotation.set_visible(False)
+            return False
+        preferred = min(max(point[0] - width / 2, left_min), left_max)
+        for side, bottom in (('below', stack.y0 - gap - height), ('above', stack.y1 + gap)):
+            if bottom < canvas.y0 + margin or bottom + height > canvas.y1 - margin:
+                continue
+            candidates = [preferred]
+            for obstacle in blockers:
+                candidates.extend([obstacle.x0 - gap - width, obstacle.x1 + gap])
+            candidates = sorted(set(min(max(x, left_min), left_max) for x in candidates),
+                                key=lambda x: abs(x - preferred))
+            for left in candidates:
+                target = Bbox.from_bounds(left, bottom, width, height)
+                if any(target.overlaps(obstacle) for obstacle in blockers):
+                    continue
+                anchor = (left - measured.x0, bottom - measured.y0)
+                annotation.set_position(self.figure.transFigure.inverted().transform(anchor))
+                annotation.update_bbox_position_size(renderer)
+                annotation._flow_side = side
+                return True
+        # A physically undersized canvas cannot show all text AND leave hit targets clear.
+        # Keep the full content for the next larger draw; existing click details remain available.
+        annotation.set_visible(False)
+        return False
+
+    def _show_hover_annotation(self, text, x, y, owner=None):
+        """A passive figure-owned text artist reflows before paint, never via draw callbacks."""
+        current = getattr(self, '_hover_annotation', None)
+        if (current is not None and current._flow_text == text and current._flow_owner == owner
+                and current._flow_identity == self._hover_identity()):
+            return  # Pointer motion over the same target cannot reopen/flicker the tooltip.
+        self._clear_hover_annotation(redraw=False)
+        from matplotlib.text import Text
+        flow = self
+        class HoverText(Text):
+            def draw(self, renderer):
+                if flow._layout_hover_annotation(self, renderer):
+                    super().draw(renderer)
+        source = (owner if owner in self.node_artists or owner in self.embryo_artists else
+                  next((artist for artist, name in self.node_artists.items() if name == owner), None))
+        annotation = HoverText(
+            text=text, transform=self.figure.transFigure, ha='left', va='top',
+            bbox=dict(boxstyle='round,pad=0.3', fc='yellow', alpha=.9),
+            zorder=20000, clip_on=False, picker=None, parse_math=False)
+        annotation.set_in_layout(False)
+        annotation.set_mouseover(False)
+        annotation._flow_text, annotation._flow_owner = text, owner
+        annotation._flow_source, annotation._flow_point = source, (x, y)
+        annotation._flow_identity = self._hover_identity()
+        self._hover_annotation = annotation
+        self.figure.add_artist(annotation)
         self.canvas.draw_idle()
-    
+
     def _on_hover(self, event):
         """Handle hover for tooltips with statistics."""
-        if not event.inaxes or event.xdata is None or event.ydata is None:
-            # Remove annotation when not over axes
-            if self._hover_annotation:
-                self._hover_annotation.remove()
-                self._hover_annotation = None
-                self.canvas.draw_idle()
+        if (event.inaxes is not self.ax or event.xdata is None or event.ydata is None
+                or getattr(self, 'pan_active', False) or getattr(self, 'drag_active', False)
+                or not self._can('use')):
+            self._clear_hover_annotation()
             return
         
         # Access Role enum
@@ -5343,7 +5363,10 @@ class FlowTrackWidget:
                             date_str = 'Total'
                         
                         if lifebar['efficiency_pct'] is not None:
-                            eff_str = f"{lifebar['efficiency_pct']:.1f}%"
+                            value = lifebar['efficiency_pct']
+                            eff_str = (self._format_ratio(value / 100) if lifebar.get('metric') in
+                                       {'usable_per_gv', 'fert_per_gv', 'usable_per_ivm'}
+                                       else self._format_efficiency(value))
                         else:
                             eff_str = self.messages.get('flow_track.no_data', 'No data')
                         
@@ -5351,7 +5374,9 @@ class FlowTrackWidget:
                                   f"{date_str}\n"
                                   f"{lifebar['metric_name']}: {eff_str}")
                         
-                        self._show_hover_annotation(tooltip, event.xdata, event.ydata)
+                        if lifebar.get('issues'):
+                            tooltip += '\n' + self._statistics_warning(lifebar['issues'])
+                        self._show_hover_annotation(tooltip, *lifebar['node_pos'], animal_name)
                         return
                 elif 'patches' in lifebar:  # Backward compatibility with old patch-based lifebars
                     border_patch, fill_patch = lifebar['patches']
@@ -5363,7 +5388,10 @@ class FlowTrackWidget:
                                    if lifebar['event_date'] else 'Total')
                         
                         if lifebar['efficiency_pct'] is not None:
-                            eff_str = f"{lifebar['efficiency_pct']:.1f}%"
+                            value = lifebar['efficiency_pct']
+                            eff_str = (self._format_ratio(value / 100) if lifebar.get('metric') in
+                                       {'usable_per_gv', 'fert_per_gv', 'usable_per_ivm'}
+                                       else self._format_efficiency(value))
                         else:
                             eff_str = self.messages.get('flow_track.no_data', 'No data')
                         
@@ -5371,7 +5399,7 @@ class FlowTrackWidget:
                                   f"{date_str}\n"
                                   f"{lifebar['metric_name']}: {eff_str}")
                         
-                        self._show_hover_annotation(tooltip, event.xdata, event.ydata)
+                        self._show_hover_annotation(tooltip, *lifebar['node_pos'], animal_name)
                         return
         
         # Check registered artists for hover tooltips
@@ -5441,7 +5469,7 @@ class FlowTrackWidget:
                         tooltip_lines.append(f"{transfers_count}/{max_transfers} {transfers_text}")
                 
                 tooltip = "\n".join(tooltip_lines)
-                self._show_hover_annotation(tooltip, node_x[0], node_y[0])
+                self._show_hover_annotation(tooltip, node_x[0], node_y[0], animal_name)
                 return
         
         # Check embryo artists
@@ -5468,14 +5496,11 @@ class FlowTrackWidget:
                     cryo_label = self.messages.get('flow_track.tooltip.cryo', 'Cryo:')
                     
                     tooltip = f"{embryo_label}\n{egg_label} {egg}\n{sperm_label} {sperm}\n{implanted_label} {implanted}\n{cryo_label} {cryo}"
-                    self._show_hover_annotation(tooltip, emb_x[0], emb_y[0])
+                    self._show_hover_annotation(tooltip, emb_x[0], emb_y[0], artist)
                 return
         
         # No hover match - remove annotation
-        if self._hover_annotation:
-            self._hover_annotation.remove()
-            self._hover_annotation = None
-            self.canvas.draw_idle()
+        self._clear_hover_annotation()
     
     def _on_undo(self):
         """Handle undo action."""
@@ -5724,8 +5749,8 @@ class FlowTrackWidget:
         surr_per_rb = QtWidgets.QRadioButton(self.messages.get("flow_track.settings.aggregation.per_transfer", "Per Transfer"))
         surr_total_rb = QtWidgets.QRadioButton(self.messages.get("flow_track.settings.aggregation.total", "Total"))
         
-        current_surr_metric = self.settings.get('surrogate_metric', 'total_implantation')
-        if current_surr_metric.startswith('per_'):
+        current_surr_aggregation = self.settings.get('surrogate_aggregation', 'total')
+        if current_surr_aggregation == 'per_transfer':
             surr_per_rb.setChecked(True)
         else:
             surr_total_rb.setChecked(True)
@@ -5930,7 +5955,7 @@ class FlowTrackWidget:
         return wb.create_sheet(title)
 
     def _export_excel(self):
-        """Export comprehensive flow track data to Excel with formulas."""
+        """Export comprehensive flow track data as a calculated Excel snapshot."""
         QtWidgets = self.parent_app.QtWidgets
         
         filename, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -6026,7 +6051,7 @@ class FlowTrackWidget:
         ws = wb.create_sheet("All Animals Overview", 0)
         Role = self.parent_app.Role
         
-        headers = ['IPID', 'Animal', 'Role', 'Embryos created', 'Transferred', 'Implanted', 'Cryopreserved']
+        headers = ['IPID', 'Animal', 'Role', 'Embryos produced', 'Transferred', 'Implanted', 'Currently frozen', 'Counting scope', 'Data inconsistencies']
         ws.append(headers)
         
         for cell in ws[1]:
@@ -6066,33 +6091,33 @@ class FlowTrackWidget:
             else:
                 role_name = "Other"
             
-            embryos_created = 0
-            transferred = 0
-            implanted = 0
-            cryopreserved = 0
-            
-            for transfer_id, transfer_data in self.manual_data.get('transfers_by_id', {}).items():
-                for embryo in transfer_data.get('embryos', []):
-                    if embryo.get('egg_donor_name') == animal_name or embryo.get('sperm_donor_name') == animal_name:
-                        embryos_created += 1
-                    
-                    if transfer_data.get('surrogate_name') == animal_name and transfer_id != FREEZER_TRANSFER_ID:
-                        transferred += 1
-                        if embryo.get('implanted', False):
-                            implanted += 1
-                    
-                    if transfer_id == FREEZER_TRANSFER_ID:
-                        if embryo.get('egg_donor_name') == animal_name or embryo.get('sperm_donor_name') == animal_name:
-                            cryopreserved += 1
-            
+            if role in {Role.SPENDER.value, Role.SAMENSP.value}:
+                stats = self._donor_efficiency(animal_name, sperm=role == Role.SAMENSP.value)
+                total = stats['total']
+                embryos_created = total.get('total_produced_ivm')
+                transferred = total['total_transferred_ivm']
+                implanted = total['total_implanted_ivm']
+                cryopreserved = total['total_frozen_ivm']
+                scope = 'IVM MII'
+            else:
+                stats = self._calculate_surrogate_efficiency(animal_name)
+                total = stats['total']
+                embryos_created = None
+                transferred = total['total_embryos']
+                implanted = total['total_implanted']
+                cryopreserved = 0
+                scope = 'All transferred stages'
+
             ws.append([
                 animal_name,
                 self._animal_export_name(animal_name),
                 role_name,
-                embryos_created,
+                self._format_count(embryos_created) if embryos_created is None else embryos_created,
                 transferred,
                 implanted,
                 cryopreserved,
+                scope,
+                self._statistics_warning(stats.get('issues', [])),
             ])
         
         for column in ws.columns:
@@ -6107,6 +6132,24 @@ class FlowTrackWidget:
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
     
+    def _statistics_transfers(self):
+        """Canonical snapshot for export detail tables; conflicts are not silently chosen."""
+        transfers = {}
+        records, _issues = self._statistics_embryos()
+        for tid, transfer, embryo, _allocation in records:
+            if tid not in transfers:
+                transfers[tid] = dict(transfer, embryos=[])
+            transfers[tid]['embryos'].append(embryo)
+        return transfers
+
+    def _write_statistics_cells(self, ws, row, data, mapping):
+        """Export the same calculated snapshot as dialogs/bars, including undefined rates."""
+        for column, key in mapping.items():
+            value = data.get(key)
+            cell = ws[f'{column}{row}']
+            cell.value = self.messages.get('flow_track.no_data', 'No data') if value is None else value
+            cell.number_format = '0.00' if key in {'usable_per_gv', 'fert_per_gv', 'usable_per_ivm'} else '0.0'
+
     def _create_egg_donors_overview(self, wb):
         """Create overview sheet for all egg donors."""
         from openpyxl.styles import Font, Alignment, PatternFill
@@ -6117,6 +6160,11 @@ class FlowTrackWidget:
         headers = ['IPID', 'Egg Donor', 'Surgeries', 'Total GV', 'Total IVM M2', 'IVM M2 Fert',
                    'Transferred', 'Frozen', 'Implanted', 'IVM %', 'Fert %', 'Impl %']
         ws.append(headers)
+        ws['M1'] = 'usable from fert'
+        ws['N1'] = 'usable per gv'
+        ws['O1'] = 'fert per gv'
+        ws['P1'] = 'produced ivm'
+        ws['Q1'] = 'unassigned ivm'
         
         for cell in ws[1]:
             cell.font = Font(bold=True, size=11, color="FFFFFF")
@@ -6141,14 +6189,11 @@ class FlowTrackWidget:
                        total.get('total_implanted_ivm', 0),
                        '', '', ''])
             
-            ws[f'J{row}'] = f'=IF(D{row}>0, E{row}/D{row}*100, 0)'
-            ws[f'K{row}'] = f'=IF(E{row}>0, F{row}/E{row}*100, 0)'
-            ws[f'L{row}'] = f'=IF(G{row}>0, I{row}/G{row}*100, 0)'
-            ws[f'J{row}'].number_format = '0.0'
-            ws[f'K{row}'].number_format = '0.0'
-            ws[f'L{row}'].number_format = '0.0'
+            self._write_statistics_cells(ws, row, total, {'J': 'ivm_rate', 'K': 'fert_rate_after_ivm', 'L': 'implantation_rate', 'M': 'usable_from_fert', 'N': 'usable_per_gv', 'O': 'fert_per_gv', 'P': 'total_produced_ivm', 'Q': 'total_unassigned_ivm'})
+            ws.cell(row, 18, self._statistics_warning(efficiency.get('issues', [])))
             row += 1
         
+        ws.cell(1, 18, 'Data inconsistencies')
         for column in ws.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -6171,6 +6216,12 @@ class FlowTrackWidget:
         headers = ['IPID', 'Sperm Donor', 'Donations', 'IVM M2 Insem', 'IVM M2 Fert',
                    'Transferred', 'Frozen', 'Implanted', 'Fert %', 'Impl %']
         ws.append(headers)
+        ws['K1'] = 'usable per ivm'
+        ws['L1'] = 'fert rate in vivo'
+        ws['M1'] = 'produced ivm'
+        ws['N1'] = 'in vivo m2 inseminated'
+        ws['O1'] = 'in vivo m2 fertilized'
+        ws['P1'] = 'unassigned ivm'
         
         for cell in ws[1]:
             cell.font = Font(bold=True, size=11, color="FFFFFF")
@@ -6194,12 +6245,11 @@ class FlowTrackWidget:
                        total.get('total_implanted_ivm', 0),
                        '', ''])
             
-            ws[f'I{row}'] = f'=IF(D{row}>0, E{row}/D{row}*100, 0)'
-            ws[f'J{row}'] = f'=IF(F{row}>0, H{row}/F{row}*100, 0)'
-            ws[f'I{row}'].number_format = '0.0'
-            ws[f'J{row}'].number_format = '0.0'
+            self._write_statistics_cells(ws, row, total, {'I': 'fert_rate_ivm', 'J': 'implantation_rate', 'K': 'usable_per_ivm', 'L': 'fert_rate_in_vivo', 'M': 'total_produced_ivm', 'N': 'total_in_vivo_m2_inseminated', 'O': 'total_in_vivo_m2_fertilized', 'P': 'total_unassigned_ivm'})
+            ws.cell(row, 17, self._statistics_warning(efficiency.get('issues', [])))
             row += 1
         
+        ws.cell(1, 17, 'Data inconsistencies')
         for column in ws.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -6242,12 +6292,11 @@ class FlowTrackWidget:
                        total.get('total_implanted', 0),
                        '', ''])
             
-            ws[f'F{row}'] = f'=IF(D{row}>0, E{row}/D{row}*100, 0)'
-            ws[f'G{row}'] = f'=IF(C{row}>0, {total.get("successful_transfers", 0)}/C{row}*100, 0)'
-            ws[f'F{row}'].number_format = '0.0'
-            ws[f'G{row}'].number_format = '0.0'
+            self._write_statistics_cells(ws, row, total, {'F': 'total_implantation_pct', 'G': 'transfer_success_rate'})
+            ws.cell(row, 8, self._statistics_warning(efficiency.get('issues', [])))
             row += 1
         
+        ws.cell(1, 8, 'Data inconsistencies')
         for column in ws.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -6261,11 +6310,11 @@ class FlowTrackWidget:
             ws.column_dimensions[column_letter].width = adjusted_width
     
     def _create_egg_donor_sheet(self, wb, animal_name):
-        """Create individual egg donor sheet with per-surgery data + total row with formulas."""
+        """Create individual egg donor sheet with per-surgery data + total row with calculated snapshot totals."""
         from openpyxl.styles import Font, Alignment, PatternFill
         
         efficiency = self._calculate_egg_donor_efficiency(animal_name)
-        if not efficiency['per_surgery'] and efficiency['total'].get('total_gv_isolated', 0) == 0:
+        if not efficiency['per_surgery']:
             return
         
         ws = self._create_animal_sheet(wb, "ED", animal_name)
@@ -6276,6 +6325,11 @@ class FlowTrackWidget:
         headers = ['Date', 'GV Isolated', 'IVM M2', 'IVM M2 Fert', 'Transferred', 'Frozen', 
                    'Implanted', 'IVM %', 'Fert %', 'Impl %']
         ws.append(headers)
+        ws['K4'] = 'usable from fert'
+        ws['L4'] = 'usable per gv'
+        ws['M4'] = 'fert per gv'
+        ws['N4'] = 'produced ivm'
+        ws['O4'] = 'unassigned ivm'
         
         for cell in ws[4]:
             cell.font = Font(bold=True, size=11, color="FFFFFF")
@@ -6299,35 +6353,21 @@ class FlowTrackWidget:
                        surgery.get('implanted_ivm', 0),
                        '', '', ''])
             
-            ws[f'H{row}'] = f'=IF(B{row}>0, C{row}/B{row}*100, 0)'
-            ws[f'I{row}'] = f'=IF(C{row}>0, D{row}/C{row}*100, 0)'
-            ws[f'J{row}'] = f'=IF(E{row}>0, G{row}/E{row}*100, 0)'
-            ws[f'H{row}'].number_format = '0.0'
-            ws[f'I{row}'].number_format = '0.0'
-            ws[f'J{row}'].number_format = '0.0'
+            self._write_statistics_cells(ws, row, surgery, {'H': 'ivm_rate', 'I': 'fert_rate_after_ivm', 'J': 'implantation_rate', 'K': 'usable_from_fert', 'L': 'usable_per_gv', 'M': 'fert_per_gv', 'N': 'produced_ivm', 'O': 'unassigned_ivm'})
             row += 1
         
         total_row = row
         ws.append(['TOTAL', '', '', '', '', '', '', '', '', ''])
         ws[f'A{total_row}'].font = Font(bold=True, size=12)
-        ws[f'B{total_row}'] = f'=SUM(B5:B{total_row-1})'
-        ws[f'C{total_row}'] = f'=SUM(C5:C{total_row-1})'
-        ws[f'D{total_row}'] = f'=SUM(D5:D{total_row-1})'
-        ws[f'E{total_row}'] = f'=SUM(E5:E{total_row-1})'
-        ws[f'F{total_row}'] = f'=SUM(F5:F{total_row-1})'
-        ws[f'G{total_row}'] = f'=SUM(G5:G{total_row-1})'
-        ws[f'H{total_row}'] = f'=IF(B{total_row}>0, C{total_row}/B{total_row}*100, 0)'
-        ws[f'I{total_row}'] = f'=IF(C{total_row}>0, D{total_row}/C{total_row}*100, 0)'
-        ws[f'J{total_row}'] = f'=IF(E{total_row}>0, G{total_row}/E{total_row}*100, 0)'
-        ws[f'H{total_row}'].number_format = '0.0'
-        ws[f'I{total_row}'].number_format = '0.0'
-        ws[f'J{total_row}'].number_format = '0.0'
+        self._write_statistics_cells(ws, total_row, efficiency['total'], {'H': 'ivm_rate', 'I': 'fert_rate_after_ivm', 'J': 'implantation_rate', 'K': 'usable_from_fert', 'L': 'usable_per_gv', 'M': 'fert_per_gv', 'N': 'total_produced_ivm', 'O': 'total_unassigned_ivm', 'B': 'total_gv_isolated', 'C': 'total_ivm_m2', 'D': 'total_ivm_m2_fertilized', 'E': 'total_transferred_ivm', 'F': 'total_frozen_ivm', 'G': 'total_implanted_ivm'})
         
         ws[f'A{total_row}'].fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
         for col in ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']:
             ws[f'{col}{total_row}'].fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
             ws[f'{col}{total_row}'].font = Font(bold=True)
         
+        ws.cell(4, 16, 'Data inconsistencies')
+        ws.cell(total_row, 16, self._statistics_warning(efficiency.get('issues', [])))
         for column in ws.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -6350,7 +6390,7 @@ class FlowTrackWidget:
         for cell in ws[embryo_start_row]:
             cell.font = Font(bold=True)
         
-        for transfer_id, transfer_data in self.manual_data.get('transfers_by_id', {}).items():
+        for transfer_id, transfer_data in self._statistics_transfers().items():
             for embryo in transfer_data.get('embryos', []):
                 if embryo.get('egg_donor_name') == animal_name:
                     ws.append([
@@ -6361,16 +6401,16 @@ class FlowTrackWidget:
                         self._animal_export_name(transfer_data.get('surrogate_name', '')),
                         transfer_data.get('transfer_date', ''),
                         embryo.get('stage', ''),
-                        'Yes' if embryo.get('implanted', False) else 'No',
+                        'Yes' if embryo.get('implanted') is True else 'No',
                         'Yes' if transfer_id == FREEZER_TRANSFER_ID else 'No'
                     ])
     
     def _create_sperm_donor_sheet(self, wb, animal_name):
-        """Create individual sperm donor sheet with per-donation data + total row with formulas."""
+        """Create individual sperm donor sheet with per-donation data + total row with calculated snapshot totals."""
         from openpyxl.styles import Font, Alignment, PatternFill
         
         efficiency = self._calculate_sperm_donor_efficiency(animal_name)
-        if not efficiency['per_donation'] and efficiency['total'].get('total_ivm_m2_inseminated', 0) == 0:
+        if not efficiency['per_donation']:
             return
         
         ws = self._create_animal_sheet(wb, "SD", animal_name)
@@ -6381,6 +6421,12 @@ class FlowTrackWidget:
         headers = ['Date', 'IVM M2 Insem', 'IVM M2 Fert', 'Transferred', 'Frozen', 
                    'Implanted', 'Fert %', 'Impl %']
         ws.append(headers)
+        ws['I4'] = 'usable per ivm'
+        ws['J4'] = 'fert rate in vivo'
+        ws['K4'] = 'produced ivm'
+        ws['L4'] = 'in vivo m2 inseminated'
+        ws['M4'] = 'in vivo m2 fertilized'
+        ws['N4'] = 'unassigned ivm'
         
         for cell in ws[4]:
             cell.font = Font(bold=True, size=11, color="FFFFFF")
@@ -6403,30 +6449,21 @@ class FlowTrackWidget:
                        donation.get('implanted_ivm', 0),
                        '', ''])
             
-            ws[f'G{row}'] = f'=IF(B{row}>0, C{row}/B{row}*100, 0)'
-            ws[f'H{row}'] = f'=IF(D{row}>0, F{row}/D{row}*100, 0)'
-            ws[f'G{row}'].number_format = '0.0'
-            ws[f'H{row}'].number_format = '0.0'
+            self._write_statistics_cells(ws, row, donation, {'G': 'fert_rate_ivm', 'H': 'implantation_rate', 'I': 'usable_per_ivm', 'J': 'fert_rate_in_vivo', 'K': 'produced_ivm', 'L': 'in_vivo_m2_inseminated', 'M': 'in_vivo_m2_fertilized', 'N': 'unassigned_ivm'})
             row += 1
         
         total_row = row
         ws.append(['TOTAL', '', '', '', '', '', '', ''])
         ws[f'A{total_row}'].font = Font(bold=True, size=12)
-        ws[f'B{total_row}'] = f'=SUM(B5:B{total_row-1})'
-        ws[f'C{total_row}'] = f'=SUM(C5:C{total_row-1})'
-        ws[f'D{total_row}'] = f'=SUM(D5:D{total_row-1})'
-        ws[f'E{total_row}'] = f'=SUM(E5:E{total_row-1})'
-        ws[f'F{total_row}'] = f'=SUM(F5:F{total_row-1})'
-        ws[f'G{total_row}'] = f'=IF(B{total_row}>0, C{total_row}/B{total_row}*100, 0)'
-        ws[f'H{total_row}'] = f'=IF(D{total_row}>0, F{total_row}/D{total_row}*100, 0)'
-        ws[f'G{total_row}'].number_format = '0.0'
-        ws[f'H{total_row}'].number_format = '0.0'
+        self._write_statistics_cells(ws, total_row, efficiency['total'], {'G': 'fert_rate_ivm', 'H': 'implantation_rate', 'I': 'usable_per_ivm', 'J': 'fert_rate_in_vivo', 'K': 'total_produced_ivm', 'L': 'total_in_vivo_m2_inseminated', 'M': 'total_in_vivo_m2_fertilized', 'N': 'total_unassigned_ivm', 'B': 'total_ivm_m2_inseminated', 'C': 'total_ivm_m2_fertilized', 'D': 'total_transferred_ivm', 'E': 'total_frozen_ivm', 'F': 'total_implanted_ivm'})
         
         ws[f'A{total_row}'].fill = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
         for col in ['B', 'C', 'D', 'E', 'F', 'G', 'H']:
             ws[f'{col}{total_row}'].fill = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
             ws[f'{col}{total_row}'].font = Font(bold=True)
         
+        ws.cell(4, 15, 'Data inconsistencies')
+        ws.cell(total_row, 15, self._statistics_warning(efficiency.get('issues', [])))
         for column in ws.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -6449,7 +6486,7 @@ class FlowTrackWidget:
         for cell in ws[embryo_start_row]:
             cell.font = Font(bold=True)
         
-        for transfer_id, transfer_data in self.manual_data.get('transfers_by_id', {}).items():
+        for transfer_id, transfer_data in self._statistics_transfers().items():
             for embryo in transfer_data.get('embryos', []):
                 if embryo.get('sperm_donor_name') == animal_name:
                     ws.append([
@@ -6460,16 +6497,16 @@ class FlowTrackWidget:
                         self._animal_export_name(transfer_data.get('surrogate_name', '')),
                         transfer_data.get('transfer_date', ''),
                         embryo.get('stage', ''),
-                        'Yes' if embryo.get('implanted', False) else 'No',
+                        'Yes' if embryo.get('implanted') is True else 'No',
                         'Yes' if transfer_id == FREEZER_TRANSFER_ID else 'No'
                     ])
     
     def _create_surrogate_sheet(self, wb, animal_name):
-        """Create individual surrogate sheet with per-transfer data + total row with formulas."""
+        """Create individual surrogate sheet with per-transfer data + total row with calculated snapshot totals."""
         from openpyxl.styles import Font, Alignment, PatternFill
         
         efficiency = self._calculate_surrogate_efficiency(animal_name)
-        if not efficiency['per_transfer'] and efficiency['total'].get('total_embryos', 0) == 0:
+        if not efficiency['per_transfer']:
             return
         
         ws = self._create_animal_sheet(wb, "SU", animal_name)
@@ -6500,25 +6537,21 @@ class FlowTrackWidget:
                        transfer.get('implanted_count_all', 0),
                        ''])
             
-            ws[f'F{row}'] = f'=IF(B{row}>0, E{row}/B{row}*100, 0)'
-            ws[f'F{row}'].number_format = '0.0'
+            self._write_statistics_cells(ws, row, transfer, {'F': 'implantation_pct_all'})
             row += 1
         
         total_row = row
         ws.append(['TOTAL', '', '', '', '', ''])
         ws[f'A{total_row}'].font = Font(bold=True, size=12)
-        ws[f'B{total_row}'] = f'=SUM(B5:B{total_row-1})'
-        ws[f'C{total_row}'] = f'=SUM(C5:C{total_row-1})'
-        ws[f'D{total_row}'] = f'=SUM(D5:D{total_row-1})'
-        ws[f'E{total_row}'] = f'=SUM(E5:E{total_row-1})'
-        ws[f'F{total_row}'] = f'=IF(B{total_row}>0, E{total_row}/B{total_row}*100, 0)'
-        ws[f'F{total_row}'].number_format = '0.0'
+        self._write_statistics_cells(ws, total_row, efficiency['total'], {'B': 'total_embryos', 'C': 'total_embryos_in_vivo', 'D': 'total_embryos_in_vitro', 'E': 'total_implanted', 'F': 'total_implantation_pct'})
         
         ws[f'A{total_row}'].fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
         for col in ['B', 'C', 'D', 'E', 'F']:
             ws[f'{col}{total_row}'].fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
             ws[f'{col}{total_row}'].font = Font(bold=True)
         
+        ws.cell(4, 7, 'Data inconsistencies')
+        ws.cell(total_row, 7, self._statistics_warning(efficiency.get('issues', [])))
         for column in ws.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -6541,7 +6574,7 @@ class FlowTrackWidget:
         for cell in ws[embryo_start_row]:
             cell.font = Font(bold=True)
         
-        for transfer_id, transfer_data in self.manual_data.get('transfers_by_id', {}).items():
+        for transfer_id, transfer_data in self._statistics_transfers().items():
             if transfer_data.get('surrogate_name') == animal_name and transfer_id != FREEZER_TRANSFER_ID:
                 for embryo in transfer_data.get('embryos', []):
                     ws.append([
@@ -6552,7 +6585,7 @@ class FlowTrackWidget:
                         self._animal_export_name(embryo.get('sperm_donor_name', '')),
                         transfer_data.get('transfer_date', ''),
                         embryo.get('stage', ''),
-                        'Yes' if embryo.get('implanted', False) else 'No'
+                        'Yes' if embryo.get('implanted') is True else 'No'
                     ])
     
     def _create_all_embryos_sheet(self, wb):
@@ -6570,7 +6603,7 @@ class FlowTrackWidget:
             cell.fill = PatternFill(start_color="7030A0", end_color="7030A0", fill_type="solid")
             cell.alignment = Alignment(horizontal='center')
         
-        for transfer_id, transfer_data in sorted(self.manual_data.get('transfers_by_id', {}).items()):
+        for transfer_id, transfer_data in sorted(self._statistics_transfers().items()):
             for embryo in transfer_data.get('embryos', []):
                 ws.append([
                     embryo.get('embryo_id', ''),
@@ -6582,7 +6615,7 @@ class FlowTrackWidget:
                     self._animal_export_name(transfer_data.get('surrogate_name', '')) if transfer_id != FREEZER_TRANSFER_ID else '',
                     transfer_data.get('transfer_date', '') if transfer_id != FREEZER_TRANSFER_ID else '',
                     embryo.get('stage', ''),
-                    'Yes' if embryo.get('implanted', False) else 'No',
+                    'Yes' if embryo.get('implanted') is True else 'No',
                     'Yes' if transfer_id == FREEZER_TRANSFER_ID else 'No',
                     embryo.get('comment', '')
                 ])
@@ -6613,7 +6646,7 @@ class FlowTrackWidget:
             cell.fill = PatternFill(start_color="B4C7E7", end_color="B4C7E7", fill_type="solid")
             cell.alignment = Alignment(horizontal='center')
         
-        freezer_transfer = self.manual_data.get('transfers_by_id', {}).get(FREEZER_TRANSFER_ID, {})
+        freezer_transfer = self._statistics_transfers().get(FREEZER_TRANSFER_ID, {})
         embryos = freezer_transfer.get('embryos', [])
         
         for embryo in embryos:

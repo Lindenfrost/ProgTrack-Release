@@ -2863,16 +2863,17 @@ class MediTrackPlugin:
     def _refresh_current_animal_when_safe(self, animal_name: str) -> None:
         if not self._widget or self._widget._current_animal != animal_name:
             return
-        if QApplication.activeModalWidget() is not None:
-            QTimer.singleShot(
-                250,
-                lambda name=animal_name: self._refresh_current_animal_when_safe(name),
-            )
-            return
-        try:
-            self._widget.show_animal(animal_name)
-        except RuntimeError:
-            pass
+        def refresh():
+            try:
+                if self._widget and self._widget._current_animal == animal_name:
+                    self._widget.show_animal(animal_name)
+            except RuntimeError:
+                pass
+        queue = getattr(self.app, "_queue_view_update", None)
+        if callable(queue):
+            queue("medi-current-animal", refresh)
+        else:
+            refresh()
 
     def _detect_lang(self) -> str:
         msgs = getattr(self.app, "messages", {}) or {}

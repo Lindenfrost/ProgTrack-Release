@@ -105,14 +105,22 @@ def _msg(messages: Dict[str, Any], key: str, fallback: str) -> str:
     return messages.get(key, fallback)
 
 
-def _organization_unit_combo(user_db: UserDB, current_id: str = "") -> QComboBox:
+def _organization_unit_combo(user_db: UserDB, current_id: str = "", messages=None) -> QComboBox:
     """Build a selector from the backend-owned organizational Unit catalog."""
     combo = QComboBox()
-    combo.addItem("Unassigned", "")
+    messages = messages or {}
+    combo.addItem(_msg(messages, "cage_track.unassigned", "Unassigned"), "")
     try:
         units = CanonicalUnitService(user_db.backend).load()
-    except Exception:
-        units = {}
+    except Exception as exc:
+        # Failure is not an empty catalogue. Retain the stable assignment and
+        # prohibit saving until a fresh dialog can validate it.
+        label = _msg(messages, "units.catalogue_unavailable", "Unit catalogue unavailable; reopen this dialog.")
+        combo.addItem(label, str(current_id or "").strip().casefold())
+        combo.setCurrentIndex(1)
+        combo.setProperty("unit_catalogue_error", str(exc))
+        combo.setEnabled(False)
+        return combo
     current_key = str(current_id or "").strip().casefold()
     for unit_id, unit in sorted(units.items(), key=lambda item: item[0]):
         if unit.archived or not unit.active:
@@ -120,13 +128,33 @@ def _organization_unit_combo(user_db: UserDB, current_id: str = "") -> QComboBox
             # existing user, but never offer it for a new assignment.
             if unit_id != current_key:
                 continue
-            label = f"{unit.display_name} (archived)"
+            label = f"{unit.display_name} ({_msg(messages, 'units.archived', 'Archived')})"
         else:
             label = unit.display_name
         combo.addItem(label, unit_id)
     index = combo.findData(current_key)
     combo.setCurrentIndex(index if index >= 0 else 0)
     return combo
+
+
+def _validated_organization_unit(user_db, combo, messages, *, current_id=""):
+    if combo.property("unit_catalogue_error"):
+        raise ValueError(_msg(messages, "units.catalogue_unavailable",
+                              "Unit catalogue unavailable; reopen this dialog."))
+    key = str(combo.currentData() or "")
+    if not key:
+        return "", ""
+    # Re-read before ANY user mutation: an already-open selector is not an
+    # authority to resurrect a deleted or newly archived assignment.
+    try:
+        unit = CanonicalUnitService(user_db.backend).get(key)
+    except Exception as exc:
+        raise ValueError(_msg(messages, "units.catalogue_unavailable",
+                              "Unit catalogue unavailable; reopen this dialog.")) from exc
+    if unit is None or ((unit.archived or not unit.active) and key != current_id):
+        raise ValueError(_msg(messages, "units.assignment_changed",
+                              "The Unit catalogue or assignment changed. Reopen this dialog."))
+    return key, unit.display_name
 
 
 def _organization_unit_display(user_db: UserDB, user: Dict[str, Any], messages: Dict[str, Any]) -> str:
@@ -882,7 +910,7 @@ class _EditUserDialog(QDialog):
         self._p_phone      = QLineEdit(user.get("phone",       ""))
         self._p_mobile     = QLineEdit(user.get("mobile",      ""))
         self._p_unit       = _organization_unit_combo(
-            user_db, user.get("unit_id", "")
+            user_db, user.get("unit_id", ""), messages
         )
         self._p_profession = QLineEdit(user.get("profession",  ""))
         for _field in (
@@ -890,6 +918,8 @@ class _EditUserDialog(QDialog):
             self._p_mobile, self._p_unit, self._p_profession,
         ):
             _field.setEnabled(self._can_edit_users)
+        if self._p_unit.property("unit_catalogue_error"):
+            self._p_unit.setEnabled(False)
         prof_form.addRow(_msg(messages, "master_track.label.display_name", "Display Name:"), self._p_display)
         prof_form.addRow(_msg(messages, "master_track.label.pronouns",     "Pronouns:"),     self._p_pronouns)
         prof_form.addRow(_msg(messages, "master_track.label.email",        "E-Mail:"),       self._p_email)
@@ -1083,6 +1113,17 @@ class _EditUserDialog(QDialog):
     def _save(self) -> None:
         new_role = self._get_selected_role()
         user = self._user
+        try:
+            initial_id = str(user.get("unit_id") or "").strip().casefold()
+            current = self.user_db.get_user(self.username)
+            if current is None or str(current.get("unit_id") or "").strip().casefold() != initial_id:
+                raise ValueError(_msg(self.messages, "units.assignment_changed",
+                    "The Unit catalogue or assignment changed. Reopen this dialog."))
+            unit_id, unit_name = _validated_organization_unit(
+                self.user_db, self._p_unit, self.messages, current_id=initial_id)
+        except Exception as exc:
+            self.error_label.setText(str(exc))
+            return
         if new_role not in (ROLE_LORD, ROLE_MASTER) and not str(self._p_unit.currentData() or ""):
             self.error_label.setText(_msg(
                 self.messages,
@@ -1171,8 +1212,8 @@ class _EditUserDialog(QDialog):
                 email=self._p_email.text().strip(),
                 phone=self._p_phone.text().strip(),
                 mobile=self._p_mobile.text().strip(),
-                unit=self._p_unit.currentText().strip(),
-                unit_id=str(self._p_unit.currentData() or ""),
+                unit=unit_name,
+                unit_id=unit_id,
                 profession=self._p_profession.text().strip(),
             )
         self.accept()
@@ -1724,6 +1765,12 @@ class AuditLogsDialog(QDialog):
             return _msg(self.messages, "master_track.logs.action.create", "Create animal")
 
         backend_action_keys = {
+            "organization_unit_create": ("master_track.logs.action.organization_unit_create", "Create organizational Unit"),
+            "organization_unit_update": ("master_track.logs.action.organization_unit_update", "Rename organizational Unit"),
+            "organization_unit_archive": ("master_track.logs.action.organization_unit_archive", "Archive organizational Unit"),
+            "organization_unit_restore": ("master_track.logs.action.organization_unit_restore", "Restore organizational Unit"),
+            "organization_unit_delete": ("master_track.logs.action.organization_unit_delete", "Delete organizational Unit"),
+            "organization_units_replace": ("master_track.logs.action.organization_units_replace", "Replace organizational Unit catalogue"),
             "database_created": (
                 "master_track.logs.action.database_created",
                 "Create database",
@@ -2369,7 +2416,7 @@ class _CreateUserSubDialog(QDialog):
         self.f_email      = QLineEdit()
         self.f_phone      = QLineEdit()
         self.f_mobile     = QLineEdit()
-        self.f_unit       = _organization_unit_combo(user_db)
+        self.f_unit       = _organization_unit_combo(user_db, messages=messages)
         self.f_profession = QLineEdit()
         prof_form.addRow(_msg(messages, "master_track.label.pronouns",   "Pronouns:"),   self.f_pronouns)
         prof_form.addRow(_msg(messages, "master_track.label.email",      "E-Mail:"),     self.f_email)
@@ -2392,6 +2439,11 @@ class _CreateUserSubDialog(QDialog):
     def _accept(self) -> None:
         uname = self.uname.text().strip()
         pw = self.pw.text()
+        try:
+            unit_id, unit_name = _validated_organization_unit(self.user_db, self.f_unit, self.messages)
+        except Exception as exc:
+            self.error_label.setText(str(exc))
+            return
         if not uname:
             self.error_label.setText(_msg(self.messages, "master_track.error.empty_username",
                                           "Username cannot be empty."))
@@ -2420,8 +2472,8 @@ class _CreateUserSubDialog(QDialog):
             email=self.f_email.text().strip(),
             phone=self.f_phone.text().strip(),
             mobile=self.f_mobile.text().strip(),
-            unit=self.f_unit.currentText().strip(),
-            unit_id=str(self.f_unit.currentData() or ""),
+            unit=unit_name,
+            unit_id=unit_id,
             profession=self.f_profession.text().strip(),
         )
         self.accept()

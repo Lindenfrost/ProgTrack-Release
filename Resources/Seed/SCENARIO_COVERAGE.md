@@ -6,6 +6,7 @@ The package is the single fictional initialization source for both backend adapt
 
 | Scenario | Coverage |
 |---|---|
+| experiment-enrollment-history | All 19 currently experimental animals have authored project-entry and experiment-start dates, consistent across Core, Project Track, Medi Track and Reports; prior completed periods are retained. |
 | complete-identity | Canonical identity, references, roles and experimental limits for all active and archived animals. |
 | all-species-weights | Weight histories for Callitrix, Macaca, Papio and Mus through the latest scientific record. |
 | denethor-family | Denethor, Boromir and Faramir retain biological donor and surrogate parentage. |
@@ -17,7 +18,7 @@ The package is the single fictional initialization source for both backend adapt
 | svetlana-legolas | Legolas retains Svetlana/Thranduil biological parentage and Olga as surrogate. Svetlana's collection is 1 October 2025, Thranduil's existing sample is 2 October, Olga's corrected transfer is 10 October; birth stays 4 March 2026. |
 | monitoring | Three 28-day cycles; one reading per animal/kind/calendar day; post-PGF response retains its sample number. |
 | flow-donor-links | Every transferred embryo links to an egg retrieval and an identified Denethor or Thranduil sperm sample; sperm is collected one day after eggs; transfer is 6-9 days after sperm collection/fertilization (current examples: 7-9 days after eggs, 6-8 after sperm). |
-| complete-donor-stage-counts | Every egg collection and sperm sample has complete stage metrics. In-vivo MII is limited to 0-2 per collection and never produces embryos; all 21 embryos arise from IVF-fertilized in-vitro MII. Collection-only/unused samples have no fabricated fertilization or embryo links. |
+| complete-donor-stage-counts | Every egg collection and sperm sample has complete stage metrics. Tiffany/Boromir has four transferred and two frozen linked embryos, retaining all six produced and biological parentage. In-vivo MII is limited to 0-2 per collection and never produces embryos; all 21 embryos arise from IVF-fertilized in-vitro MII. Collection-only/unused samples have no fabricated fertilization or embryo links. |
 | mus-musculus-ringbearer-colony | Four experimental Ringbearer mice preserve their surgery events and former Shire membership. |
 | shire-five-generation-breeding-colony | Eight founder pairs, five planned generations, 1-2 litters per pair, 10-12 young per litter, limited selected breeders and at most 500 mice in total. |
 | shire-naming | Hobbit and ASCII Portuguese names with descriptive monikers; no numeric offspring names. |
@@ -33,8 +34,10 @@ The package is the single fictional initialization source for both backend adapt
 - archived_animals: 90
 - canonical_users: 7
 - domain_records: 18
+- experimental_animals_with_enrollment_dates: 19
 - flow_egg_collections: 9
 - flow_embryos: 21
+- flow_frozen_embryos: 2
 - flow_sperm_collections: 11
 - flow_transfers: 7
 - heritage_owned_dummy_animals: 0

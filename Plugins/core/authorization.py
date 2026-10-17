@@ -41,6 +41,15 @@ def normalize_unit_id(value: Any) -> str:
         raise ValueError("Invalid organizational unit ID.")
     return value
 
+
+def organizational_owner_id(record: Mapping[str, Any]) -> str:
+    """Explicit Core workgroup owner; never infer one from housing unit_id."""
+    for field in ("organization_unit_id", "organizational_unit_id", "workgroup_id"):
+        value = str(record.get(field, "") or "").strip()
+        if value:
+            return value
+    return ""
+
 @dataclass(frozen=True)
 class OrganizationUnit:
     unit_id: str
@@ -145,20 +154,79 @@ class CanonicalUnitService:
             result[unit.unit_id] = unit
         return result, int(revision or 0)
 
-    def _audit(self, *, actor: str, action: str, unit_id: str, payload: Mapping[str, Any]) -> None:
-        if not actor:
-            return
-        audit = getattr(self.backend, "audit", None)
-        append = getattr(audit, "append", None)
-        if callable(append):
-            append(
-                actor_login=str(actor),
-                category="security",
-                action=action,
-                entity_type="organization_unit",
-                entity_id=str(unit_id),
-                payload=dict(payload),
+    def _actor(self, actor: str) -> str:
+        policy = self.authorization
+        if bool(getattr(policy, "trusted_local", False)):
+            return ""
+        mt = getattr(policy, "master_track", None)
+        if mt is not None:
+            login = str(getattr(mt, "current_username", "") or "")
+            if not login:
+                raise PermissionError("An authenticated Unit administrator is required.")
+            return login
+        return str(actor or "")  # Explicit bootstrap/test context only.
+
+    def _write(
+        self, units, previous, revision, *, actor, action, unit_id, payload,
+    ) -> int:
+        """CAS catalogue + changed assignments + audit in ONE transaction."""
+        catalogue = self._payload(units.values())
+        records = [(self.namespace, self.record_id, catalogue)]
+        expected = {(self.namespace, self.record_id): revision}
+        changed_ids = {
+            key for key, old in previous.items()
+            if key not in units or units[key].display_name != old.display_name
+        }
+        affected = []
+        if changed_ids:
+            users, users_revision = self.backend.records.get_with_revision(
+                "security", "users", default=[]
             )
+            if not isinstance(users, list) or any(not isinstance(u, dict) for u in users):
+                raise ValueError("Invalid user catalogue; Unit changes were not saved.")
+            cleaned = []
+            for user in users:
+                copied = dict(user)
+                key = str(copied.get("unit_id") or "").strip().casefold()
+                if key in changed_ids:
+                    affected.append(str(copied.get("username") or ""))
+                    target = units.get(key)
+                    copied["unit_id"] = key if target else ""
+                    copied["unit"] = target.display_name if target else ""
+                cleaned.append(copied)
+            records.append(("security", "users", cleaned))
+            expected[("security", "users")] = users_revision
+        event_payload = dict(payload)
+        event_payload.update(
+            catalogue_revision_before=revision, catalogue_revision=revision + 1,
+            users_affected=affected, users_affected_count=len(affected),
+        )
+        login = self._actor(actor)
+        if login:
+            writer = getattr(self.backend.records, "put_many_audited", None)
+            if not callable(writer):
+                raise RuntimeError("The backend does not support atomic audited Unit writes.")
+            result = writer(records, expected_revisions=expected, audit_events=[dict(
+                actor_login=login, category="security", action=action,
+                entity_type="organization_unit", entity_id=unit_id, payload=event_payload,
+            )])
+        elif len(records) > 1:
+            writer = getattr(self.backend.records, "put_many", None)
+            if not callable(writer):
+                raise RuntimeError("The backend does not support atomic Unit assignment writes.")
+            result = writer(records, expected_revisions=expected)
+        else:
+            return self.backend.records.put(
+                self.namespace, self.record_id, catalogue, expected_revision=revision
+            )
+        return result[(self.namespace, self.record_id)]
+
+    def _snapshot(self, expected_revision):
+        units, revision = self.load_with_revision()
+        if expected_revision is not None and revision != expected_revision:
+            from .backend.errors import ConflictError
+            raise ConflictError("The Unit catalogue changed. Reopen Institution before retrying.")
+        return units, revision
 
     @staticmethod
     def _payload(units: Iterable[OrganizationUnit]) -> dict[str, Any]:
@@ -166,6 +234,9 @@ class CanonicalUnitService:
         ids = [normalize_unit_id(unit.unit_id) for unit in normalized]
         if len(ids) != len(set(ids)):
             raise ValueError("Organizational unit IDs must be unique.")
+        if any(unit.unit_id != key or not unit.display_name.strip()
+               for unit, key in zip(normalized, ids)):
+            raise ValueError("Unit IDs must be canonical and names must not be empty.")
         return {
             "schema_version": 1,
             "units": [
@@ -174,17 +245,25 @@ class CanonicalUnitService:
             ],
         }
 
-    def save(self, units: Iterable[OrganizationUnit], *, expected_revision: int | None = None) -> int:
-        payload = self._payload(units)
-        return self.backend.records.put(
-            self.namespace, self.record_id, payload, expected_revision=expected_revision
+    def save(self, units: Iterable[OrganizationUnit], *, expected_revision: int | None = None,
+             actor: str = "", authorized: bool = False) -> int:
+        self._require_manage_permission(authorized)
+        desired = list(units)
+        self._payload(desired)
+        previous, revision = self._snapshot(expected_revision)
+        return self._write(
+            {u.unit_id: u for u in desired}, previous, revision, actor=actor,
+            action="organization_units_replace", unit_id="catalogue",
+            payload={"before": self._payload(previous.values()), "after": self._payload(desired)},
         )
 
     def create(
-        self, unit_id: Any, display_name: Any, *, actor: str = "", authorized: bool = False
+        self, unit_id: Any, display_name: Any, *, actor: str = "", authorized: bool = False,
+        expected_revision: int | None = None,
     ) -> OrganizationUnit:
         self._require_manage_permission(authorized)
-        units, revision = self.load_with_revision()
+        units, revision = self._snapshot(expected_revision)
+        previous = dict(units)
         key = normalize_unit_id(unit_id)
         if key in units:
             raise ValueError("An organizational unit with this ID already exists.")
@@ -193,16 +272,17 @@ class CanonicalUnitService:
             raise ValueError("The organizational unit name cannot be empty.")
         unit = OrganizationUnit(unit_id=key, display_name=label)
         units[key] = unit
-        self.save(units.values(), expected_revision=revision)
-        self._audit(actor=actor, action="organization_unit_create", unit_id=key,
-                    payload=unit.as_record())
+        self._write(units, previous, revision, actor=actor, action="organization_unit_create",
+                    unit_id=key, payload=unit.as_record())
         return unit
 
     def update(
-        self, unit_id: Any, display_name: Any, *, actor: str = "", authorized: bool = False
+        self, unit_id: Any, display_name: Any, *, actor: str = "", authorized: bool = False,
+        expected_revision: int | None = None,
     ) -> OrganizationUnit:
         self._require_manage_permission(authorized)
-        units, revision = self.load_with_revision()
+        units, revision = self._snapshot(expected_revision)
+        previous = dict(units)
         key = normalize_unit_id(unit_id)
         current = units.get(key)
         if current is None:
@@ -219,16 +299,17 @@ class CanonicalUnitService:
             facility_ref=current.facility_ref,
         )
         units[key] = unit
-        self.save(units.values(), expected_revision=revision)
-        self._audit(actor=actor, action="organization_unit_update", unit_id=key,
-                    payload={"before": current.as_record(), "after": unit.as_record()})
+        self._write(units, previous, revision, actor=actor, action="organization_unit_update",
+                    unit_id=key, payload={"before": current.as_record(), "after": unit.as_record()})
         return unit
 
     def set_archived(
-        self, unit_id: Any, archived: bool, *, actor: str = "", authorized: bool = False
+        self, unit_id: Any, archived: bool, *, actor: str = "", authorized: bool = False,
+        expected_revision: int | None = None,
     ) -> OrganizationUnit:
         self._require_manage_permission(authorized)
-        units, revision = self.load_with_revision()
+        units, revision = self._snapshot(expected_revision)
+        previous = dict(units)
         key = normalize_unit_id(unit_id)
         current = units.get(key)
         if current is None:
@@ -242,63 +323,32 @@ class CanonicalUnitService:
             facility_ref=current.facility_ref,
         )
         units[key] = unit
-        self.save(units.values(), expected_revision=revision)
-        self._audit(actor=actor, action=(
+        self._write(units, previous, revision, actor=actor, action=(
             "organization_unit_archive" if archived else "organization_unit_restore"
         ), unit_id=key, payload=unit.as_record())
         return unit
 
-    def delete(self, unit_id: Any, *, actor: str = "", authorized: bool = False) -> bool:
+    def delete(self, unit_id: Any, *, actor: str = "", authorized: bool = False,
+               expected_revision: int | None = None) -> bool:
         """Delete a unit and clear all user assignments in one backend write."""
         self._require_manage_permission(authorized)
-        units, catalog_revision = self.load_with_revision()
+        units, catalog_revision = self._snapshot(expected_revision)
+        previous = dict(units)
         key = normalize_unit_id(unit_id)
         current = units.pop(key, None)
         if current is None:
             return False
 
-        users, users_revision = self.backend.records.get_with_revision(
-            "security", "users", default=[]
-        )
-        if not isinstance(users, list):
-            users = []
-        cleaned_users = []
-        for user in users:
-            if not isinstance(user, dict):
-                cleaned_users.append(user)
-                continue
-            copied = dict(user)
-            if str(copied.get("unit_id") or "").strip().casefold() == key:
-                copied["unit_id"] = ""
-                copied["unit"] = ""
-            cleaned_users.append(copied)
-
-        catalog_payload = self._payload(units.values())
-        put_many = getattr(self.backend.records, "put_many", None)
-        if callable(put_many):
-            put_many(
-                [
-                    (self.namespace, self.record_id, catalog_payload),
-                    ("security", "users", cleaned_users),
-                ],
-                expected_revisions={
-                    (self.namespace, self.record_id): catalog_revision,
-                    ("security", "users"): users_revision,
-                },
-            )
-        else:
-            self.save(units.values(), expected_revision=catalog_revision)
-            self.backend.records.put("security", "users", cleaned_users,
-                                     expected_revision=users_revision)
-        self._audit(actor=actor, action="organization_unit_delete", unit_id=key,
+        self._write(units, previous, catalog_revision, actor=actor,
+                    action="organization_unit_delete", unit_id=key,
                     payload={"unit": current.as_record(), "users_unassigned": True})
         return True
 
-    def ensure_seed(self, units: Iterable[OrganizationUnit]) -> dict[str, OrganizationUnit]:
+    def ensure_seed(self, units: Iterable[OrganizationUnit], *, authorized: bool = False) -> dict[str, OrganizationUnit]:
         current = self.load()
         if not current:
             desired = {unit.unit_id: unit for unit in units}
-            self.save(desired.values())
+            self.save(desired.values(), authorized=authorized, expected_revision=0)
             return desired
         return current
 
