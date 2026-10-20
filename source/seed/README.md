@@ -27,6 +27,11 @@ artifact set. This is not a crash-atomic multi-file filesystem transaction.
 replacing it. All commands use disposable SQLite with seed bootstrap disabled.
 No command imports into or changes the active installation.
 
+The compiler stores the editor's chip/status/sickness defaults and stable
+project-period attribution before packaging (#316). Validation rejects an
+unprepared record; an unrelated first UI Save must never finish seed creation.
+Clinical date spellings, payload metadata and stable event IDs are preserved.
+
 ## Editing rules
 
 - Edit fixtures or scenario declarations, never generated package/report data.

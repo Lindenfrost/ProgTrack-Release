@@ -32,6 +32,7 @@ DATE_FORMAT = "%d.%m.%Y"
 # Flow_Track 3.0 Constants
 FREEZER_NODE_NAME = "FREEZER"
 FREEZER_TRANSFER_ID = "freezer_main"
+HOVER_TOOLTIP_GAP_PT = 2.0
 
 # Stage naming constants (Flow_Track 3.0)
 STAGE_IN_VIVO_M2 = "in_vivo_m2"
@@ -5195,12 +5196,12 @@ class FlowTrackWidget:
 
     @staticmethod
     def _hover_marker_bounds(artist, renderer):
+        """Visible marker/stroke bounds; an invisible picker halo is not layout space."""
         from matplotlib.transforms import Bbox
         x, y = artist.get_data()
         center = artist.get_transform().transform((float(x[0]), float(y[0])))
-        radius = renderer.points_to_pixels(max(
-            artist.get_markersize() / 2 + artist.get_markeredgewidth() / 2,
-            artist.get_pickradius()))
+        radius = renderer.points_to_pixels(
+            artist.get_markersize() / 2 + artist.get_markeredgewidth() / 2)
         return Bbox.from_bounds(center[0] - radius, center[1] - radius, 2 * radius, 2 * radius)
 
     @staticmethod
@@ -5245,7 +5246,8 @@ class FlowTrackWidget:
             self._clear_hover_annotation(redraw=False)
             return False
 
-        # Protect the owning marker's full picking radius plus its actual label/bar stack.
+        # Protect only the source's visible marker/stroke and its own label/bar stack.
+        # Tooltip text is passive, so an invisible picker halo needs no extra spacing.
         boxes = [source_box]
         owner = annotation._flow_owner
         label = getattr(self, 'node_label_artists', {}).get(owner)
@@ -5259,7 +5261,8 @@ class FlowTrackWidget:
                 patch = text.get_bbox_patch()
                 boxes.append(patch.get_window_extent(renderer) if patch else text.get_window_extent(renderer))
         stack = Bbox.union(boxes)
-        margin, gap = renderer.points_to_pixels(5), renderer.points_to_pixels(6)
+        margin = renderer.points_to_pixels(5)
+        gap = renderer.points_to_pixels(HOVER_TOOLTIP_GAP_PT)
         canvas = self.figure.bbox
         available_width = canvas.width - 2 * margin
         padding = renderer.points_to_pixels(annotation.get_fontsize() * .3 + 1)
@@ -5271,32 +5274,21 @@ class FlowTrackWidget:
         annotation.update_bbox_position_size(renderer)
         measured = annotation.get_bbox_patch().get_window_extent(renderer)
         width, height = measured.width, measured.height
-        blockers = [self._hover_marker_bounds(artist, renderer)
-                    for artist in list(self.node_artists) + list(self.embryo_artists)
-                    if artist is not source and artist.get_visible() and artist.axes is self.ax]
         left_min, left_max = canvas.x0 + margin, canvas.x1 - margin - width
         if left_max < left_min:
             annotation.set_visible(False)
             return False
-        preferred = min(max(point[0] - width / 2, left_min), left_max)
+        left = min(max(point[0] - width / 2, left_min), left_max)
         for side, bottom in (('below', stack.y0 - gap - height), ('above', stack.y1 + gap)):
             if bottom < canvas.y0 + margin or bottom + height > canvas.y1 - margin:
                 continue
-            candidates = [preferred]
-            for obstacle in blockers:
-                candidates.extend([obstacle.x0 - gap - width, obstacle.x1 + gap])
-            candidates = sorted(set(min(max(x, left_min), left_max) for x in candidates),
-                                key=lambda x: abs(x - preferred))
-            for left in candidates:
-                target = Bbox.from_bounds(left, bottom, width, height)
-                if any(target.overlaps(obstacle) for obstacle in blockers):
-                    continue
-                anchor = (left - measured.x0, bottom - measured.y0)
-                annotation.set_position(self.figure.transFigure.inverted().transform(anchor))
-                annotation.update_bbox_position_size(renderer)
-                annotation._flow_side = side
-                return True
-        # A physically undersized canvas cannot show all text AND leave hit targets clear.
+            # Other animals, embryos, labels and lines never affect this source anchor.
+            anchor = (left - measured.x0, bottom - measured.y0)
+            annotation.set_position(self.figure.transFigure.inverted().transform(anchor))
+            annotation.update_bbox_position_size(renderer)
+            annotation._flow_side = side
+            return True
+        # A physically undersized canvas cannot show all text AND leave its source clear.
         # Keep the full content for the next larger draw; existing click details remain available.
         annotation.set_visible(False)
         return False

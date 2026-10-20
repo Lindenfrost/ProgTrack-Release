@@ -3151,10 +3151,16 @@ class CageTrackPlugin:
         return self.store.get_address_for_dialog(animal_name)
 
     def save_address_from_dialog(self, animal_name: str, address_values: Dict[str, Optional[str]]) -> None:
-        if not self._can("cage.assign_locations"):
-            self._deny()
-            return
         before_address = self.store.get_address_for_dialog(animal_name)
+        requested = {key: address_values.get(key) for key in ('building_id', 'unit_id', 'room_id', 'cage_id')}
+        if before_address == requested:
+            return  # An unrelated animal Save is not a housing mutation.
+        can_assign = getattr(self.app, '_master_can', None)
+        if not callable(can_assign) or not can_assign("cage.assign_locations"):
+            deny = getattr(self.app, '_show_permission_denied', None)
+            if callable(deny):
+                deny()
+            return
         self.store.set_address_from_dialog(
             animal_name,
             address_values.get("building_id"),

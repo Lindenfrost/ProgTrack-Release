@@ -13,6 +13,7 @@ from typing import Any
 
 from Plugins.core.backend.facade import ProgTrackBackend
 from Plugins.core.experimental_limits import synchronize_experimental_limits
+from Plugins.core.project_periods import ensure_project_periods
 from Plugins.core.animal_roles import canonical_role_value
 from Plugins.core.runtime_paths import resolve_runtime_paths
 from .common import normalize_core, prune_removed_animal_references, rewrite_references
@@ -59,6 +60,14 @@ def build_bundle() -> SeedBundle:
     domains = domain_records(core, keys, scenario)
     project_experiment_enrollments(core, domains)
     assign_seed_event_ids(core)
+    # Stored editor fields and membership identities belong to the producer,
+    # not an incidental first UI Save (#316). Preserve authored values.
+    for section in ('animals', 'archived_animals'):
+        for animal in core[section].values():
+            animal.setdefault('chip_nr', '')
+            animal.setdefault('special_status', '')
+            animal.setdefault('sick_times', [])
+            ensure_project_periods(animal)
     domains[("seed", "metadata")].update({
         "source_schema": MANIFEST["schema"], "source_hashes": before,
         "scenario_ids": [s["id"] for s in MANIFEST["scenarios"]],

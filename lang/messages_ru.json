@@ -423,6 +423,7 @@
   "settings.role_setup.save_failed": "Не удалось сохранить настройку ролей животных.",
   "dialog.basic_role.title_new": "Новое животное: {role}",
   "dialog.basic_role.title_edit": "Редактировать животное: {name}",
+  "dialog.basic_role.button.new_event": "Новое событие",
   "style.main_colors": "Основные цвета",
   "style.progesterone_color": "Прогестерон:",
   "style.combined_color": "Комбинированный (кровь + моча):",

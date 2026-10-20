@@ -13,6 +13,7 @@ from Plugins.core.animal_identity import animal_identity_key
 from Plugins.core.animal_relationships import resolve_animal_reference
 from Plugins.core.animal_roles import SCHEMA_VERSION as ROLE_SCHEMA_VERSION, canonical_role_value, normalize_role_definition
 from Plugins.core.experimental_limits import KNOWN_LIMIT_FIELDS, default_experimental_limits, synchronize_experimental_limits
+from Plugins.core.project_periods import ensure_project_periods
 from Plugins.core.identity_conventions import render_animal_id
 from .config import *
 from .common import *
@@ -308,6 +309,15 @@ def validate(core: dict[str, Any], records: dict[tuple[str, str], Any], scenario
     if dates["errors"]:
         return {"valid": False, "errors": dates["errors"], "counts": {}, "event_date_audit": dates}
     report = _validate_existing(core, records, scenario)
+    for section in ('animals', 'archived_animals'):
+        for ipid, animal in core[section].items():
+            for field in ('chip_nr', 'special_status', 'sick_times'):
+                if field not in animal:
+                    report['errors'].append(f"Runtime-ready seed field missing: {ipid}/{field}")
+            projected = copy.deepcopy(animal)
+            ensure_project_periods(projected)
+            if projected != animal:
+                report['errors'].append(f"Unprepared seed project periods: {ipid}")
     report["event_date_audit"] = dates
     report["errors"].extend(measurement_errors(core))
     report["errors"].extend(enrollment_errors(core, records))

@@ -8,6 +8,7 @@
 import os
 import sys
 import logging
+import copy
 from typing import Dict, Optional, Any
 from dataclasses import dataclass, field
 
@@ -364,6 +365,7 @@ class AnimalReportsWidget(QMainWindow):
             animal_data = section_data.get(animal_name)
             if not isinstance(animal_data, dict):
                 continue
+            animal_data = copy.deepcopy(animal_data)
             ensure_project_periods(animal_data)
 
             for data_type in measurement_types:
@@ -931,6 +933,7 @@ class AnimalReportsWidget(QMainWindow):
             Dictionary with aggregated data for the backend report record
         """
         logger.debug(f"Aggregating data for animal: {animal_name}")
+        animal_data = copy.deepcopy(animal_data)
         ensure_project_periods(animal_data)
         
         # Initialize the result structure

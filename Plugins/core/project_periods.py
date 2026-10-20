@@ -11,6 +11,7 @@ with non-experimental animals.
 from __future__ import annotations
 
 import hashlib
+import copy
 from datetime import date, datetime
 from typing import Any, Iterable, Mapping
 
@@ -177,6 +178,8 @@ def current_period_records(record: dict[str, Any], collection: str) -> list[dict
         return []
     if not has_project_context(record):
         return [item for item in values if isinstance(item, dict)]
+    record = copy.deepcopy(record)
+    values = record.get(collection, [])
     ensure_project_periods(record)
     active_id = current_period_id(record)
     if not active_id:
@@ -210,6 +213,7 @@ def event_counts_by_period(record: dict[str, Any]) -> dict[str, dict[str, int]]:
     """Return immutable event usage grouped by membership-period ID."""
     if not isinstance(record, dict) or not has_project_context(record):
         return {}
+    record = copy.deepcopy(record)
     ensure_project_periods(record)
     result: dict[str, dict[str, int]] = {}
     for event in record.get("events", []) or []:
@@ -225,5 +229,7 @@ def event_counts_by_period(record: dict[str, Any]) -> dict[str, dict[str, int]]:
 
 
 def event_period_id(record: dict[str, Any], event: Mapping[str, Any]) -> str:
-    ensure_project_periods(record)
-    return str(event.get("project_period_id") or UNASSIGNED_PERIOD_ID)
+    view = copy.deepcopy(record)
+    view['events'] = [copy.deepcopy(dict(event))]
+    ensure_project_periods(view)
+    return str(view['events'][0].get("project_period_id") or UNASSIGNED_PERIOD_ID)

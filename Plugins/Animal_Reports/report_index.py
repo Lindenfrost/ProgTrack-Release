@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import copy
 import json
 import logging
 import pickle
@@ -149,6 +150,7 @@ class AnimalReportIndex:
         *,
         date_format: str,
     ) -> None:
+        animal_data = copy.deepcopy(animal_data)
         self.animal_data = animal_data
         if isinstance(animal_data, dict):
             ensure_project_periods(animal_data)

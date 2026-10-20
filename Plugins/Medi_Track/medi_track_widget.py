@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import logging
 import os
 import shutil
@@ -2625,6 +2626,7 @@ class MediTrackWidget(QWidget):
         # project header.
         usage_parts: List[str] = []
         if isinstance(rec, dict) and (rec.get("project") or rec.get("project_history")):
+            rec = copy.deepcopy(rec)
             periods = ensure_project_periods(rec)
             counts_by_period = event_counts_by_period(rec)
             max_fn = getattr(self.app, "_get_report_event_max", None)

@@ -66,6 +66,10 @@ from Plugins.core.project_visibility import (
     visible_projects_for_user,
 )
 from Plugins.core.ui_operations import AfterDialogUpdates
+from Plugins.core.storage_dates import stored_datetime
+from Plugins.core.audit_comparison import (
+    event_collections_equal, preserve_unset_optional_fields,
+)
 from Plugins.core.platform_helpers import default_export_directory, default_save_path
 from Plugins.core.runtime_paths import (
     BackendProfile,
@@ -875,7 +879,7 @@ def build_relationship_combo(
     completer = combo.completer()
     if completer is not None:
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        completer.setFilterMode(Qt.MatchFlag.MatchStartsWith)
     return combo
 
 # -------------------------------------------------------------------
@@ -1029,6 +1033,13 @@ def phase_from_value(value: Optional[float]) -> Optional[str]:
     if value is None:
         return None
     return Phase.LUTEAL.value if value >= PHASESCHWELLE else Phase.FOLLIKEL.value
+
+def parse_stored_date(value):
+    parsed = value if isinstance(value, datetime) else parse_date(value)
+    if parsed is None or not isinstance(value, str):
+        return parsed
+    return stored_datetime(parsed, value)
+
 
 def parse_date(x: Any) -> Optional[datetime]:
     """Parse various date formats into a datetime object, handling Excel's 1900 leap-year bug."""
@@ -5801,10 +5812,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 old_rec = before_scope.get(animal_name, {})
                 new_rec = after_scope.get(animal_name, {})
 
-                if old_rec == new_rec:
-                    continue
-
                 if not isinstance(old_rec, dict) or not isinstance(new_rec, dict):
+                    if old_rec == new_rec:
+                        continue
                     details = (
                         f"scope={scope}; animal={animal_name}; parameter=<record>; "
                         f"previous={self._audit_value_to_string(old_rec)}; "
@@ -5817,7 +5827,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 for parameter in changed_params:
                     previous_value = old_rec.get(parameter)
                     new_value = new_rec.get(parameter)
-                    if previous_value == new_value:
+                    if parameter == "events":
+                        if (not isinstance(previous_value, list)
+                                and not isinstance(new_value, list)
+                                and previous_value == new_value):
+                            continue
+                        if event_collections_equal(previous_value, new_value):
+                            continue
+                    elif previous_value == new_value:
                         continue
 
                     details = (
@@ -6254,8 +6271,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         period = (self.messages.get('plot.tooltip.unassigned_period', 'unassigned')
                                   if _period == 'unassigned' else _period)
                         context.append(f"{self.messages.get('plot.tooltip.event_period', 'Period')}: {period}")
-                    if _role:
-                        context.append(f"{self.messages.get('plot.tooltip.recorded_role', 'Recorded role')}: {_role}")
                     text += '\n' + '\n'.join(context)
                 return text
             history = (f" ({self.messages.get('plot.event.historical', 'historical')})"
@@ -7748,10 +7763,49 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # 7.10 Write JSON Data
     #   Serialize and save the provided configuration data to disk.
     # ------------------------
+    def _serialize_core_record(self, name, rec):
+        """Encode a record losslessly; normalization belongs to edit/create commands."""
+        rec_copy = copy.deepcopy(rec)
+        rec_copy['rolle'] = canonical_role_value(rec_copy.get('rolle'), default=Role.UNKNOWN.value)
+        visible_name = animal_base_name(name, rec_copy)
+        rec_copy.update(ipid=name, name=visible_name, _base_name=visible_name,
+                        display_name=visible_name)
+        parts = split_animal_identity_key(name)
+        if parts is not None:
+            rec_copy['species'] = self._normalize_species_value(rec_copy.get('species')) or parts[1]
+            rec_copy['birth_date'] = (normalize_birth_date(rec_copy.get('birth_date'), required=False)
+                                      or normalize_birth_date(parts[2], required=False))
+            rec_copy['origin'] = str(rec_copy.get('origin') or '').strip() or parts[3]
+        for field in ('daten', 'gewicht', 'sperm', 'pdg', 'events'):
+            if field not in rec_copy:
+                continue
+            rows = rec_copy[field]
+            if not isinstance(rows, list):
+                raise ValueError(f"Invalid {field} collection in {name}")
+            for index, row in enumerate(rows):
+                if not isinstance(row, dict):
+                    raise ValueError(f"Invalid {field} row in {name}")
+                value = row.get('datum')
+                if isinstance(value, datetime):
+                    row['datum'] = getattr(value, '_storage_text', None) or value.isoformat()
+                elif not isinstance(value, str) or parse_date(value) is None:
+                    raise ValueError(f"Invalid {field} date in {name}")
+                if field == 'events':
+                    if any(key in row for key in ('typ', 'type', 'date')):
+                        raise ValueError(f"Non-canonical event keys in {name}")
+                    if not str(row.get('event_type') or '').strip():
+                        raise ValueError(f"Missing event_type in {name}")
+                    # New event identities belong to the command/session, not
+                    # a disposable serialization copy.
+                    ensure_event_record_id(rec[field][index])
+                    row['event_id'] = rec[field][index]['event_id']
+        return rec_copy
+
     def _write_json(
         self,
         data: Dict[str, Any],
         audit_after_save: bool = True,
+        _before_snapshot: Optional[Dict[str, Any]] = None,
     ) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
         """Serialize and transactionally persist core data through the backend."""
         self._save_trace(
@@ -7768,18 +7822,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         try:
             self._save_trace("write_json.read_before_snapshot.before")
-            before_snapshot = self._read_json()
+            before_snapshot = self._read_json() if _before_snapshot is None else _before_snapshot
             self._save_trace("write_json.read_before_snapshot.after")
         except Exception:
-            before_snapshot = {}
             self._save_trace("write_json.read_before_snapshot.exception")
+            raise  # Never overwrite data after an unsuccessful authoritative read.
         
         # Build output structure with schema version
         out = {
             'version': SCHEMA_VERSION,
             'animals': {},
             'archived_animals': {},
-            'settings': data.get('settings', {})
+            'settings': data.get('settings', before_snapshot.get('settings', {}))
         }
 
         # Serialize animals and archived_animals
@@ -7790,123 +7844,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 source_data = data.get('archived', {})
             
             for name, rec in source_data.items():
-                rec_copy = rec.copy()
-                rec_copy['rolle'] = canonical_role_value(rec_copy.get('rolle'), default=Role.UNKNOWN.value)
-                visible_name = animal_base_name(name, rec_copy)
-                rec_copy['ipid'] = name
-                rec_copy['name'] = visible_name
-                rec_copy['_base_name'] = visible_name
-                rec_copy['display_name'] = visible_name
-                parts = split_animal_identity_key(name)
-                if parts is not None:
-                    rec_copy['species'] = self._normalize_species_value(rec_copy.get('species')) or parts[1]
-                    rec_copy['birth_date'] = (
-                        normalize_birth_date(rec_copy.get('birth_date'), required=False)
-                        or normalize_birth_date(parts[2], required=False)
-                    )
-                    rec_copy['origin'] = (
-                        str(rec_copy.get('origin') or '').strip() or parts[3]
-                    )
-
-                # --- progesterone (blood) ---
-                rec_copy['daten'] = []
-                for r in rec.get('daten', []):
-                    d = r.get('datum'); v = r.get('wert')
-                    if isinstance(d, datetime):
-                        d = d.isoformat()
-                    elif not isinstance(d, str):
-                        logging.warning(f"Invalid date type {type(d)} for daten in {name}, skipping")
-                        continue
-                    entry = {'datum': d, 'wert': v}
-                    probe = r.get('probennummer')
-                    if probe is not None:
-                        probe_text = str(probe).strip()
-                        if probe_text:
-                            entry['probennummer'] = probe_text
-                    rec_copy['daten'].append(entry)
-
-                # --- weights ---
-                rec_copy['gewicht'] = []
-                for r in rec.get('gewicht', []):
-                    d = r.get('datum'); v = r.get('wert')
-                    if isinstance(d, datetime):
-                        d = d.isoformat()
-                    elif not isinstance(d, str):
-                        logging.warning(f"Invalid date type {type(d)} for weight in {name}, skipping")
-                        continue
-                    rec_copy['gewicht'].append({'datum': d, 'wert': v})
-
-                # --- sperm measurements ---
-                rec_copy['sperm'] = []
-                for s in rec.get('sperm', []):
-                    d = s.get('datum')
-                    if isinstance(d, datetime):
-                        d = d.isoformat()
-                    elif not isinstance(d, str):
-                        logging.warning(f"Invalid date type {type(d)} for sperm in {name}, skipping")
-                        continue
-                    sperm_payload = {
-                        'datum':       d,
-                        'motility':    s.get('motility'),
-                        'progressive': s.get('progressive'),
-                        'count':       s.get('count'),
-                    }
-                    for sample_key in ('sample_id', 'probennummer'):
-                        sample_id = s.get(sample_key)
-                        if sample_id is not None and str(sample_id).strip():
-                            sperm_payload[sample_key] = str(sample_id).strip()
-                    rec_copy['sperm'].append(sperm_payload)
-
-                # --- PdG series + formula ---
-                rec_copy['pdg'] = []
-                for r in rec.get('pdg', []):
-                    d = r.get('datum'); v = r.get('wert')
-                    if isinstance(d, datetime):
-                        d = d.isoformat()
-                    elif not isinstance(d, str):
-                        logging.warning(f"Invalid date type {type(d)} for pdg in {name}, skipping")
-                        continue
-                    entry = {'datum': d, 'wert': v}
-                    probe = r.get('probennummer')
-                    if probe is not None:
-                        probe_text = str(probe).strip()
-                        if probe_text:
-                            entry['probennummer'] = probe_text
-                    rec_copy['pdg'].append(entry)
-
-                # --- unified events (canonical event_type + datum) ---
-                rec_copy["events"] = []
-                for event in rec.get("events", []) or []:
-                    if not isinstance(event, dict):
-                        logging.warning("Invalid event in %s, skipping: %r", name, event)
-                        continue
-                    legacy_keys = sorted(
-                        key for key in ("typ", "type", "date") if key in event
-                    )
-                    if legacy_keys:
-                        raise ValueError(
-                            f"Non-canonical event keys in {name}: {', '.join(legacy_keys)}"
-                        )
-                    # Bind a new event ID in the live record before writing,
-                    # so subsequent saves in this session update this same
-                    # row instead of manufacturing a replacement identity.
-                    ensure_event_record_id(event)
-                    event_type = str(event.get("event_type") or "").strip()
-                    event_date = event.get("datum")
-                    if not event_type or event_date is None:
-                        logging.warning("Invalid event in %s, skipping: %r", name, event)
-                        continue
-                    if isinstance(event_date, datetime):
-                        event_date = event_date.isoformat()
-                    elif not isinstance(event_date, str):
-                        logging.warning("Invalid event date in %s, skipping: %r", name, event)
-                        continue
-                    payload = dict(event)
-                    payload["event_type"] = event_type
-                    payload["datum"] = event_date
-                    rec_copy["events"].append(payload)
-                for legacy_field in ("op", "pgf", "embryo"):
-                    rec_copy.pop(legacy_field, None)
+                rec_copy = self._serialize_core_record(name, rec)
 
                 out[section][name] = rec_copy
             self._save_trace(
@@ -9078,7 +9016,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             completer = combo.completer()
             if completer is not None:
                 completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-                completer.setFilterMode(Qt.MatchFlag.MatchContains)
+                completer.setFilterMode(Qt.MatchFlag.MatchStartsWith)
             self._std_widen(combo)
             fields[field_key] = combo
             layout.addRow(self.messages.get(label_key, fallback), combo)
@@ -9536,6 +9474,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return None
 
         row_anchor = _layout_anchor(row_widget)
+        if row_anchor is not None and row_anchor is _layout_anchor(after_widget):
+            return
         row, _role = form.getWidgetPosition(row_anchor) if row_anchor is not None else (-1, None)
         if row < 0:
             return
@@ -9546,20 +9486,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             after_row, _after_role = form.getWidgetPosition(after_anchor)
             insert_at = after_row + 1 if after_row >= 0 else form.rowCount()
-        # ``addRow(widget)`` creates a spanning row.  ``takeRow`` represents
-        # that row as ``labelItem=None, fieldItem=<widget>``; putting the item
-        # back into FieldRole silently moves the section into the form's field
-        # column.  Address is the only shared section that is deliberately
-        # moved after role-specific identity rows, so this showed up as an
-        # unexplained extra indent in the New Partner, Breeding and Sperm
-        # Donor dialogs.  Preserve the original spanning role when moving a
-        # row, while retaining the normal two-column behavior for labelled
-        # rows.
-        if result.labelItem is None and result.fieldItem is not None:
-            self._set_form_item(form, insert_at, QFormLayout.ItemRole.SpanningRole, result.fieldItem)
+        # Insert a NEW row, shifting occupied rows rather than setItem-ing
+        # into their cells.  The old path lost row ownership and left orphan
+        # widgets over live inputs (notably New Experimental birth/death).
+        # insertRow also preserves spanning vs labelled rows and field layouts.
+        field = (result.fieldItem.widget() or result.fieldItem.layout()) if result.fieldItem else None
+        if result.labelItem is None:
+            form.insertRow(insert_at, field)
         else:
-            self._set_form_item(form, insert_at, QFormLayout.ItemRole.LabelRole, result.labelItem)
-            self._set_form_item(form, insert_at, QFormLayout.ItemRole.FieldRole, result.fieldItem)
+            form.insertRow(insert_at, result.labelItem.widget(), field)
 
     def _wrap_form_rows_in_section(
         self,
@@ -12205,11 +12140,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         events = self._events_recorded_in_role(animal_data, role_value)
         if not has_project_context(animal_data):
             return events
-        ensure_project_periods(animal_data)
-        active_id = current_period_id(animal_data)
+        view = copy.deepcopy(animal_data)
+        ensure_project_periods(view)
+        active_id = current_period_id(view)
+        eligible = {id(event) for event in events}
+        current_ids = {
+            id(original) for original, projected in zip(
+                animal_data.get('events', []), view.get('events', []))
+            if id(original) in eligible
+            and str(projected.get('project_period_id') or '') == active_id
+        }
         return [
-            event for event in events
-            if str(event.get("project_period_id") or "") == active_id
+            event for event in events if id(event) in current_ids
         ]
 
     def _role_dialog_blocks(self, role_value: str, mode: str = "edit") -> List[str]:
@@ -14183,6 +14125,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         record: Dict[str, Any],
         previous: Dict[str, Any],
     ) -> bool:
+        # Every Core editor reaches this shared Save preparation boundary.
+        # Preserve absent/null widget blanks before genuine lifecycle changes;
+        # never suppress an actual populated-to-empty transition in the audit.
+        preserve_unset_optional_fields(record, previous)
         death_date = str(record.get("death_date") or "").strip()
         if not death_date or death_date == str(previous.get("death_date") or "").strip():
             return True
@@ -17869,6 +17815,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 # created, not which already-saved history is visible.
                 # Stable IDs suppress only duplicate copies of the same row;
                 # separate same-day events remain separate plot occurrences.
+                a = copy.deepcopy(a)
                 ensure_project_periods(a)
                 evs = plot_event_entries(a)
                 scoped_plot = has_project_context(a)
@@ -19184,10 +19131,36 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 raise ValueError(date_text)
             seen.add(date)
             value = parse_measurement(value_text)
-            entry = {'datum': date, 'wert': value}
-            if extra and extra[0] is not None and extra[0].text().strip():
-                entry['probennummer'] = extra[0].text().strip()
+            entry = copy.deepcopy(getattr(d_edit, '_progtrack_measurement_source', {}))
+            entry = self._measurement_row_with_inputs(entry, datum=date, wert=value)
+            if extra and extra[0] is not None:
+                original_sample = entry.get('probennummer')
+                original_text = '' if original_sample is None else str(original_sample)
+                sample = extra[0].text().strip()
+                if extra[0].text() == original_text:
+                    pass  # An unchanged literal/null/absent sample ID is not an edit.
+                elif sample:
+                    entry['probennummer'] = sample
+                else:
+                    entry.pop('probennummer', None)
             result.append(entry)
+        return result
+
+    @staticmethod
+    def _measurement_row_with_inputs(source, **values):
+        """Retain unedited precision/time/metadata behind day-only controls."""
+        result = copy.deepcopy(source)
+        for key, value in values.items():
+            previous = source.get(key)
+            if ('datum' in source and value is None and previous in (None, '')):
+                continue  # An untouched blank optional sperm field keeps its representation.
+            if (isinstance(previous, datetime) and isinstance(value, datetime)
+                    and previous.strftime(DATE_FORMAT) == value.strftime(DATE_FORMAT)):
+                continue
+            if (type(previous) in (int, float) and type(value) in (int, float)
+                    and previous == value):
+                continue
+            result[key] = value
         return result
 
     def _measurement_input_error(self):
@@ -19253,11 +19226,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # 7.19.1 Add Row to Editable List
         #     Insert or update a row in the editable animal list widget.
         # ------------------------
-        def add_row(item_data: Tuple[str, Optional[str], Optional[str]]) -> None:
+        def add_row(item_data: Tuple[str, Optional[str], Optional[str]], source=None) -> None:
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(5)
             d_edit = QLineEdit(item_data[0])
+            d_edit._progtrack_measurement_source = copy.deepcopy(source or {})
             d_edit.setPlaceholderText(self.messages["form.placeholder.date"])
             
             # Add real-time date validation styling
@@ -19332,7 +19306,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         add_btn.clicked.connect(lambda: add_row(add_default(widgets)))
         for item in items:
-            add_row(format_item(item))
+            add_row(format_item(item), source=item)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -24043,6 +24017,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             row.setSpacing(5)
             date_le = QLineEdit(d['date'])
             date_le.setPlaceholderText(DATE_FORMAT)
+            date_le._progtrack_measurement_source = copy.deepcopy(d.get('_source_record', {}))
             date_le._progtrack_sperm_identifiers = {
                 sample_key: str(d[sample_key]).strip()
                 for sample_key in ('sample_id', 'probennummer')
@@ -24123,6 +24098,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         sorted_sperm = sorted(rec.get('sperm', []), key=lambda x: x['datum'])
         for ent in sorted_sperm:
             add_sperm_row({
+                '_source_record': ent,
                 'date': ent['datum'].strftime(DATE_FORMAT),
                 'motility': '' if ent.get('motility')   is None else str(ent['motility']),
                 'progressive': '' if ent.get('progressive') is None else str(ent['progressive']),
@@ -24250,19 +24226,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     p_text = prog_le.text().strip()
                     c_text = cnt_le.text().strip()
                     try:
-                        sperm_entry = {
+                        sperm_entry = copy.deepcopy(getattr(d_le, '_progtrack_measurement_source', {}))
+                        sperm_entry = self._measurement_row_with_inputs(sperm_entry, **{
                             'datum': dt,
                             'motility': parse_measurement(m_text) if m_text else None,
                             'progressive': parse_measurement(p_text) if p_text else None,
                             'count': parse_measurement(c_text) if c_text else None,
-                        }
+                        })
                     except ValueError:
                         self._measurement_input_error()
                         return
                     for sample_key, sample_id in getattr(
                         d_le, '_progtrack_sperm_identifiers', {}
                     ).items():
-                        if sample_id:
+                        if sample_id and sample_key not in sperm_entry:
                             sperm_entry[sample_key] = sample_id
                     new_sperm.append(sperm_entry)
             else:
@@ -24921,7 +24898,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # weights
             rec_obj['gewicht'] = weights_list
             rec_obj['project'] = project_le.currentText().strip()
-            rec_obj['severity'] = severity_cb.currentData()
             # events
             if steroid_active:
                 events_list, seen_event_rows = [], set()
@@ -28297,6 +28273,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------
     def _load_persistence(self) -> None:
         """Load data from JSON with accurate robust datetime parsing."""
+        self._core_load_invalid = True
         data = self._read_json()
         self.animals = data.get('animals', {})
         self.archived = data.get('archived_animals', {})
@@ -28334,24 +28311,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except ValueError:
                     logging.warning(f"Invalid birth date for animal {animal_key}: {rec.get('birth_date')}")
                     rec['birth_date'] = ''
-                rec.setdefault('chip_nr', '')
                 rec.setdefault('origin', '')
-                rec.setdefault('special_status', '')
-                rec.setdefault('in_experiment', False)
                 orig_daten = rec.get('daten', [])
                 rec['daten'] = []
                 skipped = 0
                 for r in orig_daten:
                     try:
-                        datum = parse_date(r['datum'])
+                        datum = parse_stored_date(r['datum'])
                         if datum is None:
                             raise ValueError("Invalid date")
-                        entry = {'datum': datum, 'wert': r['wert']}
-                        probe = r.get('probennummer')
-                        if probe is not None:
-                            probe_text = str(probe).strip()
-                            if probe_text:
-                                entry['probennummer'] = probe_text
+                        entry = copy.deepcopy(r)
+                        entry['datum'] = datum
                         rec['daten'].append(entry)
                     except (ValueError, TypeError):
                         logging.warning(f"Skipped invalid measurement: {r}")
@@ -28373,7 +28343,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             raise ValueError(
                                 "Non-canonical event keys: " + ", ".join(legacy_keys)
                             )
-                        datum = parse_date(ev.get('datum'))
+                        datum = parse_stored_date(ev.get('datum'))
                         event_type = str(ev.get('event_type') or '').strip().lower()
                         # Saved historical types must survive role changes and
                         # retired/unknown definitions. The current catalog
@@ -28383,13 +28353,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             payload["event_type"] = event_type
                             payload["datum"] = datum
                             ensure_event_record_id(payload)
-                            snapshot = self._custom_event_snapshot(event_type)
-                            if (
-                                not payload.get("custom_event_snapshot")
-                                and snapshot.get("id") != event_type
-                            ):
-                                payload["custom_event_snapshot"] = snapshot
                             rec['events'].append(payload)
+                        else:
+                            raise ValueError("Invalid event date/type")
                     except Exception:
                         logging.warning(f"Skipped invalid event: {ev}")
                         skipped += 1
@@ -28401,13 +28367,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec['gewicht'] = []
                 for x in orig_w:
                     try:
-                        dt = parse_date(x['datum'])
+                        dt = parse_stored_date(x['datum'])
                         if dt is None:
                             raise ValueError
-                        entry = {'datum': dt, 'wert': x['wert']}
-                        probe = x.get('probennummer')
-                        if probe is not None and str(probe).strip():
-                            entry['probennummer'] = str(probe).strip()
+                        entry = copy.deepcopy(x)
+                        entry['datum'] = dt
                         rec['gewicht'].append(entry)
                     except Exception:
                         logging.warning(f"Skipped invalid weight: {x}")
@@ -28420,15 +28384,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec['pdg'] = []
                 for p in orig_pdg:
                     try:
-                        dt = parse_date(p.get('datum'))
+                        dt = parse_stored_date(p.get('datum'))
                         if dt is None:
                             raise ValueError("Invalid date")
-                        entry = {'datum': dt, 'wert': p.get('wert')}
-                        probe = p.get('probennummer')
-                        if probe is not None:
-                            probe_text = str(probe).strip()
-                            if probe_text:
-                                entry['probennummer'] = probe_text
+                        entry = copy.deepcopy(p)
+                        entry['datum'] = dt
                         rec['pdg'].append(entry)
                     except Exception:
                         logging.warning(f"Skipped invalid pdg entry: {p}")
@@ -28441,72 +28401,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec['sperm'] = []
                 for s in orig_sperm:
                     try:
-                        dt = parse_date(s.get('datum'))
+                        dt = parse_stored_date(s.get('datum'))
                         if dt is None:
                             raise ValueError("Invalid date")
-                        entry = {
-                            'datum':       dt,
-                            'motility':    s.get('motility'),
-                            'progressive': s.get('progressive'),
-                            'count':       s.get('count'),
-                        }
-                        # Seed/domain records use sample_id for sperm
-                        # donations; older measurement imports use
-                        # probennummer. Preserve whichever canonical key was
-                        # present instead of dropping the identifier.
-                        for sample_key in ('sample_id', 'probennummer'):
-                            probe = s.get(sample_key)
-                            if probe is not None and str(probe).strip():
-                                entry[sample_key] = str(probe).strip()
+                        entry = copy.deepcopy(s)
+                        entry['datum'] = dt
                         rec['sperm'].append(entry)
                     except Exception:
                         logging.warning(f"Skipped invalid sperm entry: {s}")
                         skipped += 1
 
-                # ------------------------
-                # 7.27.1.5 Add default fields for recovery and manual '+'
-                # If these keys are missing (e.g. older persisted data),
-                # assign sensible defaults. Donors, surrogates, and sperm donors get
-                # the default recovery period; others get 0. All animals start
-                # without a manual plus flag.
-                role = self._animal_role_value(rec, default=Role.UNKNOWN.value)
-                # Promote legacy flat limit fields into the canonical map on
-                # load.  When a map already exists it remains authoritative;
-                # custom/retired block IDs are preserved by the synchronizer.
-                synchronize_experimental_limits(rec, role)
-                if 'recovery_time' not in rec:
-                    rec['recovery_time'] = DEFAULT_RECOVERY_TIME if role in (Role.SPENDER.value, Role.AMME.value, Role.SAMENSP.value) else 0
-                # Migrate manual_plus to sick for backward compatibility
-                if 'manual_plus' in rec and 'sick' not in rec:
-                    rec['sick'] = rec['manual_plus']
-                    del rec['manual_plus']
-                if 'sick' not in rec:
-                    rec['sick'] = False
-                
-                # Initialize sick_times array if missing and normalize to ISO strings
-                if 'sick_times' not in rec:
-                    rec['sick_times'] = []
-                else:
-                    # Normalize all sick_times entries to ISO strings for consistency
-                    normalized_times = []
-                    for st in rec.get('sick_times', []):
-                        if isinstance(st, datetime):
-                            normalized_times.append(st.isoformat())
-                        elif isinstance(st, str):
-                            normalized_times.append(st)
-                    rec['sick_times'] = normalized_times
-                
-                # Initialize new sick period fields (for new persistent sick status feature)
-                if 'sick_start_date' not in rec:
-                    rec['sick_start_date'] = None
-                if 'sick_end_date' not in rec:
-                    rec['sick_end_date'] = None
-
-                # Normalize project membership periods only after all dated
-                # records have been parsed.  This makes the migration
-                # deterministic and preserves the event's original period
-                # across later project changes.
-                ensure_project_periods(rec)
+                # Read only: UI fallbacks and derived membership views must
+                # not become business edits on the next unrelated Save.
+                # Create/edit commands and the seed producer own stored defaults.
 
                 # ------------------------
                 # 7.27.1.6 After processing all entries:
@@ -28517,6 +28424,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ------------------------
         # End of for-rec loop; continue with overall statistics...
         # ------------------------
+        self._core_load_invalid = bool(total_skipped)
         if total_skipped > 5:
             self._show_message("warning.load.json.invalid_records", count=total_skipped)
         # Do not show dialogs during data-load; just set a flag.
@@ -28863,26 +28771,35 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         pending = self.__dict__.pop("_pending_project_save_updates", [])
         if getattr(self, "read_only_mode", False):
             return
+        if getattr(self, "_core_load_invalid", False):
+            raise ValueError("Cannot save after loading invalid clinical records")
+        # One fresh operation-local snapshot; never a cached actor/backend view.
+        before_snapshot = self._read_json()
         definitions = {}
         for definition in self._custom_event_definitions(include_retired=True):
             token = str(definition.get("event_type") or "").strip().casefold()
             if token:
                 definitions.setdefault(token, definition)
-        for _record in list(self.animals.values()) + list(self.archived.values()):
-            if isinstance(_record, dict):
-                ensure_project_periods(_record)
+        for section, records in (('animals', self.animals), ('archived_animals', self.archived)):
+            for name, record in records.items():
+                previous = before_snapshot.get(section, {}).get(name)
+                encoded = self._serialize_core_record(name, record)
+                if json.dumps(encoded, sort_keys=True, default=str) == json.dumps(
+                        previous, sort_keys=True, default=str):
+                    continue
+                ensure_project_periods(record)
                 synchronize_experimental_limits(
-                    _record,
-                    self._animal_role_value(_record, default=Role.UNKNOWN.value),
-                    prefer_flat=True,
-                    prune_unsupported=True,
-                )
-            for _event in _record.get("events", []) if isinstance(_record, dict) else []:
-                _event_type = str(_event.get("event_type") or "") if isinstance(_event, dict) else ""
-                definition = definitions.get(_event_type.strip().casefold())
-                if definition and not _event.get("custom_event_snapshot"):
-                    _event["custom_event_snapshot"] = self._custom_event_snapshot(
-                        _event_type, definition=definition)
+                    record, self._animal_role_value(record, default=Role.UNKNOWN.value),
+                    prefer_flat=True, prune_unsupported=True)
+                existing_ids = {e.get("event_id") for e in (previous or {}).get("events", [])
+                                if isinstance(e, dict)}
+                for event in record.get("events", []):
+                    event_type = str(event.get("event_type") or "")
+                    definition = definitions.get(event_type.strip().casefold())
+                    if (definition and event.get("event_id") not in existing_ids
+                            and not event.get("custom_event_snapshot")):
+                        event["custom_event_snapshot"] = self._custom_event_snapshot(
+                            event_type, definition=definition)
         self._save_trace("save_persistence.enter", defer_post_save_work=defer_post_save_work)
         logging.info(
             "Persistence save begin; defer_post_save_work=%s",
@@ -28890,7 +28807,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
         data = {'animals': self.animals, 'archived_animals': self.archived}
         try:
-            audit_snapshots = self._write_json(data, audit_after_save=True)
+            audit_snapshots = self._write_json(
+                data, audit_after_save=True, _before_snapshot=before_snapshot)
         except Exception:
             self.__dict__.pop("_pending_project_save_updates", None)
             raise

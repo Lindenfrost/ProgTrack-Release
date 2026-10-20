@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict, deque
 from datetime import datetime
 from typing import Any, Mapping
 from uuid import uuid4
@@ -390,6 +391,16 @@ class AnimalService:
                         ),
                     )
                 measurement_rows: list[tuple[str, str, str, str, str, str]] = []
+                # Input order is a view concern, not a new measurement identity.
+                # Reuse stored IDs for unchanged, distinct same-day occurrences
+                # instead of deriving identity from a new list index.
+                available_ids = defaultdict(deque)
+                reserved_ids = set()
+                for stored in existing_measurements.get(ipid, []):
+                    row_id, kind, when, payload, sample, source = stored
+                    signature = (kind, when, dumps(loads(payload, {})), sample)
+                    available_ids[signature].append((row_id, source))
+                    reserved_ids.add(row_id)
                 for kind, entries in measurements.items():
                     for index, entry in enumerate(entries):
                         if not isinstance(entry, Mapping):
@@ -404,18 +415,30 @@ class AnimalService:
                             or entry.get("sample_id")
                             or ""
                         )
-                        measurement_id = deterministic_record_id(
-                            "measurement", ipid, kind, measured_at, sample_id,
-                            dumps(entry), index,
-                        )
+                        payload = dumps(dict(entry))
+                        signature = (kind, measured_at, payload, sample_id)
+                        if available_ids[signature]:
+                            measurement_id, source_id = available_ids[signature].popleft()
+                        else:
+                            ordinal = index
+                            measurement_id = deterministic_record_id(
+                                "measurement", ipid, kind, measured_at, sample_id,
+                                payload, ordinal)
+                            while measurement_id in reserved_ids:
+                                ordinal += 1
+                                measurement_id = deterministic_record_id(
+                                    "measurement", ipid, kind, measured_at, sample_id,
+                                    payload, ordinal)
+                            reserved_ids.add(measurement_id)
+                            source_id = "core"
                         measurement_rows.append(
                             (
                                 measurement_id,
                                 kind,
                                 measured_at,
-                                dumps(dict(entry)),
+                                payload,
                                 sample_id,
-                                "core",
+                                source_id,
                             )
                         )
                 measurement_rows.sort()
@@ -438,11 +461,15 @@ class AnimalService:
                                 measurement_changed = True
                                 break
                 if measurement_changed:
-                    _execute(
-                        connection,
-                        f"DELETE FROM measurements WHERE animal_ipid={mark}",
-                        (ipid,),
-                    )
+                    stored_ids = {row[0] for row in stored_measurement_rows}
+                    incoming_ids = {row[0] for row in measurement_rows}
+                    for removed_id in stored_ids - incoming_ids:
+                        _execute(
+                            connection,
+                            f"DELETE FROM measurements WHERE animal_ipid={mark} "
+                            f"AND measurement_id={mark}",
+                            (ipid, removed_id),
+                        )
                     for (
                         measurement_id,
                         kind,
@@ -451,6 +478,8 @@ class AnimalService:
                         sample_id,
                         source_id,
                     ) in measurement_rows:
+                        if measurement_id in stored_ids:
+                            continue  # Preserve the row and its original created_at.
                         _execute(
                             connection,
                             "INSERT INTO measurements("

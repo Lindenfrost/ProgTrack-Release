@@ -73,6 +73,7 @@
   "settings.role_setup.save_failed": "Impossibile salvare la configurazione dei ruoli animale.",
   "dialog.basic_role.title_new": "Nuovo animale: {role}",
   "dialog.basic_role.title_edit": "Modifica animale: {name}",
+  "dialog.basic_role.button.new_event": "Nuovo evento",
   "style.main_colors": "Colori principali",
   "style.progesterone_color": "Progesterone:",
   "style.combined_color": "Combinato (sangue + urina):",
