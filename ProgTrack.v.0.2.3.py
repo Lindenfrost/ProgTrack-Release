@@ -68,7 +68,7 @@ from Plugins.core.project_visibility import (
 from Plugins.core.ui_operations import AfterDialogUpdates
 from Plugins.core.storage_dates import stored_datetime
 from Plugins.core.audit_comparison import (
-    event_collections_equal, preserve_unset_optional_fields,
+    core_records_equal, event_collections_equal, preserve_unset_optional_fields,
 )
 from Plugins.core.platform_helpers import default_export_directory, default_save_path
 from Plugins.core.runtime_paths import (
@@ -154,6 +154,7 @@ from Plugins.core.role_block_presets import (
     role_block_presets_path,
     valid_preset_name,
     normalize_event_definition,
+    normalize_experimental_block,
 )
 from Plugins.core.project_species import assignment_allowed, project_species_for, project_species_values_for
 from Plugins.core.animal_relationships import (
@@ -722,7 +723,7 @@ _MAIN_ANIMAL_LIST_MIN_WIDTH: int = 130
 # # ================================================================ #
 # # 4. Qt Import                                                       #
 # # ================================================================ #
-from PyQt6.QtCore import Qt, QDate, QTimer, QSize, QRect, QRectF, QEvent, QSignalBlocker
+from PyQt6.QtCore import Qt, QDate, QTimer, QSize, QRect, QRectF, QEvent, QSignalBlocker, QItemSelectionModel
 from PyQt6.QtGui import QIcon, QColor, QIntValidator, QPixmap, QAction, QActionGroup, QFont, QPalette, QTextDocument, QAbstractTextDocumentLayout, QPainter
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QMainWindow, QLabel, QListWidget, QListWidgetItem,
@@ -3226,6 +3227,11 @@ class StyleSettingsDialog(QDialog):
             self.messages.get("settings.role_setup.custom_blocks.color", "Color"),
             color_button,
         )
+        mirror_medical = QCheckBox(self.messages['settings.role_setup.custom_blocks.mirror_medical_history'])
+        mirror_medical.setObjectName('customExperimentalBlockMirrorMedical')
+        mirror_medical.setChecked(initial.get('mirror_in_medical_history', False) is True)
+        mirror_medical.setToolTip(self.messages['settings.role_setup.custom_blocks.mirror_medical_history.tip'])
+        form.addRow(mirror_medical)
         update_symbol_visibility()
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel, dlg)
         ok = buttons.addButton(self.messages.get("button.save", "Save"), QDialogButtonBox.ButtonRole.AcceptRole)
@@ -3251,11 +3257,13 @@ class StyleSettingsDialog(QDialog):
             return None
         block_id = str(initial.get("id") or ("custom_limit:" + event))
         kind = str(event_type.currentData() or "limiting")
-        return {
+        result = {
+            **initial,
             "id": block_id,
             "name": label,
             "kind": kind,
             "event_type": event,
+            "mirror_in_medical_history": mirror_medical.isChecked(),
             # The backing field is not editable here.  Limiting definitions
             # expose their numeric maximum in New/Edit Animal instead.
             "max_field": (
@@ -3268,6 +3276,12 @@ class StyleSettingsDialog(QDialog):
                 color_button.property("color") or "#4C78A8"
             ).upper(),
         }
+        # Editing a shared definition preserves identity and advances its
+        # configuration revision only when a setting really changes.
+        old = normalize_experimental_block(initial) if initial else None
+        normalized = normalize_experimental_block(result)
+        result['revision'] = (old['revision'] + int(normalized != old)) if old else 1
+        return result
 
     def _make_role_block_preset_combo(
         self,
@@ -5834,7 +5848,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             continue
                         if event_collections_equal(previous_value, new_value):
                             continue
-                    elif previous_value == new_value:
+                    elif (parameter in old_rec and parameter in new_rec
+                          and core_records_equal({parameter: previous_value}, {parameter: new_value})):
                         continue
 
                     details = (
@@ -7801,6 +7816,38 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     row['event_id'] = rec[field][index]['event_id']
         return rec_copy
 
+    def _acknowledge_core_save(self, receipt, data):
+        """Install committed canonical records without invalidating UI references."""
+        def reconcile(target, accepted, *, root=False, event_rows=False):
+            if isinstance(target, dict) and isinstance(accepted, dict):
+                for key in set(target) - accepted.keys():
+                    del target[key]
+                for key, value in accepted.items():
+                    target[key] = reconcile(target.get(key), value,
+                                            event_rows=root and key == 'events')
+                return target
+            if isinstance(target, list) and isinstance(accepted, list):
+                by_id = {row.get('event_id'): row for row in target
+                         if event_rows and isinstance(row, dict) and row.get('event_id')}
+                target[:] = [reconcile(by_id.get(row.get('event_id')), row)
+                             if event_rows and isinstance(row, dict) and row.get('event_id')
+                             else reconcile(target[i] if i < len(target) else None, row)
+                             for i, row in enumerate(accepted)]
+                return target
+            return copy.deepcopy(accepted)
+
+        for (section, name), encoded in receipt.acknowledged_records.items():
+            accepted = copy.deepcopy(encoded)
+            for field in ('daten', 'gewicht', 'pdg', 'sperm', 'events'):
+                for row in accepted.get(field, []):
+                    parsed = parse_stored_date(row.get('datum'))
+                    if parsed is None:
+                        raise ValueError(f"Invalid committed {field} date in {name}")
+                    row['datum'] = parsed
+            target = data.get(section, {}).get(name)
+            if target is not None:
+                reconcile(target, accepted, root=True)
+
     def _write_json(
         self,
         data: Dict[str, Any],
@@ -7853,30 +7900,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 count=len(out.get(section, {})),
             )
 
-        # Atomic write: temp file → fsync → replace.  Parentage edits carry
+        # Atomic backend transaction (Core plus derived clinical records). Parentage edits carry
         # the exact Core projection token that was validated in the dialog;
         # the backend compares it inside the same transaction as the write so
         # a second session cannot commit between validation and persistence.
         expected_parentage_revision = getattr(
             self, "_pending_core_parentage_revision", None
         )
+        save_identity = _actor_backend_read_identity(self)
         try:
-            self.backend.save_core_data(
+            receipt = self.backend.save_core_data(
                 out,
                 expected_parentage_revision=expected_parentage_revision,
+                clinical_context=ProgTrackApp._core_clinical_context(self),
             )
-        except TypeError:
-            if expected_parentage_revision:
-                # A backend that cannot provide the optimistic parentage
-                # contract must fail closed instead of silently falling back
-                # to a stale full-snapshot write.
-                self._pending_core_parentage_revision = None
-                raise
-            try:
-                self.backend.save_core_data(out)
-            except Exception:
-                self._pending_core_parentage_revision = None
-                raise
         except Exception:
             # A rejected optimistic write must not poison the next unrelated
             # dialog save with the stale token that caused this failure.
@@ -7884,14 +7921,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             raise
         else:
             self._pending_core_parentage_revision = None
+        if save_identity != _actor_backend_read_identity(self):
+            raise RuntimeError("Save committed, but actor/backend changed before acknowledgment")
+        self._acknowledge_core_save(receipt, data)
         logging.info(
             "Successfully saved core data through %s",
             RUNTIME_PATHS.profile.value,
         )
         if audit_after_save:
-            self._audit_data_snapshot_diff_when_safe(before_snapshot, out)
+            self._audit_data_snapshot_diff_when_safe(receipt.audit_before, receipt.audit_after)
         else:
-            return before_snapshot, out
+            return receipt.audit_before, receipt.audit_after
         return None
 
     # ------------------------
@@ -11948,6 +11988,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         preset_payload: Optional[Dict[str, Any]] = None,
         expected_revisions: Optional[Dict[Tuple[str, str], Optional[int]]] = None,
     ) -> bool:
+        if not self._can_configure_animal_roles():
+            self._show_permission_denied()
+            return False
         registry = getattr(self, "animal_role_registry", None)
         if registry is None:
             return False
@@ -11977,6 +12020,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if preset_payload is None:
                 registry.save_roles(roles_for_save)
             else:
+                preset_payload = RoleBlockPresetRegistry(self.backend).prepare_payload(
+                    preset_payload.get('presets', []),
+                    experimental_blocks=preset_payload.get('experimental_blocks', []),
+                    event_definitions=preset_payload.get('event_definitions', []),
+                )
                 role_payload = registry.prepare_payload(roles_for_save)
                 expected = expected_revisions or {}
                 self.backend.records.put_many(
@@ -15592,7 +15640,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if normalized and (
                 normalized in self.animals
                 or normalized in getattr(self, "archived", {})
-            ) and normalized not in preserved_selection:
+            ) and normalized not in preserved_selection and self._animal_visible_to_current_user(
+                    self.animals.get(normalized, getattr(self, 'archived', {}).get(normalized, {}))):
                 preserved_selection.append(normalized)
         self.selected_animals = preserved_selection
 
@@ -15965,6 +16014,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if value in self.animals or value in getattr(self, "archived", {})
         ]
 
+        # clear() also destroyed Qt's current row. Without restoring it, focus
+        # returning after Save can choose the first row instead of the user's
+        # interaction-last subject. Cursor restoration must not change selection
+        # or plot order, and must never reinsert a filtered/unauthorized row.
+        current_key = self._selected_animal_for_edit()
+        if current_key is None:
+            current_key = next((key for key in reversed(getattr(self, '_edit_selection_order', []))
+                                if key in self.selected_animals), None)
+        current_item = next((item for item in self.lst.selectedItems()
+                             if self._normalize_sidebar_selection_value(
+                                 item.data(Qt.ItemDataRole.UserRole)) == current_key), None)
+        self.lst.setCurrentItem(current_item, QItemSelectionModel.SelectionFlag.NoUpdate)
+
         can_archive = self._master_can('core.archive_animals')
         can_delete  = self._master_can('core.delete_animals')
         can_edit    = self._can_use_primary_edit_button()
@@ -16048,37 +16110,30 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _on_animal_item_clicked(self, item) -> None:
         """Track the last clicked selected animal for the Edit action only."""
-        key = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        key = self._normalize_sidebar_selection_value(
+            item.data(Qt.ItemDataRole.UserRole)) if item is not None else None
         if not key:
             return
-        def apply_click() -> None:
-            if not hasattr(self, "lst") or self.lst is None:
-                return
-            selected = {
-                it.data(Qt.ItemDataRole.UserRole)
-                for it in self.lst.selectedItems()
-                if it.data(Qt.ItemDataRole.UserRole)
-            }
-            order = [
-                value for value in getattr(self, "_edit_selection_order", [])
-                if value in selected
-            ]
-            if key in selected:
-                order = [value for value in order if value != key]
-                order.append(str(key))
-            else:
-                order = [value for value in order if value != key]
-            for value in selected:
-                if value not in order:
-                    order.append(str(value))
-            self._edit_selection_order = order
-        QTimer.singleShot(0, apply_click)
+        # Qt has already delivered the selection change before itemClicked.
+        # Record interaction now, not in a callback that could outlive a Save,
+        # sidebar rebuild or actor transition. Hidden canonical selections keep
+        # their order; only the actually clicked selected row becomes last.
+        selected = list(getattr(self, 'selected_animals', []) or [])
+        order = [value for value in getattr(self, '_edit_selection_order', [])
+                 if value in selected]
+        order.extend(value for value in selected if value not in order)
+        if item.isSelected() and key in selected:
+            order = [value for value in order if value != key]
+            order.append(key)
+        self._edit_selection_order = order
 
     def _retain_selection_after_animal_save(self, old_key, new_key):
         """A save is not a user request to collapse an existing multi-selection."""
         selection = [new_key if key == old_key else key
                      for key in getattr(self, 'selected_animals', [])]
-        if new_key not in selection:
+        # An explicit editor target need not be the user's selected subject.
+        # Only creation / an empty selection introduces a new selected animal.
+        if new_key not in selection and (not old_key or not selection):
             selection.append(new_key)
         self.selected_animals = list(dict.fromkeys(
             key for key in selection if key in self.animals or key in getattr(self, 'archived', {})
@@ -16115,19 +16170,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if read_identity is not None and read_identity != _actor_backend_read_identity(self):
             dlg.reject()
             return False
+        editor_identity = (_actor_backend_read_identity(self),
+                           getattr(self, '_view_session_epoch', 0))
         dlg.exec()
-        saved_identity = getattr(
-            dlg, "_progtrack_successful_animal_edit", None
-        )
+        saved_identity = dlg.__dict__.pop('_progtrack_successful_animal_edit', None)
+        if editor_identity != (_actor_backend_read_identity(self),
+                               getattr(self, '_view_session_epoch', 0)):
+            return False  # Never restore an old session's target after logout/switch.
         if not (
             isinstance(saved_identity, tuple)
             and len(saved_identity) == 2
         ):
             return False
-        try:
-            delattr(dlg, "_progtrack_successful_animal_edit")
-        except AttributeError:
-            pass
         self._complete_successful_animal_edit(*saved_identity)
         return True
 
@@ -18735,7 +18789,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         target based on the actual layout contents keeps the header, rows, and
         add button tight while preserving a scrollbar for longer histories.
         """
-        if scroll is None or frame is None:
+        from PyQt6 import sip
+        if scroll is None or frame is None or sip.isdeleted(scroll) or sip.isdeleted(frame):
             return
         scroll.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -23576,7 +23631,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             # Read the complete measurement edit before building a write plan.
             try:
-                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
+                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT,
+                                          original=rec.get('ref_weight'))
                 new_weights = self._read_dialog_measurements(wt_rows)
             except ValueError:
                 self._measurement_input_error()
@@ -24198,7 +24254,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             # parse numeric fields
             try:
-                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
+                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT,
+                                          original=rec.get('ref_weight'))
                 max_sp = int(max_sperm_le.text()) if steroid_active else int(rec.get('max_spermaproben') if rec.get('max_spermaproben') is not None else DEFAULT_MAX_SPERM_SAMPLES)
                 recov  = int(rec_le.text()) if steroid_active else int(rec.get('recovery_time', DEFAULT_RECOVERY_TIME))
             except ValueError:
@@ -24907,7 +24964,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         # Use currentData() to get canonical event type, not translated display text
                         typ = combo.currentData()
                         if typ:  # Ensure we have valid data
-                            event_payload = event_payload_from_editor_row(combo, typ, dt)
+                            event_payload = event_payload_from_editor_row(
+                                combo, typ, dt, recording_role=Role.OFFSPRING.value)
                             append_event_payload_once(
                                 events_list, seen_event_rows, combo, event_payload
                             )
@@ -25459,7 +25517,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         def on_save_zuchttier() -> None:
             try:
                 weights_list = self._read_dialog_measurements(wg_widgets)
-                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
+                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT,
+                                          original=rec.get('ref_weight'))
             except ValueError:
                 self._measurement_input_error()
                 return
@@ -25592,7 +25651,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         dt = datetime.strptime(date_le.text(), DATE_FORMAT)
                         typ = combo.currentData()
                         if typ:
-                            event_payload = event_payload_from_editor_row(combo, typ, dt)
+                            event_payload = event_payload_from_editor_row(
+                                combo, typ, dt, recording_role=Role.ZUCHTTIER.value)
                             append_event_payload_once(
                                 events_list, seen_event_rows, combo, event_payload
                             )
@@ -26108,7 +26168,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         def on_save_versuchstier():
             try:
                 weights_list = self._read_dialog_measurements(wg_widgets)
-                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
+                ref_w = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT,
+                                          original=rec.get('ref_weight'))
             except ValueError:
                 self._measurement_input_error()
                 return
@@ -26154,7 +26215,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     dt  = datetime.strptime(ev_d.text(), DATE_FORMAT)
                     typ = ev_c.currentData()
                     if typ:
-                        event_payload = event_payload_from_editor_row(ev_c, typ, dt)
+                        event_payload = event_payload_from_editor_row(
+                            ev_c, typ, dt, recording_role=role_value)
                         append_event_payload_once(
                             events_list, seen_event_rows, ev_c, event_payload
                         )
@@ -26718,7 +26780,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 weight_value = (parse_measurement(new_weight_le.text())
                                 if new_weight_le is not None and new_weight_le.text().strip()
                                 else None)
-                ref_weight = (parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
+                ref_weight = (parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT,
+                                                original=rec.get('ref_weight'))
                               if ref_w_le is not None else rec.get("ref_weight", DEFAULT_REF_WEIGHT))
             except ValueError:
                 self._measurement_input_error()
@@ -27478,7 +27541,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                         pdg_w = tab_widget._pdg_widgets
                         break
             try:
-                ref_weight = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT)
+                ref_weight = parse_measurement(ref_w_le.text(), default=DEFAULT_REF_WEIGHT,
+                                                original=rec.get('ref_weight'))
                 new_gew = self._read_dialog_measurements(gew_w, unique_dates=True)
                 if steroid_active:
                     new_daten = self._read_dialog_measurements(dp_w, unique_dates=True)
@@ -28741,6 +28805,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("post_persistence_sync.audit.after")
 
         def update_views():
+            medi = getattr(getattr(self, 'medi_track_plugin', None), '_widget', None)
+            if medi is not None and getattr(medi, '_current_animal', None):
+                medi.show_animal(medi._current_animal)
             if getattr(self, 'has_heritage_plugin', False) and getattr(self, 'heritage_plugin', None):
                 try:
                     self._save_trace("post_persistence_sync.heritage.before")
@@ -28784,8 +28851,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             for name, record in records.items():
                 previous = before_snapshot.get(section, {}).get(name)
                 encoded = self._serialize_core_record(name, record)
-                if json.dumps(encoded, sort_keys=True, default=str) == json.dumps(
-                        previous, sort_keys=True, default=str):
+                if core_records_equal(previous, encoded):
                     continue
                 ensure_project_periods(record)
                 synchronize_experimental_limits(
@@ -28953,6 +29019,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------
     # 7.27.7 Delete an animal permanently from archive
     # ------------------------
+    def _core_clinical_context(self):
+        """Internal derivative records follow source capabilities, not manual Medi CRUD."""
+        master = getattr(self, 'master_track', None)
+        return {
+            'actor_login': str(getattr(master, 'current_username', '') or ''),
+            'actor_role': str(getattr(master, 'current_role', '') or ''),
+            'signature': str(getattr(master, 'current_display_name', '')
+                             or getattr(master, 'current_username', '') or 'local-user'),
+            'permissions': {permission: self._master_can(permission) for permission in (
+                'core.create_animals', 'core.edit_animal_core', 'core.edit_animal_measurements',
+                'core.archive_animals', 'core.delete_animals')},
+        }
+
     def _delete_archived(self):
         """Delete an archived animal after confirmation."""
         if not self._master_can('core.delete_animals'):
@@ -28992,6 +29071,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     str(old_record.get("ipid", "") or name).strip(),
                     old_record,
                     owner_unit_id=owner_unit,
+                    clinical_context=ProgTrackApp._core_clinical_context(self),
                 ))
             except Exception as exc:
                 logging.warning("Could not atomically delete archived animal %s: %s", name, exc)

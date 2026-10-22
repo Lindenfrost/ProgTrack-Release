@@ -10,7 +10,7 @@ from typing import Any, Mapping
 
 from ..runtime_paths import RuntimePaths
 from .adapters import create_adapter
-from .animal_service import AnimalService
+from .animal_service import AnimalService, CoreSaveReceipt
 from .repositories import (
     AuditRepository,
     DomainRecordRepository,
@@ -137,10 +137,12 @@ class ProgTrackBackend:
         data: Mapping[str, Any],
         *,
         expected_parentage_revision: str | None = None,
-    ) -> None:
-        self.animals.replace_snapshot(
+        clinical_context: Mapping[str, Any] | None = None,
+    ) -> CoreSaveReceipt:
+        return self.animals.replace_snapshot(
             data,
             expected_parentage_revision=expected_parentage_revision,
+            clinical_context=clinical_context,
         )
 
     def delete_archived_animal_atomically(
@@ -149,6 +151,7 @@ class ProgTrackBackend:
         record: Mapping[str, Any],
         *,
         owner_unit_id: str = "",
+        clinical_context: Mapping[str, Any] | None = None,
     ) -> bool:
         """Delete one archived Core row and preserve its Heritage lineage.
 
@@ -232,6 +235,16 @@ class ProgTrackBackend:
             archived_value = row["archived"] if isinstance(row, dict) else row[0]
             if not bool(archived_value):
                 return False
+
+            if clinical_context is not None:
+                from .clinical_mirroring import ClinicalMirrorTransaction
+                clinical = ClinicalMirrorTransaction(self.adapter, connection, clinical_context, timestamp)
+                clinical.authorize('core.delete_animals')
+                for event in _fetchall(connection,
+                        f'SELECT payload_json FROM animal_events WHERE animal_ipid={mark}', (key,)):
+                    raw = self.adapter.row_to_dict(event)['payload_json']
+                    clinical.delete(key, raw if isinstance(raw, dict) else json.loads(raw), animal_deleted=True)
+                clinical.flush()
 
             heritage_row = _fetchone(
                 connection,

@@ -80,18 +80,35 @@
     "Clara",
     "Luisa"
   ],
-  "surnames": [
-    "Baggins",
-    "Took",
-    "Brandybuck",
-    "Gamgee",
-    "Bolger",
-    "Boffin",
-    "Chubb",
-    "Goodbody",
-    "Grubb",
-    "Hornblower",
-    "Bracegirdle",
-    "Burrows"
+  "founder_surnames": [
+    ["Baggins", "Took"],
+    ["Took", "Chubb"],
+    ["Gamgee", "Boffin"],
+    ["Bolger", "Grubb"],
+    ["Brandybuck", "Burrows"],
+    ["Boffin", "Goodbody"],
+    ["Took", "Brandybuck"],
+    ["Goodbody", "Hornblower"]
+  ],
+  "external_surnames": {
+    "Odovacar": "Bolger",
+    "Rosamunda": "Took",
+    "Otho": "Baggins",
+    "Lobelia": "Bracegirdle",
+    "Rosie": "Cotton",
+    "Diamond": "NorthTook",
+    "Giulia": "Goodbody",
+    "Chiara": "Grubb",
+    "Giovanni": "Boffin",
+    "Sofia": "Burrows",
+    "Marco": "Bolger",
+    "Luca": "Hornblower",
+    "Elena": "Goodbody"
+  },
+  "medical_witnesses": [
+    ["SHIRE-G2-P05-L1", 6],
+    ["SHIRE-G3-P03-L1", 2],
+    ["SHIRE-G1-P06-L1", 0],
+    ["SHIRE-G1-P05-L1", 0]
   ]
 }

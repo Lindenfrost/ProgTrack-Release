@@ -213,7 +213,7 @@ def add_mouse_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
 
 
 def add_shire_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str, Any]:
-    """Author a bounded five-generation pedigree, retaining existing identities.
+    """Author a bounded five-generation pedigree with paternal family names.
 
     Each planned pair has one or two litters of 10--12 young. Selection is
     TOTAL per pair, not per litter: two in generations 1--3, one in generation
@@ -232,7 +232,10 @@ def add_shire_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
     pairings: list[dict[str, Any]] = []
     hobbit_males = SHIRE_SPEC["hobbit_males"]
     portuguese_females = SHIRE_SPEC["portuguese_females"]
-    surnames = SHIRE_SPEC["surnames"]
+    surnames_by_ipid = {
+        existing[name]: surname
+        for name, surname in SHIRE_SPEC["external_surnames"].items()
+    }
     serial = 0
     moniker_counts: dict[str, int] = {}
     used_mouse_names = {
@@ -245,25 +248,29 @@ def add_shire_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
         nonlocal serial
         serial += 1
         names = hobbit_males if sex == "Male" else portuguese_females
-        base_name = (
-            f"{names[(serial - 1) % len(names)]} "
-            f"{surnames[(serial - 1) // len(names) % len(surnames)]}"
-        )
+        surname = surnames_by_ipid[father]
+        base_name = f"{names[(serial - 1) % len(names)]} {surname}"
         base_key = base_name.casefold()
-        moniker_index = moniker_counts.get(base_key, 0)
-        while moniker_index < len(SHIRE_NAME_MONIKERS):
-            name = f"{base_name} {SHIRE_NAME_MONIKERS[moniker_index]}"
-            moniker_index += 1
+        # Distribute descriptors across different base names while repeated
+        # given-name/surname combinations walk the same deterministic pool.
+        start = int(hashlib.sha256(base_key.encode("ascii")).hexdigest()[:8], 16)
+        used = moniker_counts.get(base_key, 0)
+        while used < len(SHIRE_NAME_MONIKERS):
+            moniker = SHIRE_NAME_MONIKERS[(start + used) % len(SHIRE_NAME_MONIKERS)]
+            name = f"{base_name} {moniker}"
+            used += 1
             if name.casefold() not in used_mouse_names:
                 break
         else:
             raise ValueError(f"No unused descriptive moniker remains for {base_name}")
-        moniker_counts[base_key] = moniker_index
+        moniker_counts[base_key] = used
         used_mouse_names.add(name.casefold())
-        return add_mouse_animal(
+        child = add_mouse_animal(
             core, key_map, name, born.strftime("%d.%m.%Y"), sex,
             "breeding_animal", parent_m=father, parent_f=mother, project="Shire",
         )
+        surnames_by_ipid[child] = surname
+        return child
 
     @lru_cache(maxsize=None)
     def kinship(left: str, right: str) -> float:
@@ -300,6 +307,11 @@ def add_shire_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
         ))
     for pair in founders:
         generations.update({ipid: 0 for ipid in pair})
+    if len(SHIRE_SPEC["founder_surnames"]) != len(founders):
+        raise ValueError("Shire requires explicit paternal and maternal founder surnames")
+    for pair, surnames in zip(founders, SHIRE_SPEC["founder_surnames"], strict=True):
+        father, mother = pair
+        surnames_by_ipid[father], surnames_by_ipid[mother] = surnames
 
     def add_litter(generation: int, pair_index: int, litter_index: int,
                    father: str, mother: str, born: date,
@@ -309,6 +321,7 @@ def add_shire_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
         if named_child:
             record = animals[named_child]
             record["samenspender"], record["eizellspenderin"] = father, mother
+            surnames_by_ipid[named_child] = surnames_by_ipid[father]
             if parse_record_date(record["birth_date"]) != born:
                 raise ValueError("Shire must not change an existing animal's identity")
         while len(children) < size:
@@ -383,6 +396,16 @@ def add_shire_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
                 if record.get("species") == "Mus musculus"}
     if len(all_mice) > SHIRE_MOUSE_LIMIT:
         raise ValueError(f"Shire exceeds the complete seed mouse cap: {len(all_mice)}")
+    def surname_for(ipid: str) -> str:
+        father = all_mice[ipid].get("samenspender")
+        if father:
+            surnames_by_ipid[ipid] = surname_for(father)
+        if ipid not in surnames_by_ipid:
+            raise ValueError(f"Shire has no authored founder surname: {ipid}")
+        return surnames_by_ipid[ipid]
+
+    for ipid in all_mice:
+        surname_for(ipid)
     for ipid, record in all_mice.items():
         if record.get("project") != "Ringbearer":
             record["project"] = "Shire"
@@ -393,16 +416,43 @@ def add_shire_colony(core: dict[str, Any], key_map: dict[str, str]) -> dict[str,
                 "leave_date": "22.07.2026", "status": "former",
                 "in_experiment": False,
             }]
-    return {
+    result = {
         "schema_version": 1, "fictional": True, "mouse_limit": SHIRE_MOUSE_LIMIT,
         "founder_pairs": [list(pair) for pair in founders],
         "generation_by_ipid": generations, "litters": litters, "pairings": pairings,
         "terminal_ringbearers": [existing[name] for name in ("Frodo", "Sam", "Merry", "Pippin")],
         "exception": "Sam remains Elanor's father; his unrelated Rosie outcross adds generation 6.",
         "external_spouses": [rosie],
-        "naming": "Hobbit names and ASCII Portuguese names for invented spouses; descriptive monikers replace numeric offspring suffixes and distinguish repeated given-name/surname combinations.",
+        "surname_by_ipid": surnames_by_ipid,
+        "named_animals": {record["name"]: ipid for ipid, record in all_mice.items()
+                          if " " not in record["name"]},
+        "medical_witnesses": [
+            next(litter for litter in litters if litter["litter_id"] == litter_id)["offspring"][index]
+            for litter_id, index in SHIRE_SPEC["medical_witnesses"]
+        ],
+        "naming": "All mice have surnames following the biological father's line for sons and daughters, including the established named animals. Hobbit and ASCII Portuguese given names use varied, unique descriptive monikers, never numeric offspring suffixes. Spouses retain their own paternal surname.",
         "pairing_policy": "Minimize worst and then total pedigree coancestry among available selected breeders; no claim of zero inbreeding in a closed colony.",
     }
+    # Short authoring labels keep the recipes readable, but are never shipped
+    # as mouse names. Rewrite immutable IPIDs and every relationship/scenario
+    # reference together, before public IDs and downstream domains are built.
+    renamed = {}
+    for ipid in result["named_animals"].values():
+        record = all_mice[ipid]
+        name = f"{record['name']} {surnames_by_ipid[ipid]}"
+        new_ipid = animal_identity_key(
+            name, record["species"], record["birth_date"], record["origin"]
+        )
+        if new_ipid in all_mice or new_ipid in renamed.values():
+            raise ValueError(f"Shire surname creates a duplicate mouse identity: {new_ipid}")
+        renamed[ipid] = new_ipid
+        record.update(name=name, _base_name=name, display_name=name, ipid=new_ipid)
+    updated = rewrite_references(core, renamed)
+    core.clear()
+    core.update(updated)
+    key_map.update({old: renamed.get(new, new) for old, new in list(key_map.items())})
+    key_map.update(renamed)
+    return rewrite_references(result, renamed)
 
 
 def normalize_mouse_public_ids(core: dict[str, Any]) -> None:

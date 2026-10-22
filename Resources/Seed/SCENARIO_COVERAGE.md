@@ -21,7 +21,7 @@ The package is the single fictional initialization source for both backend adapt
 | complete-donor-stage-counts | Every egg collection and sperm sample has complete stage metrics. Tiffany/Boromir has four transferred and two frozen linked embryos, retaining all six produced and biological parentage. In-vivo MII is limited to 0-2 per collection and never produces embryos; all 21 embryos arise from IVF-fertilized in-vitro MII. Collection-only/unused samples have no fabricated fertilization or embryo links. |
 | mus-musculus-ringbearer-colony | Four experimental Ringbearer mice preserve their surgery events and former Shire membership. |
 | shire-five-generation-breeding-colony | Eight founder pairs, five planned generations, 1-2 litters per pair, 10-12 young per litter, limited selected breeders and at most 500 mice in total. |
-| shire-naming | Hobbit and ASCII Portuguese names with descriptive monikers; no numeric offspring names. |
+| shire-naming | Every mouse, including Frodo, Sam and Elanor, has a surname inherited through the father's line; spouses keep their own lineage. Hobbit and ASCII Portuguese given names use varied descriptive monikers to distinguish repeated given-name/surname combinations, never numeric offspring suffixes. |
 | sam-elanor | Sam remains Elanor's father; Sam/Rosie's complete litter is the explicit generation-6 exception. |
 | mouse-house-group-housing | Study pair cages, ordinary breeding cages and same-sex groups of at most five; Bilbo's deliberate single-cage witness. |
 | mild-resolved-medical | Four explicitly pinned animal observations and resolutions, independent of population sort order. |

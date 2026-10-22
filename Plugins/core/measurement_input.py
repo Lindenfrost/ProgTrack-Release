@@ -11,7 +11,7 @@ _NUMBER = re.compile(r"[+]?(?:[0-9]+(?:[.,][0-9]+)?|[.,][0-9]+)")
 _PARTIAL = re.compile(r"[+]?(?:[0-9]*(?:[.,][0-9]*)?)")
 
 
-def parse_measurement(text, *, default=None):
+def parse_measurement(text, *, default=None, original=None):
     """Accept plain non-negative decimals; never guess grouping or drop bad input."""
     value = str(text).strip()
     if not value and default is not None:
@@ -21,6 +21,10 @@ def parse_measurement(text, *, default=None):
     number = float(value.replace(',', '.'))
     if not math.isfinite(number) or number < 0:
         raise ValueError(value)
+    # A widget parsing an unchanged integer as float is not a data edit.
+    # Only known numeric inputs opt in; never coerce unknown/string/bool fields.
+    if type(original) in (int, float) and number == original:
+        return original
     return number
 
 

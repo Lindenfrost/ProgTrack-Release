@@ -45,6 +45,7 @@ def build_bundle() -> SeedBundle:
     core, keys = normalize_core()
     mouse = add_mouse_colony(core, keys)
     shire = add_shire_colony(core, keys)
+    mouse = rewrite_references(mouse, keys)
     normalize_mouse_public_ids(core)
     scenario = add_reproduction_scenarios(core, keys)
     scenario.update(mouse=mouse, shire=shire)

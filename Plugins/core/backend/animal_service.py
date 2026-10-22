@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
+from dataclasses import dataclass
 from collections import defaultdict, deque
 from datetime import datetime
 from typing import Any, Mapping
@@ -14,6 +16,7 @@ from ..animal_identity import (
     split_animal_identity_key,
 )
 from .errors import ConflictError, ImmutableIdentityError, ValidationError
+from .clinical_mirroring import ClinicalMirrorTransaction
 from .json_codec import dumps, loads
 from .repositories import (
     _execute,
@@ -98,6 +101,44 @@ def _date_text(value: Any) -> str:
     return str(value or "").strip()
 
 
+@dataclass(frozen=True)
+class CoreSaveReceipt:
+    """Detached, operation-local evidence, returned only after commit succeeds."""
+
+    acknowledged_records: dict[tuple[str, str], dict[str, Any]]
+    audit_before: dict[str, Any]
+    audit_after: dict[str, Any]
+
+
+def _project_record(base, role, measurements, events):
+    """The read/write-result projection; inputs are already read transaction rows."""
+    record = deepcopy(base if isinstance(base, Mapping) else loads(base, {}))
+    for field in MEASUREMENT_FIELDS.values():
+        record.setdefault(field, [])
+    record.setdefault("events", [])
+    for row in measurements:
+        field = MEASUREMENT_FIELDS.get(str(row["kind"]))
+        if field:
+            raw = row["value_json"]
+            record[field].append(deepcopy(raw if isinstance(raw, Mapping) else loads(raw, {})))
+    for row in events:
+        raw = row["payload_json"]
+        event = deepcopy(raw if isinstance(raw, Mapping) else loads(raw, {}))
+        event["event_id"] = str(row["event_id"])
+        event["event_type"] = str(row["event_type"])
+        event.setdefault("recorded_role", str(record.get("rolle") or role or "unknown"))
+        event.pop("date", None)
+        event.setdefault("datum", row.get("occurred_at"))
+        record["events"].append(event)
+    return record
+
+
+def _measurement_projection(rows):
+    return [dict(kind=kind, value_json=payload)
+            for _id, kind, _when, payload, _sample, _source in
+            sorted(rows, key=lambda row: (row[2], row[0]))]
+
+
 class AnimalService:
     def __init__(self, adapter: Any):
         self.adapter = adapter
@@ -127,50 +168,20 @@ class AnimalService:
             )
         animals: dict[str, Any] = {}
         archived: dict[str, Any] = {}
-        animal_roles: dict[str, str] = {}
-        for row in rows:
-            data = self.adapter.row_to_dict(row)
-            payload = data["record_json"]
-            record = payload if isinstance(payload, dict) else loads(payload, {})
-            for field in MEASUREMENT_FIELDS.values():
-                record.setdefault(field, [])
-            record.setdefault("events", [])
-            animal_roles[str(data["ipid"])] = str(
-                record.get("rolle") or data.get("role_id") or "unknown"
-            )
-            (archived if bool(data["archived"]) else animals)[data["ipid"]] = record
-        all_records = {**animals, **archived}
+        measurements_by_animal = defaultdict(list)
+        events_by_animal = defaultdict(list)
         for row in measurement_rows:
             data = self.adapter.row_to_dict(row)
-            record = all_records.get(str(data["animal_ipid"]))
-            field = MEASUREMENT_FIELDS.get(str(data["kind"]))
-            if record is not None and field:
-                payload = data["value_json"]
-                record[field].append(
-                    payload if isinstance(payload, dict) else loads(payload, {})
-                )
+            measurements_by_animal[str(data["animal_ipid"])].append(data)
         for row in event_rows:
             data = self.adapter.row_to_dict(row)
-            record = all_records.get(str(data["animal_ipid"]))
-            if record is not None:
-                payload = data["payload_json"]
-                event = dict(
-                    payload if isinstance(payload, dict) else loads(payload, {})
-                )
-                # The normalized table is authoritative for both identity and
-                # type. Keep these in the canonical animal snapshot so every
-                # editor, import/update path, and plot sees the same record.
-                event["event_id"] = str(data["event_id"])
-                event_type = str(data["event_type"])
-                event["event_type"] = event_type
-                event.setdefault(
-                    "recorded_role",
-                    animal_roles.get(str(data["animal_ipid"]), "unknown"),
-                )
-                event.pop("date", None)
-                if "datum" not in event:
-                    event["datum"] = data.get("occurred_at")
-                record["events"].append(event)
+            events_by_animal[str(data["animal_ipid"])].append(data)
+        for row in rows:
+            data = self.adapter.row_to_dict(row)
+            record = _project_record(
+                data["record_json"], data.get("role_id"),
+                measurements_by_animal[data["ipid"]], events_by_animal[data["ipid"]])
+            (archived if bool(data["archived"]) else animals)[data["ipid"]] = record
         settings: dict[str, Any] = {}
         if settings_row is not None:
             raw = (
@@ -233,7 +244,8 @@ class AnimalService:
         snapshot: Mapping[str, Any],
         *,
         expected_parentage_revision: str | None = None,
-    ) -> None:
+        clinical_context: Mapping[str, Any] | None = None,
+    ) -> CoreSaveReceipt:
         active = snapshot.get("animals", {})
         archived = snapshot.get("archived_animals", snapshot.get("archived", {}))
         if not isinstance(active, Mapping) or not isinstance(archived, Mapping):
@@ -249,7 +261,12 @@ class AnimalService:
         mark = _placeholder(self.adapter)
         json_mark = _json_placeholder(self.adapter)
         timestamp = now_text()
+        acknowledged = {}
+        audit_before = {"animals": {}, "archived_animals": {}}
+        audit_after = {"animals": {}, "archived_animals": {}}
         with self.adapter.transaction(write=True) as connection:
+            clinical = (ClinicalMirrorTransaction(self.adapter, connection, clinical_context, timestamp)
+                        if clinical_context is not None else None)
             if expected_parentage_revision:
                 current_parentage_revision = self._parentage_revision_in_connection(connection)
                 if str(expected_parentage_revision).strip() != current_parentage_revision:
@@ -298,6 +315,12 @@ class AnimalService:
                 event_owners[event_id] = owner_ipid
             incoming_ids = set(combined)
             for ipid in set(existing) - incoming_ids:
+                if clinical is not None:
+                    clinical.authorize('core.delete_animals')
+                    for event in existing_events.get(ipid, {}).values():
+                        raw = event['payload_json']
+                        clinical.delete(ipid, raw if isinstance(raw, dict) else loads(raw, {}),
+                                        animal_deleted=True)
                 _execute(
                     connection,
                     f"DELETE FROM animals WHERE ipid={mark}",
@@ -499,6 +522,10 @@ class AnimalService:
                             ),
                         )
                 animal_events = existing_events.setdefault(ipid, {})
+                # Keep old row references before removing deleted occurrences.
+                old_events = list(animal_events.values())
+                accepted_events = []
+                events_need_ack = False
                 incoming_event_ids: set[str] = set()
                 event_changed = False
                 for index, event in enumerate(events):
@@ -549,8 +576,12 @@ class AnimalService:
                                 "A saved animal event's type is immutable; "
                                 f"event {event_id} is {previous_type!r}, not {event_type!r}."
                             )
+                        # The SQL type is immutable, including its stored
+                        # spelling; an accepted case-only submission must not
+                        # make the receipt disagree with the next read.
+                        event_type = previous_type
                         previous_recorded_role = str(
-                            previous_event_payload.get("recorded_role")
+                            (previous_event_payload.get("recorded_role") or "")
                             if isinstance(previous_event_payload, Mapping) else ""
                         ).strip() or previous_role
                         submitted_recorded_role = str(
@@ -582,8 +613,19 @@ class AnimalService:
 
                     payload["event_id"] = event_id
                     payload["event_type"] = event_type
+                    if 'datum' not in payload and payload.get('date'):
+                        payload['datum'] = payload['date']
                     payload.pop("date", None)
+                    if clinical is not None:
+                        clinical.event(ipid, payload, previous_event_payload if previous_event is not None else None,
+                                       new_animal=previous is None)
+                    # Only these backend-owned keys are changed above; nested
+                    # clinical payloads remain untouched. Avoid decoding every
+                    # event a second time merely to identify acknowledgment work.
+                    events_need_ack = events_need_ack or payload != event
                     payload_json = dumps(payload)
+                    accepted_events.append(dict(event_id=event_id, event_type=event_type,
+                                                occurred_at=occurred_at, payload_json=payload_json))
                     if previous_event is not None:
                         payload_matches = previous_event_json == payload_json
                         if not payload_matches:
@@ -620,6 +662,9 @@ class AnimalService:
                         event_changed = True
                         event_owners[event_id] = ipid
                 for removed_event_id in set(animal_events) - incoming_event_ids:
+                    if clinical is not None:
+                        raw = animal_events[removed_event_id]['payload_json']
+                        clinical.delete(ipid, raw if isinstance(raw, dict) else loads(raw, {}))
                     _execute(
                         connection,
                         "DELETE FROM animal_events WHERE event_id="
@@ -636,6 +681,27 @@ class AnimalService:
                         f"WHERE ipid={mark}",
                         (timestamp, ipid),
                     )
+                changed = base_changed or measurement_changed or event_changed
+                if clinical is not None and base_changed:
+                    clinical.lifecycle(ipid, record, previous_record if previous else None)
+                # No full population reread/copy: only changed records or canonical
+                # acknowledgments need projections. Enumeration alone is not dirty.
+                needs_ack = changed or events_need_ack or len(accepted_events) != len(events)
+                if needs_ack:
+                    section = "archived_animals" if archived_flag else "animals"
+                    accepted = _project_record(
+                        record, role_id, _measurement_projection(measurement_rows),
+                        sorted(accepted_events, key=lambda row: (row["occurred_at"], row["event_id"])))
+                    acknowledged[section, ipid] = accepted
+                    if changed and previous:
+                        old_section = "archived_animals" if previous["archived"] else "animals"
+                        audit_before[old_section][ipid] = _project_record(
+                            previous["record_json"], previous["role_id"],
+                            _measurement_projection(existing_measurements.get(ipid, [])),
+                            sorted(old_events, key=lambda row: (row["occurred_at"], row["event_id"])))
+                        audit_after[section][ipid] = deepcopy(accepted)
+            if clinical is not None:
+                clinical.flush()
             settings = dumps(snapshot.get("settings", {}))
             settings_row = _fetchone(
                 connection,
@@ -680,3 +746,6 @@ class AnimalService:
                             "WHERE key=%s",
                             (settings, timestamp, "core.settings"),
                         )
+        # Transaction context exit above includes the commit. A failed commit
+        # cannot publish an acknowledgment or audit-success material.
+        return CoreSaveReceipt(acknowledged, audit_before, audit_after)

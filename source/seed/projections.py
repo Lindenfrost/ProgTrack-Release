@@ -79,7 +79,7 @@ def complete_housing(
     colony = {
         ipid: animal for ipid, animal in sorted(active_animals.items())
         if animal.get("species") == "Mus musculus"
-        and animal.get("name") not in {"Bilbo", "Frodo", "Sam", "Merry", "Pippin"}
+        and animal.get("name") not in {"Bilbo Baggins", "Frodo Baggins", "Sam Gamgee", "Merry Brandybuck", "Pippin Took"}
     }
 
     def colony_cage(members: list[str]) -> None:
@@ -119,11 +119,11 @@ def complete_housing(
             continue
         if animal.get("species") == "Mus musculus":
             name = str(animal.get("name") or "")
-            if name == "Bilbo":
+            if name == "Bilbo Baggins":
                 cage_id = "cage_mus_bilbo"
-            elif name in {"Frodo", "Sam"}:
+            elif name in {"Frodo Baggins", "Sam Gamgee"}:
                 cage_id = "cage_mus_experimental_frodo_sam"
-            elif name in {"Merry", "Pippin"}:
+            elif name in {"Merry Brandybuck", "Pippin Took"}:
                 cage_id = "cage_mus_experimental_merry_pippin"
             elif animal.get("in_experiment"):
                 cage_id = "cage_mus_experimental_frodo_sam"
@@ -174,7 +174,8 @@ def complete_heritage(
 
 
 def add_resolved_histories(
-    medical: dict[str, Any], reports: dict[str, Any], core: dict[str, Any]
+    medical: dict[str, Any], reports: dict[str, Any], core: dict[str, Any],
+    shire: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     med = copy.deepcopy(medical)
     med.setdefault("version", "2.0")
@@ -186,7 +187,9 @@ def add_resolved_histories(
         ("Dr. Veterinary Medicinsdottir", "Temporary welfare observation", "Reviewed and resolved"),
         ("Dr. Researcher Sciencedottir", "Short experimental observation", "No continuing finding"),
     )
-    for index, (ipid, animal) in enumerate((ipid, core["animals"][ipid]) for ipid in ('Adalgrim Baggins Tall | Mus musculus | 01.02.2020 | DPZ', 'Adalgrim Boffin Fat | Mus musculus | 01.08.2020 | DPZ', 'Adalgrim Boffin Tall | Mus musculus | 01.09.2019 | DPZ', 'Adalgrim Bolger Tall | Mus musculus | 01.09.2019 | DPZ')):
+    for index, (ipid, animal) in enumerate(
+        (ipid, core["animals"][ipid]) for ipid in shire["medical_witnesses"]
+    ):
         actor, condition, note = roles[index]
         entries = [
             {
@@ -639,6 +642,7 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
         medical,
         records[("reports", "animal-reports")],
         core,
+        scenario["shire"],
     )
     records[("medical", "history")] = medical
     records[("reports", "animal-reports")] = reports

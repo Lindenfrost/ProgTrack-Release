@@ -61,3 +61,13 @@ def event_collections_equal(before, after) -> bool:
 
     old, new = index(before), index(after)
     return old is not None and new is not None and _payload_equal(old, new)
+
+
+def core_records_equal(before, after) -> bool:
+    """Lossless preparation equality, ignoring only stable event enumeration."""
+    if not isinstance(before, Mapping) or not isinstance(after, Mapping):
+        return False
+    if before.keys() != after.keys():
+        return False
+    return all(event_collections_equal(value, after[key]) if key == "events"
+               else _payload_equal(value, after[key]) for key, value in before.items())

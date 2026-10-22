@@ -347,6 +347,32 @@ def validate_shire_colony(mice: dict[str, Any], shire: dict[str, Any]) -> list[s
     errors: list[str] = []
     if len(mice) > SHIRE_MOUSE_LIMIT:
         errors.append("Shire: complete mouse seed exceeds 500")
+    surnames = shire.get("surname_by_ipid", {})
+    named_animals = set(shire.get("named_animals", {}).values())
+    if set(surnames) != set(mice):
+        errors.append("Shire: surname catalogue must cover every mouse")
+    if not named_animals.issubset(mice):
+        errors.append("Shire: named-animal catalogue contains missing identities")
+    names_seen: set[str] = set()
+    for ipid, record in mice.items():
+        surname = str(surnames.get(ipid) or "")
+        name = str(record.get("name") or "")
+        if record.get("_base_name") != name or record.get("display_name") != name:
+            errors.append(f"Shire: name display/base projections disagree: {ipid}")
+        father = record.get("samenspender")
+        if not re.fullmatch(r"[A-Za-z]+", surname):
+            errors.append(f"Shire: missing or invalid surname: {ipid}")
+        if father and (father not in mice or surname != surnames.get(father)):
+            errors.append(f"Shire: paternal surname mismatch: {ipid}")
+        parts = name.split()
+        if ipid in named_animals:
+            if len(parts) != 2 or parts[1] != surname:
+                errors.append(f"Shire: displayed surname mismatch: {ipid}")
+        elif len(parts) != 3 or parts[1] != surname or parts[2] not in SHIRE_NAME_MONIKERS:
+            errors.append(f"Shire: displayed surname/moniker mismatch: {ipid}")
+        if name.casefold() in names_seen:
+            errors.append(f"Shire: duplicate full mouse name: {name}")
+        names_seen.add(name.casefold())
     founder_pairs = shire.get("founder_pairs", [])
     founders = [ipid for pair in founder_pairs for ipid in pair]
     if len(founder_pairs) != 8 or len(founders) != 16 or len(set(founders)) != 16:
@@ -448,13 +474,13 @@ def _validate_existing(core: dict[str, Any], records: dict[tuple[str, str], Any]
     # Validate its canonical lifecycle explicitly so a seed cannot silently
     # lose the surgery events or reintroduce mouse birth rows.
     ringbearer = {
-        str(record.get("name") or "").strip(): record
+        str(record.get("ipid") or "").strip(): record
         for record in all_animals.values()
         if str(record.get("species") or "").strip() == "Mus musculus"
         and str(record.get("project") or "").strip() == "Ringbearer"
     }
     for name, expected_surgery_date in RINGBEARER_SURGERY_DATES.items():
-        record = ringbearer.get(name)
+        record = ringbearer.get(scenario["shire"]["named_animals"].get(name))
         if record is None:
             errors.append(f"Ringbearer experimental mouse missing: {name}")
             continue
@@ -904,17 +930,17 @@ def _validate_existing(core: dict[str, Any], records: dict[tuple[str, str], Any]
         if str(record.get("species") or "") == "Mus musculus"
     }
     errors.extend(validate_shire_colony(mice, records.get(("seed", "shire-colony"), {})))
-    required_mouse_names = {"Frodo", "Sam", "Merry", "Pippin", "Fredegar"}
+    required_mouse_names = {"Frodo Baggins", "Sam Gamgee", "Merry Brandybuck", "Pippin Took", "Fredegar Bolger"}
     if not required_mouse_names.issubset({r.get("name") for r in mice.values()}):
         errors.append("Mus musculus youngest-generation names are incomplete")
     ringbearers = {
         record.get("name") for record in mice.values()
         if record.get("project") == "Ringbearer"
     }
-    if ringbearers != {"Frodo", "Sam", "Merry", "Pippin"}:
+    if ringbearers != {"Frodo Baggins", "Sam Gamgee", "Merry Brandybuck", "Pippin Took"}:
         errors.append(f"Ringbearer cohort mismatch: {sorted(ringbearers)}")
     for ipid, record in mice.items():
-        if record.get("name") in {"Frodo", "Sam", "Merry", "Pippin"}:
+        if record.get("name") in {"Frodo Baggins", "Sam Gamgee", "Merry Brandybuck", "Pippin Took"}:
             if record.get("rolle") != "experimental_animal" or not record.get("in_experiment"):
                 errors.append(f"Ringbearer animal is not experimental: {record.get('name')}")
         elif record.get("rolle") != "breeding_animal":
@@ -923,14 +949,14 @@ def _validate_existing(core: dict[str, Any], records: dict[tuple[str, str], Any]
             continue
         occupant = housing.get("occupants", {}).get(ipid, {})
         expected_cage = (
-            "cage_mus_bilbo" if record.get("name") == "Bilbo"
+            "cage_mus_bilbo" if record.get("name") == "Bilbo Baggins"
             else "cage_mus_experimental_frodo_sam"
-            if record.get("name") in {"Frodo", "Sam"}
+            if record.get("name") in {"Frodo Baggins", "Sam Gamgee"}
             else "cage_mus_experimental_merry_pippin"
-            if record.get("name") in {"Merry", "Pippin"}
+            if record.get("name") in {"Merry Brandybuck", "Pippin Took"}
             else str(occupant.get("cage_id") or "")
         )
-        if record.get("name") not in {"Bilbo", "Frodo", "Sam", "Merry", "Pippin"}:
+        if record.get("name") not in {"Bilbo Baggins", "Frodo Baggins", "Sam Gamgee", "Merry Brandybuck", "Pippin Took"}:
             if not expected_cage.startswith("cage_mus_shire_"):
                 errors.append(f"Shire mouse lacks a colony cage: {ipid}")
         if occupant.get("cage_id") != expected_cage:

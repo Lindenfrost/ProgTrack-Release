@@ -57,6 +57,9 @@ def _slug(value: Any) -> str:
 
 
 def normalize_experimental_block(raw: Dict[str, Any]) -> Dict[str, Any]:
+    mirror = raw.get('mirror_in_medical_history', False)
+    if not isinstance(mirror, bool):
+        raise ValueError('mirror_in_medical_history must be a boolean')
     name = normalized_preset_name(raw.get("name") or raw.get("label") or "")
     block_id = str(raw.get("id") or "").strip()
     if not block_id:
@@ -92,6 +95,7 @@ def normalize_experimental_block(raw: Dict[str, Any]) -> Dict[str, Any]:
         "name": name or event_type.replace("_", " ").title(),
         "description": str(raw.get("description") or "").strip(),
         "kind": kind,
+        "mirror_in_medical_history": mirror,
         "default_maximum": default_maximum,
         "event_ids": list(dict.fromkeys(event_ids)),
         "event_type": event_type,
@@ -121,6 +125,7 @@ def normalize_event_definition(raw: Dict[str, Any]) -> Dict[str, Any]:
         "label": event["name"],
         "label_key": str(raw.get("label_key") or ""),
         "kind": event["kind"],
+        "mirror_in_medical_history": event['mirror_in_medical_history'],
         "default_maximum": event["default_maximum"],
         "max_field": event["max_field"],
         "render_mode": event["render_mode"],

@@ -64,6 +64,28 @@ Clinical date spellings, payload metadata and stable event IDs are preserved.
 
 ## Reproduction and FlowTrack
 
+### Mouse family names
+
+Shire's `founder_surnames` explicitly establish the paternal family lines.
+Every son and daughter inherits the biological father's surname, including
+named breeders and the Sam/Elanor generation-six exception. Pairing never
+changes either partner's surname. Every mouse has a surname in its actual
+name and immutable IPID, including Frodo Baggins, Sam Gamgee and Elanor Gamgee.
+Short labels are authoring aliases only (`seed/shire-colony.named_animals`);
+all exported relationships and domain references use the full identities.
+`seed/shire-colony.surname_by_ipid` records every family line. Generated full
+names use that inherited surname, not a rotating pool.
+The fictional founder assignments are seed authoring facts, not a claim of a
+canonical Tolkien pedigree.
+
+`SHIRE_NAME_MONIKERS` includes Generous, Admirable, Noble and Trustworthy.
+A stable base-name hash varies the starting descriptor; repeated first-name/
+surname combinations receive different descriptors without numeric suffixes.
+The compiler rejects broken paternal inheritance, displayed surname/descriptor
+mismatches and duplicate complete names. Medical witnesses are pinned by
+explicit litter ID/child position rather than by spelling or sorted names,
+so their clinical histories stay with the same animals after naming changes.
+
 `scenarios/experiment-enrollments.json` pins project entry and experiment
 admission for all 19 currently experimental animals by immutable identity.
 Admission begins with the first experimental monitoring or before the first

@@ -17,6 +17,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, date, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from PyQt6.QtCore import Qt, QDate, QSize, QStandardPaths, QTimer
@@ -785,6 +786,26 @@ def _snake(label: str) -> str:
 # MediStore — persistence for backend medical-history records
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _clinical_note(entry, messages):
+    if not str(entry.get('entry_type', '')).startswith('core_'):
+        return str(entry.get('note', ''))
+    source = entry.get('source_payload', {})
+    header = messages.get('medi_track.core.source', 'Source {source}; effective date {date}').format(
+        source=entry.get('source_event_id', ''), date=entry.get('effective_date', ''))
+    header += '\n' + messages.get('medi_track.core.recorded', 'Recorded {when}; source revision {revision}').format(
+        when=entry.get('recorded_at', ''), revision=entry.get('source_revision', ''))
+    if entry.get('original_entry_id'):
+        header += '\n' + messages.get('medi_track.core.change',
+            'Original record {original}; before: {before}; after: {after}').format(
+                original=entry['original_entry_id'],
+                before=json.dumps(entry.get('previous_source_payload', source), ensure_ascii=False, sort_keys=True),
+                after=json.dumps(source, ensure_ascii=False, sort_keys=True)
+                if entry['entry_type'] == 'core_correction' else '—')
+    elif source.get('note') or source.get('reason') or source.get('recipient'):
+        header += '\n' + ' · '.join(str(source[key]) for key in ('note', 'reason', 'recipient') if source.get(key))
+    return header
+
+
 class MediStore:
     """Read/write medical-history records in the configured backend."""
 
@@ -840,7 +861,10 @@ class MediStore:
         return blk
 
     def get_entries(self, name: str) -> List[Dict[str, Any]]:
-        return list(self._block(name)["entries"])
+        # Retained Core-derived documentation is stored atomically with Core,
+        # independently of the cached, separately authored medical record.
+        derived = self.backend.records.get('medical.core-events', str(name).strip(), default={})
+        return list(self._block(name)["entries"]) + list(derived.get('entries', []))
 
     def get_documents(self, name: str) -> List[Dict[str, Any]]:
         return list(self._block(name)["documents"])
@@ -1852,7 +1876,8 @@ class MediTrackWidget(QWidget):
             condition = _esc(
                 ConditionLoader.compact_hierarchy_label(ckey, _lang)
                 if ckey else str(entry.get('condition_label_snapshot', '')))
-            type_display = _esc(self._entry_type_label(etype, stype))
+            type_display = _esc(MediTrackWidget._entry_type_label(
+                SimpleNamespace(messages=_messages), etype, stype))
             signature_cell = (
                 f'<td>{_esc(entry.get("signature", ""))}</td>'
                 if include_signature else ""
@@ -1862,7 +1887,7 @@ class MediTrackWidget(QWidget):
                 f'<td>{_esc(entry.get("date", ""))}</td>'
                 f'<td>{type_display}</td>'
                 f'<td>{condition}</td>'
-                f'<td>{_esc(entry.get("note", ""))}</td>'
+                f'<td>{_esc(_clinical_note(entry, _messages))}</td>'
                 f'{signature_cell}'
                 f'</tr>'
             )
@@ -2042,7 +2067,7 @@ class MediTrackWidget(QWidget):
                     str(entry.get("status_type", "")),
                 ),
                 entry.get("condition_label_snapshot", ""),
-                entry.get("note", ""),
+                _clinical_note(entry, self.messages),
             ]
             if include_signature:
                 row.append(entry.get("signature", ""))
@@ -2706,7 +2731,7 @@ class MediTrackWidget(QWidget):
             self._table.setItem(row, 0, QTableWidgetItem(str(entry.get("date", ""))))
             self._table.setItem(row, 1, QTableWidgetItem(type_display))
             self._table.setItem(row, 2, QTableWidgetItem(condition))
-            self._table.setItem(row, 3, QTableWidgetItem(str(entry.get("note", ""))))
+            self._table.setItem(row, 3, QTableWidgetItem(_clinical_note(entry, self.messages)))
             self._table.setItem(row, 4, QTableWidgetItem(str(entry.get("signature", ""))))
         self._table.setSortingEnabled(True)
 
@@ -2717,6 +2742,13 @@ class MediTrackWidget(QWidget):
 
     def _entry_type_label(self, etype: str, stype: str) -> str:
         """Human-readable entry type label."""
+        if etype == 'core_event':
+            if stype in ('own_birth', 'departure'):
+                return _msg(self.messages, 'medi_track.core.' + stype, stype)
+            return _msg(self.messages, 'event.' + stype,
+                        _msg(self.messages, 'medi_track.core.event', 'Recorded Core event'))
+        if etype in ('core_correction', 'core_deletion'):
+            return _msg(self.messages, 'medi_track.' + etype, etype)
         key_map = {
             ("issue_start", "sick"): ("medi_track.report.event.sick_started", "Sick — started"),
             ("issue_start", "abnormal"): ("medi_track.report.event.abnormal_started", "Abnormal — started"),
