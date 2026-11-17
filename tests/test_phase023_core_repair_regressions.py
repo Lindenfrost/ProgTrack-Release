@@ -4069,6 +4069,9 @@ class CoreRepairTests(unittest.TestCase):
                 return {'mode': 'text', 'text': role.get('representation_text') or role.get('label') or value}
 
         app.animal_role_registry = RoleRegistry()
+        # The positive geometry scenarios require the same capability that
+        # production checks before accepting role configuration writes.
+        app.master_track.can = lambda permission: permission == 'core.manage_animal_roles'
         if conventions:
             # Real configuration CAS/registry and real Conventions acceptance;
             # no live backend, user style file, identity settings or seed writes.
@@ -4083,7 +4086,6 @@ class CoreRepairTests(unittest.TestCase):
             app.animal_role_registry = AnimalRoleRegistry(app.backend)
             app._load_identity_conventions = lambda: copy.deepcopy(DEFAULT_CONVENTIONS)
             app._save_identity_conventions = lambda *_args: None
-            app._can_configure_animal_roles = lambda: True
             app._can_manage_institution_settings = lambda: False
             app._can_manage_institution_branding = lambda: False
             app._load_user_style_settings = lambda: {}

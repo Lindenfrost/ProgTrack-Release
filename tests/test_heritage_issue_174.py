@@ -90,6 +90,7 @@ class ArchivedSelectionBoundaryTest(unittest.TestCase):
         fake._plot_selection_order = []
         fake._edit_selection_order = []
         fake.has_heritage_plugin = False
+        fake._defer_ui_update = lambda *_flags: False
         fake._plot_selected = lambda: None
         fake._normalize_sidebar_selection_value = (
             lambda value: self.module.ProgTrackApp._normalize_sidebar_selection_value(
@@ -116,6 +117,7 @@ class ArchivedSelectionBoundaryTest(unittest.TestCase):
         fake._edit_selection_order = []
         fake._selected_heritage_only = []
         fake.has_heritage_plugin = False
+        fake._defer_ui_update = lambda *_flags: False
         fake._plot_selected = lambda: None
         fake._normalize_sidebar_selection_value = (
             lambda value: self.module.ProgTrackApp._normalize_sidebar_selection_value(
@@ -147,6 +149,7 @@ class ArchivedSelectionBoundaryTest(unittest.TestCase):
         app._edit_selection_order = []
         app._selected_heritage_only = []
         app.has_heritage_plugin = False
+        app._defer_ui_update = lambda *_flags: False
         app._plot_selected = lambda: None
         app._normalize_sidebar_selection_value = (
             lambda value: self.module.ProgTrackApp._normalize_sidebar_selection_value(
@@ -193,6 +196,7 @@ class ArchivedSelectionBoundaryTest(unittest.TestCase):
         app._edit_selection_order = []
         app._selected_heritage_only = []
         app.has_heritage_plugin = False
+        app._defer_ui_update = lambda *_flags: False
         app._plot_selected = lambda: None
         app._normalize_sidebar_selection_value = (
             lambda value: self.module.ProgTrackApp._normalize_sidebar_selection_value(
