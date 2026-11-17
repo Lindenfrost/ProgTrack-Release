@@ -264,11 +264,6 @@ class InterchangeService:
                     if line.strip()
                 )
                 settings = json.loads(settings_line)["payload"]
-                self.backend.save_core_data({
-                    "animals": animals,
-                    "archived_animals": archived,
-                    "settings": settings,
-                })
                 domain_content = archive.read("records/domain.jsonl").decode("utf-8")
                 for line in domain_content.splitlines():
                     if not line.strip():
@@ -280,6 +275,11 @@ class InterchangeService:
                     imported_records.append(
                         (record["namespace"], record["record_id"])
                     )
+                self.backend.save_core_data({
+                    "animals": animals,
+                    "archived_animals": archived,
+                    "settings": settings,
+                })
                 manifest = json.loads(archive.read("manifest.json"))
                 for entry in manifest.get("managed_files", []):
                     suffix = Path(entry["original_name"]).suffix

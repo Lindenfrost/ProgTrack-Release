@@ -1,4 +1,9 @@
 {
+  "project.catalog.conflict": "The project catalog changed or could not be saved. Refresh and try again.",
+  "dialog.parents.ineligible": "This parent does not meet the selected parentage method requirements.",
+  "dialog.parents.project_identity": "Project identity is incomplete. Use a current demo database.",
+  "dialog.parents.project_history_identity": "Project history identity is incomplete. Use a current demo database.",
+  "dialog.parents.project_mismatch": "Project identity does not match the assignment.",
   "settings.role_setup.custom_blocks.mirror_medical_history": "Mirror in medical history",
   "settings.role_setup.custom_blocks.mirror_medical_history.tip": "Applies only to newly recorded events. Earlier records are retained; later corrections and deletions are annotated.",
   "medi_track.core.event": "Recorded Core event",

@@ -19,6 +19,31 @@ from typing import Any, Iterable, Mapping
 UNASSIGNED_PERIOD_ID = "unassigned"
 
 
+def project_at_date(record, when):
+    """Read the authoritative membership at a date without normalizing data."""
+    day = _day(when)
+    if day is None:
+        return ''
+    periods = [dict(p, current=False) for p in record.get('project_history', []) if isinstance(p, Mapping)]
+    if record.get('project'):
+        periods.append(dict(project_id=record.get('project_id'), entry_date=record.get('project_entry_date'), current=True))
+    eligible = [p for p in periods if _day(p.get('entry_date')) is not None
+                and _day(p.get('entry_date')) <= day
+                and (not p.get('leave_date') or (_day(p.get('leave_date')) is not None and day < _day(p.get('leave_date'))))]
+    if not eligible:
+        eligible = [p for p in periods if _day(p.get('leave_date')) == day
+                    and _day(p.get('entry_date')) is not None and _day(p.get('entry_date')) <= day]
+    if not eligible:
+        return ''
+    chosen = max(eligible, key=lambda p: (_day(p.get('entry_date')), p.get('current', False)))
+    return str(chosen.get('project_id') or '')
+
+
+def has_project_membership(record, project_id):
+    return bool(project_id and (record.get('project_id') == project_id or any(
+        isinstance(p, Mapping) and p.get('project_id') == project_id for p in record.get('project_history', []))))
+
+
 def _day(value: Any) -> date | None:
     if isinstance(value, datetime):
         return value.date()

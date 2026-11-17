@@ -1,4 +1,9 @@
 {
+  "project.catalog.conflict": "Каталог проектов изменён или не может быть сохранён. Обновите его и повторите попытку.",
+  "dialog.parents.ineligible": "Родитель не соответствует требованиям выбранного способа происхождения.",
+  "dialog.parents.project_identity": "Идентификатор проекта неполон. Используйте актуальную демонстрационную базу данных.",
+  "dialog.parents.project_history_identity": "Идентификатор проекта в истории неполон. Используйте актуальную демонстрационную базу данных.",
+  "dialog.parents.project_mismatch": "Идентификатор проекта не соответствует назначению.",
   "settings.role_setup.custom_blocks.mirror_medical_history": "Показывать в истории болезни",
   "settings.role_setup.custom_blocks.mirror_medical_history.tip": "Только для вновь записанных событий. Старые записи сохраняются; последующие исправления и удаления отмечаются отдельно.",
   "medi_track.core.event": "Записанное событие Core",

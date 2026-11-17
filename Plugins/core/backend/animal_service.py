@@ -61,6 +61,10 @@ PARENTAGE_REVISION_FIELDS = (
     "archived",
     "project",
     "project_id",
+    "parentage_mode",
+    "project_history",
+    "project_entry_date",
+    "project_period_id",
     "organization_unit_id",
     "organizational_unit_id",
     "workgroup_id",
@@ -142,6 +146,19 @@ def _measurement_projection(rows):
 class AnimalService:
     def __init__(self, adapter: Any):
         self.adapter = adapter
+
+    def load_parentage_snapshot(self):
+        """One batched identity/eligibility projection, without clinical data."""
+        with self.adapter.transaction() as connection:
+            rows = _fetchall(connection, 'SELECT ipid,archived,record_json FROM animals ORDER BY ipid')
+        result = {'animals': {}, 'archived_animals': {}}
+        for row in rows:
+            row = self.adapter.row_to_dict(row)
+            raw = row['record_json']
+            source = raw if isinstance(raw, Mapping) else loads(raw, {})
+            record = {field: source.get(field, '') for field in PARENTAGE_REVISION_FIELDS}
+            result['archived_animals' if row['archived'] else 'animals'][row['ipid']] = record
+        return result
 
     def load_snapshot(self) -> dict[str, Any]:
         with self.adapter.transaction() as connection:
@@ -329,6 +346,38 @@ class AnimalService:
                 existing_measurements.pop(ipid, None)
                 for event_id in existing_events.pop(ipid, {}):
                     event_owners.pop(event_id, None)
+            from .project_identity import read_catalog, write_catalog, bind_assignment, server_timestamp
+            from ..parent_eligibility import parent_eligible
+            catalog, catalog_revision = read_catalog(self.adapter, connection)
+            catalog_before = dumps(catalog)
+            project_timestamp = server_timestamp(self.adapter, connection)
+            prepared = {}
+            for key, (incoming, archived_flag) in combined.items():
+                incoming = deepcopy(dict(incoming))
+                prior_raw = existing.get(key, {}).get('record_json')
+                prior = prior_raw if isinstance(prior_raw, Mapping) else loads(prior_raw or '{}', {})
+                bind_assignment(incoming, catalog, old=prior,
+                                username=str((clinical_context or {}).get('actor_login') or ''), timestamp=project_timestamp)
+                if incoming.get('project') and not prior:
+                    if not incoming.get('project_entry_date'):
+                        incoming['project_entry_date'] = incoming.get('birth_date', '')
+                prepared[key] = (incoming, archived_flag)
+            combined = prepared
+            for key, (incoming, _) in combined.items():
+                prior_raw = existing.get(key, {}).get('record_json')
+                prior = prior_raw if isinstance(prior_raw, Mapping) else loads(prior_raw or '{}', {})
+                mode = incoming.get('parentage_mode')
+                if mode and mode not in ('natural', 'embryo_transfer'):
+                    raise ValidationError('Invalid parentage method.')
+                if mode:
+                    for slot, field in (('egg_donor','eizellspenderin'), ('sperm_donor','samenspender'), ('surrogate_mother','ziehmutter'), ('surrogate_father','ziehvater')):
+                        parent = incoming.get(field)
+                        if parent and parent != prior.get(field):
+                            candidate = combined.get(parent, ({}, False))[0]
+                            if parent == key or not parent_eligible(incoming, candidate, slot, mode):
+                                raise ValidationError('This parent does not meet the selected parentage method requirements.')
+            if dumps(catalog) != catalog_before:
+                write_catalog(self.adapter, connection, catalog, catalog_revision)
             for ipid, (source_record, archived_flag) in combined.items():
                 # Only this top-level mapping is mutated below; the nested
                 # measurements/events are detached with pop() and otherwise

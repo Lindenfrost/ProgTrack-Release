@@ -2556,8 +2556,8 @@ class CoreRepairTests(unittest.TestCase):
                 for key in ('unit-a', 'unit-b')
             ]})
             app.backend.records.put('projects', 'catalog', {'projects': {
-                'Allowed': {'summary': {'contact1_login': 'tester'}},
-                'Hidden': {'summary': {'contact1_login': 'another-user'}},
+                'Allowed': {'project_id': 'test-project-a', 'summary': {'contact1_login': 'tester'}},
+                'Hidden': {'project_id': 'test-project-b', 'summary': {'contact1_login': 'another-user'}},
             }})
             active, archived = {}, {}
             for index in range(population):

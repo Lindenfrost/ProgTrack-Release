@@ -59,6 +59,8 @@ from uuid import uuid4
 from datetime import date, datetime, timedelta
 from enum import Enum
 from pathlib import Path
+from Plugins.core.parent_eligibility import parent_eligible
+from Plugins.core.backend.project_identity import bind_assignment
 from Plugins.core.project_visibility import (
     animal_matches_name_filter,
     animal_visible_by_project_scope,
@@ -7944,6 +7946,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         *, plain_text: bool = False,
     ) -> int:
         """Display a message box with specified title, message, and custom icon."""
+        parentage_messages = {'This parent does not meet the selected parentage method requirements.': 'dialog.parents.ineligible', 'Project identity is incomplete. Use a current demo database.': 'dialog.parents.project_identity', 'Project history identity is incomplete. Use a current demo database.': 'dialog.parents.project_history_identity', 'Project identity does not match the assignment.': 'dialog.parents.project_mismatch'}
+        if message in parentage_messages:
+            message = self.messages.get(parentage_messages[message], message)
         msg = QMessageBox(self)
         msg.setWindowTitle(title)
         if plain_text:
@@ -8740,7 +8745,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         cache.  A candidate list may be empty while the backend is
         unavailable; a mutation requests ``required=True`` and fails closed.
         """
-        loader = getattr(getattr(self, "backend", None), "load_core_data", None)
+        backend = getattr(self, 'backend', None)
+        loader = getattr(getattr(backend, 'animals', None), 'load_parentage_snapshot', None)
+        if not callable(loader):
+            loader = getattr(backend, 'load_core_data', None)
         unavailable = self.messages.get(
             "heritage_track.error.parentage_backend_unavailable",
             "Core parentage data is unavailable. Reload and try again.",
@@ -8903,6 +8911,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         strict_species: bool = False,
         lock_committed: bool = False,
         dialog: Optional[QDialog] = None,
+        birth_widget=None,
+        project_widget=None,
     ) -> Tuple[QGroupBox, Dict[str, AnimalRelationshipCombo]]:
         """Build Core-owned, searchable parent selectors independent of Heritage."""
         read_identity = _actor_backend_read_identity(self)
@@ -8918,7 +8928,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 raise ValueError(self.messages.get(
                     "heritage_track.error.parentage_backend_unavailable",
                     "Core parentage data is unavailable. Reload and try again."))
+        if snapshot_records is None:
+            snapshot_records = self._load_core_parentage_records(required=True)
         records = self._core_parentage_records(snapshot_records=snapshot_records)
+        # Keep only the narrow parent projection; cross-project biological
+        # candidates still obey organizational visibility.
+        all_records = snapshot_records if snapshot_records is not None else self._load_core_parentage_records(required=True)
+        biological_units = {}
+        biological_records = {key: {field: value.get(field) for field in PARENTAGE_REVISION_FIELDS}
+                              for key, value in all_records.items()
+                              if self._core_parent_candidate_visible(value, project_scope=(True, frozenset()), unit_visibility=biological_units)}
+
         if read_identity != _actor_backend_read_identity(self):
             # Even retained committed references belong to the opening actor;
             # an empty candidate result alone cannot protect those fallbacks.
@@ -8950,6 +8970,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         species_warning.setStyleSheet("color: #a33; font-style: italic;")
         layout.addRow(species_warning)
         initial_refresh = True
+        group._parentage_source = dict(source)
+        group._parentage_new = not bool(target_key)
+        group._parentage_mode = source.get('parentage_mode', '')
 
         def selected_species() -> str:
             if species_widget is not None:
@@ -8996,6 +9019,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             species_warning.setVisible(bool(warning))
             group.setToolTip(warning)
 
+            target = dict(source)
+            target['species'] = selected_species()
+            if birth_widget is not None:
+                target['birth_date'] = birth_widget.text()
+            if project_widget is not None and project_widget.currentText().strip() != str(source.get('project') or ''):
+                target['project'] = project_widget.currentText().strip()
+                target['project_entry_date'] = target.get('birth_date', '') if not target_key else datetime.now().strftime(DATE_FORMAT)
+                target.pop('project_id', None)
+                catalog = self.backend.records.get('projects', 'catalog', default={})
+                project = catalog.get('projects', {}).get(target['project'], {})
+                target['project_id'] = project.get('project_id', '')
+            mode = group._parentage_mode
             for field_key, required_sex, _label_key, _fallback in specs:
                 combo = fields[field_key]
                 current = (
@@ -9009,7 +9044,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 required = sex_token(required_sex)
                 if allowed_species is not None:
                     for key, candidate in sorted(
-                        records.items(), key=lambda item: item[0].casefold()
+                        (biological_records if field_key == 'sperm_donor' or (mode == 'natural' and field_key == 'egg_donor') else records).items(), key=lambda item: item[0].casefold()
                     ):
                         if key == target_key:
                             continue
@@ -9023,13 +9058,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                             continue
                         if sex_token(str(candidate.get("sex", "") or "")) != required:
                             continue
+                        if mode and not parent_eligible(target, candidate, field_key, mode):
+                            continue
                         combo.addItem(relationship_label(key, candidate), key)
 
                 # Existing edit dialogs retain a legacy committed reference,
                 # even when it is no longer a current catalogue candidate.
                 # New dialogs have no committed value and therefore never
                 # receive an unfiltered fallback item.
-                if current and combo.findData(current) < 0 and not strict_species:
+                if current and current == values[field_key] and combo.findData(current) < 0 and not strict_species:
                     candidate = records.get(current, {})
                     combo.addItem(relationship_label(current, candidate), current)
                 index = combo.findData(current)
@@ -9067,6 +9104,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     and widget.lineEdit().setReadOnly(bool(widget.currentData()))
                 )
 
+        group._refresh_parent_options = refresh_parent_options
+        for combo in fields.values():
+            combo._parentage_group = group
+        if birth_widget is not None:
+            birth_widget.textChanged.connect(refresh_parent_options)
+        if project_widget is not None:
+            project_widget.currentTextChanged.connect(refresh_parent_options)
         refresh_parent_options()
         if species_widget is not None:
             species_widget.currentIndexChanged.connect(refresh_parent_options)
@@ -9177,8 +9221,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not parent_fields:
             return False
         values = self._core_parentage_values(parent_fields)
-        if values == self._core_parentage_record_values(original_record):
+        first = next(iter(parent_fields.values()))
+        group = getattr(first, '_parentage_group', None)
+        mode = getattr(group, '_parentage_mode', '')
+        old_mode = str((original_record or {}).get('parentage_mode') or '')
+        if values == self._core_parentage_record_values(original_record) and (not mode or mode == old_mode or (original_record and not old_mode and not getattr(group, '_mode_user_changed', False) and not getattr(group, '_parentage_new', False))):
             return False
+        if mode:
+            values['parentage_mode'] = mode
         self._apply_core_parentage(
             target_key,
             target_record,
@@ -9218,6 +9268,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # revision token.  Never mix the dialog's session-local animal map
         # into mutation validation.
         records = self._load_core_parentage_records(required=True)
+        previous = records.get(target_key, {})
         records.pop(target_key, None)
         records[target_key] = target_record
         normalize_species_value = getattr(self, "_normalize_species_value", None)
@@ -9268,6 +9319,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 "The animal is outside your authorized project or Unit scope.",
             ))
         raw = self._core_parentage_values(parent_values)
+        mode = str(parent_values.get('parentage_mode') or target_record.get('parentage_mode') or '')
+        if target_record.get('project') and target_record.get('project') != previous.get('project'):
+            catalog = self.backend.records.get('projects', 'catalog', default={})
+            bind_assignment(target_record, catalog, old=previous)
+            if not previous:
+                if not target_record.get('project_entry_date'):
+                    target_record['project_entry_date'] = target_record.get('birth_date', '')
+        previous_parents = self._core_parentage_record_values(previous)
         canonical: Dict[str, str] = {}
         required_slots = {
             "egg_donor": ("eizellspenderin", "F"),
@@ -9280,13 +9339,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if not value:
                 canonical[storage_key] = ""
                 continue
+            if value == previous_parents.get(slot):
+                canonical[storage_key] = value
+                continue
             resolved, parent, status = resolve_animal_reference_text(value, records, target_species=species)
             if status != "resolved" or not isinstance(parent, Mapping):
                 message_key = "heritage_track.error.parent_ambiguous" if status == "ambiguous" else "heritage_track.error.parent_not_selected"
                 fallback = "Parent name is ambiguous." if status == "ambiguous" else "Select an existing Core animal."
                 raise ValueError(self.messages.get(message_key, fallback))
             resolved = str(resolved).strip()
-            if not self._core_parent_candidate_visible(parent):
+            biological_cross_project = slot == 'sperm_donor' or (mode == 'natural' and slot == 'egg_donor')
+            if not self._core_parent_candidate_visible(parent, project_scope=(True, frozenset()) if biological_cross_project else None):
                 raise ValueError(self.messages.get(
                     "heritage_track.error.permission_denied",
                     "The selected parent is outside your authorized project or Unit scope.",
@@ -9328,6 +9391,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     raise ValueError(self.messages.get("heritage_track.error.invalid_date", "The parent birth date is invalid.")) from exc
                 if parent_birth >= target_birth:
                     raise ValueError(self.messages.get("heritage_track.error.parent_too_young", "A parent must be older than the animal."))
+            if mode and not parent_eligible(target_record, parent, slot, mode):
+                raise ValueError(self.messages.get('dialog.parents.ineligible', 'This parent does not meet the selected parentage method requirements.'))
             canonical[storage_key] = resolved
 
         if canonical["eizellspenderin"] and canonical["eizellspenderin"] == canonical["samenspender"]:
@@ -9364,6 +9429,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # write.  The backend rechecks it while holding its transaction,
         # closing the validation-to-save race.
         self._pending_core_parentage_revision = validated_parentage_revision
+        if mode:
+            canonical['parentage_mode'] = mode
         target_record.update(canonical)
         return canonical
 
@@ -9653,13 +9720,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             parent_group.setFlat(True)
         content_layout.addWidget(parent_group)
 
-        mode_map = {1: "natural", 2: "embryo"}
+        mode_map = {1: "natural", 2: "embryo_transfer"}
         def _apply_mode(button_id: int) -> None:
-            self._set_parent_mode(parent_group, parent_fields, mode_map.get(button_id, "natural"))
-        mode_group.idClicked.connect(_apply_mode)
+            mode = mode_map.get(button_id, 'natural')
+            parent_group._parentage_mode = mode
+            self._set_parent_mode(parent_group, parent_fields, mode)
+            parent_group._refresh_parent_options()
+        def _choose_mode(button_id):
+            parent_group._mode_user_changed = True
+            _apply_mode(button_id)
+        mode_group.idClicked.connect(_choose_mode)
 
-        normalized_default = (default_mode or "hide").strip().lower()
-        if normalized_default == "embryo":
+        normalized_default = (getattr(parent_group, '_parentage_source', {}).get('parentage_mode') or default_mode or 'hide').strip().lower()
+        if normalized_default in ("embryo", "embryo_transfer"):
             rb_embryo.setChecked(True)
         else:
             rb_natural.setChecked(True)
@@ -12394,7 +12467,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             today = datetime.now().strftime(DATE_FORMAT)
             history = copy.deepcopy(before.get("project_history") or [])
             if old_project:
-                history.append({"project": old_project,
+                history.append({"project": old_project, "project_id": before.get("project_id", ""),
                     "entry_date": before.get("project_entry_date", ""),
                     "leave_date": today, "period_id": current_period_id(before)})
             after["project_history"] = history
@@ -13709,6 +13782,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             hist = animal_data.setdefault('project_history', [])
             hist.append({
                 'project':    old_project,
+                'project_id': animal_data.get('project_id', ''),
                 'entry_date': old_entry_date,
                 'leave_date': today_fmt,
                 'severity':   old_sv or '',
@@ -13717,12 +13791,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 ),
             })
         if new_project:
+            catalog = self.backend.records.get('projects', 'catalog', default={})
+            project = catalog.get('projects', {}).get(new_project, {})
+            animal_data['project_id'] = project.get('project_id', '')
             animal_data['project_entry_date'] = today_fmt
             animal_data['project_severity']   = new_sv or ''
             animal_data['project_period_id'] = make_project_period_id(
                 new_project, today_fmt, '', len(animal_data.get('project_history') or [])
             )
         else:
+            animal_data.pop('project_id', None)
             animal_data.pop('project_period_id', None)
 
         medi = getattr(self, 'medi_track_plugin', None)
@@ -23404,6 +23482,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             strict_species=not editing,
             lock_committed=not editing,
             dialog=dlg,
+            birth_widget=birth_date_le,
+            project_widget=project_le,
         )
         partner_parent_section = self._add_parent_mode_selector(
             form, _heritage_group, heritage_parent_fields, default_mode="hide")
@@ -24008,6 +24088,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             strict_species=not editing,
             lock_committed=not editing,
             dialog=dlg,
+            birth_widget=birth_date_le,
+            project_widget=project_le,
         )
         sperm_parent_section = self._add_parent_mode_selector(
             form, _heritage_group, heritage_parent_fields, default_mode="hide")
@@ -24615,6 +24697,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 strict_species=not editing,
                 lock_committed=not editing,
                 dialog=dlg,
+                birth_widget=birth_date_le,
+                project_widget=project_le,
             )
             self._add_parent_mode_selector(
                 form, parents_group, offspring_parent_fields, default_mode="embryo"
@@ -25290,6 +25374,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 strict_species=not editing,
                 lock_committed=not editing,
                 dialog=dlg,
+                birth_widget=birth_date_le,
+                project_widget=project_le,
             )
         zuchttier_limits_section = self._wrap_form_rows_in_section(
             form, self.messages.get("dialog.experimental_limits.title", "Experimental limits"),
@@ -25965,6 +26051,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 strict_species=not editing,
                 lock_committed=not editing,
                 dialog=dlg,
+                birth_widget=birth_date_le,
+                project_widget=project_le,
             )
         vt_limits_section = self._wrap_form_rows_in_section(
             form, self.messages.get("dialog.experimental_limits.title", "Experimental limits"),
@@ -26517,6 +26605,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 strict_species=creating,
                 lock_committed=creating,
                 dialog=dlg,
+                birth_widget=birth_date_le,
+                project_widget=project_cb,
             )
             basic_parent_section = self._add_parent_mode_selector(
                 form, parents_group, parent_fields, default_mode="hide")
@@ -27315,6 +27405,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             strict_species=creating,
             lock_committed=creating,
             dialog=dlg,
+            birth_widget=birth_date_le,
+            project_widget=project_le,
         )
         female_parent_section = self._add_parent_mode_selector(
             form, _heritage_group, heritage_parent_fields, default_mode="hide")

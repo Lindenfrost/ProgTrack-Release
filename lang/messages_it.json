@@ -1,4 +1,9 @@
 {
+  "project.catalog.conflict": "Il catalogo dei progetti è cambiato o non può essere salvato. Aggiornare e riprovare.",
+  "dialog.parents.ineligible": "Questo genitore non soddisfa i requisiti del metodo di filiazione selezionato.",
+  "dialog.parents.project_identity": "Identità del progetto incompleta. Utilizzare un database demo aggiornato.",
+  "dialog.parents.project_history_identity": "Identità del progetto nella cronologia incompleta. Utilizzare un database demo aggiornato.",
+  "dialog.parents.project_mismatch": "Identità del progetto non corrispondente all’assegnazione.",
   "settings.role_setup.custom_blocks.mirror_medical_history": "Mostra nella storia clinica",
   "settings.role_setup.custom_blocks.mirror_medical_history.tip": "Vale solo per i nuovi eventi registrati. I record precedenti restano; correzioni ed eliminazioni successive vengono annotate.",
   "medi_track.core.event": "Evento Core registrato",

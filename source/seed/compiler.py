@@ -60,6 +60,25 @@ def build_bundle() -> SeedBundle:
     apply_experiment_enrollments(core)
     domains = domain_records(core, keys, scenario)
     project_experiment_enrollments(core, domains)
+    from Plugins.core.backend.project_identity import allocate
+    catalog = domains[('projects', 'catalog')]
+    names = {r.get('project') for section in ('animals', 'archived_animals') for r in core[section].values() if r.get('project')}
+    names.update(p.get('project') for section in ('animals','archived_animals') for r in core[section].values() for p in r.get('project_history', []) if p.get('project'))
+    names.update(catalog['projects'])
+    # Rebuild the maintained fictional catalog deterministically, including
+    # generated projects that replace source records during enrichment.
+    catalog['next_project_sequence'] = 1
+    for name in sorted(names):
+        fields = catalog['projects'].pop(name, {})
+        allocate(catalog, name, 'seed', '2026-01-01T00:00:00Z', fields)
+    for section in ('animals', 'archived_animals'):
+        for animal in core[section].values():
+            if animal.get('project'):
+                animal['project_id'] = catalog['projects'][animal['project']]['project_id']
+                animal.setdefault('project_entry_date', animal.get('birth_date', ''))
+            for period in animal.get('project_history', []):
+                if period.get('project'):
+                    period['project_id'] = catalog['projects'][period['project']]['project_id']
     assign_seed_event_ids(core)
     # Stored editor fields and membership identities belong to the producer,
     # not an incidental first UI Save (#316). Preserve authored values.
@@ -107,9 +126,9 @@ def compile_to(output_dir: Path, *, check: bool = False) -> dict[str, Any]:
         backend = ProgTrackBackend(paths, acquire_process_lock=False, bootstrap_seed=False)
         package = staging / "progtrack_seed.ptdb"
         try:
-            backend.save_core_data(bundle.core)
             for (namespace, record_id), payload in sorted(bundle.domains.items()):
                 backend.records.put(namespace, record_id, payload)
+            backend.save_core_data(bundle.core)
             backend.interchange.export_package(package, package_id=SEED_PACKAGE_ID, created_at=SEED_CREATED)
             preview = backend.interchange.preview(package)
             if not preview.valid:

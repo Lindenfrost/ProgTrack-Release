@@ -57,7 +57,11 @@
         "contacts_other_logins": [],
         "species": "Callitrix jacchus",
         "title": ""
-      }
+      },
+      "project_id": "project:seed:2026-01-01T00%3A00%3A00Z:1",
+      "identity_creator": "seed",
+      "identity_created_at": "2026-01-01T00:00:00Z",
+      "identity_sequence": 1
     },
     "Backcrossing": {
       "animals_config": {
@@ -118,7 +122,11 @@
         "contacts_other_logins": [],
         "species": "Callitrix jacchus",
         "title": ""
-      }
+      },
+      "project_id": "project:seed:2026-01-01T00%3A00%3A00Z:2",
+      "identity_creator": "seed",
+      "identity_created_at": "2026-01-01T00:00:00Z",
+      "identity_sequence": 2
     },
     "Crossbreeding": {
       "animals_config": {},
@@ -129,7 +137,11 @@
       "iacuc": {},
       "modified_at": "",
       "modified_by": "",
-      "summary": {}
+      "summary": {},
+      "project_id": "project:seed:2026-01-01T00%3A00%3A00Z:3",
+      "identity_creator": "seed",
+      "identity_created_at": "2026-01-01T00:00:00Z",
+      "identity_sequence": 3
     },
     "OTOF-": {
       "animals_config": {
@@ -188,7 +200,11 @@
         "contacts_other_logins": [],
         "species": "Callitrix jacchus",
         "title": ""
-      }
+      },
+      "project_id": "project:seed:2026-01-01T00%3A00%3A00Z:4",
+      "identity_creator": "seed",
+      "identity_created_at": "2026-01-01T00:00:00Z",
+      "identity_sequence": 4
     },
     "Oakshield": {
       "animals_config": {
@@ -247,7 +263,11 @@
         "contacts_other_logins": [],
         "species": "Papio hamadryas anubis",
         "title": ""
-      }
+      },
+      "project_id": "project:seed:2026-01-01T00%3A00%3A00Z:5",
+      "identity_creator": "seed",
+      "identity_created_at": "2026-01-01T00:00:00Z",
+      "identity_sequence": 5
     },
     "Zucht": {
       "animals_config": {
@@ -306,8 +326,13 @@
         "contacts_other_logins": [],
         "species": "Callitrix jacchus",
         "title": ""
-      }
+      },
+      "project_id": "project:seed:2026-01-01T00%3A00%3A00Z:6",
+      "identity_creator": "seed",
+      "identity_created_at": "2026-01-01T00:00:00Z",
+      "identity_sequence": 6
     }
   },
-  "version": 1
+  "version": 1,
+  "next_project_sequence": 7
 }

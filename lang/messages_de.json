@@ -1,4 +1,9 @@
 {
+  "project.catalog.conflict": "Der Projektkatalog wurde geändert oder konnte nicht gespeichert werden. Aktualisieren Sie die Ansicht und versuchen Sie es erneut.",
+  "dialog.parents.ineligible": "Dieses Elterntier erfüllt die Anforderungen der gewählten Abstammungsmethode nicht.",
+  "dialog.parents.project_identity": "Die Projektidentität ist unvollständig. Verwenden Sie eine aktuelle Demo-Datenbank.",
+  "dialog.parents.project_history_identity": "Die Projektidentität in der Historie ist unvollständig. Verwenden Sie eine aktuelle Demo-Datenbank.",
+  "dialog.parents.project_mismatch": "Die Projektidentität stimmt nicht mit der Zuordnung überein.",
   "settings.role_setup.custom_blocks.mirror_medical_history": "In der Krankengeschichte anzeigen",
   "settings.role_setup.custom_blocks.mirror_medical_history.tip": "Gilt nur für neu erfasste Ereignisse. Frühere Einträge bleiben erhalten; spätere Korrekturen und Löschungen werden vermerkt.",
   "medi_track.core.event": "Erfasstes Core-Ereignis",

@@ -36,6 +36,7 @@ from Plugins.core.project_species import remove_mismatched_assignments
 from Plugins.core.project_periods import ensure_project_periods, make_project_period_id
 from Plugins.core.platform_helpers import open_local_path
 from Plugins.core.backend_store import BackendJsonStore
+from Plugins.core.backend.project_identity import create_project
 from Plugins.core.project_lifecycle import (
     PROJECT_LIFECYCLE_STATUSES,
     normalize_project_status,
@@ -430,7 +431,7 @@ class ProjectTrackTab(QWidget):
         self._load_data(); self._build_ui()
 
     def _load_data(self):
-        d = self._store.load({"version": 1, "projects": {}})
+        d, self._catalog_revision = self._store.load_with_revision({"version": 1, "projects": {}})
         if isinstance(d, dict):
             self._project_data = d
             self._project_data.setdefault('version', 1)
@@ -438,12 +439,21 @@ class ProjectTrackTab(QWidget):
 
     def _save_data(self):
         try:
-            self._store.save(self._project_data)
-        except Exception as exc: logger.warning("ProjectTrackTab save: %s", exc)
+            self._catalog_revision = self._store.save(self._project_data, expected_revision=self._catalog_revision)
+            return True
+        except Exception as exc:
+            self._load_data()
+            QMessageBox.warning(self, _m(self._messages, 'title.warning', 'Warning'),
+                _m(self._messages, 'project.catalog.conflict', 'The project catalog changed or could not be saved. Refresh and try again.'))
+            logger.warning('Project catalog save rejected: %s', exc)
+            return False
 
     def _project_record(self, name):
         p=self._project_data['projects']
-        if name not in p: p[name]={}
+        if name not in p:
+            create_project(self._app.backend, name, str(getattr(self._app.master_track, 'current_username', '') or ''))
+            self._load_data()
+            p = self._project_data['projects']
         r=p[name]
         for k in ('created_by','created_at','modified_by','modified_at'): r.setdefault(k,'')
         for k in ('summary','iacuc','assoc_users','animals_config','arrive'): r.setdefault(k,{})
@@ -740,6 +750,8 @@ class ProjectTrackTab(QWidget):
             unrestricted, visible_projects = self._app._project_visibility_scope()
             if not unrestricted:
                 all_names = [n for n in all_names if n in visible_projects]
+        deleted_names = {r.get('name') for r in self._project_data.get('project_tombstones', {}).values()} - set(self._project_data['projects'])
+        all_names = [n for n in all_names if n not in deleted_names]
         active_names = [n for n in all_names if not self._history.is_archived(n)]
         arch_names   = [n for n in all_names if self._history.is_archived(n)]
         for name in active_names:
@@ -803,13 +815,13 @@ class ProjectTrackTab(QWidget):
             return
         sig = self._current_sig()
         now_str = datetime.now().strftime('%d.%m.%Y %H:%M')
-        self._project_data['projects'][pname] = {
+        create_project(self._app.backend, pname,
+            str(getattr(self._app.master_track, 'current_username', '') or ''), {
             'created_by': sig, 'created_at': now_str,
             'modified_by': sig, 'modified_at': now_str,
             'status': 'draft',
-            'summary': {}, 'iacuc': {}, 'assoc_users': {}, 'animals_config': {}
-        }
-        self._save_data()
+            'summary': {}, 'iacuc': {}, 'assoc_users': {}, 'animals_config': {}})
+        self._load_data()
         pt_plugin = getattr(self._app, 'projects_plugin', None)
         if pt_plugin and hasattr(pt_plugin, '_on_refresh_clicked'):
             pt_plugin._on_refresh_clicked()
@@ -853,8 +865,13 @@ class ProjectTrackTab(QWidget):
         if not name: return
         msg = _m(self._messages, "project.tab.delete_confirm", "Permanently delete project '{name}'?").replace('{name}', name)
         if QMessageBox.question(self, "", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes: return
-        self._project_data['projects'].pop(name, None)
-        self._save_data()
+        deleted = self._project_data['projects'].pop(name, None)
+        if deleted:
+            self._project_data.setdefault('project_tombstones', {})[deleted['project_id']] = {key: deleted[key] for key in ('project_id', 'identity_creator', 'identity_created_at', 'identity_sequence')}
+            self._project_data['project_tombstones'][deleted['project_id']]['name'] = name
+        if not self._save_data():
+            self._refresh_project_list()
+            return
         # Also delete from the backend project history.
         if self._history and hasattr(self._history, 'delete_project'):
             self._history.delete_project(name)
@@ -1617,6 +1634,7 @@ class ProjectTrackTab(QWidget):
                     leave_date = datetime.now().strftime("%d.%m.%Y")
                     history.append({
                         "project": name,
+                        "project_id": animal.get("project_id", ""),
                         "entry_date": old_entry_date,
                         "leave_date": leave_date,
                         "period_id": old_period_id or make_project_period_id(
@@ -1625,6 +1643,7 @@ class ProjectTrackTab(QWidget):
                         "reason": "project_species_changed",
                         "actor": sig,
                     })
+                    animal.pop("project_id", None)
                     animal.pop("project_period_id", None)
         iacuc_d = {
             key: (
@@ -1653,7 +1672,8 @@ class ProjectTrackTab(QWidget):
             'departed_with_sev_no_legal': self._an_no_legal.value(),
         }
         rec['arrive'] = {k: v.toPlainText().strip() for k, v in self._arrive_fields.items()}
-        self._save_data()
+        if not self._save_data():
+            return
         if removed_animals:
             save_app = getattr(self._app, "_save_persistence", None)
             if callable(save_app):
@@ -1768,6 +1788,7 @@ class ProjectTrackTab(QWidget):
             self._build_detail(self._current_project)
 
     def _on_refresh_clicked(self):
+        self._load_data()
         pt_plugin = getattr(self._app, 'projects_plugin', None)
         refresh = getattr(pt_plugin, 'refresh_projects', None) if pt_plugin else None
         if callable(refresh):
