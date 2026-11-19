@@ -24,7 +24,8 @@ It identifies the rights holders and terms for the unchanged DejaVu, STIX, and
 Computer Modern/BaKoMa fonts; the upstream Matplotlib license files remain in
 `fonts/matplotlib/`.
 
-The local engineering artifact is deliberately not advertised as supported until
-manual native Linux validation passes: clean-machine double-click launch, Qt/font
-rendering, PDF/XLSX export, SQLite, PostgreSQL/TLS, XDG/read-only behavior, locks,
-and launcher diagnostics. Do not publish the tarball before that gate is complete.
+The Linux archive is published with ProgTrack 0.2.3 for evaluation. Native Linux
+support remains unverified until the required clean-machine acceptance passes:
+double-click launch, Qt/font rendering, PDF/XLSX export, SQLite, PostgreSQL/TLS,
+XDG/read-only behavior, locks, and launcher diagnostics. See issue #49; this
+artifact does not by itself declare Linux as a validated supported platform.

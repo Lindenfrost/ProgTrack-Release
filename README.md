@@ -157,19 +157,19 @@ Launcher.exe --script ProgTrack.v.0.2.3.py
 
 ## Platform support and release artifacts
 
-The 0.2.3 release described here is a native Windows portable release. Its
-`Launcher.exe`, Windows Qt/Python runtime, and bundled native libraries must be
-kept together; this ZIP is not a native Linux package and is not supported
-through Wine.
+The 0.2.3 release includes a native Windows portable package. Its `Launcher.exe`,
+Windows Qt/Python runtime, and bundled native libraries must be kept together;
+this ZIP is not a native Linux package and is not supported through Wine.
 
-A separate native Linux artifact uses the same current `0.2.3` application
-payload and backend contracts. A local engineering archive is now assembled as
-`ProgTrack-0.3.0-linux-x86_64.tar.gz`: it contains a pinned CPython runtime, Qt/PyQt6,
+The release also includes the separate Linux archive
+`ProgTrack-0.3.0-linux-x86_64.tar.gz`, carrying the same 0.2.3 application
+payload and backend contracts with a pinned CPython runtime, Qt/PyQt6,
 scientific/PDF/XLSX dependencies, bundled fonts, and the Psycopg binary client.
-It is kept local until the required native Linux Mint 22.3 x86_64 workstation gate
-(ELF/linker, GUI, PDF, SQLite, PostgreSQL/TLS, XDG, and clean-machine checks) passes.
-Windows and Linux artifacts remain separate rather than combining incompatible
-`.dll`/`.pyd` and `.so` runtimes in one package.
+It is published for evaluation; native Linux Mint 22.3 x86_64 acceptance
+(ELF/linker, GUI, PDF, SQLite, PostgreSQL/TLS, XDG, and clean-machine checks)
+remains open under issue #49. Linux is not declared natively supported until that
+gate passes. Windows and Linux artifacts remain separate rather than combining
+incompatible `.dll`/`.pyd` and `.so` runtimes in one package.
 
 ## Folder layout
 

@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import tarfile
@@ -25,8 +26,6 @@ from pathlib import Path, PurePosixPath
 VERSION = "0.3.0"
 ARCH = "x86_64"
 PYTHON_TAG = "cp313"
-APPLICATION_PAYLOAD_VERSION = "0.2.2"
-APPLICATION_PAYLOAD_FILE = f"ProgTrack.v.{APPLICATION_PAYLOAD_VERSION}.py"
 LINUX_FILES = (
     "ProgTrack",
     "launcher.py",
@@ -46,7 +45,6 @@ PAYLOAD_FILES = (
     "info_en.json",
     "info_it.json",
     "info_ru.json",
-    APPLICATION_PAYLOAD_FILE,
 )
 PAYLOAD_DIRECTORIES = (
     "Plugins",
@@ -250,7 +248,22 @@ def _copy_tree(source: Path, destination: Path) -> None:
         shutil.copy2(source, destination)
 
 
+def _application_payload(archive_root: Path) -> tuple[Path, str]:
+    candidates = sorted(archive_root.glob("ProgTrack.v.*.py"))
+    if len(candidates) != 1:
+        raise RuntimeError(
+            f"Expected exactly one committed application payload; found {len(candidates)}"
+        )
+    payload = candidates[0]
+    match = re.fullmatch(r"ProgTrack\.v\.(\d+\.\d+\.\d+)\.py", payload.name)
+    if match is None:
+        raise RuntimeError(f"Unsupported application payload filename: {payload.name}")
+    return payload, match.group(1)
+
+
 def _copy_payload(archive_root: Path, stage: Path) -> None:
+    application_payload, _payload_version = _application_payload(archive_root)
+    _copy_tree(application_payload, stage / application_payload.name)
     for relative in PAYLOAD_FILES:
         _copy_tree(archive_root / relative, stage / relative)
     for relative in PAYLOAD_DIRECTORIES:
@@ -291,10 +304,13 @@ def _set_modes(stage: Path) -> None:
 
 
 def _write_metadata(stage: Path, commit: str, epoch: int, manifest: dict) -> None:
+    _application, payload_version = _application_payload(stage)
     metadata = {
         "artifact": f"ProgTrack-{VERSION}-linux-{ARCH}.tar.gz",
         "artifact_version": VERSION,
-        "application_payload_version": APPLICATION_PAYLOAD_VERSION,
+        "application_payload_version": payload_version,
+        "application_payload_file": _application.name,
+        "launcher_version": VERSION,
         "source_commit": commit,
         "source_date_epoch": epoch,
         "platform": f"linux-{ARCH}",
@@ -333,6 +349,14 @@ def _write_inventory(stage: Path, commit: str, epoch: int, manifest: dict) -> No
 
 
 def _validate_stage(stage: Path) -> None:
+    application_payload, payload_version = _application_payload(stage)
+    metadata_path = stage / "release_metadata.json"
+    if metadata_path.is_file():
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if metadata.get("application_payload_version") != payload_version:
+            raise RuntimeError("Release metadata does not match the staged application payload")
+        if metadata.get("application_payload_file") != application_payload.name:
+            raise RuntimeError("Release metadata names a different application payload")
     forbidden_roots = {"tests", "tmp", "outputs", "ProgTrackData", "source"}
     for path in stage.rglob("*"):
         relative = path.relative_to(stage)
