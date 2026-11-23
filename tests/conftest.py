@@ -12,8 +12,29 @@ import json
 from pathlib import Path
 import time
 
+import pytest
+
 _heritage_terminal = None
 _retest_journal = None
+_heritage_nodeids: set[str] = set()
+
+# Heritage Track renderer/plugin behavior is being reworked in Phase 4. Keep
+# its existing tests discoverable but out of the Phase 3 default run. The
+# #156 module is intentionally exempt: it tests the Core-owned parentage
+# boundary now used independently of Heritage Track.
+_phase4_heritage_modules = {
+    path.name
+    for path in Path(__file__).parent.glob("test_heritage_*.py")
+    if path.name != "test_heritage_issue_156.py"
+}
+_phase4_heritage_modules.update({
+    "test_issue_211_manual_animal_repositioning.py",
+    "test_issue_242_heritage_category_tabs.py",
+    "test_issue_249_route_recovery.py",
+})
+_phase4_heritage_cases = {
+    "test_heritage_to_reports_keeps_the_normalized_subject",
+}
 
 
 def pytest_addoption(parser) -> None:
@@ -40,13 +61,27 @@ def pytest_collection_finish(session) -> None:
     _journal('collection', nodeids=[item.nodeid for item in session.items])
 
 
+def pytest_collection_modifyitems(items) -> None:
+    for item in items:
+        module_name = Path(str(item.path)).name
+        if module_name in _phase4_heritage_modules or item.name in _phase4_heritage_cases:
+            item.add_marker(pytest.mark.phase4_heritage)
+        if (module_name == "test_phase023_core_repair_regressions.py"
+                and item.name == "test_309_effective_status_uses_authorized_checkbox_or_coerced_result"):
+            item.add_marker(pytest.mark.isolated_qt)
+        if module_name == "test_ui_svg_palette_contrast.py":
+            item.add_marker(pytest.mark.isolated_qt)
+        if item.get_closest_marker("phase4_heritage") or item.get_closest_marker("extended_heritage"):
+            _heritage_nodeids.add(item.nodeid)
+
+
 def pytest_sessionfinish(session, exitstatus) -> None:
     _journal('finish', exitstatus=int(exitstatus))
 
 
 def pytest_runtest_logstart(nodeid, location) -> None:
     _journal('start', nodeid=nodeid)
-    if "test_heritage" not in nodeid.lower():
+    if nodeid not in _heritage_nodeids:
         return
     print(f"[HERITAGE][START] {nodeid}", flush=True)
 
@@ -55,7 +90,7 @@ def pytest_runtest_logreport(report) -> None:
     _journal('result', nodeid=report.nodeid, phase=report.when,
              outcome=report.outcome, duration=report.duration,
              failure=str(report.longrepr) if report.failed else None)
-    if report.when != "call" or "test_heritage" not in report.nodeid.lower():
+    if report.when != "call" or report.nodeid not in _heritage_nodeids:
         return
     terminal = _heritage_terminal
     if terminal is None:

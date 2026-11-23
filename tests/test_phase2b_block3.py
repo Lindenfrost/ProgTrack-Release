@@ -75,6 +75,7 @@ class Block3Tests(unittest.TestCase):
 
     def test_master_sessions_are_isolated_and_guest_does_not_leak_outgoing_style(self):
         host = self.main.ProgTrackApp.__new__(self.main.ProgTrackApp)
+        host._shared_publishing = False
         host.backend = Backend()
         host.master_track = Master(True, {"style_settings": {"prog_color": "#111111"}})
         self.assertEqual(host._load_user_style_settings()["prog_color"], "#111111")
@@ -111,7 +112,7 @@ class Block3Tests(unittest.TestCase):
 
     def test_surgery_manifest_imports_with_real_plugin_manager(self):
         from Plugins.core.plugin_manager import PluginManager
-        manager = PluginManager(ROOT / "Plugins", app_version="0.2.1")
+        manager = PluginManager(ROOT / "Plugins", app_version="0.3.0")
         diagnostic = manager.validate_manifest(SURGERY, import_entry_point=True)
         self.assertTrue(diagnostic.valid, diagnostic.errors)
         self.assertEqual(diagnostic.manifest["dependencies"], ["PyQt6", "matplotlib", "numpy"])

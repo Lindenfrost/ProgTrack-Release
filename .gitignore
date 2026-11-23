@@ -35,7 +35,11 @@ Plugins/core/backend/certificates/*
 !Plugins/core/backend/certificates/.gitkeep
 ProgTrack.v.0.1.0.zip
 progtrack_daten.lock
-tests/
+# Keep automated tests and their reusable fixtures versioned. Ignore only
+# local test evidence/output and temporary migration helpers.
+/tests/_phase2b_closure_evidence_*/
+/tests/_phase2b_ui_evidence_*/
+/tests/_tmp_migrate_active_example_names_*.py
 tmp/
 outputs/
 .pytest_cache/

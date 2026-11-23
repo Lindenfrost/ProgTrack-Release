@@ -42,6 +42,7 @@ from Plugins.core.measurement_input import MeasurementValidator, parse_measureme
 from Plugins.core.role_block_presets import RoleBlockPresetRegistry, normalize_event_definition
 from Plugins.core.backend import ProgTrackBackend
 from Plugins.core.backend.core_configuration import read_seed_configuration
+from Plugins.core.backend.errors import ConflictError
 from tests.test_current_backend_runtime import runtime_paths
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,13 +54,39 @@ SPEC.loader.exec_module(MAIN)
 class Records:
     def __init__(self):
         self.data = {}
+        self.revisions = {}
 
     def get(self, namespace, key, default=None):
         return copy.deepcopy(self.data.get((namespace, key), default))
 
+    def get_with_revision(self, namespace, key, default=None):
+        record_id = (namespace, key)
+        return copy.deepcopy(self.data.get(record_id, default)), self.revisions.get(record_id, 0)
+
     def put(self, namespace, key, value, **kwargs):
-        self.data[namespace, key] = copy.deepcopy(value)
-        return 1
+        record_id = (namespace, key)
+        revision = self.revisions.get(record_id, 0)
+        expected = kwargs.get('expected_revision')
+        if expected is not None and expected != revision:
+            raise ConflictError(f'stale revision for {namespace}/{key}')
+        self.data[record_id] = copy.deepcopy(value)
+        self.revisions[record_id] = revision + 1
+        return revision + 1
+
+    def put_many(self, records, expected_revisions=None):
+        batch = list(records)
+        expected = expected_revisions or {}
+        for namespace, key, _value in batch:
+            current = self.revisions.get((namespace, key), 0)
+            if (namespace, key) in expected and expected[(namespace, key)] != current:
+                raise ConflictError(f'stale revision for {namespace}/{key}')
+        return {
+            (namespace, key): self.put(
+                namespace, key, value,
+                expected_revision=expected.get((namespace, key)),
+            )
+            for namespace, key, value in batch
+        }
 
 
 def put_configuration_fixture(backend, record_id, payload):
@@ -73,9 +100,17 @@ class CoreRepairTests(unittest.TestCase):
     def test_2s_156_all_editor_locales_parent_marker_save_and_reload(self):
         """Real Core dialogs/SQLite; locale/role checks do not need human repetition."""
         app = self._307_sqlite_host(population=0)
-        app.master_track.user_db.add_user('test-5', 'Disposable-2S-only!', role='master')
-        app.master_track._current_username = 'test-5'
-        app.master_track._current_role = 'master'
+        # This disposable non-seed database has a synthetic fixture account,
+        # not an authenticated session. Replace it with a real first Lord so
+        # account commands run under the current backend authorization contract.
+        app.backend.records.put('security', 'users', [])
+        session = app.backend.authenticated_sessions.create_first_account(
+            'Admin', 'Disposable-2S-only!')
+        app.master_track._current_username = 'Admin'
+        app.master_track._current_role = 'lord'
+        app.master_track.session_context = session
+        app._core_configuration_generation = 0
+        app._publish_core_configuration(app.backend.core_configuration.snapshot(), redraw=False)
         app._save_persistence = MAIN.ProgTrackApp._save_persistence.__get__(app)
         app._resolve_animal_key = MAIN.ProgTrackApp._resolve_animal_key.__get__(app)
         app.has_heritage_plugin = False
@@ -187,7 +222,12 @@ class CoreRepairTests(unittest.TestCase):
         master = app.master_track
         password = 'Disposable-2S-only!'
         for username, role in (('test-1', 'master'), ('test-2', 'user')):
-            master.user_db.add_user(username, password, role=role)
+            unit_id = next(
+                unit['unit_id']
+                for unit in app.backend.records.get('security', 'organization-units', {}).get('units', [])
+                if unit.get('active', True) and not unit.get('archived', False)
+            )
+            master.user_db.add_user(username, password, role=role, unit_id=unit_id)
             master.user_db.set_password(username, password, must_change=False)
         witness = next(iter(app.animals))
         failures = []
@@ -707,6 +747,8 @@ class CoreRepairTests(unittest.TestCase):
         self.addCleanup(self.qt.setFont, previous_font)
         app = self._307_sqlite_host(seeded=True)
         self._316_admin(app)
+        app.master_track.session_context = app.backend.authenticated_sessions.login("Admin", "123456")
+        app._publish_core_configuration(app.backend.core_configuration.snapshot(), redraw=False)
         app.has_cage_track_plugin = True
         app.cage_track_plugin = CageTrackPlugin(app)
         app._is_projects_track_active = lambda: True
@@ -959,6 +1001,10 @@ class CoreRepairTests(unittest.TestCase):
     def _316_admin(self, app):
         app.master_track._current_username = 'Admin'
         app.master_track._current_role = app.master_track.user_db.get_user('Admin')['role']
+        app.master_track.session_context = app.backend.authenticated_sessions.login('Admin', '123456')
+        if not hasattr(app, '_core_configuration_generation'):
+            app._core_configuration_generation = 0
+        app._publish_core_configuration(app.backend.core_configuration.snapshot(), redraw=False)
         app._save_persistence = MAIN.ProgTrackApp._save_persistence.__get__(app)
         app._resolve_animal_key = MAIN.ProgTrackApp._resolve_animal_key.__get__(app)
 
@@ -2477,7 +2523,14 @@ class CoreRepairTests(unittest.TestCase):
         self.hosts = []
 
     def tearDown(self):
-        for host in self.hosts:
+        # Dialogs are also tracked for explicit cleanup, but most are children
+        # of a tracked main-window host. Schedule child windows first so the
+        # parent's deferred deletion cannot invalidate a child's queued
+        # DeferredDelete event (which can corrupt Qt state and crash later
+        # tests in the same process on Windows).
+        for host in reversed(self.hosts):
+            if sip.isdeleted(host):
+                continue
             host.hide()
             host.deleteLater()
         self.qt.sendPostedEvents(None, QEvent.Type.DeferredDelete)
@@ -2491,6 +2544,7 @@ class CoreRepairTests(unittest.TestCase):
         app.lang = 'en'
         app._setup_menus = lambda: None
         app.backend = SimpleNamespace(records=Records())
+        app._shared_initial_session = None
         app._test_audit_entries = []
         app.master_track = SimpleNamespace(
             current_username='tester',
@@ -2575,11 +2629,14 @@ class CoreRepairTests(unittest.TestCase):
             for index in range(population):
                 key = f'test-{index + 1}'
                 record = self.record()
+                project_name = 'Hidden' if index % 5 == 1 else 'Allowed'
                 record.update(name=key, ipid=f'IPID-307-{index}', id=f'ID-307-{index}',
                               species='Callitrix jacchus',
                               sex='Female' if index % 2 == 0 else 'Male',
                               birth_date='01.01.2010',
-                              project='Hidden' if index % 5 == 1 else 'Allowed')
+                              project=project_name,
+                              project_id='test-project-b' if project_name == 'Hidden' else 'test-project-a',
+                              project_entry_date='01.01.2009')
                 if index % 5 in (0, 1):
                     record['organization_unit_id'] = 'unit-a'
                 elif index % 5 == 2:
@@ -3048,6 +3105,7 @@ class CoreRepairTests(unittest.TestCase):
         self.assertEqual(stored['project'], '')
         self.assertEqual(len(stored['project_history']), 1)
         self.assertEqual(stored['project_history'][0]['project'], 'Allowed')
+        self.assertEqual(stored['project_history'][0]['project_id'], 'test-project-a')
         self.assertTrue(stored['project_history'][0]['leave_date'])
         self.assertIn('project_note', next(iter(stored['edits'].values())))
         log = Path(app.master_track.audit_logs_dir()) / datetime.now().strftime('audit_%Y-%m.log')
@@ -3085,9 +3143,11 @@ class CoreRepairTests(unittest.TestCase):
             ('unknown', 'G-unknown', 'Unknown', 'WRONG-SEX')):
             record = self.record()
             record.update(name=name, sex=sex, id=public_id, project='Allowed')
+            record['birth_date'] = '01.01.2020' if key == 'self' else '01.01.2010'
             records[key] = record
         records['hidden']['project'] = 'Hidden'
         records['mouse']['species'] = 'Mus musculus'
+        records['self']['parentage_mode'] = 'natural'
         return records
 
     def _317_completions(self, combo, prefix):
@@ -3114,7 +3174,8 @@ class CoreRepairTests(unittest.TestCase):
             fields = ('egg_donor', 'surrogate_mother') if sex == 'Female' else (
                 'sperm_donor', 'surrogate_father')
             for path, combo in [('shared', shared)] + [(key, parents[key]) for key in fields]:
-                expected = {key for key, record in authorized.items() if key != 'self'
+                candidate_records = app.animals if path in {'egg_donor', 'sperm_donor'} else authorized
+                expected = {key for key, record in candidate_records.items() if key != 'self'
                             and record['sex'] == sex and record['species'] == 'Callithrix jacchus'}
                 self.assertEqual({combo.itemData(i) for i in range(1, combo.count())}, expected)
                 self.assertEqual(combo.insertPolicy(), MAIN.QComboBox.InsertPolicy.NoInsert)
@@ -3125,7 +3186,7 @@ class CoreRepairTests(unittest.TestCase):
                         actual = {identity for _label, identity in self._317_completions(combo, prefix)
                                   if identity}
                         self.assertEqual(actual, {key for key in expected
-                            if authorized[key]['name'].casefold().startswith(prefix.casefold())})
+                            if candidate_records[key]['name'].casefold().startswith(prefix.casefold())})
                         self.assertEqual(combo.currentData(), '')
         self.assertEqual(app.animals, original)
 
@@ -4034,82 +4095,46 @@ class CoreRepairTests(unittest.TestCase):
     def _assert_267_role_save_geometry(
             self, *, start_all=False, conventions=False, locale='en', sidebar_width=300):
         app = self.host()
+        app.lang = locale
         app.messages = json.loads((ROOT / f'lang/messages_{locale}.json').read_text(encoding='utf-8'))
 
-        class RoleRegistry:
-            def __init__(self):
-                builtin_values = (
-                    MAIN.Role.SPENDER.value,
-                    MAIN.Role.SAMENSP.value,
-                    MAIN.Role.OFFSPRING.value,
-                    MAIN.Role.PARTNER.value,
-                    MAIN.Role.ZUCHTTIER.value,
-                    MAIN.Role.EXPERIMENTAL.value,
-                )
-                self._roles = [
-                    {
-                        'role_id': value,
-                        'value': value,
-                        'label': value,
-                        'icon': f'role.{value}',
-                        'representation_mode': 'icon',
-                        'active': True,
-                        'built_in': True,
-                    }
-                    for value in builtin_values
-                ]
-
-            def roles(self):
-                return copy.deepcopy(self._roles)
-
-            def save_roles(self, roles):
-                self._roles = copy.deepcopy(roles)
-
-            def label_for_value(self, value, _messages):
-                role = next((item for item in self._roles if item.get('value') == value), None)
-                return role.get('label') if role else None
-
-            def display_for_value(self, value, _messages):
-                return self.label_for_value(value, _messages) or value
-
-            def representation_for_value(self, value, _messages):
-                role = next((item for item in self._roles if item.get('value') == value), {})
-                if role.get('built_in'):
-                    return {'mode': 'icon', 'icon': role.get('icon')}
-                return {'mode': 'text', 'text': role.get('representation_text') or role.get('label') or value}
-
-        app.animal_role_registry = RoleRegistry()
+        # Role definitions now live in backend-owned Core configuration. Use
+        # the real authenticated registry and disposable SQLite database so
+        # this regression exercises the shipped save/publication contract.
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        app.backend = ProgTrackBackend(
+            runtime_paths(root, application_root=ROOT), acquire_process_lock=False,
+            choose_demo_seed=lambda: False,
+        )
+        self.addCleanup(app.backend.close)
+        app._core_configuration_generation = 0
+        app.master_track.session_context = app.backend.authenticated_sessions.create_first_account(
+            "core-test-admin", "Core-246-test-only!")
+        app.backend.core_configuration.setup(app.master_track.session_context)
+        app._publish_core_configuration(app.backend.core_configuration.snapshot(), redraw=False)
         # The positive geometry scenarios require the same capability that
         # production checks before accepting role configuration writes.
         app.master_track.can = lambda permission: permission == 'core.manage_animal_roles'
         if conventions:
-            # Real configuration CAS/registry and real Conventions acceptance;
-            # no live backend, user style file, identity settings or seed writes.
-            temporary = tempfile.TemporaryDirectory()
-            self.addCleanup(temporary.cleanup)
-            root = Path(temporary.name)
-            app.backend = ProgTrackBackend(
-                runtime_paths(root), acquire_process_lock=False)
-            self.addCleanup(app.backend.close)
-            app.master_track.session_context = app.backend.authenticated_sessions.create_first_account(
-                "core-test-admin", "Core-246-test-only!")
-            app.backend.core_configuration.setup(app.master_track.session_context)
-            app._publish_core_configuration(app.backend.core_configuration.snapshot(), redraw=False)
+            # Keep unrelated identity/style writes isolated while exercising
+            # the real Core role catalogue and Conventions acceptance path.
             app._save_identity_conventions = lambda *_args: None
-            app._can_manage_institution_settings = lambda: False
-            app._can_manage_institution_branding = lambda: False
-            app._load_user_style_settings = lambda: {}
-            app._save_user_style_settings = lambda *_args: None
-            app._plot_selected = lambda: None
-        app._category_tab_tooltips = lambda: ['category'] * 7
+            app._can_manage_institution_settings = lambda *_args, **_kwargs: False
+            app._can_manage_institution_branding = lambda *_args, **_kwargs: False
+            app._load_user_style_settings = lambda *_args, **_kwargs: {}
+            app._save_user_style_settings = lambda *_args, **_kwargs: None
+            app._plot_selected = lambda *_args, **_kwargs: None
+        app._category_tab_tooltips = lambda *_args, **_kwargs: ['category'] * 7
         app._animal_visible_to_current_user = lambda record: record.get('visible', True)
-        app._is_steroid_track_active = lambda: False
-        app._save_role_label_overrides = lambda *_args: None
-        app._merge_user_messages = lambda: None
-        app._apply_sidebar_button_visibility_for_category = lambda *_args: None
-        app._apply_master_button_states = lambda: None
-        app._sync_plot_action_button_widths = lambda: None
-        app._update_animal_sex_filter_texts = lambda: None
+        app._is_steroid_track_active = lambda *_args, **_kwargs: False
+        app._save_role_label_overrides = lambda *_args, **_kwargs: None
+        app._merge_user_messages = lambda *_args, **_kwargs: None
+        app._apply_sidebar_button_visibility_for_category = lambda *_args, **_kwargs: None
+        app._apply_master_button_states = lambda *_args, **_kwargs: None
+        app._sync_plot_action_button_widths = lambda *_args, **_kwargs: None
+        app._update_animal_sex_filter_texts = lambda *_args, **_kwargs: None
 
         sidebar = QWidget(app)
         sidebar.setFixedWidth(sidebar_width)
@@ -4185,17 +4210,10 @@ class CoreRepairTests(unittest.TestCase):
             )
 
         before = sidebar_geometry()
-        role = {
-            'role_id': 'custom.test_role',
-            'value': 'custom.test_role',
-            'label_key': 'role.custom.test_role',
-            'label': 'A long descriptive empty custom role',
-            'representation_mode': 'text',
-            'representation_text': 'A long descriptive empty custom role',
-            'order': 100,
-            'active': True,
-            'built_in': False,
-        }
+        role = app.animal_role_registry.make_custom_role(
+            'A long descriptive empty custom role', '')
+        role.update(role_id='custom.test_role', value='custom.test_role',
+                    label_key='role.custom.test_role', order=100)
         publications = []
         if conventions:
             # Exercise the actual refresh/list projection after the modal save,
@@ -4244,8 +4262,11 @@ class CoreRepairTests(unittest.TestCase):
                 payload = app.backend.records.get('configuration', 'animal-roles')
                 self.assertIn('custom.test_role', [item['value'] for item in payload['roles']])
             else:
+                revisions = app._core_configuration_refresh_token()[1]
                 self.assertTrue(app._save_animal_role_definitions(
-                    app.animal_role_registry.roles() + [role]))
+                    app.animal_role_registry.roles() + [role],
+                    expected_revisions={('configuration', key): revision
+                                        for key, revision in revisions.items()}))
 
         # This is the first state after Role Setup's save callback. Check it
         # before and after queued GUI work; do not click a category to force it.
@@ -4862,6 +4883,7 @@ class CoreRepairTests(unittest.TestCase):
         class FirstUI(Exception):
             pass
         app.has_master_track = True
+        app._shared_publishing = False
         app._init_master_track_plugin = lambda: None
         app.plugin_manager = SimpleNamespace(validate_all=lambda **_k: {}, required_failures=lambda: [])
         app._load_disabled_plugins = lambda: {'master_track'} if disabled else set()
@@ -6047,7 +6069,7 @@ class CoreRepairTests(unittest.TestCase):
                 rejected_events = rejected['animals']['Subject']['events']
                 rejected_events[:] = [e for e in rejected_events if e['event_id'] != 'middle']
                 rejected_events[0]['event_type'] = 'illegal_retype'
-                with self.assertRaises(MAIN.ConflictError):
+                with self.assertRaises(ConflictError):
                     backend.save_core_data(rejected)
                 self.assertEqual(backend.load_core_data()['animals']['Subject']['events'], original)
                 # Remove middle, then first, then last: also tests an empty table.
@@ -6407,7 +6429,8 @@ class CoreRepairTests(unittest.TestCase):
         from Plugins.Master_Track.dialogs import EditJobsDialog
         host = self.host()
         dialog = EditJobsDialog(host, {}, SimpleNamespace(
-            app=SimpleNamespace(lang='en'), get_job_timeout=lambda _name: 30))
+            app=SimpleNamespace(lang='en'), get_job_timeout=lambda _name: 30,
+            refresh_job_policy=lambda: 0))
         dialog.show()
         self.qt.processEvents()
         count = dialog._scroll_vbox.count()

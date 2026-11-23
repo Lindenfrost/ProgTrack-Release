@@ -1,41 +1,54 @@
 # Current automated tests
 
-This directory contains automated tests for the Phase 3 ProgTrack 0.3.0 candidate and its current backend architecture. Mutable animal, project, housing, medical, report, sample, session, and role data are tested through the configured backend; retired JSON stores are not runtime fixtures. The suite and fixtures are being reconciled against the current issue contracts under #325.
+This directory contains the maintained automated tests for ProgTrack 0.3.0. Mutable animal, project, housing, medical, report, sample, session, and role data are tested through the configured backend; retired JSON stores are not runtime fixtures. Test modules are versioned. Local run artifacts and historical UI evidence are ignored.
 
-Run the aggregate suite from the release root:
+Run the Phase 3 suite from the release root:
 
 ```powershell
 python -m pytest -q
 ```
 
-Automated cross-checks for localized manual section structure (#227) and Windows launcher copyright metadata (#299) are in test_phase3_manual_guide_contract_227.py and test_launcher_windows_copyright_299.py. To validate an extracted Windows launcher executable, set PROGTRACK_TEST_WINDOWS_LAUNCHER to its full path before running the #299 test; the native Explorer Details view remains in Manual Retest 3A. The default command uses pytest.ini and excludes only explicitly marked extended_heritage cases. Run the extended set explicitly with: python -m pytest -o addopts= -q. Do not count omitted markers as passes; issue #325 tracks the full coverage reconciliation, and Manual Retest 3A is reserved for human/native/site-only acceptance.
+Last complete default run (2026-11-23, Windows/Python 3.13, offscreen Qt):
+822 passed, 1 skipped, 289 deselected, 1,040 unittest subtests passed, and 2
+`pypdf` deprecation warnings in 1,375.94 seconds. The single skip is the
+candidate-EXE copyright check; no extracted launcher path was supplied. The
+289 deselected items are not passes: Phase 4 Heritage cases are intentionally
+deferred, while source tests marked `isolated_qt` run in the selected suite
+through subprocess wrappers.
 
-Run only the complete Heritage Track suite with live per-test and per-case progress. Each matrix case reports its selection, mode, depth, or fixture
-details as soon as it finishes, while the remaining cases continue:
+Automated cross-checks for localized manual section structure (#227) and Windows launcher copyright metadata (#299) are in `test_phase3_manual_guide_contract_227.py` and `test_launcher_windows_copyright_299.py`. To validate an extracted Windows launcher executable, set `PROGTRACK_TEST_WINDOWS_LAUNCHER` to its full path before running the #299 test; native Explorer Details verification remains in Manual Retest 3A.
+
+The default Phase 3 run excludes tests marked `phase4_heritage` and `extended_heritage`. This keeps Heritage Track renderer, layout, cache, and interaction checks with the Phase 4 overhaul while retaining shared Core/backend contracts such as #156. Deselected Heritage tests remain discoverable and are not counted as passing. The Phase 3 completion run is the standard command above; do not run the Heritage suite as part of this gate. Phase 4 can run the marked set explicitly:
 
 ```powershell
-$heritageTests = Get-ChildItem -LiteralPath tests -Filter 'test_heritage_*.py' |
-    Select-Object -ExpandProperty FullName
-python -m pytest -s -q $heritageTests
+python -m pytest -o addopts= -m "phase4_heritage or extended_heritage" -q
 ```
 
-The Heritage suite includes the current structural contracts, the two
-vertical modes, renderer-calibrated geometry, cache/ownership boundaries,
-manual-placement precedence, collapse removal, hover-free interaction, the
-existing middle-button pan contract, and the new left-button free-space pan
-contract. Native/package acceptance remains a separate manual gate.
+Manual Retest 3A contains only native, site-specific, or human-judgment checks that automation cannot establish. Issue #325 tracks test/fixture reconciliation and the results for the Phase 3 default suite.
 
-The Qt dialog geometry test is kept as `qt_phase2b_dialog_geometry.py` and is
-run by `test_phase2b_qt_geometry_isolated.py` in a separate process to avoid
-platform-specific PyQt teardown crashes when combined with headless plotting.
-
-The synthetic 1,000-node Heritage router check is a non-blocking performance
-benchmark. Its 20-second target is a reference metric, not a functional test
-gate: routing completeness and validity still fail normally, while a slower
-valid result is reported as XFAIL. Run it by itself when measuring changes:
+Run only the complete Heritage Track suite with live per-test and per-case progress. Each matrix case reports its selection, mode, depth, or fixture details as soon as it finishes, while the remaining cases continue:
 
 ```powershell
-python -m pytest -q -m non_blocking_benchmark tests/test_heritage_track_stability_step1.py
+python -m pytest -o addopts= -m "phase4_heritage or extended_heritage" -s -q
+```
+
+The Heritage suite includes renderer/layout behavior and the current plugin
+contracts. Run it as Phase 4 work; this task does not report Heritage results.
+Native/package acceptance remains a separate manual gate.
+
+Qt tests that trigger platform-specific native widget lifetime crashes are run
+by small pytest wrappers in separate processes; the wrapped tests still run and
+fail the default suite if they fail. This currently applies to the dialog
+geometry check (`qt_phase2b_dialog_geometry.py`), the #309 effective-status
+dialog regression, and the SVG palette/rendering module. The isolation contains
+Qt teardown/state contamination; it does not skip or xfail the checks.
+
+The synthetic 1,000-node Heritage router check is a non-blocking performance
+benchmark reserved for Phase 4. Its 20-second target is a reference metric,
+not a functional test gate. Run it by itself when measuring changes:
+
+```powershell
+python -m pytest -o addopts= -q -m non_blocking_benchmark tests/test_heritage_track_stability_step1.py
 ```
 
 The branding audit remains a script because it creates and visually evaluates
@@ -52,6 +65,8 @@ sheet, and the JSON evaluation are written to exactly one folder:
 `%USERPROFILE%\Desktop\test`. The script does not create timestamped sibling
 folders on the Desktop; repeated runs reuse/overwrite the same named artifacts.
 
-The former JSON/0.1.2 tests are preserved outside this discovery path in
-`Q:\GitHub\Issue Tracker\Tests\archive\legacy_tests_0.1.2` for historical
-reference only.
+The pre-reconciliation suite snapshot is preserved locally under
+`archive/test_suite_pre_325_2026-11-23`; see its README and SHA-256 manifest.
+The Phase 3 coverage map is `phase3_coverage_matrix.md`; it maps the live
+0.3.0 issue set to current automated files or the specific remaining manual /
+external acceptance.

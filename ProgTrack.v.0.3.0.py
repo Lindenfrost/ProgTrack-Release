@@ -14324,7 +14324,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         new_project: str,
         old_severity: str = "",
         new_severity: str = "",
-        *, mirror_to_medi: bool = True,
+        *, mirror_to_medi: bool = True, old_project_id: Optional[str] = None,
     ) -> None:
         """Write a project assignment change to Medi Track and Reports daily data."""
         if old_project == new_project:
@@ -14380,7 +14380,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             hist = animal_data.setdefault('project_history', [])
             hist.append({
                 'project':    old_project,
-                'project_id': animal_data.get('project_id', ''),
+                # Local SQLite saves acknowledge the new assignment before
+                # the queued follow-up writes project history. Preserve the
+                # prior stable ID captured when the change was scheduled.
+                'project_id': old_project_id if old_project_id is not None
+                              else animal_data.get('project_id', ''),
                 'entry_date': old_entry_date,
                 'leave_date': today_fmt,
                 'severity':   old_sv or '',
@@ -14573,6 +14577,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         creating: bool = False,
     ) -> None:
         animal_record = self.animals.get(animal_name, {})
+        old_project_id = str(animal_record.get("project_id") or "").strip()
         if new_project and not assignment_allowed(
             self._load_project_records_for_visibility(),
             new_project,
@@ -14624,6 +14629,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._log_death_change(animal_name, mirror_to_medi=False)
             self._log_project_change(
                 animal_name, old_project, new_project, old_severity, new_severity, mirror_to_medi=False,
+                old_project_id=old_project_id,
             )
             self._log_severity_change(
                 animal_name, old_project, new_project, old_severity, new_severity, creating, mirror_to_medi=False,
@@ -14642,7 +14648,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     animal_name, old_project, new_project)
                 self._log_death_change(animal_name)
                 self._log_project_change(
-                    animal_name, old_project, new_project, old_severity, new_severity)
+                    animal_name, old_project, new_project, old_severity, new_severity,
+                    old_project_id=old_project_id)
                 self._save_trace("post_animal_project_updates.run.project_log.after", animal_name=animal_name)
                 self._log_severity_change(
                     animal_name, old_project, new_project, old_severity, new_severity, creating)

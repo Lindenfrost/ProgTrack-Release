@@ -6,6 +6,7 @@ import os
 import json
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -92,6 +93,10 @@ class Issue250InstitutionUnitsTest(unittest.TestCase):
 
     def _dialog(self):
         backend = SimpleNamespace(records=_Records(), audit=_Audit())
+        backend.adapter = SimpleNamespace(
+            dialect="sqlite",
+            transaction=lambda **_kwargs: nullcontext(),
+        )
         backend.records.audit = backend.audit
         units = CanonicalUnitService(backend)
         return backend, units, InstitutionBrandingDialog(

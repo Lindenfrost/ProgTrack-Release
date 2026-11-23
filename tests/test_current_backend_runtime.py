@@ -371,20 +371,31 @@ class CurrentBackendRuntimeTests(unittest.TestCase):
             submitted['animals']['animal-a']['events'][0].pop('recorded_role')
             submitted['animals']['animal-a']['events'][0]['event_type'] = 'blood DRAW'
             statements = []
-            connect = backend.adapter._connect
+            sqlite_adapter = backend.adapter._adapter
+            connect = sqlite_adapter._connect
             def traced_connect():
                 connection = connect()
                 connection.set_trace_callback(statements.append)
                 return connection
-            with patch.object(backend.adapter, '_connect', side_effect=traced_connect), \
+            with patch.object(sqlite_adapter, '_connect', side_effect=traced_connect), \
                  patch.object(backend.animals, 'load_snapshot', side_effect=AssertionError('extra reload')):
                 ack = backend.save_core_data(submitted)
             self.assertEqual(ack.acknowledged_records['animals', 'animal-a'], accepted)
             self.assertEqual(ack.audit_before, {'animals': {}, 'archived_animals': {}})
             self.assertEqual(ack.audit_after, ack.audit_before)
-            self.assertFalse(any(s.lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))
-                                 for s in statements), statements)
-            self.assertEqual(sum(s.lstrip().upper().startswith('SELECT') for s in statements), 4)
+            # Canonicalization recognizes that the submitted event is already
+            # represented by the stored record. The receipt can be returned
+            # from the current reconciliation transaction, without an extra
+            # full snapshot reload or writes.
+            self.assertFalse(any(
+                statement.lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))
+                for statement in statements
+            ), statements)
+            for table in ('ANIMALS', 'MEASUREMENTS', 'ANIMAL_EVENTS', 'DOMAIN_RECORDS', 'INSTALLATION'):
+                reads = [statement for statement in statements
+                         if statement.lstrip().upper().startswith('SELECT')
+                         and f'FROM {table}' in statement.upper()]
+                self.assertEqual(len(reads), 1, (table, statements))
             submitted['animals']['animal-a']['events'][0]['datum'] = '2026-12-01'
             self.assertEqual(ack.acknowledged_records['animals', 'animal-a'], accepted,
                              'receipt evidence must be detached from subsequent edits')
@@ -414,12 +425,13 @@ class CurrentBackendRuntimeTests(unittest.TestCase):
                     if kwargs.get('write'):
                         raise RuntimeError('commit failed')
             rejected = copy.deepcopy(after)
-            rejected['animals']['animal-a']['genotype'] = 'must rollback'
+            rejected['animals']['animal-a']['gewicht'][0]['wert'] = 99.0
             with patch.object(backend.adapter, 'transaction', fail_commit):
                 with self.assertRaisesRegex(RuntimeError, 'commit failed'):
                     backend.save_core_data(rejected)
             self.assertEqual(backend.load_core_data(), after)
-            connect = backend.adapter._connect
+            sqlite_adapter = backend.adapter._adapter
+            connect = sqlite_adapter._connect
             class CommitFailure:
                 def __init__(self):
                     self.connection = connect()
@@ -427,7 +439,7 @@ class CurrentBackendRuntimeTests(unittest.TestCase):
                     return getattr(self.connection, name)
                 def commit(self):
                     raise RuntimeError('sqlite commit failed')
-            with patch.object(backend.adapter, '_connect', side_effect=CommitFailure):
+            with patch.object(sqlite_adapter, '_connect', side_effect=CommitFailure):
                 with self.assertRaisesRegex(RuntimeError, 'sqlite commit failed'):
                     backend.save_core_data(rejected)
             self.assertEqual(backend.load_core_data(), after)
@@ -629,16 +641,19 @@ class CurrentBackendRuntimeTests(unittest.TestCase):
 
             before = state()
             statements: list[str] = []
-            connect = backend.adapter._connect
+            sqlite_adapter = backend.adapter._adapter
+            connect = sqlite_adapter._connect
 
             def traced_connect():
                 connection = connect()
                 connection.set_trace_callback(statements.append)
                 return connection
 
-            backend.adapter._connect = traced_connect
-            backend.save_core_data(snapshot)
-            backend.adapter._connect = connect
+            sqlite_adapter._connect = traced_connect
+            try:
+                backend.save_core_data(snapshot)
+            finally:
+                sqlite_adapter._connect = connect
 
             self.assertEqual(state(), before)
             self.assertFalse(any(
