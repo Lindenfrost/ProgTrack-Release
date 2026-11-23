@@ -2,14 +2,14 @@
 
 Use this file only after the automated test reconciliation in #325 has produced a reviewed candidate and a complete, recorded suite run. It contains only checks that require a real supported workstation, the institution's live network/storage setup, or human review of the displayed result. Do not repeat schema, service, dialog, authorization, migration, seed, or failure-injection tests here; those belong in the automated suite and its coverage map.
 
-Record the exact candidate commit and each package SHA-256 before starting. Do not use production data. Screenshots are not requested.
+Record the exact candidate commit, both archive filenames, and each SHA-256 before starting. Take the final Windows and Linux archives only from `Q:\GitHub\Release Packages`; do not use `.new` files, staging folders, or unpacked build output. Verify each handoff copy against its sidecar checksum. Test these exact archives and publish the same files if accepted; do not rebuild between testing and publication. Do not use production data. Screenshots are not requested.
 
 ## Required setup
 
 The test coordinator or local IT prepares these disposable items before the checks:
 
 - One Windows client and one clean Linux Mint 22.3 Zena x86_64 workstation for the final platform check. If Linux Mint is unavailable, mark that test SKIP; Ubuntu is not a substitute for the #49 target.
-- The exact final Windows and Linux candidate artifacts, with their hashes and setup notes.
+- The release-ready Windows and Linux archives and `.sha256` sidecars from `Q:\GitHub\Release Packages`, with setup notes. Each archive must contain the complete application payload and intended seed.
 - A prepared disposable local SQLite demo database for the Linux visual/PDF check; do not use this check to retest #241 first-start seed behavior.
 - A real reachable Shared PostgreSQL test database with the candidate schema, IT-approved TLS settings, and no implicit seed data.
 - An institution-managed document share mounted on both clients. The clients may use different local paths to the same logical share.
@@ -21,7 +21,7 @@ For each test, leave the checkbox empty until the result is known. Replace it wi
 
 ## P3A-01 — Windows Explorer shows the launcher copyright (#299)
 
-1. In File Explorer, open the extracted final Windows candidate folder named in the handoff.
+1. In File Explorer, open the extracted final Windows candidate folder from the archive named above.
 2. Right-click Launcher.exe and select Properties, then open Details.
 3. Confirm the Copyright field is exactly: Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH.
 4. Record the displayed File version and Product version without changing them; compare them with the candidate handoff.
@@ -31,7 +31,7 @@ For each test, leave the checkbox empty until the result is known. Replace it wi
 
 ## P3A-02 — Clean native Linux Mint launch and visible output (#49)
 
-1. On the clean Linux Mint 22.3 workstation, extract the exact Linux candidate artifact identified in the handoff. Do not install Python, Qt, fonts, libpq, or ProgTrack dependencies.
+1. On the clean Linux Mint 22.3 workstation, extract the exact Linux archive named above after confirming its copied file matches the SHA-256 from `Q:\GitHub\Release Packages`. Do not install Python, Qt, fonts, libpq, or ProgTrack dependencies.
 2. Ask IT to place the extracted application folder under a read-only location. Open the file manager and start the ProgTrack launcher from the extracted package.
 3. Close ProgTrack. Start it once from the desktop/application menu while the working directory is your home folder.
 4. Confirm both launches reach the normal application window without a dependency-install prompt, missing-library error, or attempt to write into the read-only application folder.
