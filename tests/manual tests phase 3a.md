@@ -14,6 +14,7 @@ The test coordinator or local IT prepares these disposable items before the chec
 - A real reachable Shared PostgreSQL test database with the candidate schema, IT-approved TLS settings, and no implicit seed data.
 - An institution-managed document share mounted on both clients. The clients may use different local paths to the same logical share.
 - Two distinct application accounts, Test-User-A and Test-User-B, both with the same User role, Test Unit, and the existing job permissions needed to open Edit Animal for Test-Animal. Test-User-A will also be used to check same-account session replacement.
+- One disposable Test-Lord account for the #327 startup/recovery check, plus two disposable OS-user profiles on the Windows client: one with no previous Lord login and one used to log in as Test-Lord while the server is reachable. Do not use a production account.
 - One disposable animal named Test-Animal in the PostgreSQL database. Create it through ProgTrack if it is absent; do not seed PostgreSQL from the bundled demo data.
 
 For each test, leave the checkbox empty until the result is known. Replace it with [v] for PASS or [x] for FAIL; write a reason after SKIP. Add observations on the following # line. Do not mark a test PASS when a prerequisite was unavailable.
@@ -65,4 +66,28 @@ Use the separate Windows and Linux clients, the prepared PostgreSQL database, Te
 5. Record any translation that is unclear, incorrect, or inconsistent with the candidate. A structural presence check is automated; this human review is for meaning and usability.
 
 [ ] P3A-04 Result: PASS / FAIL / SKIP
+# Comments:
+
+## P3A-05 — Login-first startup and restricted Shared recovery (#327)
+
+Use the disposable Windows client, Test-Lord, Test-User-A, the reachable test database, and both prepared OS-user profiles. Keep the known-good Shared PostgreSQL profile so it can be restored after the negative cases.
+
+1. Sign in to the Windows OS profile that has never logged into ProgTrack as Test-Lord. Make the configured test server unavailable, then launch ProgTrack. Confirm the locked window shows the localized unavailable-server warning and Exit only. There must be no login, animal data, main window, menu, retry, or connection-settings action.
+2. Restore the server. In the separate OS profile reserved for Test-Lord, launch ProgTrack, sign in live as Test-Lord, and close ProgTrack normally. Make the configured server unavailable again and relaunch from that same OS profile. Confirm the gate offers only client-local Shared connection settings, **Erneut verbinden**, and Exit. Open the settings dialog and confirm there is no **Test connection**, discovery/refresh, database creation, archive/unarchive, backup, restore, delete, transfer, or schema-migration action.
+3. Restore the server and select **Erneut verbinden**. Confirm the client returns to live Master Track login and shows no application window or data before successful authentication. Sign in as Test-User-A; confirm only one login window was visible and the application opens only after login.
+4. While online as Test-Lord, temporarily save a test profile with rejected PostgreSQL runtime credentials, close ProgTrack, and relaunch. Confirm the server-rejected-authentication state does not show Lord recovery controls. Restore the known-good credentials after this check. If an approved incompatible-schema clone is available, launch against that clone and confirm the client remains locked without an unauthenticated migration action.
+5. Sign in to the working test database as Test-User-A. Choose **Program → Master Track → Logout** and cancel the required login prompt. Confirm ProgTrack closes instead of leaving a hidden, unauthenticated process. Relaunch and sign in successfully; confirm the application is usable only after authentication.
+
+[ ] P3A-05 Result: PASS / FAIL / SKIP
+# Comments:
+
+## P3A-06 — Attribute fresh Windows fault dumps (#327)
+
+Run only if WinDbg is available and the test coordinator can start exactly one ProgTrack process under it. The historic unlabelled dumps cannot be attributed retroactively.
+
+1. Close all ProgTrack/Launcher processes. Start the exact candidate under WinDbg and confirm its new `launcher_fault_<PID>.log` begins with a timestamp, PID, launcher version, and executable path matching this process.
+2. Configure first-chance breaks for `0x8001010d` and `0x80040155`. Reproduce connection, login, invalid credentials, cancellation, and successful login one step at a time. Record the PID, thread, first/second-chance state, native faulting module/interface, native stack, and UI step for each break. Continue execution and record whether the process terminates.
+3. Correlate debugger observations with the PID-specific fault log. If no exception occurs, record that; do not claim the historical 13 dumps were explained. If WinDbg or the native stack is unavailable, mark SKIP with the reason.
+
+[ ] P3A-06 Result: PASS / FAIL / SKIP
 # Comments:

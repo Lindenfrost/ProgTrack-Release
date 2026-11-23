@@ -15,6 +15,10 @@ class BackendUnavailableError(BackendConfigurationError):
     """The configured Shared PostgreSQL connection is unavailable."""
 
 
+class BackendAuthenticationRejectedError(BackendConfigurationError):
+    """PostgreSQL is reachable but rejected its configured login credentials."""
+
+
 class BackendSchemaError(BackendConfigurationError):
     """Core schema initialization or compatibility verification failed."""
 

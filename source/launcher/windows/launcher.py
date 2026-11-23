@@ -24,10 +24,32 @@ LAUNCHER_VERSION = "0.2.1"
 LAUNCHER_BUILD_NOTE = "Portable launcher for ProgTrack."
 LOG_DIR_NAME = "logs"
 ERROR_LOG_NAME = "launcher_error.log"
-FAULT_LOG_NAME = "launcher_fault.log"
+FAULT_LOG_PREFIX = "launcher_fault"
 MPL_CONFIG_DIR_NAME = "matplotlib_cache"
 _FAULT_LOG_HANDLE = None
 _LOG_DIR = None
+
+
+def _fault_log_path(log_dir: Path, pid: int | None = None) -> Path:
+    """Use one fault log per process so concurrent clients cannot mix dumps."""
+    process_id = os.getpid() if pid is None else int(pid)
+    return log_dir / f"{FAULT_LOG_PREFIX}_{process_id}.log"
+
+
+def _write_fault_log_header(handle, *, pid: int | None = None) -> None:
+    process_id = os.getpid() if pid is None else int(pid)
+    executable = (
+        Path(sys.executable).resolve()
+        if getattr(sys, "frozen", False)
+        else Path(__file__).resolve()
+    )
+    handle.write(
+        "[launcher-start] "
+        f"started_at={datetime.now().astimezone().isoformat(timespec='seconds')} "
+        f"pid={process_id} launcher_version={LAUNCHER_VERSION} "
+        f"executable={executable}\n"
+    )
+    handle.flush()
 
 
 def _directory_is_writable(path: Path) -> bool:
@@ -98,7 +120,10 @@ def setup_environment() -> Path:
         _LOG_DIR = runtime_state_dir
 
     try:
-        _FAULT_LOG_HANDLE = (_LOG_DIR / FAULT_LOG_NAME).open("a", encoding="utf-8")
+        _FAULT_LOG_HANDLE = _fault_log_path(_LOG_DIR).open(
+            "a", encoding="utf-8", buffering=1
+        )
+        _write_fault_log_header(_FAULT_LOG_HANDLE)
         faulthandler.enable(file=_FAULT_LOG_HANDLE, all_threads=True)
     except OSError:
         pass

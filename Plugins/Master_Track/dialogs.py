@@ -331,7 +331,7 @@ class LoginDialog(QDialog):
     LOCKOUT_SECONDS = 60
 
     def __init__(self, parent: Optional[QWidget], messages: Dict[str, Any],
-                 user_db: UserDB):
+                 user_db: UserDB, *, allow_guest: bool = True):
         # Do not give the login dialog a QWidget parent: Windows otherwise
         # treats it as an owned dialog and may omit it from the taskbar.  The
         # application-modal setting below still blocks the main window.
@@ -379,6 +379,7 @@ class LoginDialog(QDialog):
 
         guest_btn = QPushButton(_msg(messages, "master_track.login.guest", "Continue as Guest"))
         guest_btn.clicked.connect(self.reject)
+        guest_btn.setVisible(bool(allow_guest))
         btn_row.addWidget(guest_btn)
         layout.addLayout(btn_row)
 

@@ -18,7 +18,7 @@ from .shared_connection import SharedAttempt
 
 
 class SharedRecoveryDialog(QDialog):
-    def __init__(self, configuration, messages, parent):
+    def __init__(self, configuration, messages, parent, *, allow_test=False):
         super().__init__(parent)
         self.configuration = configuration
         self.messages = messages
@@ -79,6 +79,8 @@ class SharedRecoveryDialog(QDialog):
         self.test = self.buttons.addButton(
             self.text("backend.shared.test", "Test connection"), QDialogButtonBox.ButtonRole.ActionRole
         )
+        self.test.setVisible(bool(allow_test))
+        self._allow_test = bool(allow_test)
         self.buttons.accepted.connect(self._save)
         self.buttons.rejected.connect(self.reject)
         self.test.clicked.connect(self._test)
@@ -129,6 +131,8 @@ class SharedRecoveryDialog(QDialog):
         self.accept()
 
     def _test(self):
+        if not self._allow_test:
+            return
         settings = self._settings()
         prompt = BackendAdminAuthorizationDialog(
             self, text=self.text, action=self.text("backend.shared.test", "Test connection"),

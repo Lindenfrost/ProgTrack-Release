@@ -21,12 +21,37 @@ from ..runtime_paths import (
     RuntimePaths,
     validate_standalone_sqlite_path,
 )
-from .errors import BackendConfigurationError, StandaloneLockError
+from .errors import (
+    BackendAuthenticationRejectedError,
+    BackendConfigurationError,
+    BackendUnavailableError,
+    StandaloneLockError,
+)
 from .migration import migrate_core_schema, require_shared_schema, require_shared_transaction
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def shared_connection_error(error: BaseException) -> BackendConfigurationError:
+    """Distinguish an unreachable server from a server that rejected login."""
+    sqlstate = getattr(error, "sqlstate", None) or getattr(
+        getattr(error, "diag", None), "sqlstate", None
+    )
+    if isinstance(sqlstate, str) and sqlstate.startswith("28"):
+        return BackendAuthenticationRejectedError(
+            "The configured PostgreSQL server rejected its database credentials."
+        )
+    if isinstance(sqlstate, str) and sqlstate and not (
+        sqlstate.startswith("08") or sqlstate in {"57P01", "57P02", "57P03"}
+    ):
+        return BackendConfigurationError(
+            "PostgreSQL rejected the configured database connection."
+        )
+    return BackendUnavailableError(
+        "Cannot connect to the configured Shared PostgreSQL backend."
+    )
 
 
 class StandaloneProcessLock:
@@ -275,10 +300,8 @@ class PostgreSQLAdapter:
         try:
             with connect(dsn, connect_timeout=connect_timeout):
                 pass
-        except OperationalError:
-            from .errors import BackendUnavailableError
-
-            raise BackendUnavailableError("Cannot connect to the configured Shared PostgreSQL backend.") from None
+        except OperationalError as error:
+            raise shared_connection_error(error) from None
         self.pool = ConnectionPool(
             conninfo=dsn,
             min_size=min_size,
@@ -290,14 +313,12 @@ class PostgreSQLAdapter:
         )
         try:
             self.pool.open(wait=True, timeout=15)
-        except (PoolTimeout, OperationalError):
-            from .errors import BackendUnavailableError
-
+        except (PoolTimeout, OperationalError) as error:
             self.pool.close()
+            if isinstance(error, OperationalError):
+                raise shared_connection_error(error) from None
             raise BackendUnavailableError(
-                "Cannot connect to the configured Shared PostgreSQL backend. "
-                "Check the server address, database, credentials, TLS policy, "
-                "and network availability."
+                "Cannot obtain a connection to the configured Shared PostgreSQL backend."
             ) from None
         except BaseException:
             self.pool.close()

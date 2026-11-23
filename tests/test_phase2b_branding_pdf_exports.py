@@ -40,11 +40,7 @@ NAVY = (18, 58, 99, 255)
 TEAL = (0, 166, 166, 255)
 ORANGE = (244, 166, 65, 255)
 _PDFTOPPM_WRAPPER = shutil.which("pdftoppm.cmd") or shutil.which("pdftoppm")
-if _PDFTOPPM_WRAPPER:
-    _deps_root = Path(_PDFTOPPM_WRAPPER).resolve().parents[2]
-    PDFTOPPM = str(_deps_root / "native" / "poppler" / "Library" / "bin" / "pdftoppm.exe")
-else:
-    PDFTOPPM = "pdftoppm"
+PDFTOPPM = _PDFTOPPM_WRAPPER or "pdftoppm"
 
 
 def make_logo() -> Path:
@@ -183,7 +179,14 @@ def run() -> dict:
     logo = make_logo()
     results = []
     with tempfile.TemporaryDirectory(prefix="progtrack-branding-") as tmp:
-        backend = ProgTrackBackend(runtime_paths(Path(tmp)), acquire_process_lock=False)
+        # This isolated SQLite export audit intentionally opts into the demo
+        # fixture because its representative PDF inputs use Denethor. Normal
+        # first-start behavior remains empty unless the user opts in.
+        backend = ProgTrackBackend(
+            runtime_paths(Path(tmp)),
+            acquire_process_lock=False,
+            choose_demo_seed=lambda: True,
+        )
         try:
             config = backend.branding.save(
                 enabled=True,

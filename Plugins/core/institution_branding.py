@@ -224,8 +224,8 @@ class InstitutionBrandingService:
 
         path = Path(pdf_path)
         reader = PdfReader(str(path))
-        writer = PdfWriter()
-        for page in reader.pages:
+        writer = PdfWriter(clone_from=reader)
+        for page in writer.pages:
             width = float(page.mediabox.width)
             height = float(page.mediabox.height)
             overlay_bytes = io.BytesIO()
@@ -309,8 +309,8 @@ class InstitutionBrandingService:
                 )
             layer.save()
             overlay_bytes.seek(0)
-            page.merge_page(PdfReader(overlay_bytes).pages[0])
-            writer.add_page(page)
+            overlay_reader = PdfReader(overlay_bytes)
+            page.merge_page(overlay_reader.pages[0])
 
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=f".{path.stem}-branding-", suffix=".pdf", dir=path.parent

@@ -4749,7 +4749,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._shared_publishing = False
             self._shared_window_closing = False
             self._shared_connection_notice = None
+            self._shared_startup_gate = None
+            self._shared_lord_status_store = None
+            self._startup_authentication_cancelled = False
+            self._startup_authentication_error = ""
+            self._authentication_gate_locked = False
             if shared_postgres:
+                from Plugins.core.local_shared_lord_status import (
+                    SharedLordStatusStore,
+                    local_user_state_root,
+                )
+
+                self._shared_lord_status_store = SharedLordStatusStore(
+                    local_user_state_root()
+                )
                 self.backend = EmptySharedBackend(RUNTIME_PATHS)
                 root = RUNTIME_PATHS.configured_managed_root
                 self._storage_client = self._create_storage_client(
@@ -4776,17 +4789,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Set up the status bar
             self.statusBar().showMessage(self.messages.get("app.initializing", "Initializing..."))
             
-            # Initialize UI components first (synchronously)
-            self._init_ui_components()
+            # Shared PostgreSQL must remain a blank, hidden window until the
+            # candidate database has authenticated the user. Standalone keeps
+            # its existing modal-login construction path.
+            if not shared_postgres:
+                self._init_ui_components()
             
             # Load settings and data in background
             self._load_settings_async()
 
-            # Load data in background
-            self._load_data_async()
-            if self._shared_connection_is_pending():
-                self._build_shared_connection_notice()
-            if self._storage_client is not None:
+            # Shared projections are loaded only after user authentication.
+            if not shared_postgres and not self._startup_authentication_cancelled:
+                self._load_data_async()
+            if self._storage_client is not None and not shared_postgres:
                 from Plugins.core.managed_storage_notice import ManagedStorageNotice
 
                 self._storage_notice = ManagedStorageNotice(self)
@@ -4847,6 +4862,49 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         state = getattr(self, "_shared_connection_state", None)
         return state is not None and state != "connected"
 
+    def _has_server_confirmed_lord_status(self) -> bool:
+        store = getattr(self, "_shared_lord_status_store", None)
+        if store is None:
+            return False
+        try:
+            return store.load() is not None
+        except Exception:
+            logger.warning("Could not read the local Shared Lord status marker.")
+            return False
+
+    def _shared_profile_recovery_is_allowed(self) -> bool:
+        state = getattr(self, "_shared_connection_state", None)
+        if state not in {"unavailable", "configuration"}:
+            return False
+        return self._is_lord_session() or self._has_server_confirmed_lord_status()
+
+    def _sync_server_confirmed_shared_lord_status(self, account) -> None:
+        if RUNTIME_PATHS.profile is not BackendProfile.SHARED_POSTGRESQL:
+            return
+        store = getattr(self, "_shared_lord_status_store", None)
+        if store is None:
+            from Plugins.core.local_shared_lord_status import (
+                SharedLordStatusStore,
+                local_user_state_root,
+            )
+
+            store = SharedLordStatusStore(local_user_state_root())
+            self._shared_lord_status_store = store
+        try:
+            saved = store.sync_from_server_account(account)
+            if str(account.get("role") or "").casefold() == "lord" and not saved:
+                logger.warning("Could not persist the server-confirmed local Lord recovery status.")
+        except Exception:
+            logger.warning("Could not synchronize the local Shared Lord status marker.")
+
+    def _refresh_backend_settings_action(self) -> None:
+        action = getattr(self, "backend_settings_action", None)
+        if action is None:
+            return
+        visible = self._is_lord_session() or self._shared_profile_recovery_is_allowed()
+        action.setVisible(bool(visible))
+        action.setEnabled(bool(visible))
+
     def _process_startup_events(self):
         if not getattr(self, "_shared_publishing", False):
             QtWidgets.QApplication.processEvents()
@@ -4880,6 +4938,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._update_shared_connection_notice()
 
     def _update_shared_connection_notice(self):
+        recovery_allowed = self._shared_profile_recovery_is_allowed()
+        gate = getattr(self, "_shared_startup_gate", None)
+        if gate is not None:
+            detail = None
+            schema_error = getattr(self, "_shared_schema_error", None)
+            if self._shared_connection_state == "maintenance" and schema_error is not None:
+                detail = self.messages.get(
+                    f"backend.schema.maintenance.{schema_error.reason}", str(schema_error)
+                )
+            gate.set_state(
+                self._shared_connection_state, detail, recovery_allowed=recovery_allowed
+            )
         notice = getattr(self, "_shared_connection_notice", None)
         if notice is None:
             return
@@ -4895,6 +4965,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             "login": "Sign in to load Shared PostgreSQL records.",
             "unavailable": "Database not found!",
             "configuration": "Check the Shared PostgreSQL configuration.",
+            "authentication_rejected": "The PostgreSQL server rejected its configured database credentials.",
             "maintenance": "Shared PostgreSQL database maintenance is required or in progress.",
             "failed": "Shared PostgreSQL data could not be loaded.",
         }
@@ -4907,12 +4978,18 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._shared_maintenance_button.setText(
             self.messages.get("backend.schema.maintenance.title", "Database maintenance")
         )
-        self._shared_reconnect_button.setEnabled(state not in {"connecting", "loading"})
+        login_retry = state == "login_cancelled"
+        self._shared_reconnect_button.setVisible(recovery_allowed or login_retry)
+        self._shared_reconnect_button.setEnabled(recovery_allowed or login_retry)
+        self._shared_recovery_button.setVisible(recovery_allowed)
+        self._shared_recovery_button.setEnabled(recovery_allowed)
         self._shared_maintenance_button.setVisible(
             state == "maintenance" and getattr(self, "_shared_schema_error", None) is not None
             and self._shared_schema_error.reason == "incompatible"
+            and self._is_lord_session()
         )
         notice.show()
+        self._refresh_backend_settings_action()
 
     def _launch_shared_attempt(self, operation, recipient, cleanup):
         from Plugins.core.shared_connection import SharedAttempt
@@ -4939,6 +5016,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _retry_shared_connection(self, *, changed_profile=False):
         if not self._shared_connection_is_pending() or self._shared_window_closing:
+            return
+        state = self._shared_connection_state
+        if state in {"unavailable", "configuration"} and not self._shared_profile_recovery_is_allowed():
+            return
+        if state not in {
+            "waiting", "starting", "login_cancelled", "unavailable", "configuration", "maintenance"
+        }:
             return
         if self._shared_connection_state in {"connecting", "loading"} and not changed_profile:
             return
@@ -4971,11 +5055,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             raise
 
     def _shared_failure(self, error):
+        from Plugins.core.backend.errors import BackendAuthenticationRejectedError
+
         if isinstance(error, BackendUnavailableError):
             self._shared_connection_state = "unavailable"
         elif isinstance(error, BackendSchemaError):
             self._shared_schema_error = error
             self._shared_connection_state = "maintenance"
+        elif isinstance(error, BackendAuthenticationRejectedError):
+            self._shared_connection_state = "authentication_rejected"
         elif isinstance(error, (BackendConfigurationError, BackendConfigurationValidationError)):
             self._shared_connection_state = "configuration"
         else:
@@ -4983,6 +5071,33 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         logger.warning("Shared connection attempt ended in %s (%s)",
                        self._shared_connection_state, type(error).__name__)
         self._update_shared_connection_notice()
+        self._show_startup_gate()
+
+    def _show_startup_gate(self):
+        """Show the locked Shared startup surface and begin the first attempt."""
+        from Plugins.core.startup_auth_gate import SharedStartupGate
+
+        gate = self._shared_startup_gate
+        if gate is None:
+            gate = SharedStartupGate(
+                self.messages,
+                on_retry=self._retry_shared_connection,
+                on_settings=self._show_shared_recovery_configuration,
+                on_exit=self.close,
+            )
+            self._shared_startup_gate = gate
+        gate.set_messages(self.messages)
+        gate.set_state(
+            self._shared_connection_state or "waiting",
+            recovery_allowed=self._shared_profile_recovery_is_allowed(),
+        )
+        gate.show()
+        gate.raise_()
+        gate.activateWindow()
+        if self._shared_connection_state == "waiting":
+            self._shared_connection_state = "starting"
+            gate.set_state("starting")
+            QtCore.QTimer.singleShot(0, self._retry_shared_connection)
 
     def _shared_candidate_opened(self, generation, attempt, error):
         from Plugins.core.shared_connection import load_initial_projections
@@ -4998,6 +5113,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         candidate, dsn, storage, first_account = value
         self._shared_connection_state = "login"
         self._update_shared_connection_notice()
+        gate = self._shared_startup_gate
+        if gate is not None:
+            gate.hide()
         try:
             context = self._prompt_shared_candidate_login(candidate, first_account)
         except Exception as error:
@@ -5006,6 +5124,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return
         if context is None or generation != self._shared_connection_generation or self._shared_window_closing:
             self._discard_shared_candidate(candidate, context)
+            if generation == self._shared_connection_generation and not self._shared_window_closing:
+                self._shared_connection_state = "login_cancelled"
+                self._update_shared_connection_notice()
+                self._show_startup_gate()
             return
         self._shared_connection_state = "loading"
         self._update_shared_connection_notice()
@@ -5041,7 +5163,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             context = None
         if context is None:
-            dialog = LoginDialog(self, self.messages, users)
+            dialog = LoginDialog(self, self.messages, users, allow_guest=False)
             if not dialog.exec():
                 return None
             context = dialog.session_context
@@ -5060,6 +5182,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 except SessionRevokedError:
                     pass
                 return None
+            self._sync_server_confirmed_shared_lord_status(user)
         except BaseException:
             try:
                 candidate.authenticated_sessions.logout(context)
@@ -5149,9 +5272,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._shared_initial_projection = projections["core"]
             self._shared_initial_plugins = projections
             self._init_lazy_imports()
+            self._init_ui_components()
             self._init_application_state()
             if not self.master_track or not self.master_track.is_logged_in:
                 raise RuntimeError("The Shared actor could not be bound.")
+            self._ui_initialized = True
             self._apply_startup_master_state()
             self._refresh_ui_after_data_load()
         except Exception as error:
@@ -5164,8 +5289,6 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.lang = shell_language
             self._load_messages(self.lang)
             self._reset_shared_main_content()
-            self._init_lazy_imports()
-            self._init_application_state()
             self._shared_failure(error)
             return
         finally:
@@ -5176,10 +5299,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.setUpdatesEnabled(True)
         self._runtime_postgres_dsn = dsn
         self._storage_client = storage
+        self._ensure_storage_notice()
         self._start_storage_notice()
         self.master_track.start_authenticated_heartbeat()
         self.master_track._start_idle_timer()
         self._update_shared_connection_notice()
+        gate = self._shared_startup_gate
+        if gate is not None:
+            gate.accept()
+            self._shared_startup_gate = None
+        self.show()
 
     def _run_shared_schema_maintenance(self):
         error = getattr(self, "_shared_schema_error", None)
@@ -5263,7 +5392,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._load_settings()
             self._load_messages(self.lang)
             # Initialize application state and build UI (only on first load)
-            if not hasattr(self, '_ui_initialized'):
+            if (not hasattr(self, '_ui_initialized')
+                    and not self._shared_connection_is_pending()):
                 self._init_application_state()
                 self._ui_initialized = True
             self.setWindowTitle(self.messages.get("app.title", "ProgTrack"))
@@ -5275,6 +5405,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot()
     def _load_data_async(self):
         """Load data in a background thread."""
+        if getattr(self, "_startup_authentication_cancelled", False):
+            logger.info("Skipping data load because startup authentication did not complete")
+            return
+        if self._shared_connection_is_pending():
+            logger.info("Deferring data load until Shared authentication succeeds")
+            return
         try:
             self.statusBar().showMessage(self.messages.get("app.loading_data", "Loading data..."))
             QtWidgets.QApplication.processEvents()
@@ -5416,9 +5552,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             "configuration", "disabled-plugins", default=[]
         )
         disabled = set(value if isinstance(value, list) else [])
-        shared = getattr(self, "_uses_shared_leases", None)
-        if callable(shared) and shared():
-            disabled.discard("master_track")
+        disabled.discard("master_track")
         return disabled
 
     def _save_disabled_plugins(self) -> None:
@@ -7325,10 +7459,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _init_application_state(self):
         """Initialize application state and build the UI (called once during startup)."""
+        if self._shared_connection_is_pending():
+            logger.info("Deferring application construction until Shared authentication succeeds")
+            return
         # Load disabled-plugin set before menu/tab setup
         self._disabled_plugins = self._load_disabled_plugins()
-        if self._uses_shared_leases():
-            self._disabled_plugins.discard("master_track")
+        # Master Track is the mandatory authentication provider and cannot be
+        # disabled by a global or per-user plugin preference.
+        self._disabled_plugins.discard("master_track")
 
         self.plugin_diagnostics = self.plugin_manager.validate_all(
             import_entry_points=False
@@ -7343,24 +7481,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ------------------------
         # 6.9 Master_Track — authentication & permissions
         # ------------------------
-        disconnected = self._shared_connection_is_pending()
-        if disconnected:
-            self.master_track = None
-            self.has_master_track = False
-        else:
-            self._init_master_track_plugin()
+        self._init_master_track_plugin()
+        if not self.has_master_track:
+            self._startup_authentication_cancelled = True
+            self._startup_authentication_error = "Master Track authentication is unavailable."
+            logger.critical(self._startup_authentication_error)
+            return
         self.authorization = AuthorizationService(
             self.master_track,
-            disabled=("master_track" in self._disabled_plugins),
+            disabled=False,
             backend=self.backend,
-            trusted_local=(
-                not self._uses_shared_leases() and (
-                    not self.has_master_track or "master_track" in self._disabled_plugins
-                )
-            ),
+            trusted_local=False,
         )
         if self.has_master_track:
             global_disabled = self._load_disabled_plugins()
+            global_disabled.discard("master_track")
             if self._shared_initial_session is not None:
                 self.master_track.adopt_initial_session(*self._shared_initial_session)
                 session = self.master_track.load_session()
@@ -7369,20 +7504,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if session.get("language"):
                     self.lang = session["language"]
                     self._load_messages(self.lang)
-            elif "master_track" in global_disabled:
-                # MT is globally disabled – run as guest, skip login dialog
-                self.master_track._set_guest()
-                self._disabled_plugins.add("master_track")
             else:
-                # ← Queue all plugin loading AFTER a short delay so login dialog
-                #   can paint its UI first, then load plugins in the background
-                QTimer.singleShot(50, self._init_all_plugins_deferred)
+                authenticated = self.master_track.startup()
+                if authenticated is False or not self.master_track.is_logged_in:
+                    self._startup_authentication_cancelled = True
+                    logger.info("Startup authentication was cancelled or unsuccessful")
+                    return
 
-                self.master_track.startup()  # blocks here while user types
+                # Plugin loading may begin only after the mandatory login gate.
+                QTimer.singleShot(50, self._init_all_plugins_deferred)
 
                 # Apply per-user disabled plugins from session
                 session = self.master_track.load_session()
                 user_disabled = set(session.get("disabled_plugins", []))
+                user_disabled.discard("master_track")
                 if self.master_track.is_logged_in:
                     self._disabled_plugins = user_disabled
                     # Apply user's saved language preference (load messages only, UI refresh happens later)
@@ -7393,13 +7528,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         # Menu and tab construction reads the capabilities established by these
         # steps, including when authentication finishes before a queued step.
-        if disconnected:
-            self._set_empty_plugin_state()
-        else:
-            for step in range(getattr(self, "_next_plugin_step", 0), 8):
-                self._init_all_plugins_deferred(step)
-                if not self._shared_publishing:
-                    QtWidgets.QApplication.processEvents()
+        for step in range(getattr(self, "_next_plugin_step", 0), 8):
+            self._init_all_plugins_deferred(step)
+            if not self._shared_publishing:
+                QtWidgets.QApplication.processEvents()
 
         # The initial settings load precedes Master Track authentication.
         # Bind the effective style to the resulting user/Guest before UI
@@ -22032,7 +22164,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self.backend_settings_action.triggered.connect(
             self._show_backend_configuration
         )
-        self.backend_settings_action.setEnabled(self._shared_connection_is_pending() or self._is_lord_session())
+        self._refresh_backend_settings_action()
         program_menu.addAction(self.backend_settings_action)
     def _on_language_changed(self, action):
         """Handle click on Program → Language Settings (immediate reload)."""
@@ -22168,6 +22300,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             ),
         )
 
+    def _ensure_storage_notice(self) -> None:
+        if self._storage_client is None or self._storage_notice is not None:
+            return
+        from Plugins.core.managed_storage_notice import ManagedStorageNotice
+
+        self._storage_notice = ManagedStorageNotice(self)
+        self._storage_notice.set_messages(self.messages)
+        self.statusBar().addPermanentWidget(self._storage_notice, 1)
+        self._storage_notice.hide()
+        self._storage_notice_pending = True
+
     def showEvent(self, event):
         super().showEvent(event)
         if getattr(self, "_shared_connection_state", None) == "waiting":
@@ -22213,6 +22356,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._start_storage_notice()
 
     def _show_shared_recovery_configuration(self):
+        if not self._shared_profile_recovery_is_allowed():
+            return
         from Plugins.core.shared_recovery_dialog import SharedRecoveryDialog
 
         active_attempt = self._shared_connection_state in {"connecting", "loading"}
@@ -22220,7 +22365,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._new_shared_attempt()
             self._shared_connection_state = "configuration"
             self._update_shared_connection_notice()
-        dialog = SharedRecoveryDialog(BACKEND_CONFIGURATION, self.messages, self)
+        dialog = SharedRecoveryDialog(
+            BACKEND_CONFIGURATION, self.messages,
+            getattr(self, "_shared_startup_gate", None), allow_test=False,
+        )
         saved = dialog.exec()
         if saved:
             pg = BACKEND_CONFIGURATION.saved_postgresql()
@@ -22232,6 +22380,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _show_backend_configuration(self) -> None:
         if self._shared_connection_is_pending():
+            if not self._shared_profile_recovery_is_allowed():
+                return
             self._show_shared_recovery_configuration()
             return
         authorized = self._is_lord_session()
@@ -22855,13 +23005,15 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return
         currently_enabled = "master_track" not in self._disabled_plugins
         if currently_enabled:
-            # Ask to DISABLE
-            title = self.messages.get("master_track.toggle.disable_title",
-                                      "Disable Master Track")
-            msg = self.messages.get("master_track.toggle.disable_msg",
-                                    "This will disable Master Track globally for all users. "
-                                    "All permission checks and login requirements will be "
-                                    "suspended.\n\nDo you want to disable Master Track?")
+            QMessageBox.information(
+                self,
+                self.messages.get("master_track.toggle.required_title", "Master Track is required"),
+                self.messages.get(
+                    "master_track.toggle.required",
+                    "Master Track cannot be disabled because ProgTrack requires an authenticated account.",
+                ),
+            )
+            return
         else:
             # Ask to ENABLE
             title = self.messages.get("master_track.toggle.enable_title",
@@ -22906,10 +23058,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     @_batched_ui_update
     def _do_master_logout(self):
-        """Log out, save session, revert to Guest mode, refresh UI."""
+        """Log out only as part of a locked transition back to authentication."""
         mt = getattr(self, 'master_track', None)
         if not mt:
             return
+        self._authentication_gate_locked = True
+        self.hide()
         # Save session state before logout
         self._save_master_session()
         self._prepare_reports_for_user_context_change()
@@ -22919,61 +23073,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # The complete UI state was persisted above; do not write the same
         # per-user session record a second time from MasterTrackPlugin.logout.
         mt.logout(save_session=False)
-        shared = getattr(self, "_uses_shared_leases", None)
-        if callable(shared) and shared():
-            self._load_persistence()
         self._clear_session_animal_selection()
-        # Revert to global disabled_plugins (Guest defaults)
-        self._disabled_plugins = self._load_disabled_plugins()
-        # Bind Guest defaults before language/menu callbacks can paint.
-        self._reload_user_style_settings()
-        # Reload language from global settings (guest mode doesn't persist changes)
-        guest_lang = self._get_global_language_fallback()
-        if guest_lang != self.lang:
-            self.lang = guest_lang
-            self._load_messages(self.lang)
-            self._refresh_ui()
-        else:
-            self._setup_menus()
-        # Reset display checkboxes to defaults for guest mode
-        if hasattr(self, 'chk_prog'):
-            self.chk_prog.setChecked(True)
-        if hasattr(self, 'chk_weight'):
-            self.chk_weight.setChecked(True)
-        if hasattr(self, 'chk_events'):
-            self.chk_events.setChecked(True)
-        # Reset per-role Events checkboxes to defaults for guest mode
-        if hasattr(self, 'chk_events_offspring'):
-            self.chk_events_offspring.setChecked(True)
-        if hasattr(self, 'chk_events_breeding'):
-            self.chk_events_breeding.setChecked(True)
-        if hasattr(self, 'chk_events_experimental'):
-            self.chk_events_experimental.setChecked(True)
-        self._apply_all_plugin_states()
-        self._refresh_list(update_tab_visibility=True)
-        self._on_select()
-        self._refresh_master_menu_states()
-        self._update_master_status_bar()
-        self._apply_master_button_states()
-        pt = getattr(self, 'projects_plugin', None)
-        if pt and callable(getattr(pt, 'on_user_login', None)):
-            pt.on_user_login()
-        ptw = getattr(self, 'project_track_widget', None)
-        if ptw and callable(getattr(ptw, 'on_user_login', None)):
-            ptw.on_user_login()
-        ntw = getattr(self, 'network_track_window', None)
-        if ntw:
-            ntw.refresh_master_name()
+        self._do_master_login(required=True)
 
     @_batched_ui_update
-    def _do_master_login(self):
+    def _do_master_login(self, _checked=False, *, required=False):
         """Show login dialog, apply user session on success."""
         mt = getattr(self, 'master_track', None)
         if not mt:
             return
         if getattr(mt, "is_logged_in", False):
             self._save_master_session()
-        if mt.login_interactive(save_session=False):
+        login_options = {"save_session": False}
+        if required:
+            login_options["required"] = True
+        if mt.login_interactive(**login_options):
             shared = getattr(self, "_uses_shared_leases", None)
             if callable(shared) and shared():
                 self._load_persistence()
@@ -22989,12 +23103,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Apply the incoming snapshot without redrawing the outgoing view.
             self._reload_user_style_settings()
             self._disabled_plugins = set(session.get("disabled_plugins", []))
+            self._disabled_plugins.discard("master_track")
             # Merge global master_track toggle (it is a global setting, not per-user)
             global_disabled = self._load_disabled_plugins()
-            if "master_track" in global_disabled:
-                self._disabled_plugins.add("master_track")
-            else:
-                self._disabled_plugins.discard("master_track")
+            global_disabled.discard("master_track")
             self._apply_all_plugin_states()
             self._restore_session_ui(session)
             # Reload language from user session if set
@@ -23030,6 +23142,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                                      "You are in read-only mode. Changes will NOT be "
                                      "saved until the other instance is closed."),
                     "warning")
+            if getattr(self, "_authentication_gate_locked", False):
+                self._authentication_gate_locked = False
+                self.show()
+        elif required:
+            self.close()
 
     def _show_master_quick_menu(self):
         """Show a quick context menu when the status bar label is clicked."""
@@ -23479,7 +23596,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             can_style = mt.can("core.style_settings") if mt else True
             self.style_settings_action.setEnabled(can_style)
         if hasattr(self, "backend_settings_action"):
-            self.backend_settings_action.setEnabled(self._is_lord_session())
+            self._refresh_backend_settings_action()
 
     def _freeze_dialog_inputs(self, root) -> None:
         """Disable all interactive input widgets inside *root* (read-only mode).
@@ -29162,37 +29279,25 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _on_authenticated_session_revoked(self, *, reason=""):
         master = self.master_track
         modal = QApplication.activeModalWidget()
+        self._authentication_gate_locked = True
+        if reason == "user_account_changed":
+            store = getattr(self, "_shared_lord_status_store", None)
+            if store is not None:
+                store.clear()
+        self.hide()
         master._set_guest()
-        if self._uses_shared_leases():
-            self._load_persistence()
-            self._refresh_list(update_tab_visibility=True)
-        self._refresh_master_menu_states()
-        self._update_master_status_bar()
-        self._apply_master_button_states()
         if modal is not None and modal is not self:
-            dismiss_buttons = {
-                dialog_button
-                for box in modal.findChildren(QtWidgets.QDialogButtonBox)
-                for dialog_button in box.buttons()
-                if box.buttonRole(dialog_button) == QtWidgets.QDialogButtonBox.ButtonRole.RejectRole
-            }
-            for editor in modal.findChildren(QtWidgets.QWidget):
-                if isinstance(editor, (QtWidgets.QLineEdit, QtWidgets.QAbstractSpinBox,
-                                       QtWidgets.QPlainTextEdit, QtWidgets.QTextEdit)):
-                    editor.setReadOnly(True)
-                elif isinstance(editor, (QtWidgets.QComboBox, QtWidgets.QAbstractButton)):
-                    if editor not in dismiss_buttons and not editor.property("sessionDismiss"):
-                        editor.setEnabled(False)
+            if isinstance(modal, QtWidgets.QDialog):
+                modal.reject()
+            else:
+                modal.hide()
         key = "master_track.session_account_changed" if reason == "user_account_changed" else "master_track.session_revoked"
         QMessageBox.information(
-            modal or self,
+            None,
             self.messages.get("master_track.login.title", "Login"),
             self.messages.get(key, "Your session ended. Sign in again."),
         )
-        if isinstance(modal, QtWidgets.QDialog):
-            modal.finished.connect(lambda _: QTimer.singleShot(0, self._do_master_login))
-        else:
-            QTimer.singleShot(0, self._do_master_login)
+        QTimer.singleShot(0, lambda: self._do_master_login(required=True))
 
     # ------------------------
     # 7.24 Print Data Dialog
@@ -30744,12 +30849,42 @@ if __name__ == '__main__':
         if RUNTIME_PATHS.profile.value != "shared_postgresql":
             QMessageBox.critical(None, "Database initialization", str(schema_error))
             sys.exit(1)
-        if not _offer_startup_schema_maintenance(schema_error):
-            sys.exit(1)
-        try:
-            win = ProgTrackApp()
-        except BackendSchemaError as retry_error:
-            QMessageBox.warning(None, "Database maintenance", str(retry_error))
-            sys.exit(1)
-    win.show()
+        # A schema incompatibility cannot authorize maintenance before an
+        # ordinary ProgTrack account has authenticated. Keep startup locked.
+        startup_messages = ProgTrackApp._startup_messages_for_system_locale()
+        QMessageBox.critical(
+            None,
+            startup_messages.get("backend.schema.maintenance.title", "Database maintenance"),
+            startup_messages.get(
+                "backend.schema.maintenance.incompatible",
+                "The database is incompatible with this application version. "
+                "ProgTrack remains locked; contact an authorized administrator.",
+            ),
+        )
+        sys.exit(1)
+    if getattr(win, "_startup_authentication_cancelled", False):
+        error = getattr(win, "_startup_authentication_error", "")
+        if error:
+            QMessageBox.critical(
+                None,
+                win.messages.get("master_track.login.title", "Sign in to ProgTrack"),
+                error,
+            )
+        win.close()
+        sys.exit(1)
+    if win._shared_connection_is_pending():
+        win._show_startup_gate()
+    elif not getattr(getattr(win, "master_track", None), "is_logged_in", False):
+        QMessageBox.critical(
+            None,
+            win.messages.get("master_track.login.title", "Sign in to ProgTrack"),
+            win.messages.get(
+                "master_track.login.required",
+                "An authenticated Master Track account is required to start ProgTrack.",
+            ),
+        )
+        win.close()
+        sys.exit(1)
+    else:
+        win.show()
     sys.exit(app.exec())

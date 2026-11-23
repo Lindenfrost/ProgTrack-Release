@@ -64,6 +64,7 @@ def test_229_connection_failure_enters_database_unavailable_state():
     harness = SimpleNamespace(
         _shared_connection_state="connecting",
         _update_shared_connection_notice=lambda: transitions.append("updated"),
+        _show_startup_gate=lambda: transitions.append("gate"),
     )
 
     module.ProgTrackApp._shared_failure(
@@ -71,4 +72,4 @@ def test_229_connection_failure_enters_database_unavailable_state():
     )
 
     assert harness._shared_connection_state == "unavailable"
-    assert transitions == ["updated"]
+    assert transitions == ["updated", "gate"]

@@ -5036,11 +5036,19 @@ class CoreRepairTests(unittest.TestCase):
             renderer._do_master_login()
         self.assertEqual(renderer.custom_event_styles, style)
         self.assertEqual(len(frames), count)
-        # Real session ended, but suppress external audit/idle services in this fixture.
-        with patch.object(master, 'logout', side_effect=lambda **_k: master._set_guest()):
+        # Logout must return to required authentication instead of exposing Guest UI.
+        relogin_calls = []
+        def required_login(**kwargs):
+            relogin_calls.append(kwargs)
+            master._current_username = 'style-a'
+            return True
+        with patch.object(master, 'logout', side_effect=lambda **_k: master._set_guest()), \
+             patch.object(master, 'login_interactive', side_effect=required_login):
             renderer._do_master_logout()
         self.assertEqual(self._303_artist_colors(renderer),
-                         [to_rgba('#ead700'), to_rgba('#2feade'), to_rgba('#0000ff')])
+                         [to_rgba(value) for value in expected['style-a']])
+        self.assertEqual(relogin_calls, [{'save_session': False, 'required': True}])
+        self.assertFalse(renderer._authentication_gate_locked)
         for username, saved in sessions.items():
             self.assertEqual(master.session_mgr.load(username), saved)
 

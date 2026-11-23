@@ -335,12 +335,11 @@ class MasterTrackPlugin:
     # Login / Logout
     # ------------------------------------------------------------------
 
-    def startup(self) -> None:
-        """Run on app startup: show first-start wizard or login dialog."""
-        if not self.login_interactive(save_session=False):
-            self._set_guest()
+    def startup(self) -> bool:
+        """Require an authenticated account before entering the application."""
+        return self.login_interactive(save_session=False, required=True)
 
-    def _prompt_authentication(self):
+    def _prompt_authentication(self, *, required: bool = False):
         from .dialogs import CreateLordDialog, LoginDialog
 
         messages = self.app.messages
@@ -351,7 +350,9 @@ class MasterTrackPlugin:
                 return setup.session_context
             if not setup.completed_elsewhere:
                 return None
-        login = LoginDialog(self.app, messages, self.user_db)
+        login = LoginDialog(
+            self.app, messages, self.user_db, allow_guest=not required
+        )
         return login.session_context if login.exec() else None
 
     def _login_as(self, username: str, *, session_context=None) -> None:
@@ -399,6 +400,11 @@ class MasterTrackPlugin:
         self.session_context = session_context
         self._current_username = username
         self._current_role = user["role"]
+        sync_recovery_status = getattr(
+            getattr(self, "app", None), "_sync_server_confirmed_shared_lord_status", None
+        )
+        if callable(sync_recovery_status):
+            sync_recovery_status(user)
         if session_context is not None:
             self._settings = self._load_settings()
             self._load_job_bundles()
@@ -455,12 +461,13 @@ class MasterTrackPlugin:
         else:
             self._set_guest()
 
-    def login_interactive(self, *, save_session: bool = True) -> bool:
+    def login_interactive(self, *, save_session: bool = True,
+                          required: bool = False) -> bool:
         """Prompt for authentication and adopt the committed session."""
         if self.is_logged_in and save_session:
             self.save_session()
 
-        session = self._prompt_authentication()
+        session = self._prompt_authentication(required=required)
         if session is None:
             return False
         self._end_authenticated_session()
