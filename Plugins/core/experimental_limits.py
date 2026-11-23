@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.2 or newer.
 """Canonical built-in experimental-limit defaults.
 
 The application historically kept the values used by statistics and the

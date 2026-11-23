@@ -16,6 +16,7 @@ VSVersionInfo(
         '040904B0',
         [
           StringStruct('CompanyName', 'Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH'),
+          StringStruct('LegalCopyright', 'Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH'),
           StringStruct('FileDescription', 'ProgTrack Launcher'),
           StringStruct('FileVersion', '0.2.1.0'),
           StringStruct('InternalName', 'Launcher'),

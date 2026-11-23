@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.3 or newer.
 """Pure biological-parent eligibility, shared by pickers and commands."""
 from calendar import isleap
 from .project_periods import _day, project_at_date, has_project_membership

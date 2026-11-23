@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Master Track permission definitions and resolution logic.
@@ -369,6 +369,8 @@ def resolve_effective_permissions(
     jobs: Iterable[str],
     granted: Iterable[str],
     revoked: Iterable[str],
+    *,
+    job_bundles=None,
 ) -> Set[str]:
     """Return the effective permission set for the given user state.
 
@@ -390,9 +392,10 @@ def resolve_effective_permissions(
 
     baseline = set(ROLE_BASELINES.get(role or ROLE_GUEST, _GUEST_BASELINE))
     job_perms: Set[str] = set()
+    bundles = JOB_BUNDLES if job_bundles is None else job_bundles
     for job in jobs:
         job_perms |= {
-            permission for permission in JOB_BUNDLES.get(job, set())
+            permission for permission in bundles.get(job, set())
             if permission in ALL_PERMISSIONS
         }
 

@@ -33,7 +33,7 @@ class HeritageManifestLocalizationContractTest(unittest.TestCase):
     def test_manifest_matches_current_runtime_contract(self):
         manifest = json.loads((HERITAGE / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["version"], "0.2.3")
-        self.assertEqual(manifest["min_progtrack_version"], "0.2.3")
+        self.assertEqual(manifest["min_progtrack_version"], "0.3.0")
         self.assertEqual(
             set(manifest["permissions"]),
             {

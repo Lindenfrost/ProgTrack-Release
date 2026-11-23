@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.1 or newer.
 # Module: shared animal status display helpers.
 
 from __future__ import annotations

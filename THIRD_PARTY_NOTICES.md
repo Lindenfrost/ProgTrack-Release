@@ -1,4 +1,4 @@
-# Third-Party Notices
+# Windows third-party notices
 
 This binary launcher bundle contains third-party runtime components collected by
 PyInstaller. Those components are not authored by the ProgTrack Launcher
@@ -11,10 +11,10 @@ from the runtime bundle are stored in `third_party_licenses/`.
 | Component | Version in build | License / notice |
 | --- | ---: | --- |
 | Python runtime | 3.13.3 build environment | Python Software Foundation License |
-| SQLite runtime used by Python `sqlite3` | Bundled with the Windows launcher | Public domain; see `LICENSE_SQLITE.txt` |
+| SQLite runtime used by Python `sqlite3` | 3.49.1 | Public domain; see `third_party_licenses/LICENSE_SQLITE.txt` |
 | PyInstaller bootloader/runtime | 6.14.1 | GPLv2-or-later with PyInstaller bootloader exception |
 | PyQt6 | 6.7.1 | GPL v3 |
-| PyQt6-sip | 13.11.1 | SIP license |
+| PyQt6-sip | 13.11.1 | See `third_party_licenses/LICENSE_PYQT6_SIP.txt` |
 | PyQt6-Qt6 | 6.7.3 | Qt license terms |
 | Qt runtime libraries bundled via PyQt6 | Qt 6.x | GPL/LGPL/commercial Qt terms; this GPL bundle uses GPL-compatible redistribution |
 | matplotlib | 3.10.0 | Matplotlib license |
@@ -37,24 +37,23 @@ from the runtime bundle are stored in `third_party_licenses/`.
 | psycopg-pool | 3.3.1 | GNU LGPL v3 only; see `LICENSE_PSYCOPG_POOL.txt` |
 | psycopg-binary Windows implementation | 3.3.4 | GNU LGPL v3 only; self-contained wheel used for the portable Windows build |
 | PostgreSQL libpq bundled by psycopg-binary | 18.3 | PostgreSQL License; see `LICENSE_POSTGRESQL.txt` |
-| OpenSSL libraries bundled by psycopg-binary | OpenSSL 3.x | Apache License 2.0; see `LICENSE_OPENSSL.txt` |
+| OpenSSL libraries bundled by psycopg-binary | 3.6.2 | Apache License 2.0; see `third_party_licenses/LICENSE_OPENSSL.txt` |
+| OpenSSL libraries in `_internal/` | 3.0.16 and 3.6.5 | Apache License 2.0; see `third_party_licenses/LICENSE_OPENSSL.txt` |
 | pypdf | 6.14.2 | BSD 3-Clause; see `LICENSE_PYPDF.txt` |
 | DejaVu fonts | bundled with matplotlib | DejaVu font license |
 | STIX fonts | bundled with matplotlib | STIX font license |
 | Computer Modern / BaKoMa TrueType fonts | bundled with matplotlib | Copyright (C) 1994 Basil K. Malyshev, BaKoMa Fonts Collection; see `third_party_licenses/LICENSE_COMPUTER_MODERN_BAKOMA.txt` and Linux `fonts/LICENSE_NOTICE.md` |
 | ReportLab bundled fonts | bundled with reportlab | See ReportLab font license files |
 
-## Backend build variants
+## Frozen Windows runtime
 
 The Windows portable build forces `PSYCOPG_IMPL=binary` and verifies the
-runtime implementation and libpq version. Managed Linux builds use the pinned
-`psycopg[c]` variant with distribution-provided libpq/OpenSSL and must generate
-their component inventory from the actual package artifact.
+runtime implementation and libpq version. The packaged
+`component_inventory.json` records file paths, SHA-256 hashes and available
+native version resources for the final staged files. The runtime also contains
+Microsoft Visual C++ runtime and Universal CRT libraries, libffi, and Qt
+third-party native code. Exact upstream attribution for those components
+requires reconciliation before release.
 
-## Important Release Note
-
-This bundle was rebuilt from the repository-local pip virtual environment, not
-from the user's Conda environment. The copied `_internal/` runtime no longer
-contains Intel MKL DLLs.
-
-This notice file is practical release documentation, not legal advice.
+The Linux archive includes its own notice generated from its pinned runtime and
+wheel contents.

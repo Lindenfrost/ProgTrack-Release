@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: see release metadata.
 # Module: Heritage Track main plugin implementation.
@@ -7225,8 +7225,9 @@ class HeritageTrackPlugin:
         self.app = app
         self.messages = getattr(app, "messages", {}) or {}
         self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        self.store = HeritageStore(self.plugin_dir, app.backend)
-        self.store.load()
+        self.store = HeritageStore(self.plugin_dir, app.backend, session=self._shared_session)
+        initial = getattr(app, "_shared_initial_plugins", None)
+        self.store.load(initial=initial["heritage"] if initial is not None else None)
         self._engine_cache = PedigreeEngineCache()
         self._render_cache = RenderCacheRegistry()
         self._store_flush_scheduled = False
@@ -7350,6 +7351,16 @@ class HeritageTrackPlugin:
     def on_user_logout(self) -> None:
         """End the Heritage session and discard session-only dummies."""
         self.on_tab_hidden()
+        if getattr(getattr(self.app.backend, "adapter", None), "dialect", "") == "postgresql":
+            self.store.reset_read_scope()
+            self._active_store_snapshot = None
+            self._active_core_snapshot = None
+            self._active_backend_revision = None
+            self._engine_cache.invalidate()
+            self._render_cache.clear()
+
+    def _shared_session(self):
+        return getattr(getattr(self.app, "master_track", None), "session_context", None)
 
     @staticmethod
     def _copy_core_records(app: Any) -> Dict[str, Dict[str, Any]]:
@@ -7387,7 +7398,10 @@ class HeritageTrackPlugin:
         loader = getattr(backend, "load_core_data", None)
         if callable(loader):
             try:
-                snapshot = loader()
+                if getattr(getattr(backend, "adapter", None), "dialect", "") == "postgresql":
+                    snapshot = loader(session=self._shared_session())
+                else:
+                    snapshot = loader()
                 if isinstance(snapshot, dict):
                     records: Dict[str, Dict[str, Any]] = {}
                     found_section = False

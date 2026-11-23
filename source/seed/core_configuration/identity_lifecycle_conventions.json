@@ -1,0 +1,97 @@
+{
+  "animal_id_pattern": "{species}_{year2}_{sequence:04d}_{sex}_{name}_{origin}",
+  "animal_id_components": [
+    "species",
+    "year_short",
+    "count_year",
+    "sex",
+    "name",
+    "origin"
+  ],
+  "yearly_sequences": {
+    "60": 2,
+    "63": 2,
+    "66": 2,
+    "69": 2,
+    "72": 2,
+    "75": 2,
+    "78": 2,
+    "81": 2,
+    "84": 2,
+    "87": 2,
+    "90": 2,
+    "93": 2,
+    "96": 2,
+    "98": 2,
+    "99": 3,
+    "00": 5,
+    "01": 4,
+    "02": 12,
+    "03": 2,
+    "04": 11,
+    "05": 11,
+    "06": 8,
+    "07": 9,
+    "08": 3,
+    "10": 12,
+    "11": 9,
+    "12": 3,
+    "14": 18,
+    "15": 7,
+    "16": 2,
+    "17": 14,
+    "18": 13,
+    "19": 1,
+    "20": 20,
+    "21": 4,
+    "22": 8,
+    "23": 10,
+    "24": 4,
+    "26": 6
+  },
+  "absolute_sequence": 227,
+  "experiment_exit_reasons": [
+    "§4 Abs. 3 TierSchG – Organentnahme",
+    "§7 Abs. 2 TierSchG – Abbruchkriterien erfüllt",
+    "§7 Abs. 2 TierSchG – geplantes Versuchsende erreicht",
+    "§7 Abs. 2 TierSchG – im Versuch verstorben",
+    "§7 Abs. 2 TierSchG – tierärztliche Indikation",
+    "Totgeburt"
+  ],
+  "death_causes": [
+    "Euthanasie",
+    "Verstorben"
+  ],
+  "departure_reasons": [
+    "Abgabe",
+    "Verlegung",
+    "Sonstiges"
+  ],
+  "handover_recipients": [
+    "TUM"
+  ],
+  "animal_origins": [
+    "Aulë",
+    "DPZ",
+    "Iluvatar",
+    "Morgoth"
+  ],
+  "species": [
+    "Callitrix jacchus",
+    "Macaca mulatta",
+    "Macaca fascicularis",
+    "Papio hamadryas",
+    "Papio hamadryas anubis",
+    "Unknown species",
+    "Mus musculus"
+  ],
+  "genotypes": {
+    "Callitrix jacchus": [
+      "WT/WT",
+      "WT/H-",
+      "H-/H-",
+      "OTOF-/WT",
+      "OTOF-/OTOF-"
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Flow Track embryo-flow visualization widget.
@@ -99,6 +99,7 @@ class FlowTrackWidget:
         self._settings_store = BackendJsonStore(
             parent_app.backend, "configuration", "flow-track"
         )
+        self._shared_snapshot = None
         
         # Access Qt modules via parent_app LazyLoader
         QtWidgets = parent_app.QtWidgets
@@ -472,10 +473,18 @@ class FlowTrackWidget:
     def _load_flow_track_data(self):
         """Load Flow Track records from the configured backend (3.0 schema)."""
         try:
-            data = self._data_store.load({
-                "version": "3.0",
-                "manual_data": {},
-            })
+            if self._shared():
+                from copy import deepcopy
+                from Plugins.core.backend.shared_flow import load_shared_flow
+
+                session = self._session()
+                if session is None:
+                    data, revision = {"version": "3.0", "manual_data": {}}, 0
+                else:
+                    data, revision = load_shared_flow(self.parent_app.backend, session)
+                self._shared_snapshot = session, deepcopy(data), revision
+            else:
+                data = self._data_store.load({"version": "3.0", "manual_data": {}})
             
             version = data.get('version', '1.0')
             if version != '3.0':
@@ -504,6 +513,13 @@ class FlowTrackWidget:
                 'transfers_by_id': {},
                 'total_embryo_count': 0
             }
+
+    def _shared(self):
+        enabled = getattr(self.parent_app, "_uses_shared_leases", None)
+        return bool(callable(enabled) and enabled())
+
+    def _session(self):
+        return getattr(getattr(self.parent_app, "master_track", None), "session_context", None)
     
     def _validate_data(self) -> tuple[bool, str]:
         """Validate data before saving (Flow_Track 3.0 section 11 - hard-blocking validations).
@@ -568,6 +584,40 @@ class FlowTrackWidget:
         if hasattr(self.parent_app, '_show_permission_denied'):
             self.parent_app._show_permission_denied()
 
+    def _flow_edit_lease(self, ipids):
+        leases = getattr(self.parent_app, "_foreign_animal_leases", {})
+        return next((leases[ipid] for ipid in sorted(ipids) if ipid in leases), None)
+
+    def _flow_lease_text(self, lease):
+        return self.messages.get("core.animal_lease.foreign", "This animal is being edited by {owner}.").format(
+            owner=lease.get("owner_display") or lease.get("owner_login") or "",
+        )
+
+    def _apply_flow_dialog_lease(self, layout, ipids, close_button):
+        lease = self._flow_edit_lease(ipids)
+        if lease is None:
+            return
+        QtWidgets = self.parent_app.QtWidgets
+        stack = [layout]
+        while stack:
+            container = stack.pop()
+            for index in range(container.count()):
+                item = container.itemAt(index)
+                if item.layout() is not None:
+                    stack.append(item.layout())
+                if item.widget() is not None:
+                    widget = item.widget()
+                    controls = [widget, *widget.findChildren(QtWidgets.QWidget)]
+                    for control in controls:
+                        if control is not close_button and isinstance(control, (
+                            QtWidgets.QLineEdit, QtWidgets.QTextEdit, QtWidgets.QComboBox,
+                            QtWidgets.QAbstractSpinBox, QtWidgets.QPushButton, QtWidgets.QCheckBox,
+                        )):
+                            control.setEnabled(False)
+        status = QtWidgets.QLabel(self._flow_lease_text(lease))
+        status.setWordWrap(True)
+        layout.insertWidget(0, status)
+
     def _save_flow_track_data(self):
         """Save Flow Track records to the configured backend (3.0 schema with validations)."""
         if not self._can('edit'):
@@ -593,7 +643,10 @@ class FlowTrackWidget:
         }
         
         try:
-            self._data_store.save(data)
+            if self._shared():
+                self._save_shared_flow(data)
+            else:
+                self._data_store.save(data)
             logger.info("Flow Track data saved through backend (v3.0)")
         except Exception as e:
             logger.error(f"Failed to save Flow Track records to backend: {e}")
@@ -603,6 +656,31 @@ class FlowTrackWidget:
                 self.messages.get("flow_track.error.save_failed.title", "Save Error"),
                 self.messages.get("flow_track.error.save_failed.message", f"Failed to save: {e}")
             )
+
+    def _save_shared_flow(self, data):
+        from contextlib import ExitStack
+        from copy import deepcopy
+        from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+        from Plugins.core.backend.shared_flow import changed_flow_animals, save_shared_flow
+
+        previous = self._shared_snapshot
+        session = self._session()
+        if previous is None or session is None or previous[0] != session:
+            raise PermissionDeniedError("Reload Flow Track after signing in.")
+        _, original, revision = previous
+        try:
+            with ExitStack() as releases:
+                leases = {}
+                _, animals = changed_flow_animals(original, data)
+                for ipid in sorted(animals):
+                    owner = object()
+                    leases[ipid] = self.parent_app._hold_shared_animal_lease(ipid, owner, verify=True)
+                    releases.callback(self.parent_app._release_shared_animal_lease, ipid, owner)
+                next_revision = save_shared_flow(self.parent_app.backend, session, original, data, revision, leases)
+        except SessionRevokedError:
+            self.parent_app.master_track.handle_session_revoked()
+            raise
+        self._shared_snapshot = session, deepcopy(data), next_revision
     
     def _is_embryo_id_unique(self, embryo_id: str, exclude_transfer_id: str = None, exclude_embryo_id: str = None) -> bool:
         """Check if embryo_id is globally unique across all transfers (v3.0 hard requirement).
@@ -1529,6 +1607,10 @@ class FlowTrackWidget:
     
     def _redraw_canvas(self):
         """Redraw the entire canvas with current data."""
+        if self._shared():
+            previous = self._shared_snapshot
+            if previous is None or previous[0] != self._session():
+                self._load_flow_track_data()
         self._cancel_canvas_gesture()
         self._clear_hover_annotation(redraw=False)
         # Check if database has any animals at all
@@ -1686,6 +1768,8 @@ class FlowTrackWidget:
                     animal_record,
                     getattr(self.parent_app, "animal_role_registry", None),
                 )
+                if self._flow_edit_lease({animal_name}):
+                    color = '#d7d7d7'
             
             # Draw node (clip_on=False allows drawing beyond axis limits)
             artist, = self.ax.plot(x, y, 'o', markersize=12, 
@@ -3643,6 +3727,8 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
+        ipids = {animal_name}
+        self._apply_flow_dialog_lease(layout, ipids, cancel_btn)
         self._set_scrollable_dialog_layout(dialog, layout)
         
         # Show dialog and save data
@@ -4162,6 +4248,8 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
+        ipids = {animal_name}
+        self._apply_flow_dialog_lease(layout, ipids, cancel_btn)
         self._set_scrollable_dialog_layout(dialog, layout)
         
         # Show dialog and save data
@@ -4466,6 +4554,8 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
+        ipids = {animal_name}
+        self._apply_flow_dialog_lease(layout, ipids, cancel_btn)
         self._set_scrollable_dialog_layout(dialog, layout)
         
         # Show dialog and save data
@@ -4822,6 +4912,10 @@ class FlowTrackWidget:
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
         
+        from Plugins.core.backend.shared_flow import flow_record_animals
+
+        ipids = flow_record_animals(("transfers_by_id", transfer_id), transfer_data)
+        self._apply_flow_dialog_lease(layout, ipids, cancel_btn)
         self._set_scrollable_dialog_layout(dialog, layout)
         
         # Show dialog
@@ -5405,6 +5499,9 @@ class FlowTrackWidget:
                 
                 # Build tooltip with statistics
                 tooltip_lines = [animal_name]
+                lease = self._flow_edit_lease({animal_name})
+                if lease:
+                    tooltip_lines.append(self._flow_lease_text(lease))
                 
                 # Add role-specific statistics
                 if role == Role.SPENDER.value:

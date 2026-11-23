@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Typed backend errors shared by SQLite and PostgreSQL."""
 
 
@@ -7,6 +9,18 @@ class BackendError(RuntimeError):
 
 class BackendConfigurationError(BackendError):
     pass
+
+
+class BackendUnavailableError(BackendConfigurationError):
+    """The configured Shared PostgreSQL connection is unavailable."""
+
+
+class BackendSchemaError(BackendConfigurationError):
+    """Core schema initialization or compatibility verification failed."""
+
+    def __init__(self, message: str, *, reason: str = "incompatible"):
+        super().__init__(message)
+        self.reason = reason
 
 
 class StandaloneLockError(BackendConfigurationError):
@@ -39,3 +53,19 @@ class LockConflictError(ConflictError):
 
 class PermissionDeniedError(BackendError):
     pass
+
+
+class AuthenticationError(PermissionDeniedError):
+    """The supplied credentials did not authenticate an active account."""
+
+
+class SessionRevokedError(PermissionDeniedError):
+    """The authenticated session has expired or has been replaced."""
+
+    def __init__(self, message="The authentication session is no longer valid.", *, reason=""):
+        super().__init__(message)
+        self.reason = reason
+
+
+class FirstAccountUnavailableError(ConflictError):
+    """Initial account creation has already completed."""

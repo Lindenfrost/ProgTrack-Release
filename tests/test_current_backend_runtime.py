@@ -195,8 +195,12 @@ class CurrentBackendRuntimeTests(unittest.TestCase):
                 event_type=f'test_{kind}_{mode}_{int(mirror)}', kind=kind, render_mode=mode,
                 default_maximum=5, mirror_in_medical_history=mirror))
                 for kind in ('counting', 'limiting') for mode in ('line', 'symbol') for mirror in (False, True)]
+            session = backend.authenticated_sessions.create_first_account("core-test-admin", "Core-246-test-only!")
+            backend.core_configuration.setup(session)
             registry = RoleBlockPresetRegistry(backend)
-            registry.save_presets([], event_definitions=definitions)
+            preset_revision = registry.save_presets(
+                [], event_definitions=definitions, session=session, expected_revision=1,
+            )
             changed = backend.load_core_data()
             for definition in definitions:
                 changed['animals']['animal-a']['events'].append(dict(event_id=definition['event_type'],
@@ -206,7 +210,7 @@ class CurrentBackendRuntimeTests(unittest.TestCase):
             expected = {d['event_type'] for d in definitions if d['mirror_in_medical_history']}
             self.assertEqual({e['status_type'] for e in originals}, expected)
             # Actual registry retirement/detachment cannot cancel annotations.
-            registry.save_presets([], event_definitions=[])
+            registry.save_presets([], event_definitions=[], session=session, expected_revision=preset_revision)
             changed = backend.load_core_data()
             for event in changed['animals']['animal-a']['events']:
                 if event['event_id'] in expected:
@@ -264,10 +268,15 @@ class CurrentBackendRuntimeTests(unittest.TestCase):
             bootstrap['animals']['animal-a']['events'].append(
                 dict(event_id='historical321', event_type='custom_321', datum='2019-01-01'))
             backend.save_core_data(bootstrap)
+            session = backend.authenticated_sessions.create_first_account("core-test-admin", "Core-246-test-only!")
+            backend.core_configuration.setup(session)
             def flag(value, revision):
                 definition = normalize_event_definition(dict(name='Test Clinical', event_type='custom_321',
                     kind='counting', mirror_in_medical_history=value, revision=revision))
-                backend.records.put('configuration', 'role-block-presets', {'event_definitions': [definition]})
+                backend.core_configuration.save_roles(
+                    session, {"role-block-presets": {"presets": [], "event_definitions": [definition]}},
+                    {"role-block-presets": revision},
+                )
             def save(mutate):
                 snapshot = backend.load_core_data()
                 mutate(snapshot['animals']['animal-a']['events'])
@@ -438,16 +447,17 @@ class CurrentBackendRuntimeTests(unittest.TestCase):
             self.assertEqual(accepted['recorded_role'], 'Offspring')
             self.assertNotEqual(accepted['recorded_role'], 'None')
 
-    def open_backend(self, directory: str):
+    def open_backend(self, directory: str, *, choose_demo_seed=None):
         backend = ProgTrackBackend(
-            runtime_paths(Path(directory)), acquire_process_lock=False
+            runtime_paths(Path(directory)), acquire_process_lock=False,
+            choose_demo_seed=choose_demo_seed,
         )
         self.addCleanup(backend.close)
         return backend
 
     def test_seed_is_loaded_into_the_backend(self):
         with tempfile.TemporaryDirectory() as directory:
-            backend = self.open_backend(directory)
+            backend = self.open_backend(directory, choose_demo_seed=lambda: True)
             snapshot = backend.load_core_data()
             self.assertGreater(len(snapshot.get("animals", {})), 0)
             self.assertNotEqual(snapshot.get("animals"), {})
@@ -825,10 +835,12 @@ class CurrentBackendRuntimeTests(unittest.TestCase):
     def test_role_configuration_is_backend_owned(self):
         with tempfile.TemporaryDirectory() as directory:
             backend = self.open_backend(directory)
+            session = backend.authenticated_sessions.create_first_account("core-test-admin", "Core-246-test-only!")
+            backend.core_configuration.setup(session)
             registry = AnimalRoleRegistry(backend)
             self.assertTrue(registry.roles())
             custom = registry.make_custom_role("Current test role", "role_partner")
-            registry.save_roles(registry.roles() + [custom])
+            registry.save_roles(registry.roles() + [custom], session=session, expected_revision=1)
             reloaded = AnimalRoleRegistry(backend)
             self.assertIn("Current test role", [role["label"] for role in reloaded.roles()])
 

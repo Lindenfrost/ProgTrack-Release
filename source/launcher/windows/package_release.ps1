@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.2.2",
+    [string]$Version = "0.3.0",
     [string]$Commit = "HEAD",
     [string]$RuntimeDirectory = (Join-Path $PSScriptRoot "dist\ProgTrack_small"),
     [string]$OutputDirectory = (Join-Path $PSScriptRoot "release")
@@ -108,6 +108,7 @@ $payloadPaths = @(
     "LICENSE",
     "LICENSE_NOTICE.md",
     "THIRD_PARTY_NOTICES.md",
+    "release_inventory.json",
     "Username + 123456 password.png"
 )
 
@@ -119,8 +120,6 @@ Expand-Archive -LiteralPath $payloadArchive -DestinationPath $packageRoot -Force
 
 Copy-Item -LiteralPath (Join-Path $runtime "Launcher.exe") -Destination $packageRoot
 Copy-Item -LiteralPath (Join-Path $runtime "_internal") -Destination $packageRoot -Recurse
-Copy-Item -LiteralPath (Join-Path $runtime "component_inventory.json") -Destination $packageRoot
-
 foreach ($excludedRuntimePath in @(
     (Join-Path $packageRoot "_internal\logs"),
     (Join-Path $packageRoot "_internal\matplotlib_cache"),
@@ -128,6 +127,54 @@ foreach ($excludedRuntimePath in @(
 )) {
     Remove-GeneratedPath -Path $excludedRuntimePath
 }
+
+$inventory = Get-Content -Raw -LiteralPath (Join-Path $runtime "component_inventory.json") | ConvertFrom-Json
+if (-not $inventory.valid -or $inventory.psycopg_implementation -ne "binary" -or
+    @($inventory.python_runtime_families).Count -ne 1 -or $inventory.python_runtime_families[0] -ne $runtimeAbi) {
+    throw "Frozen runtime inventory validation failed."
+}
+$frozenFiles = @{}
+foreach ($entry in $inventory.files) {
+    $frozenFiles.Add($entry.path, $entry)
+}
+$inventory.files = @(
+    Get-ChildItem -LiteralPath $packageRoot -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
+        $relative = $_.FullName.Substring($packageRoot.Length + 1).Replace("\", "/")
+        $fileHash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        $entry = [ordered]@{path = $relative; bytes = $_.Length; sha256 = $fileHash}
+        if ($relative -eq "Launcher.exe" -or $relative.StartsWith("_internal/")) {
+            $expected = $frozenFiles[$relative]
+            if ($null -eq $expected -or $_.Length -ne $expected.bytes -or $fileHash -ne $expected.sha256) {
+                throw "Staged runtime differs from frozen build inventory: $relative"
+            }
+            $frozenFiles.Remove($relative)
+        }
+        if ($_.Extension -in ".dll", ".pyd", ".exe") {
+            $entry.native = @{
+                file_version = $_.VersionInfo.FileVersion
+                product = $_.VersionInfo.ProductName
+                company = $_.VersionInfo.CompanyName
+            }
+            if ($_.Name -match "\.(cp\d{3})-" -or $_.Name -match "\.(abi3)\.pyd$") {
+                $entry.native.python_abi = $Matches[1]
+            }
+        }
+        [pscustomobject]$entry
+    }
+)
+foreach ($missing in $frozenFiles.Keys) {
+    if ($missing -notmatch "^_internal/(logs/|matplotlib_cache/|PyQt6/Qt6/plugins/multimedia/ffmpegmediaplugin\.dll$)") {
+        throw "Staged runtime lost a frozen component: $missing"
+    }
+}
+$inventory.schema = "progtrack-component-inventory/2"
+$inventory | Add-Member -NotePropertyName source_commit -NotePropertyValue $resolvedCommit
+$inventory | Add-Member -NotePropertyName platform -NotePropertyValue "windows-x86_64"
+[IO.File]::WriteAllText(
+    (Join-Path $packageRoot "component_inventory.json"),
+    (($inventory | ConvertTo-Json -Depth 8) + "`n"),
+    [Text.UTF8Encoding]::new($false)
+)
 
 if (-not (Test-Path -LiteralPath (Join-Path $packageRoot "Resources\Seed\progtrack_seed.ptdb"))) {
     throw "The committed Phase 2 sample-data seed is missing from the release package."
@@ -152,6 +199,7 @@ foreach ($requiredEntry in @(
     "$releaseName/_internal/_sqlite3.pyd",
     "$releaseName/_internal/PyQt6/QtCore.pyd",
     "$releaseName/Resources/Seed/progtrack_seed.ptdb",
+    "$releaseName/release_inventory.json",
     "$releaseName/component_inventory.json"
 )) {
     if ($requiredEntry -notin $archiveEntries) {

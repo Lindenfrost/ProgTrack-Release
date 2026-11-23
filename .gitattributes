@@ -1,3 +1,4 @@
 # Generated seed reports are compared byte-for-byte by --check.
 Resources/Seed/integrity_report.json text eol=lf
 Resources/Seed/SCENARIO_COVERAGE.md text eol=lf
+icons/Thumbs.db export-ignore

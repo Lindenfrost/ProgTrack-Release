@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.3 or newer.
 """Narrow semantic comparisons for Core audit evidence (#315)."""
 
 from collections.abc import Mapping

@@ -1,3 +1,4 @@
+<!-- Part of: ProgTrack 0.3.0. Required ProgTrack version: 0.3.0 or newer. -->
 # Phase 3 PostgreSQL administration and IT test
 
 ProgTrack supports two backend profiles:
@@ -36,12 +37,15 @@ errors, or partial imports are rejected and rolled back.
 
 ## Managed documents
 
-In Shared PostgreSQL mode, the effective managed-document root is stored in the
-PostgreSQL installation record and resolved identically by every client. It is
-deployment-owned storage on the PostgreSQL server or its explicitly managed
-server volume, exposed through one canonical client path. There is no local
-fallback. Ordinary documents remain external files; PostgreSQL stores stable
-IDs, ownership links, relative paths, MIME type, size, and checksums.
+In Shared PostgreSQL mode, each client stores its absolute managed-document
+root and any optional storage credentials in that client's local backend
+profile. Client paths may differ, but IT must configure them to reach the same
+logical managed share. PostgreSQL stores document IDs, ownership links, safe
+relative references, MIME type, size, and checksums; it must not store or
+override a client's absolute path or storage credentials. The runtime must not
+fall back to a local directory when the configured share is unavailable.
+Ordinary documents remain external files. See #226 for the client-local path
+and credential contract and #230 for the recoverable file/database protocol.
 
 The complete PostgreSQL backup envelope contains a `pg_dump` archive and the
 managed-document payloads with checksums. Restore verifies all payloads before

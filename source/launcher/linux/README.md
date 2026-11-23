@@ -24,7 +24,7 @@ It identifies the rights holders and terms for the unchanged DejaVu, STIX, and
 Computer Modern/BaKoMa fonts; the upstream Matplotlib license files remain in
 `fonts/matplotlib/`.
 
-The Linux archive is published with ProgTrack 0.2.3 for evaluation. Native Linux
+The Linux 0.3.0 candidate contains the ProgTrack 0.3.0 application payload. Native Linux
 support remains unverified until the required clean-machine acceptance passes:
 double-click launch, Qt/font rendering, PDF/XLSX export, SQLite, PostgreSQL/TLS,
 XDG/read-only behavior, locks, and launcher diagnostics. See issue #49; this

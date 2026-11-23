@@ -267,7 +267,7 @@ def test_long_old_new_values_remain_in_exported_pdf(tmp_path: Path) -> None:
 
 
 def test_permission_checks_do_not_infer_mutations() -> None:
-    source = Path(__file__).resolve().parents[1] / "ProgTrack.v.0.2.3.py"
+    source = Path(__file__).resolve().parents[1] / "ProgTrack.v.0.3.0.py"
     text = source.read_text(encoding="utf-8")
     start = text.index("    def _master_can(self, action: str)")
     end = text.index("    def _master_can_for_unit", start)
@@ -278,7 +278,7 @@ def test_permission_checks_do_not_infer_mutations() -> None:
 
 
 def test_snapshot_diff_has_no_implicit_record_lifecycle_events() -> None:
-    source = Path(__file__).resolve().parents[1] / "ProgTrack.v.0.2.3.py"
+    source = Path(__file__).resolve().parents[1] / "ProgTrack.v.0.3.0.py"
     text = source.read_text(encoding="utf-8")
     start = text.index("    def _audit_data_snapshot_diff(")
     end = text.index("    def _init_menu_bar", start)
@@ -288,7 +288,7 @@ def test_snapshot_diff_has_no_implicit_record_lifecycle_events() -> None:
 
 
 def test_animal_lifecycle_handlers_emit_explicit_events() -> None:
-    source = Path(__file__).resolve().parents[1] / "ProgTrack.v.0.2.3.py"
+    source = Path(__file__).resolve().parents[1] / "ProgTrack.v.0.3.0.py"
     text = source.read_text(encoding="utf-8")
     for function_name in (
         "_dlg_partner",

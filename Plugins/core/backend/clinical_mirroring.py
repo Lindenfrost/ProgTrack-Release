@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Retained Core-derived medical history, atomic with the source command (#321).
 
 No widget, timer, render side effect, seed backfill or manual medical CRUD.
@@ -188,6 +190,18 @@ class ClinicalMirrorTransaction:
             if event.get('event_type') == 'departure' and event.get('event_id') not in previous_ids and not record.get('death_date'):
                 self.authorize('core.archive_animals')
                 sources.append(dict(event, datum=event.get('date')))
+        if self.context.get('shared_lifecycle_transitions'):
+            for event in record.get('lifecycle_events', []):
+                if event.get('event_type') in {'death', 'experiment_started', 'experiment_ended'} and event.get('event_id') not in previous_ids:
+                    sources.append(dict(event, datum=event.get('date')))
+            before = previous or {}
+            old, new = before.get('project'), record.get('project')
+            old_severity, new_severity = before.get('severity'), record.get('severity')
+            transition = {'old_project': old, 'project': new, 'old_severity': old_severity, 'severity': new_severity}
+            if old != new and (old or new):
+                sources.append(dict(transition, event_id='project:' + self.timestamp, event_type='project_change', datum=self.timestamp))
+            elif new and new_severity and new_severity != old_severity:
+                sources.append(dict(transition, event_id='severity:' + self.timestamp, event_type='severity_change', datum=self.timestamp))
         for source in sources:
             source.setdefault('recorded_role', str(record.get('rolle') or record.get('role_id') or ''))
             source.setdefault('project', str(record.get('project') or ''))

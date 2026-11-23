@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Projects Track main tab widget.
@@ -11,13 +11,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QBrush, QColor, QFont, QPalette
 from PyQt6.QtWidgets import (
     QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QMessageBox, QPushButton, QRadioButton, QScrollArea, QSpinBox, QSplitter,
+    QMessageBox, QPushButton, QRadioButton, QScrollArea, QSpinBox, QSplitter, QStyledItemDelegate,
     QTextEdit, QVBoxLayout, QWidget,
 )
+from Plugins.core.document_messages import complete_document_retry, document_cleanup_notice, document_error, document_retry_id
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_roles import (
     ROLE_VALUE_AMME,
@@ -419,6 +420,14 @@ def _project_role_specs(animals_config):
 
 # ── ProjectTrackTab ───────────────────────────────────────────────────────────
 
+class _ProjectListDelegate(QStyledItemDelegate):
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if index.data(Qt.ItemDataRole.UserRole + 1):
+            option.palette.setColor(QPalette.ColorRole.Highlight, QColor("#d7d7d7"))
+            option.palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#1b1b1b"))
+
+
 class ProjectTrackTab(QWidget):
     def __init__(self, app, messages, history_store, parent=None):
         super().__init__(parent)
@@ -431,7 +440,23 @@ class ProjectTrackTab(QWidget):
         self._load_data(); self._build_ui()
 
     def _load_data(self):
-        d, self._catalog_revision = self._store.load_with_revision({"version": 1, "projects": {}})
+        default = {"version": 1, "projects": {}}
+        if self._shared_backend():
+            from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+            from Plugins.core.backend.shared_projects import load_shared_project_catalog
+
+            master = getattr(self._app, "master_track", None)
+            session = getattr(master, "session_context", None)
+            d, self._catalog_revision = default, 0
+            if session is not None:
+                try:
+                    d, self._catalog_revision = load_shared_project_catalog(self._app.backend, session)
+                except SessionRevokedError:
+                    master.handle_session_revoked()
+                except PermissionDeniedError:
+                    pass
+        else:
+            d, self._catalog_revision = self._store.load_with_revision(default)
         if isinstance(d, dict):
             self._project_data = d
             self._project_data.setdefault('version', 1)
@@ -439,6 +464,10 @@ class ProjectTrackTab(QWidget):
 
     def _save_data(self):
         try:
+            if self._shared_backend():
+                name = self._current_project
+                replacement = self._project_data["projects"].get(name)
+                return self._shared_project_action(name, "update", replacement)
             self._catalog_revision = self._store.save(self._project_data, expected_revision=self._catalog_revision)
             return True
         except Exception as exc:
@@ -448,9 +477,49 @@ class ProjectTrackTab(QWidget):
             logger.warning('Project catalog save rejected: %s', exc)
             return False
 
+    def _shared_backend(self):
+        enabled = getattr(self._app, "_uses_shared_leases", None)
+        return bool(callable(enabled) and enabled())
+
+    def _shared_project_action(self, name, operation, replacement=None):
+        from Plugins.core.backend.errors import SessionRevokedError
+        from Plugins.core.backend.shared_projects import mutate_shared_project
+
+        record = self._project_data["projects"].get(name, {})
+        project_id = record.get("project_id")
+        master = getattr(self._app, "master_track", None)
+        session = getattr(master, "session_context", None)
+        if not project_id or session is None:
+            return False
+        token = None
+        try:
+            token = self._app.backend.leases.acquire("project", project_id, session=session)["token"]
+            mutate_shared_project(
+                self._app.backend, session, name, project_id, token, operation=operation,
+                replacement=replacement, expected_revision=self._catalog_revision,
+            )
+        except SessionRevokedError:
+            master.handle_session_revoked()
+            return False
+        except Exception as exc:
+            logger.warning("Project command rejected: %s", exc)
+            QMessageBox.warning(self, _m(self._messages, 'title.warning', 'Warning'), str(exc))
+            self._load_data()
+            return False
+        finally:
+            if token:
+                try:
+                    self._app.backend.leases.release("project", project_id, token, session=session)
+                except Exception:
+                    logger.warning("Could not confirm project lease release.")
+        self._load_data()
+        return True
+
     def _project_record(self, name):
         p=self._project_data['projects']
         if name not in p:
+            if self._shared_backend():
+                return {}
             create_project(self._app.backend, name, str(getattr(self._app.master_track, 'current_username', '') or ''))
             self._load_data()
             p = self._project_data['projects']
@@ -641,7 +710,18 @@ class ProjectTrackTab(QWidget):
         )
         # The compact project panel intentionally elides long list entries.
         # Keep the complete project name available without expanding the panel.
-        item.setToolTip(f'{name}\n{status_tooltip}')
+        project_id = record.get("project_id") if isinstance(record, dict) else None
+        lease = getattr(self, "_foreign_project_leases", {}).get(project_id)
+        details = [name, status_tooltip]
+        if lease:
+            details.append(self._lease_owner_text(lease))
+        item.setBackground(QBrush(QColor("#d7d7d7")) if lease else QBrush())
+        item.setData(Qt.ItemDataRole.UserRole + 1, bool(lease))
+        if lease:
+            item.setForeground(QBrush(QColor("#1b1b1b")))
+        else:
+            item.setForeground(QBrush())
+        item.setToolTip("\n".join(details))
         item.setData(
             Qt.ItemDataRole.AccessibleTextRole,
             f'{name} — {status_text}',
@@ -650,6 +730,52 @@ class ProjectTrackTab(QWidget):
             Qt.ItemDataRole.AccessibleDescriptionRole,
             item.toolTip(),
         )
+
+    def _lease_owner_text(self, lease):
+        return _m(self._messages, "project.edit_lease.foreign", "This project is being edited by {owner}.").format(
+            owner=lease.get("owner_display") or lease.get("owner_login") or "",
+        )
+
+    def apply_shared_lease_snapshot(self, leases):
+        if leases == getattr(self, "_foreign_project_leases", {}):
+            return
+        self._foreign_project_leases = leases
+        for index in range(self._list.count()):
+            item = self._list.item(index)
+            name = item.data(Qt.ItemDataRole.UserRole)
+            if name != '__sep__':
+                self._style_project_item(item, name)
+        self._adjust_shared_editor()
+
+    def _adjust_shared_editor(self):
+        record = self._project_data.get("projects", {}).get(self._current_project, {})
+        lease = getattr(self, "_foreign_project_leases", {}).get(record.get("project_id"))
+        owner = getattr(self, "_lease_owner_label", None)
+        if owner is not None:
+            owner.setText(self._lease_owner_text(lease) if lease else "")
+            owner.setVisible(bool(lease))
+        locked = getattr(self, "_lease_disabled_widgets", ())
+        if not lease:
+            for widget in locked:
+                widget.setEnabled(True)
+            self._lease_disabled_widgets = ()
+            return
+        if locked:
+            return
+        editors = [self._archive_btn, self._restore_btn, self._delete_btn]
+        editors.extend(getattr(self, attr, None) for attr in (
+            "_detail_save_btn", "_doc_upload_btn", "_doc_delete_btn", "_sop_upload_btn", "_sop_delete_btn",
+        ))
+        for index in range(self._right_v.count()):
+            panel = self._right_v.itemAt(index).widget()
+            if panel is not None:
+                editors.extend(widget for widget in panel.findChildren(QWidget) if isinstance(
+                    widget, (QLineEdit, QTextEdit, QComboBox, QCheckBox, QRadioButton, QSpinBox,
+                             UserSearchField, DynamicUserList, _RoleCountList),
+                ))
+        self._lease_disabled_widgets = tuple(widget for widget in editors if widget is not None and widget.isEnabled())
+        for widget in self._lease_disabled_widgets:
+            widget.setEnabled(False)
 
     def _can(self, perm):
         can_fn = getattr(self._app, '_master_can', None)
@@ -699,6 +825,7 @@ class ProjectTrackTab(QWidget):
         project_action_layout.addWidget(self._refresh_project_btn)
         left_v.addWidget(self._project_action_row)
         self._list=QListWidget()
+        self._list.setItemDelegate(_ProjectListDelegate(self._list))
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._list.setTextElideMode(Qt.TextElideMode.ElideRight)
         self._list.currentRowChanged.connect(self._on_list_selection)
@@ -732,6 +859,8 @@ class ProjectTrackTab(QWidget):
         self._refresh_project_list()
 
     def _clear_right(self):
+        self._lease_owner_label = None
+        self._lease_disabled_widgets = ()
         while self._right_v.count():
             item = self._right_v.takeAt(0)
             if item.widget():
@@ -820,7 +949,8 @@ class ProjectTrackTab(QWidget):
             'created_by': sig, 'created_at': now_str,
             'modified_by': sig, 'modified_at': now_str,
             'status': 'draft',
-            'summary': {}, 'iacuc': {}, 'assoc_users': {}, 'animals_config': {}})
+            'summary': {}, 'iacuc': {}, 'assoc_users': {}, 'animals_config': {}},
+            session=getattr(self._app.master_track, "session_context", None))
         self._load_data()
         pt_plugin = getattr(self._app, 'projects_plugin', None)
         if pt_plugin and hasattr(pt_plugin, '_on_refresh_clicked'):
@@ -847,6 +977,11 @@ class ProjectTrackTab(QWidget):
         if not name or self._history.is_archived(name): return
         msg = _m(self._messages, "project.tab.archive_confirm", "Archive project '{name}'?").replace('{name}', name)
         if QMessageBox.question(self, "", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes: return
+        if self._shared_backend():
+            if self._shared_project_action(name, "archive"):
+                self._history._load()
+                self._refresh_project_list()
+            return
         self._history.set_archived(name, True)
         self._audit_project_action('archive_project', name)
         self._refresh_project_list()
@@ -856,6 +991,11 @@ class ProjectTrackTab(QWidget):
         if not name or not self._history.is_archived(name): return
         msg = _m(self._messages, "project.tab.restore_confirm", "Restore project '{name}'?").replace('{name}', name)
         if QMessageBox.question(self, "", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes: return
+        if self._shared_backend():
+            if self._shared_project_action(name, "restore"):
+                self._history._load()
+                self._refresh_project_list()
+            return
         self._history.set_archived(name, False)
         self._audit_project_action('restore_project', name)
         self._refresh_project_list()
@@ -865,6 +1005,12 @@ class ProjectTrackTab(QWidget):
         if not name: return
         msg = _m(self._messages, "project.tab.delete_confirm", "Permanently delete project '{name}'?").replace('{name}', name)
         if QMessageBox.question(self, "", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes: return
+        if self._shared_backend():
+            if self._shared_project_action(name, "delete"):
+                self._history._load()
+                self._current_project = None
+                self._refresh_project_list()
+            return
         deleted = self._project_data['projects'].pop(name, None)
         if deleted:
             self._project_data.setdefault('project_tombstones', {})[deleted['project_id']] = {key: deleted[key] for key in ('project_id', 'identity_creator', 'identity_created_at', 'identity_sequence')}
@@ -890,6 +1036,9 @@ class ProjectTrackTab(QWidget):
 
         # ── Meta ──────────────────────────────────────────────────────────
         meta_w = QWidget(); meta_v = QVBoxLayout(meta_w); meta_v.setContentsMargins(0, 0, 0, 4)
+        self._lease_owner_label = QLabel(meta_w)
+        self._lease_owner_label.setWordWrap(True)
+        meta_v.addWidget(self._lease_owner_label)
         cb = (rec.get('created_by') or '').strip()
         if cb:
             l = QLabel(f"{_m(self._messages,'project.label.created_by','Created by:')} {cb}")
@@ -1199,10 +1348,12 @@ class ProjectTrackTab(QWidget):
         self._right_v.addWidget(self._save_status_label)
         save_w = QWidget(); save_h = QHBoxLayout(save_w); save_h.setContentsMargins(0, 8, 0, 8)
         save_btn = QPushButton(_m(self._messages, "project.btn.save", "Save"))
+        self._detail_save_btn = save_btn
         save_btn.setEnabled(can_manage); save_btn.clicked.connect(lambda: self._save_detail(name))
         save_h.addStretch(); save_h.addWidget(save_btn)
         self._right_v.addWidget(save_w)
         self._right_v.addStretch()
+        self._adjust_shared_editor()
 
     def _compute_animal_stats(self, name):
         ah = self._history.get_animals(name)
@@ -1467,40 +1618,93 @@ class ProjectTrackTab(QWidget):
         safe="".join(c if (c.isalnum() or c in '-_()') else '_' for c in name)
         return os.path.join(self._docs_base,safe)
 
+    def _project_document_records(self, name, kind):
+        if not self._shared_backend():
+            return self._app.backend.documents.list_for_owner(kind, name)
+        project_id = self._project_data["projects"].get(name, {}).get("project_id")
+        master = getattr(self._app, "master_track", None)
+        session = getattr(master, "session_context", None)
+        if session is None or not project_id:
+            return []
+        from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+
+        try:
+            return self._app.backend.list_shared_project_documents(session, project_id, kind)
+        except SessionRevokedError:
+            master.handle_session_revoked()
+        except PermissionDeniedError:
+            pass
+        return []
+
+    def _mutate_project_document(self, name, kind, session, *, source=None, document_id=None, **options):
+        from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+
+        master = getattr(self._app, "master_track", None)
+        project_id = self._project_data["projects"].get(name, {}).get("project_id")
+        if not project_id or session is None or session != getattr(master, "session_context", None):
+            raise PermissionDeniedError("Sign in to manage project documents.")
+        backend = self._app.backend
+        token = backend.leases.acquire("project", project_id, session=session)["token"]
+        try:
+            if source is not None:
+                return backend.add_shared_project_document(session, project_id, token, kind, source, **options)
+            return backend.delete_shared_project_document(session, project_id, token, kind, document_id, **options)
+        except SessionRevokedError:
+            master.handle_session_revoked()
+            raise
+        finally:
+            try:
+                backend.leases.release("project", project_id, token, session=session)
+            except Exception:
+                logger.warning("Could not confirm project lease release.")
+
     def _refresh_docs(self, name):
         if not hasattr(self, '_docs_list'): return
         self._docs_list.clear()
-        for record in self._app.backend.documents.list_for_owner(
-            "project-document", name
-        ):
+        for record in self._project_document_records(name, "project-document"):
             item = QListWidgetItem(str(record["original_name"]))
             item.setData(Qt.ItemDataRole.UserRole, str(record["document_id"]))
+            item.setData(Qt.ItemDataRole.UserRole + 1, record["revision"])
+            item.setData(Qt.ItemDataRole.UserRole + 2, record["sha256"])
             self._docs_list.addItem(item)
 
     def _on_doc_open(self, name, item):
         document_id = item.data(Qt.ItemDataRole.UserRole)
         try:
-            record = self._app.backend.documents.get(str(document_id))
-            path = self._app.backend.documents.payload_path(record)
+            if self._shared_backend():
+                record = next(
+                    (value for value in self._project_document_records(name, "project-document")
+                     if str(value["document_id"]) == str(document_id)), None,
+                )
+                if record is None:
+                    return
+            else:
+                record = self._app.backend.documents.get(str(document_id))
         except (KeyError, OSError):
             return
-        if not open_local_path(path):
-            logger.error('doc open failed: %s', path)
+        self._open_managed_project_payload(record)
+
+    def _open_managed_project_payload(self, record):
+        from Plugins.core.backend.errors import BackendError
+
+        try:
+            path = self._app.backend.documents.viewer_payload_path(record)
+            if not open_local_path(path):
+                raise OSError("Could not open the managed document.")
+        except (BackendError, OSError) as error:
+            QMessageBox.warning(
+                self, _m(self._messages, "title.warning", "Warning"),
+                document_error(self._messages, error),
+            )
 
     def _on_doc_upload(self, name):
         if not self._can('project.upload_document'):
             return
+        master = getattr(self._app, "master_track", None)
+        context = getattr(master, "session_context", None)
         files,_=QFileDialog.getOpenFileNames(self,_m(self._messages,"project.docs.upload_dialog","Select Documents"),"",_ALL_DOC_FILTER)
         if not files: return
-        for fp in files:
-            try:
-                self._app.backend.documents.add(
-                    fp,
-                    owner_type="project-document",
-                    owner_id=name,
-                    actor=self._current_sig(),
-                )
-            except Exception as exc: logger.error("doc upload: %s",exc)
+        self._upload_project_managed_files(name, "project-document", context, files)
         self._refresh_docs(name)
 
     def _on_doc_delete(self, name):
@@ -1508,16 +1712,14 @@ class ProjectTrackTab(QWidget):
             return
         item = self._docs_list.currentItem()
         if not item: return
+        master = getattr(self._app, "master_track", None)
+        context = getattr(master, "session_context", None)
         fname = item.text()
         tmpl = _m(self._messages, "project.docs.delete_confirm", "Delete '{name}'?")
         if QMessageBox.question(self, "", tmpl.replace('{name}', fname),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
-        try:
-            self._app.backend.documents.remove(
-                str(item.data(Qt.ItemDataRole.UserRole))
-            )
-        except Exception as exc: logger.error('doc delete: %s', exc)
+        self._delete_project_managed_file(name, "project-document", context, item)
         self._refresh_docs(name)
 
     def _sop_dir(self, name):
@@ -1527,37 +1729,37 @@ class ProjectTrackTab(QWidget):
     def _refresh_sops(self, name):
         if not hasattr(self, '_sops_list'): return
         self._sops_list.clear()
-        for record in self._app.backend.documents.list_for_owner(
-            "project-sop", name
-        ):
+        for record in self._project_document_records(name, "project-sop"):
             item = QListWidgetItem(str(record["original_name"]))
             item.setData(Qt.ItemDataRole.UserRole, str(record["document_id"]))
+            item.setData(Qt.ItemDataRole.UserRole + 1, record["revision"])
+            item.setData(Qt.ItemDataRole.UserRole + 2, record["sha256"])
             self._sops_list.addItem(item)
 
     def _on_sop_open(self, name, item):
         document_id = item.data(Qt.ItemDataRole.UserRole)
         try:
-            record = self._app.backend.documents.get(str(document_id))
-            path = self._app.backend.documents.payload_path(record)
+            if self._shared_backend():
+                record = next(
+                    (value for value in self._project_document_records(name, "project-sop")
+                     if str(value["document_id"]) == str(document_id)), None,
+                )
+                if record is None:
+                    return
+            else:
+                record = self._app.backend.documents.get(str(document_id))
         except (KeyError, OSError):
             return
-        if not open_local_path(path):
-            logger.error('sop open failed: %s', path)
+        self._open_managed_project_payload(record)
 
     def _on_sop_upload(self, name):
         if not self._can('project.upload_sop'):
             return
+        master = getattr(self._app, "master_track", None)
+        context = getattr(master, "session_context", None)
         files,_=QFileDialog.getOpenFileNames(self,_m(self._messages,"project.sops.upload_dialog","Select SOPs"),"",_ALL_DOC_FILTER)
         if not files: return
-        for fp in files:
-            try:
-                self._app.backend.documents.add(
-                    fp,
-                    owner_type="project-sop",
-                    owner_id=name,
-                    actor=self._current_sig(),
-                )
-            except Exception as exc: logger.error("sop upload: %s",exc)
+        self._upload_project_managed_files(name, "project-sop", context, files)
         self._refresh_sops(name)
 
     def _on_sop_delete(self, name):
@@ -1565,17 +1767,51 @@ class ProjectTrackTab(QWidget):
             return
         item = self._sops_list.currentItem()
         if not item: return
+        master = getattr(self._app, "master_track", None)
+        context = getattr(master, "session_context", None)
         fname = item.text()
         tmpl = _m(self._messages, "project.sops.delete_confirm", "Delete '{name}'?")
         if QMessageBox.question(self, "", tmpl.replace('{name}', fname),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
-        try:
-            self._app.backend.documents.remove(
-                str(item.data(Qt.ItemDataRole.UserRole))
-            )
-        except Exception as exc: logger.error('sop delete: %s', exc)
+        self._delete_project_managed_file(name, "project-sop", context, item)
         self._refresh_sops(name)
+
+    def _upload_project_managed_files(self, name, kind, context, files):
+        actor = self._current_sig()
+        for source in files:
+            retry = ("upload", actor, name, kind, source)
+            operation_id = document_retry_id(self, retry)
+            try:
+                if self._shared_backend():
+                    self._mutate_project_document(name, kind, context, source=source, operation_id=operation_id)
+                else:
+                    self._app.backend.documents.add(
+                        source, owner_type=kind, owner_id=name, actor=actor, operation_id=operation_id,
+                    )
+                complete_document_retry(self, retry)
+            except Exception as error:
+                QMessageBox.warning(self, _m(self._messages, "title.warning", "Warning"), document_error(self._messages, error))
+
+    def _delete_project_managed_file(self, name, kind, context, item):
+        actor = self._current_sig()
+        document_id = str(item.data(Qt.ItemDataRole.UserRole))
+        revision = item.data(Qt.ItemDataRole.UserRole + 1)
+        checksum = item.data(Qt.ItemDataRole.UserRole + 2)
+        retry = ("delete", actor, name, kind, document_id, revision)
+        options = dict(expected_revision=revision, expected_checksum=checksum, operation_id=document_retry_id(self, retry))
+        try:
+            if self._shared_backend():
+                result = self._mutate_project_document(name, kind, context, document_id=document_id, **options)
+            else:
+                result = self._app.backend.documents.delete_active(
+                    document_id, owner_type=kind, owner_id=name, actor=actor, **options,
+                )
+            complete_document_retry(self, retry)
+            if result["cleanup_pending"]:
+                QMessageBox.warning(self, _m(self._messages, "title.warning", "Warning"), document_cleanup_notice(self._messages))
+        except Exception as error:
+            QMessageBox.warning(self, _m(self._messages, "title.warning", "Warning"), document_error(self._messages, error))
 
     def _save_detail(self, name):
         # Validate before mutating the in-memory project record or applying any
@@ -1620,7 +1856,7 @@ class ProjectTrackTab(QWidget):
         }
         new_species = rec["summary"]["species"]
         removed_animals: List[str] = []
-        if new_species != old_species:
+        if new_species != old_species and not self._shared_backend():
             animals = getattr(self._app, "animals", {})
             if isinstance(animals, dict):
                 removed_animals = remove_mismatched_assignments(
@@ -1674,6 +1910,8 @@ class ProjectTrackTab(QWidget):
         rec['arrive'] = {k: v.toPlainText().strip() for k, v in self._arrive_fields.items()}
         if not self._save_data():
             return
+        if self._shared_backend() and new_species != old_species:
+            self._app._load_persistence()
         if removed_animals:
             save_app = getattr(self._app, "_save_persistence", None)
             if callable(save_app):

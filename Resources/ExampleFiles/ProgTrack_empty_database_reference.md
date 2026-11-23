@@ -1,6 +1,7 @@
+<!-- Part of: ProgTrack 0.3.0. Required ProgTrack version: 0.3.0 or newer. -->
 # ProgTrack empty database schema reference
 
-Schema version: `1`
+Core schema version `4`. Backend contract generation `1`.
 
 This file is the schema-only reference for an empty ProgTrack database. It is
 the mapping baseline for future migrations and adapter implementations. It
@@ -8,8 +9,8 @@ describes the current relational schema, backend type mapping, constraints,
 triggers, indexes, and generic record keys. It contains no test procedure,
 deployment instruction, seed data, UI behavior, or acceptance checklist.
 
-An empty database has this schema and no application rows. Migration metadata
-may contain the installed core revision; that metadata is not domain data.
+An empty database has this schema and no domain data. Initialization records
+the Core revision and the backend contract in installation metadata.
 
 ## SQLite schema
 
@@ -103,7 +104,23 @@ CREATE TABLE IF NOT EXISTS entity_leases (
     acquired_at TEXT NOT NULL,
     heartbeat_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
+    owner_session_id TEXT,
     PRIMARY KEY(entity_type, entity_id)
+);
+CREATE INDEX IF NOT EXISTS idx_entity_leases_owner_session
+    ON entity_leases(owner_session_id);
+CREATE TABLE IF NOT EXISTS active_sessions (
+    username_key TEXT PRIMARY KEY NOT NULL,
+    username TEXT NOT NULL,
+    session_id TEXT NOT NULL UNIQUE,
+    token_hash TEXT NOT NULL,
+    generation INTEGER NOT NULL DEFAULT 1 CHECK (generation > 0),
+    client_type TEXT NOT NULL,
+    client_context TEXT NOT NULL DEFAULT '{}',
+    issued_at TEXT NOT NULL,
+    heartbeat_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS audit_events (
@@ -135,6 +152,7 @@ CREATE TABLE IF NOT EXISTS managed_files (
     created_at TEXT NOT NULL,
     created_by TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    revision BIGINT NOT NULL DEFAULT 1 CHECK (revision > 0),
     CHECK (state IN ('staged','pending','active','quarantined','deleted'))
 );
 ```
@@ -235,7 +253,23 @@ CREATE TABLE IF NOT EXISTS entity_leases (
     acquired_at TIMESTAMPTZ NOT NULL,
     heartbeat_at TIMESTAMPTZ NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
+    owner_session_id TEXT,
     PRIMARY KEY(entity_type, entity_id)
+);
+CREATE INDEX IF NOT EXISTS idx_entity_leases_owner_session
+    ON entity_leases(owner_session_id);
+CREATE TABLE IF NOT EXISTS active_sessions (
+    username_key TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    session_id TEXT NOT NULL UNIQUE,
+    token_hash TEXT NOT NULL,
+    generation BIGINT NOT NULL DEFAULT 1 CHECK (generation > 0),
+    client_type TEXT NOT NULL,
+    client_context JSONB NOT NULL DEFAULT '{}'::jsonb,
+    issued_at TIMESTAMPTZ NOT NULL,
+    heartbeat_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS audit_events (
@@ -267,8 +301,45 @@ CREATE TABLE IF NOT EXISTS managed_files (
     created_at TIMESTAMPTZ NOT NULL,
     created_by TEXT NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
+    revision BIGINT NOT NULL DEFAULT 1 CHECK (revision > 0),
     CHECK (state IN ('staged','pending','active','quarantined','deleted'))
 );
+```
+
+## Managed-document journal (both backends)
+
+```sql
+CREATE TABLE document_operations (
+    operation_id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    operation_kind TEXT NOT NULL CHECK (operation_kind IN ('create','replace','retire')),
+    actor_login TEXT NOT NULL,
+    request_sha256 TEXT NOT NULL,
+    intent_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('prepared','committed','abandoned')),
+    result_json TEXT NOT NULL DEFAULT '',
+    retired_path TEXT,
+    retired_sha256 TEXT,
+    retired_byte_size BIGINT,
+    cleanup_pending INTEGER NOT NULL DEFAULT 0 CHECK (cleanup_pending IN (0,1)),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX idx_document_operations_pending
+    ON document_operations(document_id) WHERE state = 'prepared';
+CREATE TABLE document_publish_attempts (
+    attempt_id TEXT PRIMARY KEY,
+    operation_id TEXT NOT NULL REFERENCES document_operations(operation_id),
+    category TEXT NOT NULL,
+    staging_path TEXT NOT NULL UNIQUE,
+    final_path TEXT NOT NULL UNIQUE,
+    verified_sha256 TEXT,
+    verified_byte_size BIGINT,
+    created_at TEXT NOT NULL,
+    CHECK ((verified_sha256 IS NULL AND verified_byte_size IS NULL)
+        OR (verified_sha256 IS NOT NULL AND verified_byte_size IS NOT NULL AND verified_byte_size >= 0))
+);
+CREATE INDEX idx_document_publish_attempts_operation ON document_publish_attempts(operation_id);
 ```
 
 ## Backend type mapping
@@ -291,9 +362,12 @@ CREATE TABLE IF NOT EXISTS managed_files (
 | `measurements` | `measurement_id` | `animal_ipid → animals.ipid`; unique animal/kind/time/value/sample tuple | normalized measurements |
 | `animal_events` | `event_id` | `animal_ipid → animals.ipid` | normalized animal events |
 | `domain_records` | `(namespace, record_id)` | one JSON payload per typed namespace/key | plugin and service records |
-| `entity_leases` | `(entity_type, entity_id)` | `token` unique | transient edit/open leases |
+| `entity_leases` | `(entity_type, entity_id)` | `token` unique, indexed `owner_session_id` | transient edit/open leases |
+| `active_sessions` | `username_key` | `session_id` unique, positive generation | current server-authoritative session slot per account |
 | `audit_events` | `event_id` | index on entity and occurrence time | immutable audit records |
-| `managed_files` | `document_id` | `relative_path` unique; state check | metadata for external managed payloads |
+| `managed_files` | `document_id` | `relative_path` unique; state check and positive revision | metadata for external managed payloads |
+| `document_operations` | `operation_id` | one prepared operation per document ID | request identity, committed result, and retired path |
+| `document_publish_attempts` | `attempt_id` | `operation_id → document_operations.operation_id`; unique staging and final paths | operation-owned candidates and verified content |
 
 ## Generic domain-record key map
 
@@ -341,3 +415,27 @@ The canonical migration source is
 the logical objects, keys, constraints, identity immutability, foreign-key
 relationships, and backend type mapping defined here. A changed schema version
 must update this reference as part of the same change.
+
+`schema_revisions.core` and `installation['backend-contract']` are written in
+the same transaction as Core schema changes. The contract payload contains
+`state`, `core_revision`, `min_contract`, `max_contract`, and `last_migration`,
+which identifies the previous revision, applied migration, applying contract,
+result, UTC timestamp and correlation ID. Contract generation is independent of
+the application release version. PostgreSQL bootstrap coordinates on
+transaction advisory lock `(942637, 1)`. Initialization leaves session and
+lease tables empty for a new database. Revision 3 adds nullable session
+ownership to earlier leases and retains existing domain rows. A Shared runtime
+probe obtains the shared schema lock before checking the revision and required
+objects. Opening an older Shared database requires controlled administration.
+
+Revision 4 initializes existing managed rows at document revision 1, preserving
+their state and relative path. The managed-document journal uses text for
+intent and result JSON and UTC timestamps on both backends. Journal paths are
+relative to the configured client-local managed-storage category.
+
+`username_key` represents the normalized immutable account username. The
+stored canonical `username` retains its original spelling. Session credentials
+are represented by a token hash. `client_context` contains nonsecret metadata.
+Shared lease expiry and authenticated requests use server time under the
+session/lease service contract. Owner-session enforcement and revocation
+belong to that service, including removal of old lease rows when it activates.

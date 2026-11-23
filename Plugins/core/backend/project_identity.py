@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """One transactional project identity allocator in the existing catalog."""
 from copy import deepcopy
 from urllib.parse import quote
@@ -56,14 +58,26 @@ def write_catalog(adapter, connection, catalog, revision):
                  ('projects','catalog',dumps(catalog),stamp,stamp))
 
 
-def create_project(backend, name, username, fields=None):
+def create_project(backend, name, username, fields=None, *, session=None):
+    if backend.adapter.dialect == "postgresql":
+        with backend.protected_request(session, "project.create", write=True) as (connection, account, _):
+            record = _create_project(backend, connection, name, account["username"], fields)
+            backend.audit._append_in_transaction(
+                connection, actor_login=account["username"], category="projects", action="create",
+                entity_type="project", entity_id=record["project_id"], payload={"name": name},
+            )
+            return record
     with backend.adapter.transaction(write=True) as connection:
-        catalog, revision = read_catalog(backend.adapter, connection)
-        if name in catalog['projects']:
-            raise ConflictError('A project with this name already exists.')
-        timestamp = server_timestamp(backend.adapter, connection)
-        record = allocate(catalog, name, username, timestamp, fields)
-        write_catalog(backend.adapter, connection, catalog, revision)
+        return _create_project(backend, connection, name, username, fields)
+
+
+def _create_project(backend, connection, name, username, fields):
+    catalog, revision = read_catalog(backend.adapter, connection)
+    if name in catalog['projects']:
+        raise ConflictError('A project with this name already exists.')
+    timestamp = server_timestamp(backend.adapter, connection)
+    record = allocate(catalog, name, username, timestamp, fields)
+    write_catalog(backend.adapter, connection, catalog, revision)
     return record
 
 

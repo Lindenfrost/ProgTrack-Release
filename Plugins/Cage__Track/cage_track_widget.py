@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Cage Track main visualization widget.
@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from PyQt6.QtCore import Qt, QDate, QTimer, QSize
 from PyQt6.QtGui import QColor, QCursor
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -415,7 +416,7 @@ class MovementHistoryDialog(QDialog):
     """Show movement history for a single occupant."""
 
     def __init__(self, parent: QWidget, messages: Dict[str, Any], occupant_id: str,
-                 engine: CageEngine, store: CageStore):
+                 engine: CageEngine, store: CageStore, *, read_only=False, lease_message=""):
         super().__init__(parent)
         self.messages = messages
         self.occupant_id = occupant_id
@@ -437,13 +438,15 @@ class MovementHistoryDialog(QDialog):
         occupant_widget = QLabel(f"<b>{self._occupant_display}</b>")
         occupant_widget.setToolTip(self._occupant_display)
         layout.addWidget(occupant_widget)
+        if lease_message:
+            layout.addWidget(QLabel(lease_message))
 
         current_cage_id = occ.get("cage_id", UNASSIGNED_CAGE_ID) if occ else UNASSIGNED_CAGE_ID
         ua_label = messages.get("cage_track.unassigned", "Unassigned")
         current_path = engine.resolve_cage_path(current_cage_id, ua_label)
-        layout.addWidget(QLabel(
-            f"{messages.get('cage_track.history.current_cage', 'Current Cage')}: {current_path}"
-        ))
+        location = QLabel(f"{messages.get('cage_track.history.current_cage', 'Current Cage')}: {current_path}")
+        location.setWordWrap(True)
+        layout.addWidget(location)
 
         self._table = None
         if not history:
@@ -495,7 +498,10 @@ class MovementHistoryDialog(QDialog):
                 item4.setFlags(no_edit)
                 table.setItem(row, 4, item4)
 
-            table.cellChanged.connect(self._on_cell_changed)
+            if read_only:
+                table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+            else:
+                table.cellChanged.connect(self._on_cell_changed)
             table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
             layout.addWidget(table)
             self._table = table
@@ -1388,8 +1394,36 @@ class CageTrackWidget(QWidget):
         app = getattr(self.plugin, 'app', None)
         if app is None:
             return True
+        leases = getattr(app, "_foreign_housing_leases", {})
+        if action in {"cage.edit", "cage.manage_rooms_buildings"} and "cage" in leases:
+            return False
+        if action == "cage.record_inspection" and "inspections" in leases:
+            return False
         fn = getattr(app, '_master_can', None)
         return fn(action) if fn else True
+
+    def apply_shared_lease_snapshot(self, animals_changed):
+        lease = getattr(self.plugin.app, "_foreign_housing_leases", {}).get("cage")
+        message = self.messages.get("cage_track.toolbar.add", "Add")
+        if lease:
+            message = self.messages.get("cage_track.edit_lease.foreign", "Housing is being edited by {owner}.").format(
+                owner=lease.get("owner_display") or lease.get("owner_login") or "",
+            )
+        self.add_btn.setEnabled(self._can("cage.manage_rooms_buildings"))
+        self.add_btn.setToolTip(message)
+        if animals_changed and self.isVisible():
+            self.refresh_view(sync_animals=False)
+
+    def _foreign_animal_lease(self, occupant_id):
+        app = getattr(getattr(self, "plugin", None), "app", None)
+        return getattr(app, "_foreign_animal_leases", {}).get(occupant_id)
+
+    def _animal_lease_message(self, lease):
+        if not lease:
+            return ""
+        return self.messages.get("core.animal_lease.foreign", "This animal is being edited by {owner}.").format(
+            owner=lease.get("owner_display") or lease.get("owner_login") or "",
+        )
 
     def _deny(self) -> None:
         app = getattr(self.plugin, 'app', None)
@@ -1719,7 +1753,9 @@ class CageTrackWidget(QWidget):
             "verticalalignment": "center",
             "fontweight": "bold" if highlighted else "normal",
         }
-        if project_color and project_color != "#000000":
+        if self._foreign_animal_lease(occupant_id or name):
+            kwargs["bbox"] = {"boxstyle": "round,pad=0.14", "facecolor": "#d7d7d7", "edgecolor": "none"}
+        elif project_color and project_color != "#000000":
             rgba = list(self._cached_project_rgba(project_color))
             rgba[3] = 0.45
             kwargs["bbox"] = {
@@ -2453,7 +2489,9 @@ class CageTrackWidget(QWidget):
             if hit and hit[1] == "occupant":
                 animal_id = hit[0]
                 occupant = self.store.get_occupant(animal_id) or {}
-                QToolTip.showText(QCursor.pos(), movement_identity_text(animal_id, occupant), self)
+                tip = movement_identity_text(animal_id, occupant)
+                lease = self._animal_lease_message(self._foreign_animal_lease(animal_id))
+                QToolTip.showText(QCursor.pos(), f"{tip}\n{lease}" if lease else tip, self)
                 return
         QToolTip.hideText()
 
@@ -2509,8 +2547,30 @@ class CageTrackWidget(QWidget):
             artist.set_fontsize(base_size * scale)
 
     def _show_movement_history(self, occupant_id: str) -> None:
-        dlg = MovementHistoryDialog(self, self.messages, occupant_id, self.engine, self.store)
-        dlg.exec()
+        app = getattr(self.plugin, "app", None)
+        shared = getattr(app, "_uses_shared_leases", None)
+        if not callable(shared) or not shared():
+            dlg = MovementHistoryDialog(self, self.messages, occupant_id, self.engine, self.store)
+            dlg.exec()
+            return
+        from Plugins.core.backend.errors import LockConflictError
+
+        owner = object()
+        locked = self._foreign_animal_lease(occupant_id)
+        editable = not locked and self._can("cage.assign_locations")
+        if editable:
+            try:
+                app._hold_shared_animal_lease(occupant_id, owner)
+            except LockConflictError as error:
+                locked = {"owner_display": error.owner} if error.owner else None
+                editable = False
+        try:
+            dlg = MovementHistoryDialog(self, self.messages, occupant_id, self.engine, self.store,
+                                        read_only=not editable, lease_message=self._animal_lease_message(locked))
+            dlg.exec()
+        finally:
+            if editable:
+                app._release_shared_animal_lease(occupant_id, owner)
 
     def _clear_shared_animal_selection(self) -> None:
         """Clear the main selection through the same application update path."""
@@ -2801,12 +2861,19 @@ class CageTrackWidget(QWidget):
     # ------------------------------------------------------------------
 
     def _load_inspections(self) -> List[Dict[str, Any]]:
+        loader = getattr(self.store, "load_inspections", None)
+        if callable(loader):
+            return loader()
         data = self.store.inspection_store.load({"records": []})
         return data.get("records", []) if isinstance(data, dict) else []
 
     def _save_inspections(self, records: List[Dict[str, Any]]) -> None:
         try:
-            self.store.inspection_store.save({"records": records})
+            save = getattr(self.store, "save_inspections", None)
+            if callable(save):
+                save(records)
+            else:
+                self.store.inspection_store.save({"records": records})
         except Exception as e:
             logger.error(f"Failed to save inspections: {e}")
 
@@ -3081,7 +3148,7 @@ class CageTrackPlugin:
         self.app = app
         self.messages: Dict[str, Any] = getattr(app, "messages", {}) or {}
         self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        self.store = CageStore(self.plugin_dir, app.backend)
+        self.store = CageStore(self.plugin_dir, app.backend, app)
         self.store.load_data()
 
         self.widget: Optional[CageTrackWidget] = None

@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Facility branding configuration and repeatable compact PDF headers."""
 
 from __future__ import annotations
@@ -34,6 +36,8 @@ from PyQt6.QtWidgets import (
 )
 
 from Plugins.core.ui_icons import apply_icon
+from Plugins.core.backend.errors import BackendError, ConflictError
+from Plugins.core.document_messages import complete_document_retry, document_cleanup_notice, document_error, document_retry_id
 
 
 CONFIG_NAMESPACE = "configuration"
@@ -55,27 +59,23 @@ class InstitutionBrandingService:
         self.backend = backend
         self.authorization = authorization
 
-    def load(self) -> dict[str, Any]:
-        value = self.backend.records.get(
-            CONFIG_NAMESPACE,
-            CONFIG_RECORD,
-            default={
-                "enabled": False,
-                "facility_name": "",
-                "logo_document_id": "",
-                "position": POSITION_TOP_RIGHT,
-            },
-        )
-        if not isinstance(value, dict):
-            value = {}
-        normalized = dict(value)
+    @staticmethod
+    def _normalized(value):
+        normalized = dict(value) if isinstance(value, dict) else {}
         normalized.setdefault("enabled", False)
         normalized.setdefault("facility_name", "")
         normalized.setdefault("logo_document_id", "")
-        normalized["position"] = normalize_branding_position(
-            normalized.get("position")
-        )
+        normalized["position"] = normalize_branding_position(normalized.get("position"))
         return normalized
+
+    def load(self) -> dict[str, Any]:
+        return self._normalized(self.backend.records.get(CONFIG_NAMESPACE, CONFIG_RECORD, default={}))
+
+    def edit_state(self):
+        with self.backend.adapter.transaction():
+            raw, revision = self.backend.records.get_with_revision(CONFIG_NAMESPACE, CONFIG_RECORD, default={})
+            config = self._normalized(raw)
+            return config, revision, self._logo_record(config)
 
     def save(
         self,
@@ -87,21 +87,51 @@ class InstitutionBrandingService:
         actor: str,
         authorized: bool = False,
         remove_logo: bool = False,
+        session=None,
+        expected_config=None,
+        expected_logo=None,
+        operation_id=None,
     ) -> dict[str, Any]:
-        policy = self.authorization
-        if policy is not None:
-            authorized = bool(
-                policy.can("core.manage_institution_settings", write=True)
-            )
-        if not authorized:
-            raise PermissionError(
-                "Institution branding requires institution-settings permission."
-            )
-        current = self.load()
-        logo_id = str(current.get("logo_document_id", ""))
-        if remove_logo:
-            logo_id = ""
+        documents = self.backend.documents
+        shared = self.backend.adapter.dialect == "postgresql"
+        if shared:
+            request = self.backend._document_request(session, "core.manage_institution_settings")
+            if expected_config is None:
+                raise ConflictError("Reload institution settings before saving.")
+        else:
+            if self.authorization is not None:
+                authorized = bool(self.authorization.can("core.manage_institution_settings", write=True))
+            if not authorized:
+                raise PermissionError("Institution branding requires institution-settings permission.")
+            request = documents.operation_request(actor)
+
+        if expected_config is None:
+            current, config_revision, expected_logo = self.edit_state()
+        else:
+            current, config_revision = expected_config
+        current_logo = current["logo_document_id"]
+        if (logo_source or remove_logo) and current_logo and (
+                expected_logo is None or expected_logo["document_id"] != current_logo):
+            raise ConflictError("Reload institution settings before changing the logo.")
+
+        value = {
+            "enabled": bool(enabled),
+            "facility_name": str(facility_name or "").strip(),
+            "logo_document_id": "" if remove_logo else current_logo,
+            "position": normalize_branding_position(position),
+        }
+
+        def update_owner(connection, record, authenticated_actor):
+            updated = value | {"logo_document_id": record["document_id"] if record["state"] == "active" else ""}
+            self._save_in_transaction(connection, updated, config_revision, authenticated_actor)
+
+        target = dict(owner_type="installation", owner_id="branding", request=request,
+                      operation_id=operation_id, update_owner=update_owner,
+                      owner_intent={"config_revision": config_revision, "configuration": value})
+        record = None
         if logo_source:
+            with request():
+                pass
             source = Path(logo_source)
             if source.suffix.lower() not in ALLOWED_SUFFIXES:
                 raise ValueError("Institution logos must be PNG or JPEG files.")
@@ -109,47 +139,66 @@ class InstitutionBrandingService:
                 raise ValueError("Institution logos must not exceed 10 MiB.")
             with Image.open(source) as image:
                 image.verify()
-            record = self.backend.documents.add(
-                source,
-                owner_type="installation",
-                owner_id="branding",
-                category="config-asset",
-                actor=actor,
+            if expected_logo is None:
+                record = documents.add(source, category="config-asset", **target)
+            else:
+                record = documents.replace(
+                    source, document_id=current_logo, category="config-asset",
+                    expected_revision=expected_logo["revision"], expected_checksum=expected_logo["sha256"], **target,
+                )
+        elif remove_logo and current_logo:
+            record = documents.delete_active(
+                current_logo, expected_revision=expected_logo["revision"],
+                expected_checksum=expected_logo["sha256"], reason="Institution logo removed", **target,
             )
-            logo_id = str(record["document_id"])
-        value = {
-            "enabled": bool(enabled),
-            "facility_name": str(facility_name or "").strip(),
-            "logo_document_id": logo_id,
-            "position": normalize_branding_position(position),
-        }
-        self.backend.records.put(CONFIG_NAMESPACE, CONFIG_RECORD, value)
-        self.backend.audit.append(
-            actor_login=actor,
-            category="configuration",
-            action="institution_branding_update",
-            entity_type="installation",
-            entity_id="branding",
-            payload={
-                "enabled": value["enabled"],
-                "facility_name": value["facility_name"],
-                "logo_document_id": value["logo_document_id"],
-                "position": value["position"],
-            },
-        )
-        return value
+        else:
+            with request() as (connection, authenticated_actor):
+                self._save_in_transaction(connection, value, config_revision, authenticated_actor)
 
-    def logo_path(self, config: dict[str, Any] | None = None) -> Path | None:
+        result = self.load()
+        if record and record["cleanup_pending"]:
+            result["_cleanup_pending"] = True
+        return result
+
+    def _save_in_transaction(self, connection, value, config_revision, actor):
+        self.backend.records.put(CONFIG_NAMESPACE, CONFIG_RECORD, value, expected_revision=config_revision)
+        self.backend.audit._append_in_transaction(
+            connection, actor_login=actor, category="configuration", action="institution_branding_update",
+            entity_type="installation", entity_id="branding", payload=value,
+        )
+
+    def _logo_record(self, config: dict[str, Any] | None = None):
         config = config or self.load()
         document_id = str(config.get("logo_document_id", ""))
         if not document_id:
             return None
         try:
             record = self.backend.documents.get(document_id)
-            path = self.backend.documents.payload_path(record)
-            return path if path.is_file() else None
+            if (record["owner_type"], record["owner_id"], record["category"], record["state"]) == (
+                    "installation", "branding", "config-asset", "active"):
+                return record
+            return None
         except (KeyError, OSError):
             return None
+
+    def logo_path(self, config: dict[str, Any] | None = None) -> Path | None:
+        record = self._logo_record(config)
+        if record is None:
+            return None
+        return self.backend.documents.available_payload_path(record)
+
+    def logo_name(self, config: dict[str, Any] | None = None) -> str:
+        record = self._logo_record(config)
+        return str(record["original_name"]) if record is not None else ""
+
+    def logo_contents(self, config: dict[str, Any] | None = None) -> bytes | None:
+        record = self._logo_record(config)
+        if record is None:
+            return None
+        with tempfile.TemporaryDirectory(prefix="progtrack-branding-") as staging:
+            staged = Path(staging) / "logo"
+            self.backend.documents.copy_verified_payload(record, staged)
+            return staged.read_bytes()
 
     def apply_to_pdf(self, pdf_path: str | Path) -> bool:
         """Overlay the configured compact name/logo header on every page.
@@ -163,7 +212,7 @@ class InstitutionBrandingService:
         if not config.get("enabled"):
             return False
         facility = str(config.get("facility_name", "")).strip()
-        logo = self.logo_path(config)
+        logo = self.logo_contents(config)
         position = normalize_branding_position(config.get("position"))
         if not facility and logo is None:
             return False
@@ -189,7 +238,7 @@ class InstitutionBrandingService:
             center_y = height - margin - header_h / 2.0
             logo_size: tuple[float, float] | None = None
             if logo is not None:
-                with Image.open(logo) as image:
+                with Image.open(io.BytesIO(logo)) as image:
                     iw, ih = image.size
                 max_w, max_h = 216.0, header_h - 6.0
                 scale = min(max_w / max(iw, 1), max_h / max(ih, 1))
@@ -250,7 +299,7 @@ class InstitutionBrandingService:
             if logo_size:
                 draw_w, draw_h = logo_size
                 layer.drawImage(
-                    ImageReader(str(logo)),
+                    ImageReader(io.BytesIO(logo)),
                     logo_x,
                     center_y - draw_h / 2.0,
                     width=draw_w,
@@ -312,7 +361,7 @@ class _BrandingPreview(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._enabled = False
         self._facility_name = ""
-        self._logo_path: Path | None = None
+        self._logo_pixmap = QPixmap()
         self._position = POSITION_TOP_RIGHT
 
     def sizeHint(self) -> QSize:  # noqa: N802 - Qt API name
@@ -324,11 +373,14 @@ class _BrandingPreview(QWidget):
         enabled: bool,
         facility_name: str,
         logo_path: Path | None,
+        logo_data: bytes | None = None,
         position: str,
     ) -> None:
         self._enabled = bool(enabled)
         self._facility_name = str(facility_name or "").strip()
-        self._logo_path = logo_path if logo_path and logo_path.is_file() else None
+        self._logo_pixmap = QPixmap(str(logo_path)) if logo_path else QPixmap()
+        if logo_data is not None:
+            self._logo_pixmap.loadFromData(logo_data)
         self._position = normalize_branding_position(position)
         self.update()
 
@@ -358,7 +410,7 @@ class _BrandingPreview(QWidget):
         margin = 18.0
         gap = 9.0
         header = QRectF(page.left() + margin, page.top() + 14, page.width() - 2 * margin, 48)
-        pixmap = QPixmap(str(self._logo_path)) if self._logo_path is not None else QPixmap()
+        pixmap = self._logo_pixmap
         logo_w = logo_h = 0.0
         if not pixmap.isNull():
             scaled = pixmap.scaled(
@@ -747,12 +799,14 @@ class InstitutionBrandingDialog(QDialog):
         units_authorized: bool | None = None,
         user_db: Any = None,
         authorization: Any = None,
+        session=None,
         parent=None,
     ):
         super().__init__(parent)
         self.service = service
         self.actor = actor
         self.authorized = authorized
+        self.session = session
         self.messages = messages or {}
         self.embedded = bool(embedded)
         self.units_service = units_service
@@ -772,7 +826,7 @@ class InstitutionBrandingDialog(QDialog):
             self.setWindowFlags(Qt.WindowType.Widget)
         else:
             self.setMinimumSize(480, 360)
-        config = service.load()
+        config, self._initial_revision, self._initial_logo = service.edit_state()
         self._initial_config = dict(config)
 
         outer = QVBoxLayout(self)
@@ -789,9 +843,7 @@ class InstitutionBrandingDialog(QDialog):
         self.name = QLineEdit(str(config.get("facility_name", "")))
         self.logo = QLineEdit()
         self.logo.setReadOnly(True)
-        existing_logo = service.logo_path(config)
-        if existing_logo is not None:
-            self.logo.setText(existing_logo.name)
+        self._load_saved_logo(config)
         self.choose_button = QPushButton(
             self._text("branding.choose", "Choose PNG/JPEG…")
         )
@@ -996,14 +1048,23 @@ class InstitutionBrandingDialog(QDialog):
         self._remove_logo = True
         self._refresh_preview()
 
+    def _load_saved_logo(self, config) -> None:
+        self.logo.setText(self.service.logo_name(config))
+        self.logo.setToolTip("")
+        try:
+            self._saved_logo_data = self.service.logo_contents(config)
+        except (BackendError, OSError) as error:
+            self._saved_logo_data = None
+            self.logo.setToolTip(document_error(self.messages, error))
+
     def _refresh_preview(self) -> None:
-        logo_path = self._logo_source_path or self.service.logo_path()
-        if self._remove_logo:
-            logo_path = None
+        logo_path = self._logo_source_path if not self._remove_logo else None
+        logo_data = self._saved_logo_data if not (self._remove_logo or logo_path) else None
         self.preview.set_preview(
             enabled=self.enabled.isChecked(),
             facility_name=self.name.text(),
             logo_path=logo_path,
+            logo_data=logo_data,
             position=(
                 POSITION_TOP_LEFT
                 if self.position_left.isChecked()
@@ -1028,6 +1089,8 @@ class InstitutionBrandingDialog(QDialog):
         )
         if unchanged:
             return True
+        retry = (self.actor, str(self._logo_source_path), self._remove_logo, self._initial_revision,
+                 self.enabled.isChecked(), self.name.text(), self.position_left.isChecked())
         try:
             saved = self.service.save(
                 enabled=self.enabled.isChecked(),
@@ -1040,21 +1103,26 @@ class InstitutionBrandingDialog(QDialog):
                 ),
                 actor=self.actor,
                 authorized=self.authorized,
-                remove_logo=self._remove_logo,
+                remove_logo=self._remove_logo, session=self.session,
+                expected_config=(self._initial_config, self._initial_revision), expected_logo=self._initial_logo,
+                operation_id=document_retry_id(self, retry),
             )
-        except (OSError, PermissionError, ValueError) as exc:
+        except (BackendError, OSError, PermissionError, ValueError) as exc:
             QMessageBox.warning(
                 self,
                 self._text(
                     "branding.save_failed.title", "Cannot save branding"
                 ),
-                str(exc),
+                document_error(self.messages, exc),
             )
             return False
-        self._initial_config = dict(saved)
+        complete_document_retry(self, retry)
+        if saved.get("_cleanup_pending"):
+            QMessageBox.warning(self, self._text("title.warning", "Warning"), document_cleanup_notice(self.messages))
+        config, self._initial_revision, self._initial_logo = self.service.edit_state()
+        self._initial_config = dict(config)
         self._logo_source_path = None
-        saved_logo = self.service.logo_path(saved)
-        self.logo.setText(saved_logo.name if saved_logo is not None else "")
+        self._load_saved_logo(saved)
         self._remove_logo = False
         self._refresh_preview()
         return True

@@ -654,7 +654,7 @@ def domain_records(core: dict[str, Any], key_map: dict[str, str],
     }
     records[("configuration", "global-settings")] = {"language": "en"}
     records[("configuration", "disabled-plugins")] = []
-    records[("configuration", "animal-roles")] = seeded_animal_role_configuration()
+    records.update(seeded_core_configuration())
     records[("seed", "metadata")] = {
         "version": "0.2.1",
         "fictional": True,

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Sample Track organ and biological sample widget.
@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from PyQt6.QtCore import Qt, QSettings, QSize, QStringListModel, QTimer
+from Plugins.core.backend.shared_samples import sample_species_abbreviation as _species_abbreviation
 from Plugins.core.backend_store import BackendJsonStore
 from PyQt6.QtGui import QColor, QPainter, QFont, QTransform, QIcon
 from PyQt6.QtWidgets import (
@@ -51,13 +52,25 @@ def _record_sex_value(record: Optional[Dict[str, Any]]) -> str:
     return ""
 
 
-def _species_abbreviation(species: str) -> str:
-    words = [part for part in str(species or "").strip().split() if part]
-    if len(words) >= 2:
-        return "".join(word[0].lower() for word in words if word[0].isalnum())
-    if words:
-        return words[0][:2].lower()
-    return ""
+def _apply_sample_lease_state(row):
+    ipid = row.get_animal_name()
+    lease = getattr(row._app, "_foreign_animal_leases", {}).get(ipid)
+    row.setStyleSheet("background-color: #d7d7d7;" if lease else (
+        "background-color: #cce8ff;" if row._selected else ""
+    ))
+    previous = getattr(row, "_foreign_edit_lease", None)
+    row._foreign_edit_lease = lease
+    if bool(previous) != bool(lease):
+        row._row1.setEnabled(not lease)
+        row._row2.setEnabled(not lease)
+    if lease:
+        row.setToolTip(row._messages.get(
+            "core.animal_lease.foreign", "This animal is being edited by {owner}.",
+        ).format(owner=lease.get("owner_display") or lease.get("owner_login") or ""))
+    elif previous:
+        row.setToolTip("")
+
+
 
 # ---------------------------------------------------------------------------
 # Column-width constants shared by row widgets AND headers (px)
@@ -371,20 +384,81 @@ class JsonStore:
     callers; it is deliberately ignored. Sample rows are backend-only.
     """
 
-    def __init__(self, path: Path, backend=None, record_id: str = ""):
+    def __init__(self, path: Path, backend=None, record_id: str = "", app=None):
         if backend is None or not record_id:
             raise RuntimeError("Sample Track requires a backend record store.")
         self._store = BackendJsonStore(backend, "samples", record_id)
+        self._app = app
+        self._snapshot = None
 
     def read(self) -> List[Dict[str, Any]]:
+        shared = getattr(self._app, "_uses_shared_leases", None)
+        if callable(shared) and shared():
+            import copy
+            from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+
+            master = getattr(self._app, "master_track", None)
+            session = getattr(master, "session_context", None)
+            self._snapshot = None
+            if session is None:
+                return []
+            try:
+                rows, revision = self._store.backend.load_shared_samples(session, self._store.record_id)
+            except SessionRevokedError:
+                master.handle_session_revoked()
+                return []
+            except PermissionDeniedError:
+                return []
+            self._snapshot = session, copy.deepcopy(rows), revision
+            return rows
         value = self._store.load([])
         return value if isinstance(value, list) else []
 
-    def write(self, rows: List[Dict[str, Any]]) -> None:
+    def write(self, rows: List[Dict[str, Any]]) -> bool:
+        shared = getattr(self._app, "_uses_shared_leases", None)
+        if callable(shared) and shared():
+            try:
+                self._write_shared(rows)
+            except Exception as exc:
+                logger.error("Sample backend write failed: %s", exc)
+                QMessageBox.warning(
+                    self._app, _msg(self._app.messages, "error.title", "Error"),
+                    _msg(self._app.messages, "sample_track.error.save_failed",
+                         "Could not save the samples. Reload the register and try again."),
+                )
+                return False
+            return True
         try:
             self._store.save(rows)
         except Exception as exc:
             logger.error("Sample backend write failed: %s", exc)
+            return False
+        return True
+
+    def _write_shared(self, rows):
+        from contextlib import ExitStack
+        from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+        from Plugins.core.backend.shared_samples import changed_sample_animals
+
+        master = getattr(self._app, "master_track", None)
+        context = getattr(master, "session_context", None)
+        if self._snapshot is None or context != self._snapshot[0]:
+            raise PermissionDeniedError("Reload this sample register after signing in.")
+        _, original, revision = self._snapshot
+        self._snapshot = None
+        try:
+            with ExitStack() as releases:
+                leases = {}
+                for ipid in sorted(changed_sample_animals(original, rows)):
+                    owner = object()
+                    leases[ipid] = self._app._hold_shared_animal_lease(ipid, owner, verify=True)
+                    releases.callback(self._app._release_shared_animal_lease, ipid, owner)
+                self._store.backend.save_shared_samples(
+                    context, self._store.record_id, original, rows, revision, leases,
+                )
+        except SessionRevokedError:
+            master.handle_session_revoked()
+            raise
 
 
 # ---------------------------------------------------------------------------
@@ -878,6 +952,7 @@ class SampleRowWidget(QFrame):
         self._build_identity_section()
         self._build_organ_section()
         self._apply_saved_state()
+        _apply_sample_lease_state(self)
         
         # Sync height after layout is complete
         _sync_widget_height(self)
@@ -1016,6 +1091,8 @@ class SampleRowWidget(QFrame):
         self._death_le.setText(rec.get('death_date', ''))
 
     def _on_save(self):
+        if getattr(self, "_foreign_edit_lease", None):
+            return
         raw_name = self._name_le.text().strip()
         name, rec, error_code = _resolve_animal_input(self._app, raw_name)
         if error_code == "ambiguous":
@@ -1050,7 +1127,10 @@ class SampleRowWidget(QFrame):
         self._data["death_date"] = (rec.get("death_date") if rec else "") or self._death_le.text().strip()
         self._saved = True
         self._apply_saved_state()
-        self._save_to_store()
+        if self._save_to_store() is False:
+            self._saved = False
+            self._apply_saved_state()
+            return
         # Audit
         mt = getattr(self._app, 'master_track', None)
         if mt and hasattr(mt, 'audit'):
@@ -1068,6 +1148,8 @@ class SampleRowWidget(QFrame):
             self.delete_row()
 
     def delete_row(self):
+        if getattr(self, "_foreign_edit_lease", None):
+            return
         """Delete this row from storage and remove from UI."""
         try:
             name = self._data.get("animal_name", "")
@@ -1078,7 +1160,8 @@ class SampleRowWidget(QFrame):
             rows = [r for r in rows if r.get("animal_name", "") != name]
             if len(rows) < original_count:
                 logger.debug(f"Purging {original_count - len(rows)} rows from JSON")
-                self._store.write(rows)
+                if self._store.write(rows) is False:
+                    return
             mt = getattr(self._app, 'master_track', None)
             if mt and hasattr(mt, 'audit'):
                 mt.audit("sample_track.delete_row", name or "<unsaved>", "tab=organ_samples")
@@ -1172,8 +1255,10 @@ class SampleRowWidget(QFrame):
         if not found:
             rows.append(self._data)
         rows.sort(key=lambda r: r.get("animal_name", "").lower())
-        self._store.write(rows)
+        if self._store.write(rows) is False:
+            return False
         self._persisted_key = name if name else None
+        return True
 
     def _show_context_menu(self):
         from PyQt6.QtWidgets import QDialog as _QDialog, QVBoxLayout as _VL, QPushButton as _PB
@@ -1223,7 +1308,8 @@ class SampleRowWidget(QFrame):
                         locs = [{"unit": u, "storage": s} for _ in locs]
                         self._data[f"{k}_aliquot_locations"] = json.dumps(locs)
                 self._apply_saved_state()
-                self._save_to_store()
+                if self._save_to_store() is False:
+                    return
                 mt = getattr(self._app, 'master_track', None)
                 if mt and hasattr(mt, 'audit'):
                     mt.audit("sample_track.edit_location",
@@ -1335,7 +1421,8 @@ class SampleRowWidget(QFrame):
                     chk.set_checked(False)
                     chk.set_warning(False)
                     chk.set_count(0)
-                    self._save_to_store()
+                    if self._save_to_store() is False:
+                        return
                     self._check_all_unchecked()
             elif dlg.action == "ok":
                 num_al2, locs2, comment2, warning2 = dlg.values()
@@ -1349,7 +1436,8 @@ class SampleRowWidget(QFrame):
                     chk.set_checked(False)
                     chk.set_warning(False)
                     chk.set_count(0)
-                    self._save_to_store()
+                    if self._save_to_store() is False:
+                        return
                     self._check_all_unchecked()
                 else:
                     self._data[f"{organ_key}_num_aliquots"] = num_al2
@@ -1359,7 +1447,8 @@ class SampleRowWidget(QFrame):
                     chk.set_warning(warning2)
                     chk.set_count(num_al2)
                     self._apply_saved_state()
-                    self._save_to_store()
+                    if self._save_to_store() is False:
+                        return
                     all_units = [loc.get("unit", "").strip() for loc in locs2 if loc.get("unit", "").strip()]
                     if all_units:
                         mt = getattr(self._app, 'master_track', None)
@@ -1438,7 +1527,7 @@ class SampleRowWidget(QFrame):
 
     def set_selected(self, v: bool):
         self._selected = v
-        self.setStyleSheet("background-color: #cce8ff;" if v else "")
+        _apply_sample_lease_state(self)
 
 
 # ---------------------------------------------------------------------------
@@ -1486,6 +1575,7 @@ class OtherSampleRowWidget(QFrame):
         self._build_identity_section()
         self._build_type_section()
         self._apply_saved_state()
+        _apply_sample_lease_state(self)
         
         # Sync height after layout is complete
         _sync_widget_height(self)
@@ -1612,6 +1702,8 @@ class OtherSampleRowWidget(QFrame):
         self._sex_cb.setCurrentText(_sv2 if _sv2 in ('Male', 'Female', 'Undefined') else 'Undefined')
 
     def _on_save(self):
+        if getattr(self, "_foreign_edit_lease", None):
+            return
         raw_name = self._name_le.text().strip()
         name, rec, error_code = _resolve_animal_input(self._app, raw_name)
         if error_code == "ambiguous":
@@ -1648,7 +1740,10 @@ class OtherSampleRowWidget(QFrame):
         self._data["collection_date"] = self._date_le.text().strip()
         self._saved = True
         self._apply_saved_state()
-        self._save_to_store()
+        if self._save_to_store() is False:
+            self._saved = False
+            self._apply_saved_state()
+            return
         self._persisted_key = (name, sn) if (name or sn) else None
         mt = getattr(self._app, 'master_track', None)
         if mt and hasattr(mt, 'audit'):
@@ -1664,6 +1759,8 @@ class OtherSampleRowWidget(QFrame):
             self.delete_row()
 
     def delete_row(self):
+        if getattr(self, "_foreign_edit_lease", None):
+            return
         """Delete this row from storage and remove from UI."""
         try:
             name = self._data.get("animal_name", "")
@@ -1674,7 +1771,8 @@ class OtherSampleRowWidget(QFrame):
             rows = [r for r in rows if r.get("animal_name", "") != name]
             if len(rows) < original_count:
                 logger.info(f"Purging {original_count - len(rows)} rows from JSON")
-                self._store.write(rows)
+                if self._store.write(rows) is False:
+                    return
             mt = getattr(self._app, 'master_track', None)
             if mt and hasattr(mt, 'audit'):
                 mt.audit("sample_track.delete_row", name or "<unsaved>", "tab=other_samples")
@@ -1789,8 +1887,10 @@ class OtherSampleRowWidget(QFrame):
                 break
         if not found:
             rows.append(self._data)
-        self._store.write(rows)
+        if self._store.write(rows) is False:
+            return False
         self._persisted_key = (name, sn) if (name or sn) else None
+        return True
 
     def _build_type_section(self):
         self._type_checkboxes: List[OrganLabel] = []
@@ -1870,7 +1970,8 @@ class OtherSampleRowWidget(QFrame):
                     chk.set_checked(False)
                     chk.set_warning(False)
                     chk.set_count(0)
-                    self._save_to_store()
+                    if self._save_to_store() is False:
+                        return
                     self._check_all_unchecked()
             elif dlg.action == "ok":
                 num2, locs2, comment2, warning2 = dlg.values()
@@ -1884,7 +1985,8 @@ class OtherSampleRowWidget(QFrame):
                     chk.set_checked(False)
                     chk.set_warning(False)
                     chk.set_count(0)
-                    self._save_to_store()
+                    if self._save_to_store() is False:
+                        return
                     self._check_all_unchecked()
                 else:
                     self._data[f"{type_key}_num_aliquots"] = num2
@@ -1893,7 +1995,8 @@ class OtherSampleRowWidget(QFrame):
                     self._data[f"{type_key}_warning"] = warning2
                     chk.set_warning(warning2)
                     chk.set_count(num2)
-                    self._save_to_store()
+                    if self._save_to_store() is False:
+                        return
                     # Audit unit
                     all_units = [loc.get("unit", "").strip() for loc in locs2 if loc.get("unit", "").strip()]
                     if all_units:
@@ -1985,7 +2088,7 @@ class OtherSampleRowWidget(QFrame):
 
     def set_selected(self, v: bool):
         self._selected = v
-        self.setStyleSheet("background-color: #cce8ff;" if v else "")
+        _apply_sample_lease_state(self)
 
 
 # ---------------------------------------------------------------------------
@@ -3530,8 +3633,21 @@ class SampleTrackPlugin:
         self.app = app
         self.plugin_dir = PLUGIN_DIR
         self._window: Optional[SampleTrackWindow] = None
-        self._organ_store = JsonStore(None, app.backend, "organs")
-        self._other_store = JsonStore(None, app.backend, "other")
+        self._organ_store = JsonStore(None, app.backend, "organs", app)
+        self._other_store = JsonStore(None, app.backend, "other", app)
+
+    def invalidate_session(self):
+        self._organ_store._snapshot = None
+        self._other_store._snapshot = None
+        if self._window is not None:
+            self._window.close()
+            self._window = None
+
+    def apply_shared_lease_snapshot(self):
+        if self._window is not None and self._window.isVisible():
+            for kind in (SampleRowWidget, OtherSampleRowWidget):
+                for row in self._window.findChildren(kind):
+                    _apply_sample_lease_state(row)
 
     @property
     def _messages(self) -> Dict:
@@ -3601,7 +3717,8 @@ class SampleTrackPlugin:
                     found[f"{type_key}_num_aliquots"] = 1
                     found[f"{type_key}_aliquot_locations"] = json.dumps(
                         [{"unit": "", "storage": ""}])
-        self._other_store.write(rows)
+        if self._other_store.write(rows) is False:
+            return
         # Refresh open window
         if self._window and self._window.isVisible():
             self._window.other_tab.refresh()

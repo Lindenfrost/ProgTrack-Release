@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.3 or newer.
 """Small compatibility repository for plugin-owned structured records.
 
 This is intentionally not a JSON-file fallback. It lets existing plugin

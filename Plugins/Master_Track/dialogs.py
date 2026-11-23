@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Master Track PyQt6 dialogs.
@@ -47,6 +47,7 @@ from PyQt6.QtWidgets import (
 from .auth import UserDB
 from Plugins.core.ui_icons import apply_icon
 from Plugins.core.authorization import CanonicalUnitService
+from Plugins.core.backend.errors import AuthenticationError, BackendError, FirstAccountUnavailableError, SessionRevokedError
 from .permissions import (
     ALL_PERMISSIONS,
     DEFAULT_JOB_BUNDLES,
@@ -214,6 +215,8 @@ class CreateLordDialog(QDialog):
         self.messages = messages
         self.user_db = user_db
         self.created_user: Optional[str] = None
+        self.session_context = None
+        self.completed_elsewhere = False
 
         self.setWindowTitle(_msg(messages, "master_track.create_lord.title",
                                  "Create Lord Account"))
@@ -292,10 +295,21 @@ class CreateLordDialog(QDialog):
                                           "Passwords do not match."))
             return
 
-        self.user_db.add_user(username, password, role="lord",
-                              display_name=self.display_edit.text().strip())
-        self.user_db.record_login(username)
-        self.created_user = username
+        try:
+            self.session_context = self.user_db.backend.authenticated_sessions.create_first_account(
+                username, password, self.display_edit.text().strip()
+            )
+        except FirstAccountUnavailableError:
+            self.completed_elsewhere = True
+            self.reject()
+            return
+        except BackendError:
+            self.error_label.setText(_msg(self.messages, "master_track.error.account_setup_failed",
+                                          "The administrator account could not be created."))
+            return
+        self.created_user = self.session_context.username
+        self.pw_edit.clear()
+        self.pw_confirm.clear()
         self.accept()
 
 
@@ -325,6 +339,7 @@ class LoginDialog(QDialog):
         self.messages = messages
         self.user_db = user_db
         self.logged_in_user: Optional[str] = None
+        self.session_context = None
         self._attempts = 0
         self._locked_until: float = 0
 
@@ -392,8 +407,9 @@ class LoginDialog(QDialog):
 
         username = self.username_edit.text().strip()
         password = self.pw_edit.text()
-        user = self.user_db.authenticate(username, password)
-        if user is None:
+        try:
+            self.session_context = self.user_db.backend.authenticated_sessions.login(username, password)
+        except AuthenticationError:
             self._attempts += 1
             if self._attempts >= self.MAX_ATTEMPTS:
                 self._locked_until = now + self.LOCKOUT_SECONDS
@@ -402,9 +418,13 @@ class LoginDialog(QDialog):
                 _msg(self.messages, "master_track.error.bad_credentials",
                      "Invalid username or password."))
             return
+        except BackendError:
+            self.error_label.setText(_msg(self.messages, "master_track.error.login_unavailable",
+                                          "Login is currently unavailable."))
+            return
 
-        self.user_db.record_login(username)
-        self.logged_in_user = username
+        self.logged_in_user = self.session_context.username
+        self.pw_edit.clear()
         self.accept()
 
 
@@ -416,12 +436,14 @@ class ChangePasswordDialog(QDialog):
     """Allows any logged-in user to change their own password."""
 
     def __init__(self, parent: Optional[QWidget], messages: Dict[str, Any],
-                 user_db: UserDB, username: str, forced: bool = False):
+                 user_db: UserDB, username: str, forced: bool = False, *, session=None):
         super().__init__(parent)
         self.messages = messages
         self.user_db = user_db
         self.username = username
         self.forced = bool(forced)
+        self._session = session
+        self.password_changed = False
 
         self.setWindowTitle(_msg(messages, "master_track.change_pw.title", "Change Password"))
         self.setModal(True)
@@ -497,7 +519,7 @@ class ChangePasswordDialog(QDialog):
         new = self.new_pw.text()
         confirm = self.confirm_pw.text()
 
-        if not self.user_db.authenticate(self.username, old):
+        if self._session is None and not self.user_db.authenticate(self.username, old):
             self.error_label.setText(
                 _msg(self.messages, "master_track.error.wrong_old_pw",
                      "Current password is incorrect."))
@@ -513,7 +535,23 @@ class ChangePasswordDialog(QDialog):
                      "Passwords do not match."))
             return
 
-        self.user_db.set_password(self.username, new, must_change=False)
+        if self._session is None:
+            self.user_db.set_password(self.username, new, must_change=False)
+        else:
+            try:
+                self.user_db.backend.authenticated_sessions.change_password(self._session, old, new)
+            except SessionRevokedError:
+                self.error_label.setText(_msg(self.messages, "master_track.session_revoked", "Your session ended. Sign in again."))
+                # A revoked mandatory-password dialog must allow the login to restart.
+                super().reject()
+                return
+            except AuthenticationError:
+                self.error_label.setText(_msg(self.messages, "master_track.error.wrong_old_pw", "Current password is incorrect."))
+                return
+            except BackendError:
+                self.error_label.setText(_msg(self.messages, "master_track.login.backend_unavailable", "The database is unavailable."))
+                return
+        self.password_changed = True
         self.accept()
 
 
@@ -610,6 +648,7 @@ class ManageUsersDialog(QDialog):
 
         btn_row.addStretch()
         close_btn = QPushButton(_msg(messages, "master_track.manage.close", "Close"))
+        close_btn.setProperty("sessionDismiss", True)
         close_btn.clicked.connect(self.accept)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
@@ -662,7 +701,8 @@ class ManageUsersDialog(QDialog):
     def _add_user(self) -> None:
         if not self._can_create_users:
             return
-        dlg = _CreateUserSubDialog(self, self.messages, self.user_db)
+        dlg = _CreateUserSubDialog(self, self.messages, self.user_db,
+                                   can_assign_primary_role=self._can_assign_primary_role)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self._refresh()
 
@@ -722,7 +762,11 @@ class ManageUsersDialog(QDialog):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            ok = self.user_db.delete_user(uname)
+            try:
+                ok = self.user_db.delete_user(uname)
+            except BackendError as error:
+                QMessageBox.warning(self, _msg(self.messages, "master_track.error.title", "Error"), str(error))
+                return
             if not ok:
                 QMessageBox.warning(
                     self,
@@ -877,6 +921,8 @@ class _EditUserDialog(QDialog):
             self.reject()
             return
         self._user = user
+        baseline = getattr(self.user_db, "baseline", None)
+        self._account_baseline = baseline(username) if callable(baseline) else None
 
         self.setWindowTitle(
             _msg(messages, "master_track.manage.edit_user", "Edit User") + f" — {username}")
@@ -1157,18 +1203,14 @@ class _EditUserDialog(QDialog):
                          "Cannot demote the last Lord account."))
                 return
 
+        patch = {}
         if new_role != user.get("role"):
-            self.user_db.set_role(self.username, new_role)
+            patch["role"] = new_role
 
         if new_role not in (ROLE_LORD, ROLE_MASTER):
             new_jobs = [j for j, cb in self._job_checks.items() if cb.isChecked()]
-            if not self.user_db.set_jobs(self.username, new_jobs):
-                self.error_label.setText(_msg(
-                    self.messages,
-                    "master_track.error.awo_requires_vet",
-                    "The AWO job requires the Vet job.",
-                ))
-                return
+            if set(new_jobs) != set(user.get("jobs", [])):
+                patch["jobs"] = new_jobs
 
             if self._perm_checks:
                 base_perms = resolve_effective_permissions(new_role, new_jobs, [], [])
@@ -1196,26 +1238,31 @@ class _EditUserDialog(QDialog):
                 if revoke_changes and not self._can_revoke_direct:
                     self.error_label.setText("Permission denied: direct revocations.")
                     return
-                self.user_db.set_direct_permissions(
-                    self.username, sorted(granted), sorted(revoked)
-                )
+                if grant_changes or revoke_changes:
+                    patch["permissions"] = {"granted": sorted(granted), "revoked": sorted(revoked)}
         else:
-            self.user_db.set_jobs(self.username, [])
-            self.user_db.set_direct_permissions(self.username, [], [])
+            if user.get("jobs"):
+                patch["jobs"] = []
+            direct = user.get("permissions") or {}
+            if direct.get("granted") or direct.get("revoked"):
+                patch["permissions"] = {"granted": [], "revoked": []}
 
-        # Save profile fields
         if self._can_edit_users:
-            self.user_db.update_user_profile(
-                self.username,
-                display_name=self._p_display.text().strip(),
-                pronouns=self._p_pronouns.text().strip(),
-                email=self._p_email.text().strip(),
-                phone=self._p_phone.text().strip(),
-                mobile=self._p_mobile.text().strip(),
-                unit=unit_name,
-                unit_id=unit_id,
-                profession=self._p_profession.text().strip(),
-            )
+            profile = {
+                "display_name": self._p_display.text().strip(),
+                "pronouns": self._p_pronouns.text().strip(),
+                "email": self._p_email.text().strip(),
+                "phone": self._p_phone.text().strip(),
+                "mobile": self._p_mobile.text().strip(),
+                "unit_id": unit_id,
+                "profession": self._p_profession.text().strip(),
+            }
+            patch.update({key: value for key, value in profile.items() if value != (user.get(key) or "")})
+        try:
+            self.user_db.edit_account(self.username, patch, expected=self._account_baseline)
+        except BackendError as error:
+            self.error_label.setText(str(error))
+            return
         self.accept()
 
 
@@ -1231,6 +1278,7 @@ class EditJobsDialog(QDialog):
         super().__init__(parent)
         self.messages = messages
         self.plugin = plugin
+        self._policy_revision = plugin.refresh_job_policy()
 
         self.setWindowTitle(_msg(messages, "master_track.manage.edit_jobs", "Edit Jobs"))
         self.setModal(True)
@@ -1282,6 +1330,7 @@ class EditJobsDialog(QDialog):
         btn_row.addWidget(save_btn)
         btn_row.addStretch()
         close_btn = QPushButton(_msg(messages, "master_track.manage.close", "Close"))
+        close_btn.setProperty("sessionDismiss", True)
         close_btn.clicked.connect(self.accept)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
@@ -1333,10 +1382,14 @@ class EditJobsDialog(QDialog):
         if reply != QMessageBox.StandardButton.Yes:
             return
         new_perms = {p for p, cb in self._perm_checks.items() if cb.isChecked()}
-        JOB_BUNDLES[job_name] = new_perms
-        self.plugin.set_job_timeout(job_name, self.timeout_spin.value())
-        self.plugin.save_job_bundles()
-        affected = self.plugin.user_db.reset_permissions_for_job(job_name)
+        try:
+            result = self.plugin.change_job_policy(job_name, action="update", permissions=new_perms,
+                timeout=self.timeout_spin.value(), expected=self._policy_revision)
+        except BackendError as error:
+            self.error_label.setText(str(error))
+            return
+        self._policy_revision = self.plugin.job_policy_revision()
+        affected = len(result.targets)
         msg = _msg(self.messages, "master_track.manage.job_saved", "Job saved.")
         if affected:
             msg += f" {affected} user(s) updated."
@@ -1356,8 +1409,12 @@ class EditJobsDialog(QDialog):
                 _msg(self.messages, "master_track.error.job_exists",
                      "A job with this name already exists."))
             return
-        JOB_BUNDLES[name] = set()
-        self.plugin.save_job_bundles()
+        try:
+            self.plugin.change_job_policy(name, action="create", expected=self._policy_revision)
+        except BackendError as error:
+            self.error_label.setText(str(error))
+            return
+        self._policy_revision = self.plugin.job_policy_revision()
         self.job_combo.addItem(name)
         self.job_combo.setCurrentText(name)
 
@@ -1382,10 +1439,13 @@ class EditJobsDialog(QDialog):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        JOB_BUNDLES.pop(job_name, None)
-        affected = self.plugin.user_db.remove_job_from_all_users(job_name)
-        self.plugin.delete_job_timeout(job_name)
-        self.plugin.save_job_bundles()
+        try:
+            result = self.plugin.change_job_policy(job_name, action="delete", expected=self._policy_revision)
+        except BackendError as error:
+            self.error_label.setText(str(error))
+            return
+        self._policy_revision = self.plugin.job_policy_revision()
+        affected = len(result.targets)
         index = self.job_combo.findText(job_name)
         if index >= 0:
             self.job_combo.removeItem(index)
@@ -1620,7 +1680,13 @@ class AuditLogsDialog(QDialog):
             return names
 
         try:
-            data = backend.records.get("housing", "cage", default={})
+            shared = getattr(app, "_uses_shared_leases", None)
+            if callable(shared) and shared():
+                master = getattr(app, "master_track", None)
+                with backend.protected_request(getattr(master, "session_context", None), "master.view_logs"):
+                    data = backend.records.get("housing", "cage", default={})
+            else:
+                data = backend.records.get("housing", "cage", default={})
         except Exception:
             return names
 
@@ -2384,7 +2450,7 @@ class AuditLogsDialog(QDialog):
 # -- small helper sub-dialogs used by ManageUsersDialog -------------------
 
 class _CreateUserSubDialog(QDialog):
-    def __init__(self, parent: QWidget, messages: Dict[str, Any], user_db: UserDB):
+    def __init__(self, parent: QWidget, messages: Dict[str, Any], user_db: UserDB, *, can_assign_primary_role=True):
         super().__init__(parent)
         self.messages = messages
         self.user_db = user_db
@@ -2405,7 +2471,8 @@ class _CreateUserSubDialog(QDialog):
         self.pw.setEchoMode(QLineEdit.EchoMode.Password)
         form.addRow(_msg(messages, "master_track.label.password",     "Password:"),     self.pw)
         self.role_combo = QComboBox()
-        self.role_combo.addItems(["user", "lord"])
+        self.role_combo.addItems(["user", "lord"] if can_assign_primary_role else ["user"])
+        self.role_combo.setEnabled(bool(can_assign_primary_role))
         form.addRow(_msg(messages, "master_track.manage.col_role",    "Role:"),         self.role_combo)
         layout.addWidget(acct_group)
 
@@ -2465,17 +2532,21 @@ class _CreateUserSubDialog(QDialog):
                 "A regular user must have an organizational Unit.",
             ))
             return
-        self.user_db.add_user(
-            uname, pw, role=role,
-            display_name=self.dname.text().strip(),
-            pronouns=self.f_pronouns.text().strip(),
-            email=self.f_email.text().strip(),
-            phone=self.f_phone.text().strip(),
-            mobile=self.f_mobile.text().strip(),
-            unit=unit_name,
-            unit_id=unit_id,
-            profession=self.f_profession.text().strip(),
-        )
+        try:
+            self.user_db.add_user(
+                uname, pw, role=role,
+                display_name=self.dname.text().strip(),
+                pronouns=self.f_pronouns.text().strip(),
+                email=self.f_email.text().strip(),
+                phone=self.f_phone.text().strip(),
+                mobile=self.f_mobile.text().strip(),
+                unit=unit_name,
+                unit_id=unit_id,
+                profession=self.f_profession.text().strip(),
+            )
+        except BackendError as error:
+            self.error_label.setText(str(error))
+            return
         self.accept()
 
 
@@ -2516,5 +2587,9 @@ class _ResetPasswordSubDialog(QDialog):
                 _msg(self.messages, "master_track.error.pw_too_short",
                      "Password must be at least {n} characters.").replace("{n}", str(_MIN_PW_LEN)))
             return
-        self.user_db.set_password(self.username, pw, must_change=True)
+        try:
+            self.user_db.set_password(self.username, pw, must_change=True)
+        except BackendError as error:
+            self.error_label.setText(str(error))
+            return
         self.accept()

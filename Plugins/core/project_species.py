@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.2 or newer.
 """Exact project-species assignment rules shared by core and Project Track."""
 
 from __future__ import annotations

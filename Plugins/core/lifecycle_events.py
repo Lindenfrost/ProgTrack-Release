@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.3 or newer.
 """Structured lifecycle-event helpers for Phase 1."""
 
 from __future__ import annotations

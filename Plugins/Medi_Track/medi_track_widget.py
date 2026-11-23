@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Medi Track medical-history widget and plugin logic.
@@ -57,6 +57,7 @@ from PyQt6.QtWidgets import (
     QWidget,
     QApplication,
 )
+from Plugins.core.document_messages import complete_document_retry, document_cleanup_notice, document_error, document_retry_id
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_status import status_summary_with_death_priority
 from Plugins.core.lifecycle_events import ever_in_experiment
@@ -456,21 +457,22 @@ def _path_identity(path: Path) -> str:
     return os.path.normcase(os.path.abspath(str(path)))
 
 
-def _document_paths_for_animal(
+def _document_entries_for_animal(
     animal_name: str,
     store: "MediStore",
     docs_root: Optional[Path] = None,
-) -> List[Path]:
+) -> list[tuple[Path, dict | None]]:
     """Return all filesystem documents known for an animal."""
     seen = set()
-    paths: List[Path] = []
+    entries = []
 
-    def add(path_like: object) -> None:
+    def add(path_like: object, record=None) -> None:
         if not path_like:
             return
         path = Path(str(path_like))
         try:
-            if not path.is_file() or path.name.startswith(".") or path.name.lower() == "thumbs.db":
+            if ((record is None and not path.is_file()) or path.name.startswith(".")
+                    or path.name.lower() == "thumbs.db"):
                 return
         except OSError:
             return
@@ -478,14 +480,17 @@ def _document_paths_for_animal(
         if ident in seen:
             return
         seen.add(ident)
-        paths.append(path)
+        entries.append((path, record))
 
     backend = getattr(store, "backend", None)
+    shared = getattr(store, "_shared", lambda: False)()
     if backend is not None:
-        for record in backend.documents.list_for_owner(
-            "animal-medical", animal_name
-        ):
-            add(backend.documents.payload_path(record))
+        get_managed = getattr(store, "managed_documents", None)
+        managed = get_managed(animal_name) if callable(get_managed) else backend.documents.list_for_owner(
+            "animal-medical", animal_name,
+        )
+        for record in managed:
+            add(backend.documents.payload_path(record), record)
     elif docs_root is not None:
         folder = Path(docs_root) / _safe_name(animal_name)
         if folder.exists():
@@ -495,22 +500,29 @@ def _document_paths_for_animal(
             except OSError:
                 pass
 
+    if shared:
+        return sorted(entries, key=lambda entry: entry[1]["original_name"].casefold())
     try:
         json_docs = store.get_documents(animal_name)
     except Exception:
         json_docs = []
     for doc in json_docs:
-        if isinstance(doc, dict):
+        if isinstance(doc, dict) and not doc.get("document_id"):
             add(doc.get("path"))
 
-    return sorted(paths, key=lambda p: p.name.lower())
+    return sorted(entries, key=lambda entry: (entry[1]["original_name"] if entry[1] else entry[0].name).casefold())
 
 
-def _unique_export_destination(destination_dir: Path, source: Path) -> Path:
-    candidate = destination_dir / source.name
+def _document_paths_for_animal(animal_name, store, docs_root=None):
+    return [path for path, _record in _document_entries_for_animal(animal_name, store, docs_root)]
+
+
+def _unique_export_destination(destination_dir: Path, source: Path, original_name=None) -> Path:
+    name = Path(original_name) if original_name else source
+    candidate = destination_dir / name.name
     counter = 1
     while candidate.exists() and _path_identity(candidate) != _path_identity(source):
-        candidate = destination_dir / f"{source.stem}_{counter}{source.suffix}"
+        candidate = destination_dir / f"{name.stem}_{counter}{name.suffix}"
         counter += 1
     return candidate
 
@@ -518,17 +530,19 @@ def _unique_export_destination(destination_dir: Path, source: Path) -> Path:
 def _copy_document_files_to_directory(
     sources: Iterable[Path],
     destination_dir: Path,
+    *,
+    copy_managed=None,
 ) -> int:
     """Copy document files to a directory without overwriting existing files."""
     destination_dir.mkdir(parents=True, exist_ok=True)
     copied = 0
     for source in sources:
-        if not source.is_file():
+        if copy_managed is None and not source.is_file():
             continue
         dest = _unique_export_destination(destination_dir, source)
         if _path_identity(dest) == _path_identity(source):
             continue
-        shutil.copy2(str(source), str(dest))
+        (copy_managed or shutil.copy2)(source, dest)
         copied += 1
     return copied
 
@@ -809,9 +823,10 @@ def _clinical_note(entry, messages):
 class MediStore:
     """Read/write medical-history records in the configured backend."""
 
-    def __init__(self, backend: Any) -> None:
+    def __init__(self, backend: Any, app: Any = None) -> None:
         from Plugins.core.backend_store import BackendJsonStore
         self.backend = backend
+        self.app = app
         self._backend_store = BackendJsonStore(backend, "medical", "history")
         self._data: Optional[Dict[str, Any]] = None
 
@@ -860,16 +875,83 @@ class MediStore:
             blk["documents"] = []
         return blk
 
+    def _shared_history(self, name):
+        from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+        from Plugins.core.runtime_paths import BackendProfile
+
+        paths = getattr(self.backend, "paths", None)
+        if getattr(paths, "profile", None) is not BackendProfile.SHARED_POSTGRESQL:
+            return None
+        master = getattr(self.app, "master_track", None)
+        session = getattr(master, "session_context", None)
+        if session is None:
+            return {}, {}
+        try:
+            return self.backend.load_shared_medical_history(session, str(name).strip())
+        except SessionRevokedError:
+            master.handle_session_revoked()
+        except PermissionDeniedError:
+            pass
+        return {}, {}
+
+    def _shared(self):
+        from Plugins.core.runtime_paths import BackendProfile
+
+        return getattr(getattr(self.backend, "paths", None), "profile", None) is BackendProfile.SHARED_POSTGRESQL
+
+    def managed_documents(self, ipid):
+        if not self._shared():
+            return self.backend.documents.list_for_owner("animal-medical", ipid)
+        from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+
+        master = getattr(self.app, "master_track", None)
+        session = getattr(master, "session_context", None)
+        if session is None:
+            return []
+        try:
+            return self.backend.list_shared_medical_documents(session, ipid)
+        except SessionRevokedError:
+            master.handle_session_revoked()
+        except PermissionDeniedError:
+            pass
+        return []
+
     def get_entries(self, name: str) -> List[Dict[str, Any]]:
+        shared = self._shared_history(name)
+        if shared is not None:
+            own, derived = shared
+            return list(own.get("entries", ())) + list(derived.get("entries", ()))
         # Retained Core-derived documentation is stored atomically with Core,
         # independently of the cached, separately authored medical record.
         derived = self.backend.records.get('medical.core-events', str(name).strip(), default={})
         return list(self._block(name)["entries"]) + list(derived.get('entries', []))
 
     def get_documents(self, name: str) -> List[Dict[str, Any]]:
+        shared = self._shared_history(name)
+        if shared is not None:
+            return list(shared[0].get("documents", ()))
         return list(self._block(name)["documents"])
 
-    def add_entry(self, name: str, entry: Dict[str, Any]) -> None:
+    def add_entry(self, name: str, entry: Dict[str, Any], *, source_session=None) -> None:
+        uses_shared_leases = getattr(self.app, "_uses_shared_leases", None)
+        if callable(uses_shared_leases) and uses_shared_leases():
+            from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+
+            master = getattr(self.app, "master_track", None)
+            context = getattr(master, "session_context", None)
+            if context is None or source_session is not None and source_session != context:
+                raise PermissionDeniedError("Sign in to add a medical entry.")
+            ipid = self.app._lease_ipid(name)
+            owner = object()
+            token = self.app._hold_shared_animal_lease(ipid, owner)
+            try:
+                self.backend.append_shared_medical_entry(context, ipid, token, entry)
+            except SessionRevokedError:
+                master.handle_session_revoked()
+                raise
+            finally:
+                self.app._release_shared_animal_lease(ipid, owner)
+            return
         self._block(name)["entries"].append(entry)
         self.save()
 
@@ -1738,6 +1820,7 @@ class MediTrackWidget(QWidget):
             return
         sig = self._get_signature()
         mt = getattr(self.app, 'master_track', None)
+        source_session = getattr(mt, "session_context", None)
         readonly_sig = bool(mt and getattr(mt, 'is_logged_in', False))
         _app_animals = getattr(self.app, 'animals', {}) or {}
         _rec_entry = (_app_animals.get(self._current_animal) or {})
@@ -1770,7 +1853,23 @@ class MediTrackWidget(QWidget):
             "linked_document_ids": [],
         }
         try:
-            self.store.add_entry(self._current_animal, entry)
+            uses_shared_leases = getattr(self.app, "_uses_shared_leases", None)
+            if callable(uses_shared_leases) and uses_shared_leases():
+                from Plugins.core.backend.errors import LockConflictError, SessionRevokedError
+
+                ipid = self.app._lease_ipid(self._current_animal)
+                hold = getattr(self.app, "_owned_animal_leases", {}).get(ipid)
+                if hold is None:
+                    raise LockConflictError("A current edit lease is required.")
+                try:
+                    self.app.backend.append_shared_medical_entry(source_session, ipid, hold[0], entry)
+                except SessionRevokedError:
+                    if source_session == getattr(mt, "session_context", None):
+                        mt.handle_session_revoked()
+                    raise
+                self.store._data = None
+            else:
+                self.store.add_entry(self._current_animal, entry)
         except Exception as exc:
             logger.error("add_entry failed: %s", exc)
             return
@@ -1990,8 +2089,19 @@ class MediTrackWidget(QWidget):
         brand_generated_pdf(self, output_path)
 
     def _copy_documents_for_export(self, animal_name: str, output_path: str) -> int:
-        docs = _document_paths_for_animal(animal_name, self.store)
-        return _copy_document_files_to_directory(docs, Path(output_path).parent)
+        docs = _document_entries_for_animal(animal_name, self.store)
+        destination_dir = Path(output_path).parent
+        copied = 0
+        for source, record in docs:
+            destination = _unique_export_destination(destination_dir, source, record["original_name"] if record else None)
+            if _path_identity(destination) == _path_identity(source):
+                continue
+            if record is None:
+                shutil.copy2(source, destination)
+            else:
+                self.app.backend.documents.copy_verified_payload(record, destination)
+            copied += 1
+        return copied
 
     def _export_animal_history_package(
         self,
@@ -2034,20 +2144,19 @@ class MediTrackWidget(QWidget):
             final_document_dir = Path(_document_final_dir or document_dir)
             link_base_dir = Path(_link_base_dir or Path(output_path).parent)
             document_dir.mkdir(parents=True, exist_ok=True)
-            for source in _document_paths_for_animal(animal_name, self.store):
-                src = Path(source)
-                if not src.is_file():
-                    continue
-                destination = document_dir / src.name
-                final_destination = final_document_dir / src.name
+            for src, record in _document_entries_for_animal(animal_name, self.store):
+                name = Path(record["original_name"]) if record else src
+                destination = document_dir / name.name
+                final_destination = final_document_dir / name.name
                 counter = 1
                 while destination.exists() or final_destination.exists():
-                    destination = document_dir / f"{src.stem}_{counter}{src.suffix}"
-                    final_destination = (
-                        final_document_dir / f"{src.stem}_{counter}{src.suffix}"
-                    )
+                    destination = document_dir / f"{name.stem}_{counter}{name.suffix}"
+                    final_destination = final_document_dir / f"{name.stem}_{counter}{name.suffix}"
                     counter += 1
-                shutil.copy2(src, destination)
+                if record is None:
+                    shutil.copy2(src, destination)
+                else:
+                    self.app.backend.documents.copy_verified_payload(record, destination)
                 copied[str(src)] = final_destination
         else:
             link_base_dir = Path(_link_base_dir or Path(output_path).parent)
@@ -2433,6 +2542,9 @@ class MediTrackWidget(QWidget):
     def _on_add_document_clicked(self) -> None:
         if not self._current_animal:
             return
+        animal = self._current_animal
+        master = getattr(self.app, "master_track", None)
+        context = getattr(master, "session_context", None)
         path, _ = QFileDialog.getOpenFileName(
             self,
             _msg(self.messages, "medi_track.dialog.select_file", "Select document"),
@@ -2440,74 +2552,96 @@ class MediTrackWidget(QWidget):
         if not path:
             return
         src = Path(path)
+        actor = str(getattr(master, "current_username", "") or "medical-user")
+        retry = ("add", actor, animal, str(src))
+        operation_id = document_retry_id(self, retry)
         try:
-            mt = getattr(self.app, "master_track", None)
-            actor = str(
-                getattr(mt, "current_username", "") or "medical-user"
-            )
-            record = self.app.backend.documents.add(
-                src,
-                owner_type="animal-medical",
-                owner_id=self._current_animal,
-                actor=actor,
-            )
-            dest = self.app.backend.documents.payload_path(record)
+            uses_shared_leases = getattr(self.app, "_uses_shared_leases", None)
+            if callable(uses_shared_leases) and uses_shared_leases():
+                from Plugins.core.backend.errors import LockConflictError, SessionRevokedError
+
+                ipid = self.app._lease_ipid(animal)
+                hold = getattr(self.app, "_owned_animal_leases", {}).get(ipid)
+                if hold is None:
+                    raise LockConflictError("A current edit lease is required.")
+                try:
+                    self.app.backend.add_shared_medical_document(context, ipid, hold[0], src, operation_id=operation_id)
+                except SessionRevokedError:
+                    if context == getattr(master, "session_context", None):
+                        master.handle_session_revoked()
+                    raise
+            else:
+                self.app.backend.documents.add(
+                    src, owner_type="animal-medical", owner_id=animal, actor=actor, operation_id=operation_id,
+                )
         except Exception as exc:
-            logger.error("copy document failed: %s", exc)
-            QMessageBox.warning(
-                self,
-                _msg(self.messages, "error.title", "Error"),
-                str(exc))
+            QMessageBox.warning(self, _msg(self.messages, "error.title", "Error"), document_error(self.messages, exc))
             return
-        doc = {
-            "original_name": src.name,
-            "path": str(dest),
-            "title": src.name,
-            "document_id": str(record["document_id"]),
-        }
-        try:
-            self.store.add_document(self._current_animal, doc)
-        except Exception as exc:
-            logger.error("add_document failed: %s", exc)
-        self._reload_docs(self._current_animal)
+        complete_document_retry(self, retry)
+        self._reload_docs(animal)
 
     def _reload_docs(self, animal_name: str) -> None:
         """Refresh the documents list for the given animal."""
         self._docs_list.clear()
-        found: List[Tuple[str, str]] = []
-        for record in self.app.backend.documents.list_for_owner(
-            "animal-medical", animal_name
-        ):
-            found.append((
-                str(self.app.backend.documents.payload_path(record)),
-                str(record.get("document_id", "")),
-            ))
-        json_docs = self.store.get_documents(animal_name)
-        found_paths = {path for path, _document_id in found}
-        extra = [d for d in json_docs
-                 if d.get('path') and d['path'] not in found_paths
-                 and Path(d['path']).exists()]
-        all_paths = [(p, Path(p).name, document_id) for p, document_id in found] + [
-            (d['path'], d.get('title') or Path(d['path']).name, str(d.get('document_id', '')))
-            for d in extra]
+        found = []
+        uses_shared_leases = getattr(self.app, "_uses_shared_leases", None)
+        shared = callable(uses_shared_leases) and uses_shared_leases()
+        if shared:
+            from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+
+            master = getattr(self.app, "master_track", None)
+            session = getattr(master, "session_context", None)
+            documents = []
+            if session is not None:
+                try:
+                    documents = self.app.backend.list_shared_medical_documents(session, animal_name)
+                except SessionRevokedError:
+                    master.handle_session_revoked()
+                except PermissionDeniedError:
+                    pass
+        else:
+            documents = self.app.backend.documents.list_for_owner("animal-medical", animal_name)
+        for record in documents:
+            found.append(("", str(record["original_name"]), record))
+        json_docs = [] if shared else self.store.get_documents(animal_name)
+        extra = [(doc["path"], doc.get("title") or Path(doc["path"]).name, {})
+                 for doc in json_docs if not doc.get("document_id") and doc.get("path") and Path(doc["path"]).exists()]
+        all_paths = found + extra
         if not all_paths:
             self._docs_list.addItem(
                 _msg(self.messages, "medi_track.empty.no_documents", "(no documents)"))
             return
-        for fpath, fname, document_id in all_paths:
-            icon = _icon_for_ext(Path(fpath).suffix)
+        for fpath, fname, record in all_paths:
+            icon = _icon_for_ext(Path(fname).suffix)
             item = QListWidgetItem(icon, fname)
             item.setData(Qt.ItemDataRole.UserRole, fpath)
-            item.setData(Qt.ItemDataRole.UserRole + 1, document_id)
+            item.setData(Qt.ItemDataRole.UserRole + 1, record.get("document_id", ""))
+            item.setData(Qt.ItemDataRole.UserRole + 2, record.get("revision"))
+            item.setData(Qt.ItemDataRole.UserRole + 3, record.get("sha256", ""))
             item.setToolTip(fpath)
             self._docs_list.addItem(item)
         self._btn_delete_doc.setEnabled(self._can_delete_document() and bool(found))
 
     def _on_doc_item_clicked(self, item: QListWidgetItem) -> None:
+        from Plugins.core.backend.errors import BackendError
+        from Plugins.core.backend.managed_storage import ManagedStorageUnavailable
+
+        document_id = str(item.data(Qt.ItemDataRole.UserRole + 1) or "")
+        if document_id:
+            try:
+                records = self.store.managed_documents(self._current_animal)
+                matched = next((row for row in records if str(row.get("document_id")) == document_id), None)
+                if matched is None:
+                    return
+                path = self.app.backend.documents.viewer_payload_path(matched)
+                if not open_local_path(path):
+                    raise ManagedStorageUnavailable("not_accessible")
+            except (BackendError, OSError) as error:
+                QMessageBox.warning(self, _msg(self.messages, "error.title", "Error"), document_error(self.messages, error))
+            return
         path = item.data(Qt.ItemDataRole.UserRole)
         if path and Path(path).exists():
-            if not open_local_path(path):
-                logger.error("Could not open document path: %s", path)
+            open_local_path(path)
 
     def _on_delete_document_clicked(self) -> None:
         if not self._current_animal or not self._can_delete_document():
@@ -2516,8 +2650,10 @@ class MediTrackWidget(QWidget):
         item = self._docs_list.currentItem()
         if item is None:
             return
+        animal = self._current_animal
+        master = getattr(self.app, "master_track", None)
+        context = getattr(master, "session_context", None)
         document_id = str(item.data(Qt.ItemDataRole.UserRole + 1) or "").strip()
-        path = str(item.data(Qt.ItemDataRole.UserRole) or "").strip()
         if not document_id:
             QMessageBox.warning(
                 self,
@@ -2535,31 +2671,35 @@ class MediTrackWidget(QWidget):
         reason = str(reason or "").strip()
         if not accepted or not reason:
             return
+        actor = str(getattr(master, "current_username", "") or "medical-user")
+        revision = item.data(Qt.ItemDataRole.UserRole + 2)
+        checksum = item.data(Qt.ItemDataRole.UserRole + 3)
+        retry = ("delete", actor, animal, document_id, revision, reason)
+        options = dict(expected_revision=revision, expected_checksum=checksum,
+                       operation_id=document_retry_id(self, retry))
         try:
-            record = self.app.backend.documents.delete_active(document_id)
-            try:
-                self.store.remove_document(self._current_animal, document_id=document_id, path=path)
-            except Exception:
-                # The backend reference and payload are authoritative.  A stale
-                # compatibility mirror must not suppress the successful audit.
-                logger.exception("Could not remove Medi compatibility document reference %s", document_id)
-            mt = getattr(self.app, "master_track", None)
-            if mt is not None and hasattr(mt, "audit"):
-                mt.audit(
-                    "medi_document_delete",
-                    document_id,
-                    (f"animal={self._current_animal}; original_name={record.get('original_name', '')}; "
-                     f"path={path}; reason={reason}; result=deleted"),
-                )
-            self._reload_docs(self._current_animal)
+            uses_shared_leases = getattr(self.app, "_uses_shared_leases", None)
+            if callable(uses_shared_leases) and uses_shared_leases():
+                from Plugins.core.backend.errors import LockConflictError, SessionRevokedError
+
+                ipid = self.app._lease_ipid(animal)
+                hold = getattr(self.app, "_owned_animal_leases", {}).get(ipid)
+                if hold is None:
+                    raise LockConflictError("A current edit lease is required.")
+                try:
+                    result = self.app.backend.delete_shared_medical_document(context, ipid, hold[0], document_id, reason, **options)
+                except SessionRevokedError:
+                    if context == getattr(master, "session_context", None):
+                        master.handle_session_revoked()
+                    raise
+            else:
+                result = self.app.backend.retire_medical_document(animal, document_id, reason, actor=actor, **options)
+            complete_document_retry(self, retry)
+            self._reload_docs(animal)
+            if result["cleanup_pending"]:
+                QMessageBox.warning(self, _msg(self.messages, "title.warning", "Warning"), document_cleanup_notice(self.messages))
         except Exception as exc:
-            logger.exception("Medi document deletion failed for %s", document_id)
-            QMessageBox.warning(
-                self,
-                _msg(self.messages, "error.title", "Error"),
-                _msg(self.messages, "medi_track.dialog.delete_document.failed",
-                     "The document could not be deleted: {error}").format(error=exc),
-            )
+            QMessageBox.warning(self, _msg(self.messages, "error.title", "Error"), document_error(self.messages, exc))
 
     def _show_permission_denied(self) -> None:
         fn = getattr(self.app, "_show_permission_denied", None)
@@ -2889,7 +3029,7 @@ class MediTrackPlugin:
         self.app = app
         self.messages: Dict[str, Any] = getattr(app, "messages", {}) or {}
         self._lang = self._detect_lang()
-        self.store = MediStore(app.backend)
+        self.store = MediStore(app.backend, app)
         self._widget: Optional[MediTrackWidget] = None
 
     # ── helpers ──
@@ -2951,6 +3091,7 @@ class MediTrackPlugin:
         if can_resolve is None:
             can_resolve = mode in ('resolve', 'manage')
         mt = getattr(self.app, 'master_track', None)
+        source_session = getattr(mt, "session_context", None)
         readonly_sig = bool(mt and getattr(mt, 'is_logged_in', False))
         active = self.store.get_active_issues(animal_name, status_type)
         _app_animals = getattr(self.app, 'animals', {}) or {}
@@ -2975,9 +3116,14 @@ class MediTrackPlugin:
                 status_type, dlg.result_issue_id(), dlg.result_note(), sig,
                 animal_name=animal_name)
         try:
-            self.store.add_entry(animal_name, entry)
+            shared = getattr(self.app, "_uses_shared_leases", None)
+            if callable(shared) and shared():
+                self.store.add_entry(animal_name, entry, source_session=source_session)
+            else:
+                self.store.add_entry(animal_name, entry)
         except Exception as exc:
             logger.error("open_status_dialog add_entry: %s", exc)
+            return False
         self._refresh_current_animal_when_safe(animal_name)
         return True
 

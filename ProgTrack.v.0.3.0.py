@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required Launcher version: 0.2.1 or newer.
 # Module: Main application entry point and core user interface.
 # Minimum Python version: 3.9.
@@ -48,7 +48,7 @@ import hashlib
 import tempfile
 import errno
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 import warnings
 import re
 import platform
@@ -80,9 +80,11 @@ from Plugins.core.runtime_paths import (
     resolve_runtime_paths,
 )
 from Plugins.core.backend import (
-    ConflictError,
     LockConflictError,
     ProgTrackBackend,
+    BackendSchemaError,
+    BackendConfigurationError,
+    BackendUnavailableError,
     StandaloneLockError,
 )
 from Plugins.core.backend.animal_service import PARENTAGE_REVISION_FIELDS
@@ -91,7 +93,6 @@ from Plugins.core.backend_configuration import (
     BackendConfigurationService,
     BackendConfigurationValidationError,
     PostgreSQLSettings,
-    configured_postgres_dsn,
 )
 from Plugins.core.ui_icons import (
     apply_icon,
@@ -153,7 +154,6 @@ from Plugins.core.experimental_limits import (
 from Plugins.core.role_block_presets import (
     RoleBlockPresetRegistry,
     normalized_preset_name,
-    role_block_presets_path,
     valid_preset_name,
     normalize_event_definition,
     normalize_experimental_block,
@@ -170,11 +170,11 @@ from Plugins.core.resource_catalogs import (
     UNKNOWN_SPECIES_VALUE,
     ordered_species_for_display,
 )
+from Plugins.core.backend.core_configuration import (
+    ANIMAL_ROLES, IDENTITY_CONVENTIONS, PRESETS, RECORD_IDS, CoreConfigurationMissing,
+)
 from Plugins.core.identity_conventions import (
     birth_year_token,
-    conventions_path,
-    load_conventions,
-    next_generated_id,
     pattern_from_components,
     preview_next_generated_id,
     relationship_candidates,
@@ -1670,25 +1670,27 @@ class StyleSettingsDialog(QDialog):
         self.marker_combos = {}
         self._custom_event_style_controls = {}
         self.role_table = None
-        self._role_definitions = self.parent_app._load_animal_role_definitions()
-        self._role_setup_editable = self.parent_app._can_configure_animal_roles()
+        config = getattr(self.parent_app.backend, "core_configuration", None)
+        snapshot = config.snapshot() if config is not None else dict.fromkeys(RECORD_IDS, (None, 0))
+        roles, _revision = snapshot[ANIMAL_ROLES]
+        self._role_definitions = AnimalRoleRegistry(
+            self.parent_app.backend, initial_payload=roles if isinstance(roles, dict) else AnimalRoleRegistry.empty_payload()
+        ).roles()
+        self._opening_role_definitions = copy.deepcopy(self._role_definitions)
+        self._role_setup_editable = (
+            all(revision for _payload, revision in snapshot.values())
+            and self.parent_app._can_configure_animal_roles()
+        )
         self._accepted_role_definitions = None
+        presets, _revision = snapshot[PRESETS]
         self._role_block_preset_registry = RoleBlockPresetRegistry(
-            self.parent_app.backend
+            self.parent_app.backend, initial_payload=presets if isinstance(presets, dict) else {}
         )
         self._staged_role_block_preset_payload = None
-        self._configuration_revisions = {}
-        for _key in (
-            ("configuration", "animal-roles"),
-            ("configuration", "role-block-presets"),
-        ):
-            try:
-                _unused_payload, _revision = self.parent_app.backend.records.get_with_revision(
-                    _key[0], _key[1], default=None
-                )
-                self._configuration_revisions[_key] = int(_revision or 0)
-            except Exception:
-                self._configuration_revisions[_key] = None
+        self._configuration_revisions = {
+            ("configuration", key): revision for key, (_value, revision) in snapshot.items()
+        }
+        self._opening_configuration_snapshot = snapshot
         self._custom_role_block_presets = (
             self._role_block_preset_registry.presets()
         )
@@ -2543,9 +2545,15 @@ class StyleSettingsDialog(QDialog):
         sections_layout.setSpacing(3)
         self._identity_sections_layout = sections_layout
         self._identity_sections: Dict[str, _ConventionsCollapsibleSection] = {}
-        self._identity_conventions = (
-            self.parent_app._load_identity_conventions()
+        conventions, self._identity_configuration_revision = (
+            self._opening_configuration_snapshot[IDENTITY_CONVENTIONS]
         )
+        self._identity_conventions = conventions if isinstance(conventions, dict) else {}
+        can_manage_settings = getattr(
+            self.parent_app, "_can_manage_institution_settings",
+            self.parent_app._can_manage_institution_branding,
+        )
+        editable = bool(self._identity_configuration_revision) and can_manage_settings()
         configured_components = [
             str(value)
             for value in self._identity_conventions.get("animal_id_components", [])
@@ -2579,10 +2587,11 @@ class StyleSettingsDialog(QDialog):
                 combo.addItem(label, value)
             index = combo.findData(configured)
             combo.setCurrentIndex(index if index >= 0 else 0)
-            combo.setEnabled(self._role_setup_editable)
+            combo.setEnabled(editable)
             self._id_component_combos.append(combo)
             component_layout.addWidget(combo, 0, component_index)
             component_layout.setColumnStretch(component_index, 1)
+        self._opening_id_components = [combo.currentData() for combo in self._id_component_combos]
         self._identity_component_layout = component_layout
         self._identity_component_row = component_row
         self._identity_component_columns = 5
@@ -2620,7 +2629,7 @@ class StyleSettingsDialog(QDialog):
 
         self._species_catalog_editor = CatalogListEditor(
             self._identity_conventions.get("species", []),
-            editable=self._role_setup_editable,
+            editable=editable,
             messages=self.messages,
             on_changed=species_changed,
             italic=True,
@@ -2641,7 +2650,7 @@ class StyleSettingsDialog(QDialog):
         )
         self._origin_catalog_editor = CatalogListEditor(
             self._identity_conventions.get("animal_origins", []),
-            editable=self._role_setup_editable,
+            editable=editable,
             messages=self.messages,
             parent=content,
         )
@@ -2653,7 +2662,7 @@ class StyleSettingsDialog(QDialog):
         self._genotype_catalog_editor = GenotypeCatalogEditor(
             self._species_catalog_editor.values(),
             self._identity_conventions.get("genotypes", {}),
-            editable=self._role_setup_editable,
+            editable=editable,
             messages=self.messages,
             parent=content,
         )
@@ -2671,7 +2680,7 @@ class StyleSettingsDialog(QDialog):
         ):
             edit = CatalogListEditor(
                 self._identity_conventions.get(key, []),
-                editable=self._role_setup_editable,
+                editable=editable,
                 messages=self.messages,
                 parent=content,
             )
@@ -4106,6 +4115,7 @@ class StyleSettingsDialog(QDialog):
         return InstitutionBrandingDialog(
             self.parent_app.backend.branding,
             actor,
+            session=getattr(mt, "session_context", None),
             authorized=authorized,
             units_authorized=authorized,
             units_service=CanonicalUnitService(
@@ -4125,11 +4135,12 @@ class StyleSettingsDialog(QDialog):
         if not hasattr(self, "_id_component_combos"):
             return None
         conventions = copy.deepcopy(getattr(self, "_identity_conventions", {}))
-        components = [str(combo.currentData() or "") for combo in self._id_component_combos
-                      if str(combo.currentData() or "")]
-        conventions["animal_id_components"] = components
-        conventions["animal_id_pattern"] = pattern_from_components(components)
-        conventions.pop("default_offspring_origin", None)
+        selected = [combo.currentData() for combo in self._id_component_combos]
+        if selected != self._opening_id_components:
+            components = [str(value) for value in selected if value]
+            components.extend(conventions.get("animal_id_components", [])[len(selected):])
+            conventions["animal_id_components"] = components
+            conventions["animal_id_pattern"] = pattern_from_components(components)
         species = self._species_catalog_editor.values()
         conventions["species"] = species
         conventions["animal_origins"] = self._origin_catalog_editor.values()
@@ -4210,7 +4221,12 @@ class StyleSettingsDialog(QDialog):
         if hasattr(self, "_id_component_combos"):
             conventions = self._identity_settings()
             if conventions != self._opening_identity_settings:
-                self.parent_app._save_identity_conventions(conventions)
+                try:
+                    self.parent_app._save_identity_conventions(
+                        conventions, self._identity_configuration_revision)
+                except Exception as exc:
+                    QMessageBox.warning(self, self.messages.get("title.warning", "Warning"), str(exc))
+                    return
         if (
             hasattr(self, "_branding_editor")
             and bool(getattr(
@@ -4627,6 +4643,24 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _prepare_actor_transition(self):
         """Clear outgoing sensitive state before Master changes its identity."""
         self._invalidate_pending_view_updates()
+        self.__dict__.pop("_owned_animal_leases", None)
+        self.__dict__.pop("_selection_lease_context", None)
+        self.__dict__.pop("_foreign_animal_leases", None)
+        self.__dict__.pop("_foreign_housing_leases", None)
+        self.__dict__.pop("_shared_core_loaded_snapshot", None)
+        self.__dict__.pop("_shared_report_loaded_snapshot", None)
+        samples = getattr(self, "sample_track_plugin", None)
+        expire_samples = getattr(samples, "invalidate_session", None)
+        if callable(expire_samples) and self._uses_shared_leases():
+            expire_samples()
+        cage = getattr(self, "cage_track_plugin", None)
+        expire_housing = getattr(getattr(cage, "store", None), "invalidate_session", None)
+        if callable(expire_housing) and self._uses_shared_leases():
+            expire_housing()
+        network = getattr(self, "network_track_window", None)
+        expire_chat = getattr(network, "invalidate_shared_session", None)
+        if callable(expire_chat):
+            expire_chat()
         if any(hasattr(self, name) for name in
                ("report_save_timer", "report_table", "report_current_animal")):
             self._prepare_reports_for_user_context_change()
@@ -4697,21 +4731,40 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.lock_handle = None
             self.read_only_mode = False
             self.lock_retry_timer = None
-            postgres_dsn = configured_postgres_dsn(RUNTIME_PATHS)
-            pool_min, pool_max = BACKEND_CONFIGURATION.effective_pool_sizes()
-            self.backend = ProgTrackBackend(
-                RUNTIME_PATHS,
-                postgres_dsn=postgres_dsn,
-                postgres_pool_min=pool_min,
-                postgres_pool_max=pool_max,
-            )
-            self.plugin_manager = PluginManager(APP_BASE_DIR / "Plugins", app_version="0.2.3")
+            from threading import Event
+            from Plugins.core.shared_connection import EmptySharedBackend
+
+            self._runtime_postgres_dsn = ""
+            self._storage_notice = None
+            self._storage_notice_pending = False
+            self._storage_client = None
+            shared_postgres = RUNTIME_PATHS.profile is BackendProfile.SHARED_POSTGRESQL
+            self._shared_connection_state = "waiting" if shared_postgres else None
+            self._shared_connection_generation = 0
+            self._shared_attempt_discard = Event()
+            self._shared_attempt_job = None
+            self._shared_initial_projection = None
+            self._shared_initial_plugins = None
+            self._shared_initial_session = None
+            self._shared_publishing = False
+            self._shared_window_closing = False
+            self._shared_connection_notice = None
+            if shared_postgres:
+                self.backend = EmptySharedBackend(RUNTIME_PATHS)
+                root = RUNTIME_PATHS.configured_managed_root
+                self._storage_client = self._create_storage_client(
+                    RUNTIME_PATHS.managed_root if root is None else root
+                )
+            else:
+                self.backend = ProgTrackBackend(RUNTIME_PATHS, choose_demo_seed=self._choose_demo_seed)
+            self.plugin_manager = PluginManager(APP_BASE_DIR / "Plugins", app_version="0.3.0")
             self.plugin_diagnostics = {}
             self.authorization = AuthorizationService(None, disabled=False, backend=self.backend)
-            logger.info(
-                "Backend initialized: %s",
-                json.dumps(backend_diagnostics(RUNTIME_PATHS), ensure_ascii=False),
-            )
+            diagnostics = backend_diagnostics(RUNTIME_PATHS)
+            if shared_postgres:
+                for key in ("managed_root", "managed_documents", "managed_config_assets"):
+                    diagnostics.pop(key, None)
+            logger.info("Backend initialized: %s", json.dumps(diagnostics, ensure_ascii=False))
             
             # Set up basic window properties
             self.setWindowTitle(self.messages.get("app.initializing", "ProgTrack - Loading..."))
@@ -4731,7 +4784,19 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
             # Load data in background
             self._load_data_async()
+            if self._shared_connection_is_pending():
+                self._build_shared_connection_notice()
+            if self._storage_client is not None:
+                from Plugins.core.managed_storage_notice import ManagedStorageNotice
+
+                self._storage_notice = ManagedStorageNotice(self)
+                self._storage_notice.set_messages(self.messages)
+                self.statusBar().addPermanentWidget(self._storage_notice, 1)
+                self._storage_notice.hide()
+                self._storage_notice_pending = True
             
+        except BackendSchemaError:
+            raise
         except Exception as e:
             logger.critical(f"Error during initialization: {e}", exc_info=True)
             # Try to show an error message
@@ -4778,6 +4843,350 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 logger.error("Could not show initialization error dialog: %s", dialog_error)
             raise
 
+    def _shared_connection_is_pending(self):
+        state = getattr(self, "_shared_connection_state", None)
+        return state is not None and state != "connected"
+
+    def _process_startup_events(self):
+        if not getattr(self, "_shared_publishing", False):
+            QtWidgets.QApplication.processEvents()
+
+    def _set_empty_plugin_state(self):
+        self.reports_enabled = self._plugin_available("Animal_Reports")
+        self.embryo_tracker_enabled = False
+        self.network_track_enabled = False
+        self.flow_track_enabled = False
+        self.network_track_window = None
+        self.flow_track_window = None
+        for name in ("steroid_track", "pdg", "projects", "heritage", "cage_track",
+                     "medi_track", "sample_track"):
+            setattr(self, f"has_{name}_plugin", False)
+
+    def _build_shared_connection_notice(self):
+        self._shared_connection_notice = QWidget(self)
+        layout = QHBoxLayout(self._shared_connection_notice)
+        layout.setContentsMargins(4, 0, 4, 0)
+        self._shared_connection_label = QLabel(self._shared_connection_notice)
+        self._shared_reconnect_button = QtWidgets.QPushButton(self._shared_connection_notice)
+        self._shared_reconnect_button.clicked.connect(self._retry_shared_connection)
+        self._shared_recovery_button = QtWidgets.QPushButton(self._shared_connection_notice)
+        self._shared_recovery_button.clicked.connect(self._show_backend_configuration)
+        self._shared_maintenance_button = QtWidgets.QPushButton(self._shared_connection_notice)
+        self._shared_maintenance_button.clicked.connect(self._run_shared_schema_maintenance)
+        for widget in (self._shared_connection_label, self._shared_reconnect_button,
+                       self._shared_recovery_button, self._shared_maintenance_button):
+            layout.addWidget(widget)
+        self.statusBar().addPermanentWidget(self._shared_connection_notice)
+        self._update_shared_connection_notice()
+
+    def _update_shared_connection_notice(self):
+        notice = getattr(self, "_shared_connection_notice", None)
+        if notice is None:
+            return
+        state = self._shared_connection_state
+        if state == "connected":
+            notice.hide()
+            return
+        labels = {
+            "waiting": "Connecting to Shared PostgreSQL…",
+            "starting": "Connecting to Shared PostgreSQL…",
+            "connecting": "Connecting to Shared PostgreSQL…",
+            "loading": "Loading authorized database records…",
+            "login": "Sign in to load Shared PostgreSQL records.",
+            "unavailable": "Database not found!",
+            "configuration": "Check the Shared PostgreSQL configuration.",
+            "maintenance": "Shared PostgreSQL database maintenance is required or in progress.",
+            "failed": "Shared PostgreSQL data could not be loaded.",
+        }
+        label = self.messages.get(f"backend.shared.{state}", labels[state])
+        if state == "maintenance":
+            label = self.messages.get(f"backend.schema.maintenance.{self._shared_schema_error.reason}", label)
+        self._shared_connection_label.setText(label)
+        self._shared_reconnect_button.setText(self.messages.get("backend.shared.retry", "Reconnect"))
+        self._shared_recovery_button.setText(self.messages.get("menu.program.backend", "Backend"))
+        self._shared_maintenance_button.setText(
+            self.messages.get("backend.schema.maintenance.title", "Database maintenance")
+        )
+        self._shared_reconnect_button.setEnabled(state not in {"connecting", "loading"})
+        self._shared_maintenance_button.setVisible(
+            state == "maintenance" and getattr(self, "_shared_schema_error", None) is not None
+            and self._shared_schema_error.reason == "incompatible"
+        )
+        notice.show()
+
+    def _launch_shared_attempt(self, operation, recipient, cleanup):
+        from Plugins.core.shared_connection import SharedAttempt
+
+        attempt = SharedAttempt(
+            self._shared_connection_generation, operation, self._shared_attempt_discard, cleanup
+        )
+        attempt.signals.completed.connect(recipient, QtCore.Qt.ConnectionType.QueuedConnection)
+        self._shared_attempt_job = attempt.result
+        QtCore.QThreadPool.globalInstance().start(attempt)
+
+    def _new_shared_attempt(self):
+        from threading import Event
+
+        self._cancel_shared_attempt()
+        self._shared_attempt_discard = Event()
+        self._shared_connection_generation += 1
+
+    def _cancel_shared_attempt(self):
+        self._shared_attempt_discard.set()
+        if self._shared_attempt_job is not None:
+            self._shared_attempt_job.cancel()
+            self._shared_attempt_job = None
+
+    def _retry_shared_connection(self, *, changed_profile=False):
+        if not self._shared_connection_is_pending() or self._shared_window_closing:
+            return
+        if self._shared_connection_state in {"connecting", "loading"} and not changed_profile:
+            return
+        self._new_shared_attempt()
+        self._shared_connection_state = "connecting"
+        self._update_shared_connection_notice()
+        self._launch_shared_attempt(
+            self._open_shared_candidate, self._shared_candidate_opened, lambda value: value[0].close()
+        )
+
+    def _open_shared_candidate(self):
+        paths = RUNTIME_PATHS
+        pg = BACKEND_CONFIGURATION.saved_postgresql()
+        root = BACKEND_CONFIGURATION.environ.get("PROGTRACK_MANAGED_ROOT", pg.managed_root)
+        if not root and paths.configured_managed_root is None and not BACKEND_CONFIGURATION.load_document():
+            root = paths.managed_root
+        paths = paths.with_shared_managed_root(str(root))
+        dsn = BACKEND_CONFIGURATION.effective_postgres_dsn()
+        storage = self._create_storage_client(root, runtime_dsn=dsn)
+        pool_min, pool_max = BACKEND_CONFIGURATION.effective_pool_sizes()
+        candidate = ProgTrackBackend(
+            paths, postgres_dsn=dsn, postgres_pool_min=pool_min,
+            postgres_pool_max=pool_max, storage_client=storage,
+        )
+        try:
+            first_account = candidate.authenticated_sessions.first_account_available()
+            return candidate, dsn, storage, first_account
+        except BaseException:
+            candidate.close()
+            raise
+
+    def _shared_failure(self, error):
+        if isinstance(error, BackendUnavailableError):
+            self._shared_connection_state = "unavailable"
+        elif isinstance(error, BackendSchemaError):
+            self._shared_schema_error = error
+            self._shared_connection_state = "maintenance"
+        elif isinstance(error, (BackendConfigurationError, BackendConfigurationValidationError)):
+            self._shared_connection_state = "configuration"
+        else:
+            self._shared_connection_state = "failed"
+        logger.warning("Shared connection attempt ended in %s (%s)",
+                       self._shared_connection_state, type(error).__name__)
+        self._update_shared_connection_notice()
+
+    def _shared_candidate_opened(self, generation, attempt, error):
+        from Plugins.core.shared_connection import load_initial_projections
+
+        value = attempt.take_result() if attempt is not None else None
+        if generation != self._shared_connection_generation or self._shared_window_closing:
+            if value is not None:
+                value[0].close()
+            return
+        if error is not None:
+            self._shared_failure(error)
+            return
+        candidate, dsn, storage, first_account = value
+        self._shared_connection_state = "login"
+        self._update_shared_connection_notice()
+        try:
+            context = self._prompt_shared_candidate_login(candidate, first_account)
+        except Exception as error:
+            candidate.close()
+            self._shared_failure(error)
+            return
+        if context is None or generation != self._shared_connection_generation or self._shared_window_closing:
+            self._discard_shared_candidate(candidate, context)
+            return
+        self._shared_connection_state = "loading"
+        self._update_shared_connection_notice()
+        enabled_plugins = {name for name, diagnostic in self.plugin_diagnostics.items() if diagnostic.valid}
+
+        def load():
+            try:
+                with candidate.adapter.transaction(snapshot=True):
+                    actor, projections = load_initial_projections(candidate, context, enabled_plugins)
+                return candidate, dsn, storage, context, actor, projections
+            except BaseException:
+                self._discard_shared_candidate(candidate, context)
+                raise
+
+        self._launch_shared_attempt(
+            load, self._publish_shared_candidate,
+            lambda value: self._discard_shared_candidate(value[0], value[3]),
+        )
+
+    def _prompt_shared_candidate_login(self, candidate, first_account):
+        from Plugins.Master_Track.auth import UserDB
+        from Plugins.Master_Track.dialogs import (
+            ChangePasswordDialog, CreateLordDialog, LoginDialog,
+        )
+        from Plugins.core.backend.errors import SessionRevokedError
+
+        users = UserDB(str(APP_BASE_DIR / "Plugins" / "Master_Track"), candidate)
+        if first_account:
+            dialog = CreateLordDialog(self, self.messages, users)
+            if not dialog.exec() and not dialog.completed_elsewhere:
+                return None
+            context = dialog.session_context
+        else:
+            context = None
+        if context is None:
+            dialog = LoginDialog(self, self.messages, users)
+            if not dialog.exec():
+                return None
+            context = dialog.session_context
+        try:
+            with candidate.adapter.transaction() as connection:
+                user = candidate.authenticated_sessions.require(
+                    connection, context, allow_password_change=True
+                )
+            if user.get("must_change_password"):
+                dialog = ChangePasswordDialog(
+                    self, self.messages, users, context.username, forced=True, session=context
+                )
+                dialog.exec()
+                try:
+                    candidate.authenticated_sessions.logout(context)
+                except SessionRevokedError:
+                    pass
+                return None
+        except BaseException:
+            try:
+                candidate.authenticated_sessions.logout(context)
+            except Exception:
+                logger.warning("Could not end an unused Shared session.")
+            raise
+        return context
+
+    @staticmethod
+    def _discard_shared_candidate(candidate, context=None):
+        if context is not None:
+            try:
+                candidate.authenticated_sessions.logout(context)
+            except Exception:
+                logger.warning("Could not end an unused Shared session.")
+        candidate.close()
+
+    def _stop_network_monitor(self):
+        network = getattr(self, "network_track_window", None)
+        timer = getattr(network, "monitor_timer", None)
+        if timer is not None:
+            timer.stop()
+
+    def _remove_master_event_filter(self):
+        event_filter = getattr(self, "_master_event_filter", None)
+        if event_filter is not None:
+            QApplication.instance().removeEventFilter(event_filter)
+            event_filter.deleteLater()
+            self._master_event_filter = None
+
+    def _reset_shared_main_content(self):
+        self._stop_network_monitor()
+        self._invalidate_pending_view_updates()
+        for key in ("_shared_core_loaded_snapshot", "_shared_report_loaded_snapshot",
+                    "_sidebar_read_context", "_owned_animal_leases", "_selection_lease_context",
+                    "_foreign_animal_leases", "_foreign_housing_leases"):
+            self.__dict__.pop(key, None)
+        heritage = getattr(self, "heritage_plugin", None)
+        undo_quit_hook = getattr(heritage, "flush_pending_store", None)
+        if callable(undo_quit_hook):
+            with suppress(TypeError):
+                QApplication.instance().aboutToQuit.disconnect(undo_quit_hook)
+        self._remove_master_event_filter()
+        for name in ("_master_status_icon_label", "_master_status_label", "_master_login_shortcut",
+                     "network_track_window", "flow_track_window"):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.deleteLater()
+                setattr(self, name, None)
+        for name in ("pdg_cap", "projects_plugin", "heritage_plugin", "cage_track_plugin",
+                     "medi_track_plugin", "sample_track_plugin", "project_track_widget"):
+            setattr(self, name, None)
+        for name in ("report_save_timer", "_plot_timer"):
+            timer = getattr(self, name, None)
+            if timer is not None:
+                timer.stop()
+                setattr(self, name, None)
+        for name in ("report_table", "report_current_animal", "reports_tab", "lst", "category_tab"):
+            setattr(self, name, None)
+        self.main_tabs = None
+        self.medi_track_tab_placeholder = None
+        self._plugins_loaded = False
+        self._next_plugin_step = 0
+        self.central_widget = QWidget(self)
+        self.setCentralWidget(self.central_widget)
+        self.main_layout = QVBoxLayout(self.central_widget)
+
+    def _publish_shared_candidate(self, generation, attempt, error):
+        value = attempt.take_result() if attempt is not None else None
+        if generation != self._shared_connection_generation or self._shared_window_closing:
+            if value is not None:
+                self._discard_shared_candidate(value[0], value[3])
+            return
+        if error is not None:
+            self._shared_failure(error)
+            return
+        candidate, dsn, storage, context, actor, projections = value
+        empty = self.backend
+        shell_language = self.lang
+        self.setUpdatesEnabled(False)
+        self._shared_publishing = True
+        try:
+            self._reset_shared_main_content()
+            self.backend = candidate
+            self._shared_connection_state = "connected"
+            self._shared_initial_session = context, actor
+            self._shared_initial_projection = projections["core"]
+            self._shared_initial_plugins = projections
+            self._init_lazy_imports()
+            self._init_application_state()
+            if not self.master_track or not self.master_track.is_logged_in:
+                raise RuntimeError("The Shared actor could not be bound.")
+            self._apply_startup_master_state()
+            self._refresh_ui_after_data_load()
+        except Exception as error:
+            self._discard_shared_candidate(candidate, context)
+            self.backend = empty
+            self._shared_connection_state = "failed"
+            self._shared_initial_session = None
+            self._shared_initial_projection = None
+            self._shared_initial_plugins = None
+            self.lang = shell_language
+            self._load_messages(self.lang)
+            self._reset_shared_main_content()
+            self._init_lazy_imports()
+            self._init_application_state()
+            self._shared_failure(error)
+            return
+        finally:
+            self._shared_publishing = False
+            self._shared_initial_session = None
+            self._shared_initial_projection = None
+            self._shared_initial_plugins = None
+            self.setUpdatesEnabled(True)
+        self._runtime_postgres_dsn = dsn
+        self._storage_client = storage
+        self._start_storage_notice()
+        self.master_track.start_authenticated_heartbeat()
+        self.master_track._start_idle_timer()
+        self._update_shared_connection_notice()
+
+    def _run_shared_schema_maintenance(self):
+        error = getattr(self, "_shared_schema_error", None)
+        if self._shared_connection_state == "maintenance" and error is not None:
+            if error.reason == "incompatible" and _offer_startup_schema_maintenance(error):
+                self._retry_shared_connection()
+
     @staticmethod
     def _startup_messages_for_system_locale() -> Dict[str, Any]:
         """Load minimal localized startup text before the backend is available."""
@@ -4811,58 +5220,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         
         # Expose Role enum for plugin access
         self.Role = Role
-        role_payload = self.backend.records.get(
-            "configuration", "animal-roles", default=None
-        )
-        if not isinstance(role_payload, dict):
-            bundled_roles = (
-                APP_BASE_DIR / "Plugins" / "core" / "animal_roles.json"
-            )
-            try:
-                role_payload = json.loads(bundled_roles.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                role_payload = {"schema_version": 1, "roles": []}
-            self.backend.records.put(
-                "configuration", "animal-roles", role_payload
-            )
-        semantic_icon_migration = {
-            "♀": "role.female",
-            "☉": "role.female",
-            "♂": "role.male",
-            "👶": "role.offspring",
-            "🐾": "role.partner",
-            "⚤": "role.breeding",
-            "💡": "role.experimental",
-            "?": "",
-        }
-        migrated_roles = False
-        for role in role_payload.get("roles", []) if isinstance(role_payload.get("roles"), list) else []:
-            if not isinstance(role, dict):
-                continue
-            legacy_icon = str(role.get("icon") or "")
-            if legacy_icon in semantic_icon_migration:
-                role["icon"] = semantic_icon_migration[legacy_icon]
-                migrated_roles = True
-        if migrated_roles:
-            self.backend.records.put("configuration", "animal-roles", role_payload)
-        self.animal_role_registry = AnimalRoleRegistry(
-            self.backend, initial_payload=role_payload
-        )
-        preset_payload = self.backend.records.get(
-            "configuration", "role-block-presets", default=None
-        )
-        if not isinstance(preset_payload, dict):
-            bundled_presets = role_block_presets_path(APP_BASE_DIR)
-            try:
-                preset_payload = json.loads(
-                    bundled_presets.read_text(encoding="utf-8")
-                )
-            except (OSError, json.JSONDecodeError):
-                preset_payload = {"schema_version": 1, "presets": []}
-            self.backend.records.put(
-                "configuration", "role-block-presets", preset_payload
-            )
-        
+        service = getattr(self.backend, "core_configuration", None)
+        snapshot = service.snapshot() if service is not None else dict.fromkeys(RECORD_IDS, (None, 0))
+        self._core_configuration_generation = getattr(self, "_core_configuration_generation", 0) + 1
+        self._core_configuration_snapshot = None
+        self._publish_core_configuration(snapshot, redraw=False)
+
         # Import Qt components that are needed immediately
         global QIcon, QMainWindow
         from PyQt6.QtGui import QIcon
@@ -4875,6 +5238,24 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             logger.warning("Icon file 'progtrack_icon.ico' not found")
     
+    def _choose_demo_seed(self) -> bool:
+        language = QtCore.QLocale.system().name().split("_", 1)[0]
+        if language not in {"en", "de", "it", "ru"}:
+            language = "en"
+        catalog = APP_BASE_DIR / "lang" / f"messages_{language}.json"
+        with catalog.open(encoding="utf-8") as handle:
+            messages = json.load(handle)
+        prompt = QMessageBox(self)
+        prompt.setIcon(QMessageBox.Icon.Question)
+        prompt.setWindowTitle(messages["backend.demo_seed.title"])
+        prompt.setText(messages["backend.demo_seed.prompt"])
+        yes = prompt.addButton(messages["backend.demo_seed.yes"], QMessageBox.ButtonRole.YesRole)
+        no = prompt.addButton(messages["backend.demo_seed.no"], QMessageBox.ButtonRole.NoRole)
+        prompt.setDefaultButton(no)
+        prompt.setEscapeButton(no)
+        prompt.exec()
+        return prompt.clickedButton() is yes
+
     @QtCore.pyqtSlot()
     def _load_settings_async(self):
         """Load settings in a background thread."""
@@ -4964,7 +5345,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._refresh_list()
             
             # Process any pending events
-            QtWidgets.QApplication.processEvents()
+            self._process_startup_events()
             
         except Exception as e:
             logger.error(f"Error refreshing UI: {e}", exc_info=True)
@@ -5034,7 +5415,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         value = self.backend.records.get(
             "configuration", "disabled-plugins", default=[]
         )
-        return set(value if isinstance(value, list) else [])
+        disabled = set(value if isinstance(value, list) else [])
+        shared = getattr(self, "_uses_shared_leases", None)
+        if callable(shared) and shared():
+            disabled.discard("master_track")
+        return disabled
 
     def _save_disabled_plugins(self) -> None:
         """Persist disabled plugin keys through the configured backend."""
@@ -5465,6 +5850,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.has_pdg_plugin = False
             logger.info(f"PdG Converter plugin not available: {e}")
         except Exception as e:
+            if getattr(self, "_shared_publishing", False):
+                raise
             self.pdg_cap = None
             self.has_pdg_plugin = False
             logger.error(f"PdG Converter plugin initialization failed: {e}", exc_info=True)
@@ -5486,6 +5873,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.has_projects_plugin = False
             logger.info(f"ProjectsTrack plugin not available: {e}")
         except Exception as e:
+            if getattr(self, "_shared_publishing", False):
+                raise
             self.projects_plugin = None
             self.has_projects_plugin = False
             logger.error(f"ProjectsTrack plugin initialization failed: {e}")
@@ -5503,6 +5892,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.has_heritage_plugin = False
             logger.info(f"Heritage_Track plugin not available: {e}")
         except Exception as e:
+            if getattr(self, "_shared_publishing", False):
+                raise
             self.heritage_plugin = None
             self.has_heritage_plugin = False
             logger.error(f"Heritage_Track plugin initialization failed: {e}")
@@ -5520,6 +5911,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.has_cage_track_plugin = False
             logger.info(f"Cage_Track plugin not available: {e}")
         except Exception as e:
+            if getattr(self, "_shared_publishing", False):
+                raise
             self.cage_track_plugin = None
             self.has_cage_track_plugin = False
             logger.error(f"Cage_Track plugin initialization failed: {e}")
@@ -5537,6 +5930,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.has_medi_track_plugin = False
             logger.info(f"Medi_Track plugin not available: {e}")
         except Exception as e:
+            if getattr(self, "_shared_publishing", False):
+                raise
             self.medi_track_plugin = None
             self.has_medi_track_plugin = False
             logger.error(f"Medi_Track plugin initialization failed: {e}")
@@ -5618,6 +6013,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.has_sample_track_plugin = False
             logger.info(f"Sample_Track plugin not available: {e}")
         except Exception as e:
+            if getattr(self, "_shared_publishing", False):
+                raise
             self.sample_track_plugin = None
             self.has_sample_track_plugin = False
             logger.error(f"Sample_Track plugin initialization failed: {e}")
@@ -5643,6 +6040,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.has_master_track = False
             logger.info(f"Master_Track plugin not available: {e}")
         except Exception as e:
+            if getattr(self, "_shared_publishing", False):
+                raise
             self.master_track = None
             self.has_master_track = False
             logger.error(f"Master_Track plugin initialization failed: {e}")
@@ -5657,10 +6056,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         that actually commits data (or by the explicit denial path below),
         never by this UI-state probe.
         """
+        if self._shared_connection_is_pending():
+            return False
         service = getattr(self, "authorization", None)
         if service is None:
             return False if AuthorizationService.is_write_action(action) else True
         allowed = service.can(action)
+        if allowed and action in {
+            "reports.write", "medi_track.add_docs", "medi_track.upload_document",
+            "medi_track.delete_document",
+        }:
+            uses_shared_leases = getattr(self, "_uses_shared_leases", None)
+            names = getattr(self, "selected_animals", ())
+            if callable(uses_shared_leases) and uses_shared_leases() and names:
+                return self._lease_ipid(names[-1]) in getattr(self, "_owned_animal_leases", {})
         trusted_local = bool(getattr(service, "trusted_local", False))
         if not allowed and AuthorizationService.is_write_action(action) and not trusted_local:
             self._master_audit(
@@ -5731,6 +6140,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _show_permission_denied(self) -> None:
         """Show a message box indicating the action is not permitted."""
+        if self._shared_connection_is_pending():
+            self.statusBar().showMessage(
+                self.messages.get("backend.shared.reconnect_required", "Reconnect to Shared PostgreSQL to use this action."),
+                5000,
+            )
+            return
         QMessageBox.warning(
             self,
             self.messages.get("master_track.error.title", "Error"),
@@ -6503,7 +6918,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             session = mt.load_session()
             raw = session.get("style_settings", {}) if isinstance(session, dict) else {}
             normalized = self._normalize_style_settings(raw)
-            if isinstance(raw, dict) and raw != normalized:
+            if isinstance(raw, dict) and raw != normalized and not getattr(self, "_shared_publishing", False):
                 mt.save_session({"style_settings": normalized})
             return normalized
         if mt and not mt.is_logged_in:
@@ -6564,12 +6979,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _get_global_language_fallback(self):
         """Get the installation language from backend configuration."""
+        if self._shared_connection_is_pending():
+            return QtCore.QLocale.system().name().split("_", 1)[0]
         data = self.backend.records.get(
             "configuration", "global-settings", default={}
         )
         return str(data.get("language", "en")) if isinstance(data, dict) else "en"
 
     def _save_settings(self):
+        if self._shared_connection_is_pending():
+            return
         # Check if running in read-only mode
         if self.read_only_mode:
             logger.warning("Attempted to save settings in READ-ONLY mode - operation skipped")
@@ -6605,75 +7024,94 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             with open(fallback_path, encoding="utf-8") as f:
                 self.messages = json.load(f)
         self._merge_user_messages(lang_code)
+        if getattr(self, "_storage_notice", None) is not None:
+            self._storage_notice.set_messages(self.messages)
+        self._update_shared_connection_notice()
+
+    def _core_configuration_session(self):
+        return getattr(getattr(self, "master_track", None), "session_context", None)
+
+    def _core_configuration_refresh_token(self):
+        snapshot = getattr(self, "_core_configuration_snapshot", None)
+        if snapshot is None:
+            return None
+        return self._core_configuration_generation, {
+            key: revision for key, (_value, revision) in snapshot.items()
+        }
+
+    def _publish_core_configuration(self, snapshot, *, redraw=True):
+        previous = getattr(self, "_core_configuration_snapshot", None)
+        if previous is not None and (
+            snapshot == previous or any(snapshot[key][1] < previous[key][1] for key in RECORD_IDS)
+        ):
+            return
+        payload, _revision = snapshot[ANIMAL_ROLES]
+        if isinstance(payload, dict):
+            payload = copy.deepcopy(payload)
+            semantic_icons = {
+                "♀": "role.female", "☉": "role.female", "♂": "role.male",
+                "👶": "role.offspring", "🐾": "role.partner", "⚤": "role.breeding",
+                "💡": "role.experimental", "?": "",
+            }
+            for role in payload.get("roles", []):
+                if isinstance(role, dict) and role.get("icon") in semantic_icons:
+                    role["icon"] = semantic_icons[role["icon"]]
+        else:
+            payload = AnimalRoleRegistry.empty_payload()
+        registry = AnimalRoleRegistry(self.backend, initial_payload=payload)
+        self._core_configuration_snapshot = snapshot
+        self._core_configuration_missing = any(not revision for _value, revision in snapshot.values())
+        self.animal_role_registry = registry
+        if redraw and hasattr(self, "category_tab"):
+            self._load_messages(self.lang)
+            self._setup_sidebar_texts()
+            self._apply_sidebar_button_visibility_for_category(self.category_tab.currentIndex())
+            self._apply_master_button_states()
+            cage = getattr(self, "cage_track_widget", None)
+            if cage is not None:
+                cage._role_color_cache.clear()
+                cage.refresh_view(sync_animals=False)
+            flow = getattr(self, "flow_track_widget", None)
+            if flow is not None:
+                flow._redraw_canvas()
+            projects = getattr(self, "project_track_widget", None)
+            if projects is not None and getattr(projects, "_current_project", None):
+                projects._refresh_animals_section_safe(projects._current_project)
+
+    def _refresh_core_configuration(self):
+        self._publish_core_configuration(self.backend.core_configuration.snapshot())
+
+    def _show_core_configuration_setup(self):
+        if not self._can_manage_institution_settings():
+            self._show_permission_denied()
+            return
+        title = self.messages["core.configuration.title"]
+        if self._show_message_raw(
+            title, self.messages["core.configuration.confirm"], "question",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            plain_text=True,
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.backend.core_configuration.setup(self._core_configuration_session())
+            self._refresh_core_configuration()
+        except Exception as exc:
+            QMessageBox.warning(self, title, str(exc))
 
     def _load_identity_conventions(self) -> Dict[str, Any]:
-        bundled = load_conventions(conventions_path(APP_BASE_DIR))
-        value = self.backend.records.get(
-            "configuration",
-            "identity-lifecycle-conventions",
-            default=None,
-        )
-        if isinstance(value, dict):
-            merged = dict(bundled)
-            merged.update(value)
-            return merged
-        self.backend.records.put(
-            "configuration",
-            "identity-lifecycle-conventions",
-            bundled,
-        )
-        return bundled
+        value, _revision = self.backend.records.get_with_revision(
+            "configuration", IDENTITY_CONVENTIONS, default=None)
+        return copy.deepcopy(value) if isinstance(value, dict) else {}
 
-    def _save_identity_conventions(self, conventions: Mapping[str, Any]) -> None:
-        self.backend.records.put(
-            "configuration",
-            "identity-lifecycle-conventions",
-            dict(conventions),
-        )
+    def _save_identity_conventions(self, conventions: Mapping[str, Any], revision) -> None:
+        self.backend.core_configuration.save_identity(
+            self._core_configuration_session(), dict(conventions), revision)
+        self._refresh_core_configuration()
 
-    def _reserve_generated_animal_id(
-        self,
-        *,
-        name: str,
-        species: str,
-        birth_date: str,
-        sex: str,
-        origin: str,
-        existing_ids: Iterable[str],
-    ) -> Tuple[str, Dict[str, Any]]:
-        """Atomically reserve the next convention counter in the backend."""
-        bundled = load_conventions(conventions_path(APP_BASE_DIR))
-        for _attempt in range(20):
-            stored, revision = self.backend.records.get_with_revision(
-                "configuration",
-                "identity-lifecycle-conventions",
-                default=None,
-            )
-            conventions = dict(bundled)
-            if isinstance(stored, dict):
-                conventions.update(stored)
-            generated_id = next_generated_id(
-                conventions,
-                name=name,
-                species=species,
-                birth_date=birth_date,
-                sex=sex,
-                origin=origin,
-                existing_ids=existing_ids,
-            )
-            try:
-                self.backend.records.put(
-                    "configuration",
-                    "identity-lifecycle-conventions",
-                    conventions,
-                    expected_revision=revision,
-                )
-                return generated_id, conventions
-            except ConflictError:
-                continue
-        raise ConflictError(
-            "Could not reserve a unique animal ID after concurrent updates."
-        )
+    def _reserve_generated_animal_id(self, **inputs) -> Tuple[str, Dict[str, Any]]:
+        if getattr(self, "_core_configuration_missing", True):
+            raise CoreConfigurationMissing("Initialize Core configuration before allocating animal IDs.")
+        return self.backend.core_configuration.reserve_id(self._core_configuration_session(), **inputs)
 
     def _id_for_animal_dialog(
         self,
@@ -6697,6 +7135,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         supported for the identity-correction workflow; editing never
         silently regenerates an established ID.
         """
+        if not editing and getattr(self, "_core_configuration_missing", False):
+            raise CoreConfigurationMissing("Initialize Core configuration before creating animals.")
         entered = str(id_widget.text() or "").strip()
         previous = str((old_record or {}).get("id") or "").strip()
         if editing:
@@ -6741,46 +7181,30 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _merge_user_messages(self, lang_code: Optional[str] = None) -> None:
         lang_code = lang_code or getattr(self, "lang", "de") or "de"
-        overrides = self.backend.records.get(
-            "configuration", f"user-message-overrides:{lang_code}", default={}
-        )
+        snapshot = getattr(self, "_core_configuration_snapshot", None)
+        if snapshot is not None:
+            overrides, _revision = snapshot.get(f"user-message-overrides:{lang_code}", (None, 0))
+        else:
+            overrides = self.backend.records.get(
+                "configuration", f"user-message-overrides:{lang_code}", default={}
+            )
         if isinstance(overrides, dict):
             self.messages.update({str(key): str(value) for key, value in overrides.items()})
 
-    def _save_role_label_overrides(self, roles: List[Dict[str, Any]]) -> None:
-        lang_code = getattr(self, "lang", "de") or "de"
-        existing = self.backend.records.get(
-            "configuration", f"user-message-overrides:{lang_code}", default={}
-        )
-        if not isinstance(existing, dict):
-            existing = {}
-        else:
-            existing = {str(key): str(value) for key, value in existing.items()}
+    def _role_label_override_changes(self, roles, original_roles):
+        def labels(items):
+            return {
+                str(role.get("label_key") or f"role.{role['value']}"): str(role["label"]).strip()
+                for role in items if role.get("built_in") and role.get("value") and role.get("label")
+            }
 
-        changed = False
-        for role in roles:
-            if not isinstance(role, dict):
-                continue
-            # Facility-created role labels and text representations are role
-            # configuration data, not language-catalog entries.
-            if not bool(role.get("built_in", False)):
-                continue
-            value = canonical_role_value(role.get("value") or role.get("role_id") or "")
-            label = str(role.get("label") or "").strip()
-            if not value or not label:
-                continue
-            label_key = str(role.get("label_key") or "").strip() or f"role.{value}"
-            if existing.get(label_key) != label:
-                existing[label_key] = label
-                changed = True
-        if not changed:
-            return
+        original = labels(original_roles)
+        updated = labels(roles)
+        return {
+            key: updated.get(key) for key in original.keys() | updated.keys()
+            if original.get(key) != updated.get(key)
+        }
 
-        self.backend.records.put(
-            "configuration", f"user-message-overrides:{lang_code}", existing
-        )
-        self.messages.update(existing)
-    
     def _plugin_available(self, plugin_id: str, fallback: bool = False) -> bool:
         diagnostic = getattr(self, "plugin_diagnostics", {}).get(plugin_id)
         if diagnostic is None:
@@ -6791,13 +7215,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Initialize all plugins in background while login dialog is open.
 
         Called via QTimer.singleShot(...) before startup() blocks on login.
-        By the time the user finishes typing credentials, plugins are loaded.
+        Finish any remaining steps after the login dialog returns.
 
         Uses stepped loading with processEvents() to keep the login UI responsive.
         """
-        # Prevent double-execution if plugins were already loaded synchronously
-        if getattr(self, '_plugins_loaded', False):
+        # A queued step may still fire while startup finishes the steps directly.
+        if getattr(self, '_plugins_loaded', False) or _step != getattr(self, '_next_plugin_step', 0):
             return
+        self._next_plugin_step = _step + 1
 
         if _step == 0:
             # ------------------------
@@ -6805,12 +7230,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # ------------------------
             reports_plugin_path = Path(__file__).parent / "Plugins" / "Animal_Reports" / "animal_reports.py"
             self.reports_enabled = self._plugin_available("Animal_Reports", reports_plugin_path.exists())
-            QtWidgets.QApplication.processEvents()
+            self._process_startup_events()
 
             # Check for Embryo Tracker Plugin
             embryo_tracker_plugin_path = Path(__file__).parent / "Plugins" / "Embryo_Track" / "embryo_track.py"
             self.embryo_tracker_enabled = self._plugin_available("Embryo_Track", embryo_tracker_plugin_path.exists())
-            QtWidgets.QApplication.processEvents()
+            self._process_startup_events()
 
             # Check for Network Track Plugin (heavy - creates widget)
             network_track_plugin_path = Path(__file__).parent / "Plugins" / "Network_Track" / "network_track.py"
@@ -6819,18 +7244,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if self.network_track_enabled:
                 try:
                     NetworkTrackWidget = self.plugin_manager.resolve_entry_point("Network_Track")
-                    QtWidgets.QApplication.processEvents()
+                    self._process_startup_events()
                     self.network_track_window = NetworkTrackWidget(self.messages, self, app=self)
                     # This widget uses native Window flags.  Hide it before
                     # processing events or Windows briefly paints it between
                     # the login dialog and the main application window.
                     self.network_track_window.hide()
-                    QtWidgets.QApplication.processEvents()
+                    self._process_startup_events()
                 except Exception as e:
+                    if getattr(self, "_shared_publishing", False):
+                        raise
                     logging.error(f"Failed to initialize Network Track at startup: {e}", exc_info=True)
                     self.network_track_window = None
 
-            QtWidgets.QApplication.processEvents()
+            self._process_startup_events()
             QTimer.singleShot(0, lambda: self._init_all_plugins_deferred(_step=1))
 
         elif _step == 1:
@@ -6838,11 +7265,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             flow_track_plugin_path = Path(__file__).parent / "Plugins" / "Flow_Track" / "flow_track_widget.py"
             self.flow_track_enabled = self._plugin_available("Flow_Track", flow_track_plugin_path.exists())
             self.flow_track_window = None
-            QtWidgets.QApplication.processEvents()
+            self._process_startup_events()
 
             # Check for Steroid_track gating plugin
             self.has_steroid_track_plugin = self._detect_steroid_track_plugin()
-            QtWidgets.QApplication.processEvents()
+            self._process_startup_events()
 
             QTimer.singleShot(0, lambda: self._init_all_plugins_deferred(_step=2))
 
@@ -6851,7 +7278,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # 7.0a Check for PdG Converter Plugin
             # ------------------------
             self._init_pdg_plugin()
-            QtWidgets.QApplication.processEvents()
+            self._process_startup_events()
             QTimer.singleShot(0, lambda: self._init_all_plugins_deferred(_step=3))
 
         elif _step == 3:
@@ -6859,7 +7286,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # 7.0b Check for ProjectsTrack Plugin (can be heavy)
             # ------------------------
             self._init_projects_plugin()
-            QtWidgets.QApplication.processEvents()
+            self._process_startup_events()
             QTimer.singleShot(0, lambda: self._init_all_plugins_deferred(_step=4))
 
         elif _step == 4:
@@ -6867,7 +7294,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # 7.0c Check for Heritage_Track Plugin
             # ------------------------
             self._init_heritage_plugin()
-            QtWidgets.QApplication.processEvents()
+            self._process_startup_events()
             QTimer.singleShot(0, lambda: self._init_all_plugins_deferred(_step=5))
 
         elif _step == 5:
@@ -6875,7 +7302,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # 7.0d Check for Cage_Track Plugin
             # ------------------------
             self._init_cage_track_plugin()
-            QtWidgets.QApplication.processEvents()
+            self._process_startup_events()
             QTimer.singleShot(0, lambda: self._init_all_plugins_deferred(_step=6))
 
         elif _step == 6:
@@ -6883,7 +7310,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # 7.0e Check for Medi_Track Plugin
             # ------------------------
             self._init_medi_track_plugin()
-            QtWidgets.QApplication.processEvents()
+            self._process_startup_events()
             QTimer.singleShot(0, lambda: self._init_all_plugins_deferred(_step=7))
 
         elif _step == 7:
@@ -6900,6 +7327,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         """Initialize application state and build the UI (called once during startup)."""
         # Load disabled-plugin set before menu/tab setup
         self._disabled_plugins = self._load_disabled_plugins()
+        if self._uses_shared_leases():
+            self._disabled_plugins.discard("master_track")
 
         self.plugin_diagnostics = self.plugin_manager.validate_all(
             import_entry_points=False
@@ -6914,27 +7343,36 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ------------------------
         # 6.9 Master_Track — authentication & permissions
         # ------------------------
-        self._init_master_track_plugin()
+        disconnected = self._shared_connection_is_pending()
+        if disconnected:
+            self.master_track = None
+            self.has_master_track = False
+        else:
+            self._init_master_track_plugin()
         self.authorization = AuthorizationService(
             self.master_track,
             disabled=("master_track" in self._disabled_plugins),
             backend=self.backend,
             trusted_local=(
-                not self.has_master_track
-                or "master_track" in self._disabled_plugins
+                not self._uses_shared_leases() and (
+                    not self.has_master_track or "master_track" in self._disabled_plugins
+                )
             ),
         )
         if self.has_master_track:
             global_disabled = self._load_disabled_plugins()
-            if "master_track" in global_disabled:
+            if self._shared_initial_session is not None:
+                self.master_track.adopt_initial_session(*self._shared_initial_session)
+                session = self.master_track.load_session()
+                self._disabled_plugins = set(session.get("disabled_plugins", []))
+                self._disabled_plugins.discard("master_track")
+                if session.get("language"):
+                    self.lang = session["language"]
+                    self._load_messages(self.lang)
+            elif "master_track" in global_disabled:
                 # MT is globally disabled – run as guest, skip login dialog
                 self.master_track._set_guest()
                 self._disabled_plugins.add("master_track")
-                # No login dialog → load plugins synchronously (all steps at once)
-                for step in range(8):
-                    self._init_all_plugins_deferred(step)
-                    QtWidgets.QApplication.processEvents()
-                self._plugins_loaded = True
             else:
                 # ← Queue all plugin loading AFTER a short delay so login dialog
                 #   can paint its UI first, then load plugins in the background
@@ -6952,20 +7390,16 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if user_lang:
                         self.lang = user_lang
                         self._load_messages(self.lang)
-                else:
-                    # User chose "Guest" - plugins may not have finished loading
-                    # because the dialog closed quickly. Load synchronously.
-                    logger.info("Guest mode selected, completing plugin loading...")
-                    for step in range(8):
-                        self._init_all_plugins_deferred(step)
-                        QtWidgets.QApplication.processEvents()
-                    self._plugins_loaded = True
+
+        # Menu and tab construction reads the capabilities established by these
+        # steps, including when authentication finishes before a queued step.
+        if disconnected:
+            self._set_empty_plugin_state()
         else:
-            # No Master_Track → load plugins synchronously (all steps at once)
-            for step in range(8):
+            for step in range(getattr(self, "_next_plugin_step", 0), 8):
                 self._init_all_plugins_deferred(step)
-                QtWidgets.QApplication.processEvents()
-            self._plugins_loaded = True
+                if not self._shared_publishing:
+                    QtWidgets.QApplication.processEvents()
 
         # The initial settings load precedes Master Track authentication.
         # Bind the effective style to the resulting user/Guest before UI
@@ -7013,6 +7447,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         file_menu.addSection(self.messages.get("menu.file.section.database", "Database"))
         save_db_action = QAction(self.messages.get("menu.file.save_database", "Save Backup"), self)
         save_db_action.triggered.connect(self._save_database)
+        save_db_action.setEnabled(not self._shared_connection_is_pending())
         file_menu.addAction(save_db_action)
 
         # ------------------------
@@ -7218,9 +7653,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 rec,
                 self._animal_role_value(rec, default=Role.UNKNOWN.value),
             )
-        QTimer.singleShot(0, self._plot_selected)
-        if getattr(self, 'has_master_track', False):
-            QTimer.singleShot(0, self._apply_startup_master_state)
+        if not getattr(self, "_shared_publishing", False):
+            QTimer.singleShot(0, self._plot_selected)
+            if getattr(self, 'has_master_track', False):
+                QTimer.singleShot(0, self._apply_startup_master_state)
 
 
     def _apply_startup_master_state(self) -> None:
@@ -7249,6 +7685,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if ntw:
                 ntw.refresh_master_name()
         except Exception as e:
+            if getattr(self, "_shared_publishing", False):
+                raise
             import logging as _log
             _log.error(f"_apply_startup_master_state failed: {e}", exc_info=True)
 
@@ -7767,7 +8205,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             }
         }
 
-        data = self.backend.load_core_data()
+        shared = getattr(self, "_uses_shared_leases", None)
+        if callable(shared) and shared():
+            from Plugins.core.backend.errors import SessionRevokedError
+
+            master = getattr(self, "master_track", None)
+            session = getattr(master, "session_context", None)
+            if session is None:
+                return default_data
+            try:
+                data = self.backend.load_core_data(session=session)
+            except SessionRevokedError as error:
+                master.handle_session_revoked(error.reason)
+                raise
+        else:
+            data = self.backend.load_core_data()
         if not isinstance(data, dict):
             return default_data
         data.setdefault('animals', {})
@@ -7871,7 +8323,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
         try:
             self._save_trace("write_json.read_before_snapshot.before")
-            before_snapshot = self._read_json() if _before_snapshot is None else _before_snapshot
+            if _before_snapshot is None:
+                before_snapshot = getattr(self, "_shared_core_loaded_snapshot", None)
+                if before_snapshot is None:
+                    before_snapshot = self._read_json()
+            else:
+                before_snapshot = _before_snapshot
             self._save_trace("write_json.read_before_snapshot.after")
         except Exception:
             self._save_trace("write_json.read_before_snapshot.exception")
@@ -7911,11 +8368,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
         save_identity = _actor_backend_read_identity(self)
         try:
-            receipt = self.backend.save_core_data(
-                out,
-                expected_parentage_revision=expected_parentage_revision,
-                clinical_context=ProgTrackApp._core_clinical_context(self),
-            )
+            uses_shared_leases = getattr(self, "_uses_shared_leases", None)
+            if callable(uses_shared_leases) and uses_shared_leases():
+                receipt = self._save_shared_core_changes(
+                    before_snapshot, out, expected_parentage_revision
+                )
+            else:
+                receipt = self.backend.save_core_data(
+                    out,
+                    expected_parentage_revision=expected_parentage_revision,
+                    clinical_context=ProgTrackApp._core_clinical_context(self),
+                )
         except Exception:
             # A rejected optimistic write must not poison the next unrelated
             # dialog save with the stale token that caused this failure.
@@ -7935,6 +8398,85 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         else:
             return receipt.audit_before, receipt.audit_after
         return None
+
+    def _save_shared_core_changes(self, before, after, expected_parentage_revision):
+        from contextlib import ExitStack
+        from Plugins.core.backend.animal_service import CoreSaveReceipt
+        from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError, ValidationError
+        from Plugins.core.backend.shared_animal_edit import AnimalChange
+
+        if before.get("settings", {}) != after.get("settings", {}):
+            raise PermissionDeniedError("Save the configuration through its own command.")
+        editor = getattr(self, "_shared_editor_scope", None)
+        addresses = getattr(self, "_pending_shared_core_addresses", {})
+        related = getattr(self, "_pending_shared_relationship_ipids", set())
+        edited = {editor[0]} | related if editor is not None else None
+        baseline = {
+            ipid: (section, record)
+            for section in ("animals", "archived_animals")
+            for ipid, record in before.get(section, {}).items()
+            if edited is None or ipid in edited
+        }
+        changes = {}
+        incoming_ids = set()
+        for section in ("animals", "archived_animals"):
+            for ipid, candidate in after.get(section, {}).items():
+                if edited is not None and ipid not in edited:
+                    continue
+                if ipid in incoming_ids:
+                    raise ValidationError("An animal cannot be active and archived.")
+                incoming_ids.add(ipid)
+                previous_section, previous = baseline.get(ipid, (None, None))
+                if ipid not in addresses and previous_section == section and core_records_equal(
+                    self._serialize_core_record(ipid, previous), candidate
+                ):
+                    continue
+                changes[ipid] = AnimalChange(previous_section, previous, section, candidate)
+        if baseline.keys() - incoming_ids:
+            raise PermissionDeniedError("Remove archived animals through the Delete command.")
+        if not changes:
+            return CoreSaveReceipt({}, {"animals": {}, "archived_animals": {}},
+                                   {"animals": {}, "archived_animals": {}})
+
+        master = getattr(self, "master_track", None)
+        context = getattr(master, "session_context", None)
+        if context is None:
+            raise PermissionDeniedError("Sign in to change animal records.")
+        if editor is not None and (changes.keys() - edited or context != editor[2]):
+            raise PermissionDeniedError("An editor may only change its animal and planned relationships.")
+        try:
+            with ExitStack() as pending_releases:
+                leases = {}
+                for ipid, change in sorted(changes.items()):
+                    if change.original is None:
+                        continue
+                    if editor is not None and ipid == editor[0]:
+                        leases[ipid] = editor[1]
+                        continue
+                    owner = object()
+                    leases[ipid] = self._hold_shared_animal_lease(ipid, owner, verify=True)
+                    pending_releases.callback(self._release_shared_animal_lease, ipid, owner)
+                receipt = self.backend.save_shared_animal_changes(
+                    context, changes, leases, expected_parentage_revision=expected_parentage_revision,
+                    addresses=addresses,
+                    derive_samples=bool(getattr(self, "sample_track_plugin", None)),
+                )
+                if addresses:
+                    housing = getattr(self, "cage_track_plugin", None)
+                    if housing is not None:
+                        housing.store.invalidate_housing_snapshot()
+                        housing.mark_cage_assignments_dirty()
+                original = self.__dict__.setdefault("_shared_core_loaded_snapshot", copy.deepcopy(before))
+                for ipid, change in changes.items():
+                    if change.original_section:
+                        original[change.original_section].pop(ipid, None)
+                    original[change.section][ipid] = copy.deepcopy(
+                        receipt.acknowledged_records.get((change.section, ipid), change.record)
+                    )
+                return receipt
+        except SessionRevokedError as error:
+            master.handle_session_revoked(error.reason)
+            raise
 
     # ------------------------
     # 7.11 Show Message Dialog
@@ -9027,7 +9569,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 target['project'] = project_widget.currentText().strip()
                 target['project_entry_date'] = target.get('birth_date', '') if not target_key else datetime.now().strftime(DATE_FORMAT)
                 target.pop('project_id', None)
-                catalog = self.backend.records.get('projects', 'catalog', default={})
+                catalog = ProgTrackApp._load_project_catalog_snapshot(self)
                 project = catalog.get('projects', {}).get(target['project'], {})
                 target['project_id'] = project.get('project_id', '')
             mode = group._parentage_mode
@@ -9321,7 +9863,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         raw = self._core_parentage_values(parent_values)
         mode = str(parent_values.get('parentage_mode') or target_record.get('parentage_mode') or '')
         if target_record.get('project') and target_record.get('project') != previous.get('project'):
-            catalog = self.backend.records.get('projects', 'catalog', default={})
+            catalog = ProgTrackApp._load_project_catalog_snapshot(self)
             bind_assignment(target_record, catalog, old=previous)
             if not previous:
                 if not target_record.get('project_entry_date'):
@@ -11169,7 +11711,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self.project_track_tab = None
 
         # Connect tab change handler when at least one tab is lazy-loaded.
-        if (self.reports_enabled or self.flow_track_enabled
+        if self._shared_connection_is_pending():
+            for plugin, key, label in (
+                ("Flow_Track", "tab.flow_track", "Flow Track"),
+                ("Heritage_Track", "tab.heritage_track", "Heritage Track"),
+                ("Cage__Track", "tab.cage_track", "Cage Track"),
+                ("Medi_Track", "tab.medi_track", "Medi Track"),
+                ("Projects_Track", "tab.project_track", "Project Track"),
+            ):
+                if self._plugin_available(plugin):
+                    self.main_tabs.addTab(QWidget(), self.messages.get(key, label))
+        elif (self.reports_enabled or self.flow_track_enabled
                 or getattr(self, 'has_heritage_plugin', False)
                 or getattr(self, 'has_cage_track_plugin', False)
                 or getattr(self, 'has_medi_track_plugin', False)
@@ -11204,11 +11756,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         self._apply_steroid_track_state()
 
         # ── Master_Track status bar & shortcut ──
+        if self._shared_connection_is_pending():
+            self._apply_master_button_states()
         if getattr(self, 'has_master_track', False) and self.master_track:
-            from PyQt6.QtWidgets import QStatusBar
             from PyQt6.QtGui import QShortcut, QKeySequence
-            sb = QStatusBar(self)
-            self.setStatusBar(sb)
+            sb = self.statusBar()
             self._master_status_icon_label = QLabel()
             self._master_status_icon_label.setFixedSize(22, 22)
             self._master_status_label = _ClickableLabel()
@@ -11222,6 +11774,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             # Ctrl+L → login shortcut
             login_shortcut = QShortcut(QKeySequence("Ctrl+L"), self)
             login_shortcut.activated.connect(self._do_master_login)
+            self._master_login_shortcut = login_shortcut
 
             # Install event filter to reset idle timer on user interaction
             from PyQt6.QtCore import QEvent
@@ -11312,6 +11865,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # identity, not localized tab text, so placeholder replacement cannot
         # change the contract.
         self._normalize_selection_for_single_animal_tab(tab_widget)
+        sync_selection_lease = getattr(self, "_sync_selected_animal_lease", None)
+        if callable(sync_selection_lease):
+            sync_selection_lease(tab_widget)
         pt_tab_selected = (
             getattr(self, '_pt_tab_needed', False) and (
                 tab_widget is getattr(self, 'project_track_tab', None)
@@ -11839,6 +12395,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _commit_relationship_updates(
         self, updates: Mapping[str, Mapping[str, Any]]
     ) -> None:
+        related = getattr(self, "_pending_shared_relationship_ipids", None)
+        if related is not None:
+            related.update(updates)
         archived = getattr(self, "archived", None)
         legacy_archived = getattr(self, "archived_animals", None)
         for animal_key, record in updates.items():
@@ -11912,11 +12471,33 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         elif isinstance(species_widget, QLineEdit):
             species_widget.textChanged.connect(rebuild)
 
+    def _load_project_catalog_snapshot(self):
+        initial = getattr(self, "_shared_initial_plugins", None)
+        if initial is not None:
+            return initial["projects"]
+        shared = getattr(self, "_uses_shared_leases", None)
+        if not callable(shared) or not shared():
+            return self.backend.records.get("projects", "catalog", default={})
+        from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+        from Plugins.core.backend.shared_projects import load_shared_project_catalog
+
+        master = getattr(self, "master_track", None)
+        session = getattr(master, "session_context", None)
+        if session is None:
+            return {"projects": {}}
+        try:
+            return load_shared_project_catalog(self.backend, session)[0]
+        except SessionRevokedError as error:
+            master.handle_session_revoked(error.reason)
+        except PermissionDeniedError:
+            pass
+        return {"projects": {}}
+
     def _load_project_records_for_visibility(self) -> Dict[str, Dict[str, Any]]:
         context = getattr(self, "_sidebar_read_context", None)
         if context is not None and context[0] == _actor_backend_read_identity(self) and context[2] is not None:
             return context[2]
-        data = self.backend.records.get("projects", "catalog", default={})
+        data = ProgTrackApp._load_project_catalog_snapshot(self)
         projects = data.get("projects", {}) if isinstance(data, dict) else {}
         records = {str(k): v for k, v in projects.items() if isinstance(v, dict)}
         if context is not None and context[0] == _actor_backend_read_identity(self):
@@ -12060,6 +12641,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         *,
         preset_payload: Optional[Dict[str, Any]] = None,
         expected_revisions: Optional[Dict[Tuple[str, str], Optional[int]]] = None,
+        original_roles=None,
     ) -> bool:
         if not self._can_configure_animal_roles():
             self._show_permission_denied()
@@ -12090,45 +12672,24 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         }
         deleted_values = previous_values - next_values
         try:
-            if preset_payload is None:
-                registry.save_roles(roles_for_save)
-            else:
-                preset_payload = RoleBlockPresetRegistry(self.backend).prepare_payload(
-                    preset_payload.get('presets', []),
-                    experimental_blocks=preset_payload.get('experimental_blocks', []),
-                    event_definitions=preset_payload.get('event_definitions', []),
+            if getattr(self, "_core_configuration_missing", True):
+                raise CoreConfigurationMissing("Initialize Core configuration before editing roles.")
+            role_payload = registry.prepare_payload(roles_for_save)
+            payloads = {ANIMAL_ROLES: role_payload}
+            if preset_payload is not None:
+                payloads[PRESETS] = RoleBlockPresetRegistry(self.backend).prepare_payload(
+                    preset_payload.get("presets", []),
+                    experimental_blocks=preset_payload.get("experimental_blocks", []),
+                    event_definitions=preset_payload.get("event_definitions", []),
                 )
-                role_payload = registry.prepare_payload(roles_for_save)
-                expected = expected_revisions or {}
-                self.backend.records.put_many(
-                    [
-                        ("configuration", "animal-roles", role_payload),
-                        ("configuration", "role-block-presets", preset_payload),
-                    ],
-                    expected_revisions=expected,
-                )
-                registry.apply_payload(role_payload)
-            self._save_role_label_overrides(registry.roles())
-            self._merge_user_messages()
-            if hasattr(self, "category_tab"):
-                self._setup_sidebar_texts()
-                self._apply_sidebar_button_visibility_for_category(
-                    self.category_tab.currentIndex())
-                self._apply_master_button_states()
-            cage_widget = getattr(self, "cage_track_widget", None)
-            if cage_widget is not None:
-                try:
-                    cage_widget._role_color_cache.clear()
-                    cage_widget.refresh_view(sync_animals=False)
-                except RuntimeError:
-                    pass
-            project_widget = getattr(self, "project_track_widget", None)
-            current_project = getattr(project_widget, "_current_project", None)
-            if project_widget is not None and current_project:
-                project_widget._refresh_animals_section_safe(current_project)
-            flow_widget = getattr(self, "flow_track_widget", None)
-            if flow_widget is not None:
-                flow_widget._redraw_canvas()
+            expected = {key: revision for (_namespace, key), revision in (expected_revisions or {}).items()}
+            locale_key = f"user-message-overrides:{getattr(self, 'lang', 'de') or 'de'}"
+            before = original_roles if original_roles is not None else registry.roles()
+            label_changes = self._role_label_override_changes(roles_for_save, before)
+            if label_changes:
+                payloads[locale_key] = label_changes
+            self.backend.core_configuration.save_roles(self._core_configuration_session(), payloads, expected)
+            self._refresh_core_configuration()
             changed_active = clear_deleted_role_assignments(self.animals, deleted_values)
             changed_archived = clear_deleted_role_assignments(self.archived, deleted_values)
             if changed_active or changed_archived:
@@ -12553,18 +13114,54 @@ class ProgTrackApp(QtWidgets.QMainWindow):
 
     def _connect_event_save_button(self, button, dialog, callback):
         """Guard the entire attempt, including nested modal events/double clicks."""
+        from Plugins.core.backend.errors import BackendError, ConflictError, SessionRevokedError
+
         def save_once():
             if dialog.property("event_save_running"):
                 return
             dialog.setProperty("event_save_running", True)
             button.setEnabled(False)
+            previous_addresses = getattr(self, "_pending_shared_core_addresses", None)
+            previous_related = getattr(self, "_pending_shared_relationship_ipids", None)
+            self._pending_shared_core_addresses = {}
+            self._pending_shared_relationship_ipids = set()
             try:
                 callback()
+            except BackendError as error:
+                if not self._uses_shared_leases():
+                    raise
+                if not isinstance(error, SessionRevokedError):
+                    try:
+                        self._load_persistence()
+                    except Exception:
+                        logging.exception("Could not reload authoritative Core data after a rejected save.")
+                    key = "core.shared_save_conflict" if isinstance(error, ConflictError) else "core.shared_save_failed"
+                    dialog_error = self.messages.get(key, "This save was rejected. Close the editor and try again.")
+                    self._show_message_raw(self.messages.get("error.title", "Error"), dialog_error, "error")
             finally:
+                if previous_addresses is None:
+                    self.__dict__.pop("_pending_shared_core_addresses", None)
+                else:
+                    self._pending_shared_core_addresses = previous_addresses
+                if previous_related is None:
+                    self.__dict__.pop("_pending_shared_relationship_ipids", None)
+                else:
+                    self._pending_shared_relationship_ipids = previous_related
                 if dialog.result() != QDialog.DialogCode.Accepted:
                     dialog.setProperty("event_save_running", False)
-                    button.setEnabled(True)
+                    master = getattr(self, "master_track", None)
+                    if not self._uses_shared_leases() or getattr(master, "session_context", None) is not None:
+                        button.setEnabled(True)
         button.clicked.connect(save_once)
+
+    def _stage_core_housing_address(self, animal_name, address):
+        if not self._uses_shared_leases():
+            self.cage_track_plugin.save_address_from_dialog(animal_name, address)
+            return
+        current = self.cage_track_plugin.get_current_address(animal_name)
+        old_cage, new_cage = current.get("cage_id"), address.get("cage_id")
+        if old_cage != new_cage:
+            self._pending_shared_core_addresses[animal_name] = (old_cage, new_cage)
 
     def _role_block_enabled(self, role_value: str, block_id: str, mode: str = "edit") -> bool:
         if block_id in REQUIRED_DIALOG_BLOCKS:
@@ -13727,6 +14324,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         new_project: str,
         old_severity: str = "",
         new_severity: str = "",
+        *, mirror_to_medi: bool = True,
     ) -> None:
         """Write a project assignment change to Medi Track and Reports daily data."""
         if old_project == new_project:
@@ -13791,7 +14389,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 ),
             })
         if new_project:
-            catalog = self.backend.records.get('projects', 'catalog', default={})
+            catalog = ProgTrackApp._load_project_catalog_snapshot(self)
             project = catalog.get('projects', {}).get(new_project, {})
             animal_data['project_id'] = project.get('project_id', '')
             animal_data['project_entry_date'] = today_fmt
@@ -13804,7 +14402,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             animal_data.pop('project_period_id', None)
 
         medi = getattr(self, 'medi_track_plugin', None)
-        if getattr(self, 'has_medi_track_plugin', False) and medi:
+        if mirror_to_medi and getattr(self, 'has_medi_track_plugin', False) and medi:
             try:
                 medi.log_project_change(
                     animal_name, old_project, new_project, sig,
@@ -14019,6 +14617,21 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._save_trace("post_animal_project_updates.schedule.no_change", animal_name=animal_name)
             return
 
+        if self._uses_shared_leases():
+            # Prepare the report annotations and lifecycle fields before the
+            # Shared command. The backend writes the medical/project mirrors
+            # in the same transaction as this record.
+            self._log_death_change(animal_name, mirror_to_medi=False)
+            self._log_project_change(
+                animal_name, old_project, new_project, old_severity, new_severity, mirror_to_medi=False,
+            )
+            self._log_severity_change(
+                animal_name, old_project, new_project, old_severity, new_severity, creating, mirror_to_medi=False,
+            )
+            if new_in_experiment != old_in_experiment:
+                self._log_experiment_change(animal_name, new_in_experiment, mirror_to_medi=False)
+            return
+
         def _run_post_save_updates():
             try:
                 self._save_trace("post_animal_project_updates.run.enter", animal_name=animal_name)
@@ -14124,6 +14737,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         old_severity: str,
         new_severity: str,
         creating: bool = False,
+        *, mirror_to_medi: bool = True,
     ) -> None:
         """Log a severity change to animal report edits and Medi Track (other type)."""
         # Normalize legacy '0' value
@@ -14166,13 +14780,13 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return 'SV0' if s == '0' else (s or '')
         animal_data['project_severity'] = _norm_sv2(new_severity)
         medi = getattr(self, 'medi_track_plugin', None)
-        if getattr(self, 'has_medi_track_plugin', False) and medi:
+        if mirror_to_medi and getattr(self, 'has_medi_track_plugin', False) and medi:
             try:
                 medi.log_severity_change(animal_name, proj, old_lbl, new_lbl, sig)
             except Exception as exc:
                 logging.error(f"_log_severity_change: {exc}")
 
-    def _log_experiment_change(self, animal_name: str, started: bool) -> None:
+    def _log_experiment_change(self, animal_name: str, started: bool, *, mirror_to_medi: bool = True) -> None:
         """Write 'Experiment started/ended' to Reports daily edits and Medi_Track."""
         mt = getattr(self, 'master_track', None)
         sig = ''
@@ -14232,7 +14846,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         animal_data['edits'][event_iso]['experiment_note'] = note
 
         medi = getattr(self, 'medi_track_plugin', None)
-        if getattr(self, 'has_medi_track_plugin', False) and medi:
+        if mirror_to_medi and getattr(self, 'has_medi_track_plugin', False) and medi:
             try:
                 entry_type = 'experiment_started' if started else 'experiment_ended'
                 medi.log_experiment_change(
@@ -14326,7 +14940,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     }
         return True
 
-    def _log_death_change(self, animal_name: str) -> None:
+    def _log_death_change(self, animal_name: str, *, mirror_to_medi: bool = True) -> None:
         """Publish a newly captured death exactly once to Reports and MediTrack."""
         record = self.animals.get(animal_name, {})
         pending = getattr(self, "_pending_death_notifications", {})
@@ -14353,7 +14967,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         record.setdefault("edits", {}).setdefault(event_iso, {})["death_note"] = note
 
         medi = getattr(self, "medi_track_plugin", None)
-        if getattr(self, "has_medi_track_plugin", False) and medi:
+        if mirror_to_medi and getattr(self, "has_medi_track_plugin", False) and medi:
             try:
                 medi.log_lifecycle_change(
                     animal_name,
@@ -15375,11 +15989,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if timer is not None:
             timer.stop()
 
-        all_data = copy.deepcopy(
-            self.backend.records.get("reports", "animal-reports", default={})
-        )
-
         current_animal = getattr(self, 'report_current_animal', None)
+        shared = getattr(self, "_uses_shared_leases", None)
+        shared = bool(callable(shared) and shared())
+        if shared:
+            context = getattr(mt, "session_context", None)
+            ipid = self._lease_ipid(current_animal) if current_animal else ""
+            hold = getattr(self, "_owned_animal_leases", {}).get(ipid)
+            if context is None or hold is None:
+                return
+            all_data = {}
+        else:
+            all_data = copy.deepcopy(
+                self.backend.records.get("reports", "animal-reports", default={})
+            )
         if current_animal:
             all_data[current_animal] = {
                 'locked_dates': list(self.report_locked_dates),
@@ -15409,13 +16032,28 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             animal_data['edits'] = edits
 
         if changed or current_animal:
-            self.backend.records.put("reports", "animal-reports", all_data)
+            if shared:
+                from Plugins.core.backend.errors import SessionRevokedError
+
+                try:
+                    self._save_report_with_shared_lease(context, ipid, hold[0], all_data[current_animal])
+                except SessionRevokedError as error:
+                    mt.handle_session_revoked(error.reason)
+                    return
+                except Exception:
+                    logging.exception("Could not persist the unlocked report rows.")
+                    return
+            else:
+                self.backend.records.put("reports", "animal-reports", all_data)
 
         if current_animal in all_data:
             current_data = all_data[current_animal]
             self.report_locked_dates = set(current_data.get('locked_dates', []))
             self.report_edits = copy.deepcopy(current_data.get('edits', {}))
-        pending.clear()
+        if shared:
+            pending.pop(current_animal, None)
+        else:
+            pending.clear()
 
     def _save_report_data(self) -> None:
         """Save report data (locked dates and edits) to JSON file."""
@@ -15435,26 +16073,69 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             return
         
         animal_name = self.report_current_animal
+        report = {
+            'locked_dates': list(self.report_locked_dates),
+            'edits': copy.deepcopy(self.report_edits),
+        }
+        shared = getattr(self, "_uses_shared_leases", None)
+        if callable(shared) and shared():
+            from Plugins.core.backend.errors import SessionRevokedError
+
+            ipid = self._lease_ipid(animal_name)
+            hold = getattr(self, "_owned_animal_leases", {}).get(ipid)
+            context = getattr(mt, "session_context", None)
+            if hold is None or context is None:
+                return
+            try:
+                self._save_report_with_shared_lease(context, ipid, hold[0], report)
+            except SessionRevokedError as error:
+                mt.handle_session_revoked(error.reason)
+            except Exception:
+                logging.exception("Could not save Shared animal report.")
+                self._show_message_raw(
+                    self.messages.get("error.title", "Error"),
+                    self.messages.get("reports.error.save_failed", "The report could not be saved."),
+                    "error",
+                )
+            return
         
         all_data = dict(
             self.backend.records.get("reports", "animal-reports", default={})
         )
         
         # Update data for this animal
-        all_data[animal_name] = {
-            'locked_dates': list(self.report_locked_dates),
-            'edits': copy.deepcopy(self.report_edits)
-        }
+        all_data[animal_name] = report
         
         self.backend.records.put("reports", "animal-reports", all_data)
     
+    def _save_report_with_shared_lease(self, context, ipid, token, report):
+        snapshots = getattr(self, "_shared_report_loaded_snapshot", {})
+        self.backend.save_shared_animal_report(
+            context, ipid, token, report, expected_report=snapshots.get(ipid),
+        )
+        snapshots[ipid] = copy.deepcopy(report)
+
     def _load_report_data(self, animal_name: str) -> None:
         """Load report data for a specific animal."""
-        all_data = self.backend.records.get(
-            "reports", "animal-reports", default={}
-        )
-        
-        animal_data = copy.deepcopy(all_data.get(animal_name, {}))
+        shared = getattr(self, "_uses_shared_leases", None)
+        if callable(shared) and shared():
+            from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+
+            master = getattr(self, "master_track", None)
+            context = getattr(master, "session_context", None)
+            animal_data = {}
+            if context is not None:
+                try:
+                    ipid = self._lease_ipid(animal_name)
+                    animal_data = self.backend.load_shared_animal_report(context, ipid)
+                    self.__dict__.setdefault("_shared_report_loaded_snapshot", {})[ipid] = copy.deepcopy(animal_data)
+                except SessionRevokedError as error:
+                    master.handle_session_revoked(error.reason)
+                except PermissionDeniedError:
+                    pass
+        else:
+            all_data = self.backend.records.get("reports", "animal-reports", default={})
+            animal_data = copy.deepcopy(all_data.get(animal_name, {}))
         self.report_locked_dates = set(animal_data.get('locked_dates', []))
         all_edits = animal_data.get('edits', {})
         
@@ -15924,6 +16605,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             item.setToolTip(identity_label)
             self.lst.addItem(item)
             self.lst.setItemWidget(item, row_widget)
+            paint_lease = getattr(self, "_paint_foreign_animal_lease", None)
+            if callable(paint_lease):
+                paint_lease(item, name)
             
             # Selection match must use the base name (without appended status)
             if name in preserved_selection:
@@ -16522,6 +17206,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if hasattr(self, 'category_tab') and hasattr(self, 'btn_load_sperm'):
             self._apply_sidebar_button_visibility_for_category(self.category_tab.currentIndex())
 
+        sync_selection_lease = getattr(self, "_sync_selected_animal_lease", None)
+        if callable(sync_selection_lease):
+            sync_selection_lease(current_tab_widget)
         # Detect archived animal selections and update restore/delete button states
         archived_selected = []
         for item in self.lst.selectedItems():
@@ -19683,6 +20370,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not self._master_can('core.create_animals'):
             self._show_permission_denied()
             return
+        if getattr(self, "_core_configuration_missing", True):
+            QMessageBox.warning(
+                self, self.messages["core.configuration.title"],
+                self.messages["core.configuration.create_requires_setup"],
+            )
+            return
         idx = self.category_tab.currentIndex()
         # ♂ tab → Samenspender
         if idx == 1:
@@ -21322,14 +22015,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # Add Style settings menu item
         self.style_settings_action = QAction(self.messages.get("menu.program.style_settings", "Style"), self)
         self.style_settings_action.triggered.connect(self._show_style_settings)
+        self.core_configuration_setup_action = QAction(self.messages["core.configuration.setup"], self)
+        self.core_configuration_setup_action.triggered.connect(self._show_core_configuration_setup)
         program_menu.addAction(self.style_settings_action)
+        program_menu.addAction(self.core_configuration_setup_action)
         self.backend_settings_action = QAction(
             self.messages.get("menu.program.backend", "Backend"), self
         )
         self.backend_settings_action.triggered.connect(
             self._show_backend_configuration
         )
-        self.backend_settings_action.setEnabled(self._is_lord_session())
+        self.backend_settings_action.setEnabled(self._shared_connection_is_pending() or self._is_lord_session())
         program_menu.addAction(self.backend_settings_action)
     def _on_language_changed(self, action):
         """Handle click on Program → Language Settings (immediate reload)."""
@@ -21383,6 +22079,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             new_roles,
             preset_payload=preset_payload,
             expected_revisions=expected_revisions,
+            original_roles=dialog._opening_role_definitions,
         ):
             self._refresh_list(update_tab_visibility=True)
         if style_changed and getattr(self, 'selected_animals', None):
@@ -21432,6 +22129,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         InstitutionBrandingDialog(
             self.backend.branding,
             actor,
+            session=getattr(mt, "session_context", None),
             authorized=True,
             units_authorized=True,
             units_service=CanonicalUnitService(self.backend, app_authorization),
@@ -21452,7 +22150,83 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             and str(getattr(mt, "current_role", "") or "").casefold() == "lord"
         )
 
+    def _create_storage_client(self, root, *, runtime_dsn=None):
+        from Plugins.core.managed_storage_worker import ManagedStorageClient
+
+        return ManagedStorageClient(
+            BACKEND_CONFIGURATION, root, runtime_dsn=runtime_dsn or self._runtime_postgres_dsn,
+            error_message=lambda: self.messages.get(
+                "backend.storage.context_error",
+                "Managed document storage is unavailable. Check the path in the Backend dialog and retry.",
+            ),
+        )
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, "_shared_connection_state", None) == "waiting":
+            self._shared_connection_state = "starting"
+            QtCore.QTimer.singleShot(0, self._retry_shared_connection)
+        if getattr(self, "_storage_notice_pending", False):
+            self._storage_notice_pending = False
+            QtCore.QTimer.singleShot(0, self._start_storage_notice)
+
+    def _start_storage_notice(self) -> None:
+        notice = self._storage_notice
+        if notice is not None and self.isVisible():
+            client = self._storage_client
+            if client is not None:
+                notice.watch(client.root, client.check)
+
+    def _storage_profile_tested(self, root: str, available: bool) -> None:
+        notice = self._storage_notice
+        if notice is not None and notice.root == root:
+            # Unsaved passwords are used for the dialog test only. Confirm
+            # under the active profile before changing the running warning.
+            notice.recheck()
+
+    def _storage_profile_saved(self) -> None:
+        if self._storage_notice is None:
+            return
+        document = BACKEND_CONFIGURATION.load_document()
+        if document.get("profile") != BackendProfile.SHARED_POSTGRESQL.value:
+            return
+        # A profile pointing at a different DB still needs normal restart.
+        if BACKEND_CONFIGURATION.effective_postgres_dsn() != self._runtime_postgres_dsn:
+            return
+        from psycopg.conninfo import conninfo_to_dict
+
+        target = document.get("postgresql", {})
+        active_database = conninfo_to_dict(self._runtime_postgres_dsn).get("dbname")
+        if target.get("database") and target["database"] != active_database:
+            return
+        root = BACKEND_CONFIGURATION.environ.get("PROGTRACK_MANAGED_ROOT", document.get("managed_root", ""))
+        client = self._create_storage_client(root)
+        self.backend.reconfigure_shared_storage(client.root, client)
+        self._storage_client = client
+        self._start_storage_notice()
+
+    def _show_shared_recovery_configuration(self):
+        from Plugins.core.shared_recovery_dialog import SharedRecoveryDialog
+
+        active_attempt = self._shared_connection_state in {"connecting", "loading"}
+        if active_attempt:
+            self._new_shared_attempt()
+            self._shared_connection_state = "configuration"
+            self._update_shared_connection_notice()
+        dialog = SharedRecoveryDialog(BACKEND_CONFIGURATION, self.messages, self)
+        saved = dialog.exec()
+        if saved:
+            pg = BACKEND_CONFIGURATION.saved_postgresql()
+            root = BACKEND_CONFIGURATION.environ.get("PROGTRACK_MANAGED_ROOT", pg.managed_root)
+            self._storage_client = self._create_storage_client(root)
+            self._start_storage_notice()
+        if saved or active_attempt:
+            self._retry_shared_connection(changed_profile=True)
+
     def _show_backend_configuration(self) -> None:
+        if self._shared_connection_is_pending():
+            self._show_shared_recovery_configuration()
+            return
         authorized = self._is_lord_session()
         if not authorized:
             QMessageBox.warning(
@@ -21472,6 +22246,20 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             getattr(getattr(self, "master_track", None), "current_username", "")
             or "installation-admin"
         )
+        master = getattr(self, "master_track", None)
+        initiating_session = getattr(master, "session_context", None)
+
+        def validate_admin_initiator() -> str:
+            if not self._is_lord_session():
+                return ""
+            if initiating_session is not None:
+                if getattr(master, "session_context", None) != initiating_session:
+                    return ""
+                return self.backend.require_backend_admin_initiator(initiating_session)
+            if (self.backend.paths.profile is BackendProfile.STANDALONE_SQLITE
+                    and getattr(self.authorization, "trusted_local", False)):
+                return actor
+            return ""
 
         def audit(payload: Dict[str, Any]) -> None:
             # Backend administration services pass the concrete event action
@@ -21500,18 +22288,30 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 entity_type=entity_type,
                 entity_id=entity_id,
                 payload=event,
+                correlation_id=str(event.get("correlation_id") or ""),
             )
 
+        def validate_managed_initiator() -> str:
+            current = str(getattr(master, "current_username", "") or "installation-admin")
+            return actor if current == actor and self._is_lord_session() else ""
+
         try:
-            BackendConfigurationDialog(
+            dialog = BackendConfigurationDialog(
                 BACKEND_CONFIGURATION,
                 self.messages,
                 authorized=authorized,
                 audit_callback=audit,
                 backend=self.backend,
                 actor_login=actor,
+                validate_admin_initiator=validate_admin_initiator,
+                validate_managed_initiator=validate_managed_initiator,
+                managed_session=initiating_session,
+                active_database=self.backend.active_postgresql_database(),
                 parent=self,
-            ).exec()
+            )
+            dialog.managed_storage_tested.connect(self._storage_profile_tested)
+            dialog.managed_storage_profile_saved.connect(self._storage_profile_saved)
+            dialog.exec()
         except BackendConfigurationPermissionError:
             QMessageBox.warning(
                 self,
@@ -21716,6 +22516,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         file_menu.addSection(self.messages.get("menu.file.section.database", "Database"))
         save_db_action = QAction(self.messages.get("menu.file.save_database", "Save Backup"), self)
         save_db_action.triggered.connect(self._save_database)
+        save_db_action.setEnabled(not self._shared_connection_is_pending())
         file_menu.addAction(save_db_action)
 
         # Tools
@@ -22042,7 +22843,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         Shows a confirmation dialog with a message that differs depending on
         whether Master Track is currently enabled or disabled."""
         mt = getattr(self, 'master_track', None)
-        if not mt or not mt.can("toggle_master_track"):
+        if self._uses_shared_leases() or not mt or not mt.can("toggle_master_track"):
             self._show_permission_denied()
             return
         currently_enabled = "master_track" not in self._disabled_plugins
@@ -22111,6 +22912,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # The complete UI state was persisted above; do not write the same
         # per-user session record a second time from MasterTrackPlugin.logout.
         mt.logout(save_session=False)
+        shared = getattr(self, "_uses_shared_leases", None)
+        if callable(shared) and shared():
+            self._load_persistence()
         self._clear_session_animal_selection()
         # Revert to global disabled_plugins (Guest defaults)
         self._disabled_plugins = self._load_disabled_plugins()
@@ -22163,6 +22967,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if getattr(mt, "is_logged_in", False):
             self._save_master_session()
         if mt.login_interactive(save_session=False):
+            shared = getattr(self, "_uses_shared_leases", None)
+            if callable(shared) and shared():
+                self._load_persistence()
             self._clear_session_animal_selection()
             heritage_plugin = getattr(self, 'heritage_plugin', None)
             if heritage_plugin is not None and callable(getattr(heritage_plugin, 'on_user_logout', None)):
@@ -22428,7 +23235,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 if _currently_on else
                 self.messages.get("master_track.menu.enable", "Enable Master Track")
             )
-            self._mt_toggle_action.setEnabled(mt.can("toggle_master_track"))
+            self._mt_toggle_action.setEnabled(not self._uses_shared_leases() and mt.can("toggle_master_track"))
         self._refresh_role_restricted_tool_states()
 
     def _tool_permission_for_action(self, action_attr: str) -> Optional[str]:
@@ -22586,6 +23393,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _apply_master_button_states(self):
         """Grey out sidebar buttons based on current Master_Track permissions.
         When Master_Track is absent or disabled, all buttons stay enabled."""
+        if self._shared_connection_is_pending():
+            action = getattr(self, "core_configuration_setup_action", None)
+            if action is not None:
+                action.setEnabled(False)
+            for name in ("btn_new", "btn_edit", "btn_edit_animal", "btn_load_blood",
+                         "btn_load_urine", "btn_load_weights", "btn_load_sperm",
+                         "btn_archive", "btn_restore", "btn_delete"):
+                button = getattr(self, name, None)
+                if button is not None:
+                    button.setEnabled(False)
+            return
         mt = getattr(self, 'master_track', None)
         mt_disabled = "master_track" in getattr(self, '_disabled_plugins', set())
         steroid_active = self._is_steroid_track_active()
@@ -22596,7 +23414,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                          'btn_archive', 'btn_restore', 'btn_delete'):
                 btn = getattr(self, attr, None)
                 if btn:
-                    btn.setEnabled(True)
+                    btn.setEnabled(attr != "btn_new" or not getattr(self, "_core_configuration_missing", False))
             if hasattr(self, 'btn_load_sperm'):
                 self.btn_load_sperm.setEnabled(steroid_active)
             active_selected = any(name in self.animals for name in self.selected_animals)
@@ -22619,7 +23437,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         can_edit_animal = self._master_can('core.edit_animal_core')
 
         if hasattr(self, 'btn_new'):
-            self.btn_new.setEnabled(can_create)
+            self.btn_new.setEnabled(can_create and not getattr(self, "_core_configuration_missing", False))
         if hasattr(self, 'btn_edit'):
             # Edit button also needs a selection — only enable if both permission and selection
             self.btn_edit.setEnabled(can_edit and any(name in self.animals for name in self.selected_animals))
@@ -22644,6 +23462,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             _sel_arch = getattr(self, '_selected_archived', [])
             self.btn_delete.setEnabled(can_delete and bool(_sel_arch))
         # Grey out Style settings menu for guests when Master Track is active
+        if hasattr(self, "core_configuration_setup_action"):
+            self.core_configuration_setup_action.setText(self.messages["core.configuration.setup"])
+            self.core_configuration_setup_action.setEnabled(
+                getattr(self, "_core_configuration_missing", False)
+                and getattr(self.backend, "core_configuration", None) is not None
+                and self._can_manage_institution_settings())
         if hasattr(self, 'style_settings_action'):
             can_style = mt.can("core.style_settings") if mt else True
             self.style_settings_action.setEnabled(can_style)
@@ -23817,7 +24641,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self._save_trace("partner.save.cage_address.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_values = extract_address_values(cage_address_fields)
-                    self.cage_track_plugin.save_address_from_dialog(new_name, addr_values)
+                    self._stage_core_housing_address(new_name, addr_values)
                     self._save_trace("partner.save.cage_address.after", new_name=new_name)
                 except Exception as e:
                     self._save_trace("partner.save.cage_address.exception", new_name=new_name, error=e)
@@ -24478,7 +25302,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self._save_trace("sperm_donor.save.cage_address.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_values = extract_address_values(cage_address_fields)
-                    self.cage_track_plugin.save_address_from_dialog(new_name, addr_values)
+                    self._stage_core_housing_address(new_name, addr_values)
                     self._save_trace("sperm_donor.save.cage_address.after", new_name=new_name)
                 except Exception as e:
                     self._save_trace("sperm_donor.save.cage_address.exception", new_name=new_name, error=e)
@@ -25085,7 +25909,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self._save_trace("offspring.save.cage.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_vals = extract_address_values(cage_address_fields)
-                    self.cage_track_plugin.save_address_from_dialog(new_name, addr_vals)
+                    self._stage_core_housing_address(new_name, addr_vals)
                     self._save_trace("offspring.save.cage.after", new_name=new_name)
                 except Exception as e:
                     self._save_trace("offspring.save.cage.exception", new_name=new_name, error=e)
@@ -25775,7 +26599,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self._save_trace("zuchttier.save.cage.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_vals = extract_address_values(cage_address_fields)
-                    self.cage_track_plugin.save_address_from_dialog(new_name, addr_vals)
+                    self._stage_core_housing_address(new_name, addr_vals)
                     self._save_trace("zuchttier.save.cage.after", new_name=new_name)
                 except Exception as e:
                     self._save_trace("zuchttier.save.cage.exception", new_name=new_name, error=e)
@@ -26401,7 +27225,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self._save_trace("versuchstier.save.cage.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_vals = extract_address_values(cage_address_fields)
-                    self.cage_track_plugin.save_address_from_dialog(new_name, addr_vals)
+                    self._stage_core_housing_address(new_name, addr_vals)
                     self._save_trace("versuchstier.save.cage.after", new_name=new_name)
                 except Exception as e:
                     self._save_trace("versuchstier.save.cage.exception", new_name=new_name, error=e)
@@ -27077,10 +27901,14 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 new_in_experiment,
                 creating,
             )
+            has_cage_address = cage_address_fields and extract_address_values and getattr(self, 'cage_track_plugin', None) is not None
+            shared_housing = has_cage_address and self._uses_shared_leases()
+            if shared_housing:
+                self._stage_core_housing_address(new_key, extract_address_values(cage_address_fields))
             self._save_persistence(defer_post_save_work=True)
             if creating:
                 self._audit_animal_created(new_key, rec_obj)
-            if cage_address_fields and extract_address_values and getattr(self, 'cage_track_plugin', None) is not None:
+            if has_cage_address and not shared_housing:
                 try:
                     self.cage_track_plugin.save_address_from_dialog(
                         new_key,
@@ -27917,7 +28745,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     self._save_trace("female_like.save.cage_address.before", new_name=new_name)
                     from Plugins.Cage__Track.ui_address_fields import extract_address_values
                     addr_values = extract_address_values(cage_address_fields)
-                    self.cage_track_plugin.save_address_from_dialog(new_name, addr_values)
+                    self._stage_core_housing_address(new_name, addr_values)
                     self._save_trace("female_like.save.cage_address.after", new_name=new_name)
                 except Exception as e:
                     self._save_trace("female_like.save.cage_address.exception", new_name=new_name, error=e)
@@ -27946,7 +28774,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             if creating:
                 self._audit_animal_created(key, rec)
             # Sample_Track: notify for newly added blood/urine measurements
-            if getattr(self, 'has_sample_track_plugin', False) and self.sample_track_plugin:
+            if not self._uses_shared_leases() and getattr(self, 'has_sample_track_plugin', False) and self.sample_track_plugin:
                 _st_anim = key
                 for _e in rec.get('daten', []):
                     _d = _e.get('datum')
@@ -28112,28 +28940,252 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         login = str(getattr(mt, "current_username", "") or "local-user")
         display = str(getattr(mt, "current_display_name", "") or login)
         lease = None
+        ipid = self._lease_ipid(animal_name)
+        shared = self._uses_shared_leases()
+        context = object()
         try:
-            lease = self.backend.leases.acquire(
-                "animal",
-                animal_name,
-                owner_login=login,
-                owner_display=display,
-            )
+            if shared:
+                lease = self._hold_shared_animal_lease(ipid, context, verify=True)
+            else:
+                lease = self.backend.leases.acquire(
+                    "animal", ipid, owner_login=login, owner_display=display,
+                )["token"]
         except LockConflictError as exc:
             self._show_message_raw(
                 self.messages.get("title.warning", "Warning"),
-                str(exc),
+                self.messages.get(
+                    "core.animal_lease.foreign", "This animal is being edited by {owner}."
+                ).format(owner=exc.owner) if exc.owner else str(exc),
                 "warning",
             )
             opener(animal_name, read_only=True)
             return
+        previous_editor = getattr(self, "_shared_editor_scope", None)
+        if shared:
+            self._shared_editor_scope = ipid, lease, mt.session_context
+            housing = getattr(self, "cage_track_plugin", None)
+            if housing is not None:
+                housing.store.invalidate_housing_snapshot()
         try:
             opener(animal_name, read_only=False)
         finally:
+            self._shared_editor_scope = previous_editor
             if lease:
-                self.backend.leases.release(
-                    "animal", animal_name, lease["token"]
-                )
+                if shared:
+                    self._release_shared_animal_lease(ipid, context)
+                else:
+                    self.backend.leases.release("animal", ipid, lease)
+
+    def _uses_shared_leases(self):
+        from Plugins.core.runtime_paths import BackendProfile
+
+        paths = getattr(getattr(self, "backend", None), "paths", None)
+        return getattr(paths, "profile", None) is BackendProfile.SHARED_POSTGRESQL
+
+    def _lease_ipid(self, animal_name):
+        record = self.animals.get(animal_name) or getattr(self, "archived", {}).get(animal_name) or {}
+        return str(record.get("ipid") or animal_name)
+
+    def _hold_shared_animal_lease(self, ipid, owner, *, verify=False):
+        from Plugins.core.backend.errors import SessionRevokedError
+
+        master = getattr(self, "master_track", None)
+        session = getattr(master, "session_context", None)
+        if session is None:
+            raise LockConflictError("Sign in to edit an animal.")
+        holds = self.__dict__.setdefault("_owned_animal_leases", {})
+        token, owners = holds.get(ipid, (None, set()))
+        if token is None or verify:
+            try:
+                lease = self.backend.leases.acquire("animal", ipid, session=session)
+            except SessionRevokedError as error:
+                master.handle_session_revoked(error.reason)
+                raise LockConflictError("Sign in again to edit an animal.") from None
+            except LockConflictError:
+                heartbeat = getattr(master, "_heartbeat", None)
+                if heartbeat is not None:
+                    heartbeat.refresh()
+                raise
+            except Exception:
+                logging.warning("Could not acquire the Shared animal edit lease.")
+                raise LockConflictError(self.messages.get(
+                    "core.animal_lease.unavailable", "Editing is unavailable for this animal."
+                )) from None
+            token = lease["token"]
+            holds[ipid] = token, owners
+        owners.add(owner)
+        return token
+
+    def _release_shared_animal_lease(self, ipid, owner):
+        holds = getattr(self, "_owned_animal_leases", {})
+        active = holds.get(ipid)
+        if active is None or owner not in active[1]:
+            return
+        token, owners = active
+        owners.discard(owner)
+        if owners:
+            return
+        del holds[ipid]
+        master = getattr(self, "master_track", None)
+        session = getattr(master, "session_context", None)
+        if session is None:
+            return
+        try:
+            self.backend.leases.release("animal", ipid, token, session=session)
+            if getattr(master, "_heartbeat", None) is not None:
+                master._heartbeat.refresh()
+        except Exception:
+            logging.warning("Could not confirm edit-lease release.")
+        heartbeat = getattr(master, "_heartbeat", None)
+        if heartbeat is not None:
+            heartbeat.refresh()
+
+    def _sync_selected_animal_lease(self, tab_widget=None):
+        if not self._uses_shared_leases():
+            return
+        kind = self._single_animal_tab_kind(tab_widget)
+        names = getattr(self, "selected_animals", [])
+        desired = (
+            (kind, self._lease_ipid(names[-1]))
+            if kind and names and names[-1] in self.animals else None
+        )
+        old = getattr(self, "_selection_lease_context", None)
+        if old == desired:
+            return
+        if desired is not None:
+            name, ipid = desired
+            if ipid in getattr(self, "_foreign_animal_leases", {}):
+                desired = None
+            else:
+                try:
+                    self._hold_shared_animal_lease(ipid, name)
+                except LockConflictError:
+                    desired = None
+        self._selection_lease_context = desired
+        if old is not None:
+            self._release_shared_animal_lease(old[1], old[0])
+
+    def _current_edit_lease_tokens(self):
+        return tuple(token for token, _ in getattr(self, "_owned_animal_leases", {}).values())
+
+    def _apply_shared_lease_heartbeat(self, requested_tokens, renewed, snapshot):
+        if not self._uses_shared_leases():
+            return
+        master = self.master_track
+        own_session = getattr(master.session_context, "session_id", None)
+        previous_foreign = getattr(self, "_foreign_animal_leases", {})
+        previous_selection = getattr(self, "_selection_lease_context", None)
+        self._foreign_animal_leases = {
+            row["entity_id"]: row
+            for row in snapshot
+            if row["entity_type"] == "animal" and row["owner_session_id"] != own_session
+        }
+        self._foreign_housing_leases = {
+            row["entity_id"]: row for row in snapshot
+            if row["entity_type"] == "housing" and row["owner_session_id"] != own_session
+        }
+        animals_changed = {
+            ipid: row.get("owner_session_id") for ipid, row in previous_foreign.items()
+        } != {
+            ipid: row.get("owner_session_id") for ipid, row in self._foreign_animal_leases.items()
+        }
+        cage = getattr(getattr(self, "cage_track_plugin", None), "widget", None)
+        refresh_housing = getattr(cage, "apply_shared_lease_snapshot", None)
+        if callable(refresh_housing):
+            refresh_housing(animals_changed)
+        samples = getattr(self, "sample_track_plugin", None)
+        refresh_samples = getattr(samples, "apply_shared_lease_snapshot", None)
+        if animals_changed and callable(refresh_samples):
+            refresh_samples()
+        flow = getattr(self, "flow_track_widget", None)
+        flow_surface = getattr(flow, "widget", None)
+        if animals_changed and flow_surface is not None and flow_surface.isVisible():
+            flow._redraw_canvas()
+        project_widget = getattr(self, "project_track_widget", None)
+        refresh_projects = getattr(project_widget, "apply_shared_lease_snapshot", None)
+        if callable(refresh_projects):
+            refresh_projects({
+                row["entity_id"]: row for row in snapshot
+                if row["entity_type"] == "project" and row["owner_session_id"] != own_session
+            })
+        for ipid, (token, _) in list(getattr(self, "_owned_animal_leases", {}).items()):
+            if token in requested_tokens and token not in renewed and not any(
+                row["entity_id"] == ipid and row["owner_session_id"] == own_session
+                for row in snapshot
+            ):
+                self._owned_animal_leases.pop(ipid, None)
+                selected = getattr(self, "_selection_lease_context", None)
+                if selected is not None and selected[1] == ipid:
+                    self._selection_lease_context = None
+        sidebar = getattr(self, "lst", None)
+        if sidebar is not None:
+            for index in range(sidebar.count()):
+                item = sidebar.item(index)
+                key = self._normalize_sidebar_selection_value(item.data(Qt.ItemDataRole.UserRole))
+                if key in self.animals or key in getattr(self, "archived", {}):
+                    self._paint_foreign_animal_lease(item, key)
+        selected = getattr(self, "selected_animals", ())
+        if selected:
+            ipid = self._lease_ipid(selected[-1])
+            foreign_changed = (ipid in previous_foreign) != (ipid in self._foreign_animal_leases)
+            if foreign_changed or previous_selection != getattr(self, "_selection_lease_context", None):
+                if QApplication.activeModalWidget() is None:
+                    self._sync_selected_animal_lease()
+                    self._on_select()
+
+    def _paint_foreign_animal_lease(self, item, name):
+        leases = getattr(self, "_foreign_animal_leases", {})
+        lease = leases.get(self._lease_ipid(name))
+        widget = self.lst.itemWidget(item)
+        if widget is None:
+            return
+        if lease is not None and not widget.property("foreignLease"):
+            widget.setProperty("foreignLease", True)
+            widget.setStyleSheet("QWidget[foreignLease=true] { background-color: #d7d7d7; }")
+            widget.setProperty("unlockedTooltip", widget.toolTip())
+        elif lease is None and widget.property("foreignLease"):
+            widget.setProperty("foreignLease", False)
+            widget.setStyleSheet("")
+            widget.setToolTip(widget.property("unlockedTooltip") or "")
+        if lease is not None:
+            widget.setToolTip(self.messages.get(
+                "core.animal_lease.foreign", "This animal is being edited by {owner}."
+            ).format(owner=lease.get("owner_display") or lease.get("owner_login") or ""))
+
+    def _on_authenticated_session_revoked(self, *, reason=""):
+        master = self.master_track
+        modal = QApplication.activeModalWidget()
+        master._set_guest()
+        if self._uses_shared_leases():
+            self._load_persistence()
+            self._refresh_list(update_tab_visibility=True)
+        self._refresh_master_menu_states()
+        self._update_master_status_bar()
+        self._apply_master_button_states()
+        if modal is not None and modal is not self:
+            dismiss_buttons = {
+                dialog_button
+                for box in modal.findChildren(QtWidgets.QDialogButtonBox)
+                for dialog_button in box.buttons()
+                if box.buttonRole(dialog_button) == QtWidgets.QDialogButtonBox.ButtonRole.RejectRole
+            }
+            for editor in modal.findChildren(QtWidgets.QWidget):
+                if isinstance(editor, (QtWidgets.QLineEdit, QtWidgets.QAbstractSpinBox,
+                                       QtWidgets.QPlainTextEdit, QtWidgets.QTextEdit)):
+                    editor.setReadOnly(True)
+                elif isinstance(editor, (QtWidgets.QComboBox, QtWidgets.QAbstractButton)):
+                    if editor not in dismiss_buttons and not editor.property("sessionDismiss"):
+                        editor.setEnabled(False)
+        key = "master_track.session_account_changed" if reason == "user_account_changed" else "master_track.session_revoked"
+        QMessageBox.information(
+            modal or self,
+            self.messages.get("master_track.login.title", "Login"),
+            self.messages.get(key, "Your session ended. Sign in again."),
+        )
+        if isinstance(modal, QtWidgets.QDialog):
+            modal.finished.connect(lambda _: QTimer.singleShot(0, self._do_master_login))
+        else:
+            QTimer.singleShot(0, self._do_master_login)
 
     # ------------------------
     # 7.24 Print Data Dialog
@@ -28408,7 +29460,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
             self._save_persistence()
             # Sample_Track: notify for each newly imported blood measurement
-            if getattr(self, 'has_sample_track_plugin', False) and self.sample_track_plugin:
+            if not self._uses_shared_leases() and getattr(self, 'has_sample_track_plugin', False) and self.sample_track_plugin:
                 for _stn, _std in _st_blood_pairs:
                     try:
                         self.sample_track_plugin.notify_blood_sample(_stn, _std)
@@ -28430,7 +29482,11 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     def _load_persistence(self) -> None:
         """Load data from JSON with accurate robust datetime parsing."""
         self._core_load_invalid = True
-        data = self._read_json()
+        staged = getattr(self, "_shared_initial_projection", None)
+        data = copy.deepcopy(staged) if staged is not None else self._read_json()
+        shared = getattr(self, "_uses_shared_leases", None)
+        if callable(shared) and shared():
+            self._shared_core_loaded_snapshot = copy.deepcopy(data)
         self.animals = data.get('animals', {})
         self.archived = data.get('archived_animals', {})
         migrated_active_roles = normalize_animal_record_roles(self.animals)
@@ -28582,10 +29638,12 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         # ------------------------
         self._core_load_invalid = bool(total_skipped)
         if total_skipped > 5:
+            if getattr(self, "_shared_publishing", False):
+                raise RuntimeError("The Shared snapshot contains too many invalid records.")
             self._show_message("warning.load.json.invalid_records", count=total_skipped)
         # Do not show dialogs during data-load; just set a flag.
         if not self.animals and not self.archived:
-            self._no_data_pending = True
+            self._no_data_pending = not self._shared_connection_is_pending()
         logging.info(f"Loaded {len(self.animals)} animals and {len(self.archived)} archived animals")
         self._refresh_list(update_tab_visibility=True)
 
@@ -28670,7 +29728,7 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             )
             self._save_persistence()
             # Sample_Track: notify for each newly imported urine measurement
-            if getattr(self, 'has_sample_track_plugin', False) and self.sample_track_plugin:
+            if not self._uses_shared_leases() and getattr(self, 'has_sample_track_plugin', False) and self.sample_track_plugin:
                 for _stn, _std in _st_urine_pairs:
                     try:
                         self.sample_track_plugin.notify_urine_sample(_stn, _std)
@@ -28965,8 +30023,9 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         )
         data = {'animals': self.animals, 'archived_animals': self.archived}
         try:
+            loaded_baseline = getattr(self, "_shared_core_loaded_snapshot", before_snapshot)
             audit_snapshots = self._write_json(
-                data, audit_after_save=True, _before_snapshot=before_snapshot)
+                data, audit_after_save=True, _before_snapshot=loaded_baseline)
         except Exception:
             self.__dict__.pop("_pending_project_save_updates", None)
             raise
@@ -28999,6 +30058,8 @@ class ProgTrackApp(QtWidgets.QMainWindow):
             self._show_message("error.archive.no_selection")
             return
         data = self._read_json()
+        shared = getattr(self, "_uses_shared_leases", None)
+        before_snapshot = copy.deepcopy(data) if callable(shared) and shared() else None
         archived_names = [
             name for name in list(self.selected_animals)
             if name in data.get('animals', {})
@@ -29063,7 +30124,10 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                 )
         for name in archived_names:
             data['archived_animals'][name] = data['animals'].pop(name, {})
-        self._write_json(data)
+        if before_snapshot is None:
+            self._write_json(data)
+        else:
+            self._write_json(data, _before_snapshot=before_snapshot)
         self._load_persistence()
         self._on_select()
         details = (
@@ -29091,12 +30155,17 @@ class ProgTrackApp(QtWidgets.QMainWindow):
         if not name or name == no_archived_msg:
             return
         data = self._read_json()
+        shared = getattr(self, "_uses_shared_leases", None)
+        before_snapshot = copy.deepcopy(data) if callable(shared) and shared() else None
         previous_record = data.get('archived_animals', {}).get(name)
         if not isinstance(previous_record, dict):
             return
         previous_record = copy.deepcopy(previous_record)
         data['animals'][name] = data['archived_animals'].pop(name)
-        self._write_json(data)
+        if before_snapshot is None:
+            self._write_json(data)
+        else:
+            self._write_json(data, _before_snapshot=before_snapshot)
         self._load_persistence()
         self._on_select()
         details = (
@@ -29159,12 +30228,27 @@ class ProgTrackApp(QtWidgets.QMainWindow):
                     if owner_unit:
                         break
             try:
-                deleted = bool(backend_delete(
-                    str(old_record.get("ipid", "") or name).strip(),
-                    old_record,
-                    owner_unit_id=owner_unit,
-                    clinical_context=ProgTrackApp._core_clinical_context(self),
-                ))
+                ipid = str(old_record.get("ipid", "") or name).strip()
+                shared = getattr(self, "_uses_shared_leases", None)
+                if callable(shared) and shared():
+                    from Plugins.core.backend.errors import SessionRevokedError
+
+                    owner = object()
+                    token = self._hold_shared_animal_lease(ipid, owner, verify=True)
+                    try:
+                        deleted = bool(backend_delete(
+                            ipid, old_record, session=master.session_context, lease_token=token,
+                        ))
+                    except SessionRevokedError as error:
+                        master.handle_session_revoked(error.reason)
+                        raise
+                    finally:
+                        self._release_shared_animal_lease(ipid, owner)
+                else:
+                    deleted = bool(backend_delete(
+                        ipid, old_record, owner_unit_id=owner_unit,
+                        clinical_context=ProgTrackApp._core_clinical_context(self),
+                    ))
             except Exception as exc:
                 logging.warning("Could not atomically delete archived animal %s: %s", name, exc)
                 return
@@ -29569,24 +30653,96 @@ class ProgTrackApp(QtWidgets.QMainWindow):
     # ------------------------
     def closeEvent(self, event):
         """Handle application close event - save session and release file lock."""
+        self._stop_network_monitor()
+        self._remove_master_event_filter()
+        if getattr(self, "_storage_notice", None) is not None:
+            self._storage_notice.stop()
+        self._storage_notice_pending = False
         self._invalidate_pending_view_updates()
         # Save Master_Track session before closing
         self._save_master_session()
+        master = getattr(self, "master_track", None)
+        if master is not None:
+            master._stop_idle_timer()
+            master._end_authenticated_session()
+            heartbeat = getattr(master, "_heartbeat", None)
+            if heartbeat is not None:
+                heartbeat.stop()
 
         logger.info("Application closing - releasing file lock")
         if getattr(self, "lock_retry_timer", None) is not None:
             self.lock_retry_timer.stop()
             self.lock_retry_timer = None
-        release_lock(self.lock_handle, LOCK_FILE)
+        if self._uses_shared_leases():
+            self._shared_window_closing = True
+            self._cancel_shared_attempt()
+            self._shared_connection_generation += 1
+            if not self._shared_connection_is_pending():
+                self.backend.close()
+        else:
+            release_lock(self.lock_handle, LOCK_FILE)
         event.accept()
 
 # ------------------------
 # 8.0 Application entry point
 #     Initialize and start the main Qt event loop.
 # ------------------------
+def _offer_startup_schema_maintenance(error: BackendSchemaError) -> bool:
+    from PyQt6.QtWidgets import QInputDialog, QLineEdit, QMessageBox
+    from Plugins.core.backend.postgresql_admin import PostgreSQLAdministrationService
+
+    messages = ProgTrackApp._startup_messages_for_system_locale()
+    title = messages.get("backend.schema.maintenance.title", "Database maintenance")
+    if error.reason != "incompatible":
+        QMessageBox.warning(None, title, messages.get(f"backend.schema.maintenance.{error.reason}", str(error)))
+        return False
+    decision = QMessageBox.question(
+        None, title,
+        messages.get(
+            "backend.schema.maintenance.confirm",
+            "The Shared PostgreSQL database needs maintenance. Attempt the approved schema migration?",
+        ),
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        QMessageBox.StandardButton.No,
+    )
+    if decision != QMessageBox.StandardButton.Yes:
+        return False
+    login, accepted = QInputDialog.getText(
+        None, title, messages.get("backend.schema.maintenance.login", "PostgreSQL administrator:")
+    )
+    if not accepted:
+        return False
+    password, accepted = QInputDialog.getText(
+        None, title, messages.get("backend.schema.maintenance.password", "PostgreSQL administrator password:"),
+        QLineEdit.EchoMode.Password,
+    )
+    if not accepted:
+        return False
+    try:
+        PostgreSQLAdministrationService.migrate_configured_schema(
+            BACKEND_CONFIGURATION, login=login, password=password,
+        )
+    except Exception as exc:
+        QMessageBox.warning(None, title, str(exc))
+        return False
+    return True
+
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     install_monochrome_indicator_style(app)
-    win = ProgTrackApp()
+    try:
+        win = ProgTrackApp()
+    except BackendSchemaError as schema_error:
+        if RUNTIME_PATHS.profile.value != "shared_postgresql":
+            QMessageBox.critical(None, "Database initialization", str(schema_error))
+            sys.exit(1)
+        if not _offer_startup_schema_maintenance(schema_error):
+            sys.exit(1)
+        try:
+            win = ProgTrackApp()
+        except BackendSchemaError as retry_error:
+            QMessageBox.warning(None, "Database maintenance", str(retry_error))
+            sys.exit(1)
     win.show()
     sys.exit(app.exec())

@@ -33,7 +33,7 @@ The package is the single fictional initialization source for both backend adapt
 - active_animals: 605
 - archived_animals: 90
 - canonical_users: 7
-- domain_records: 18
+- domain_records: 24
 - experimental_animals_with_enrollment_dates: 19
 - flow_egg_collections: 9
 - flow_embryos: 21

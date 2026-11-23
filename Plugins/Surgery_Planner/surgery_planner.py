@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.2.1 or newer.
 # Module: Surgery Planner scheduling and Gantt-chart tools.
@@ -46,6 +46,7 @@ from PyQt6.QtWidgets import (
 
 from Plugins.core.animal_identity import animal_base_name
 from Plugins.core.animal_roles import ROLE_VALUE_AMME, ROLE_VALUE_SPENDER, canonical_role_value
+from Plugins.core.backend.shared_surgery import SharedSurgeryStore
 from Plugins.core.backend_store import BackendJsonStore
 from .surgery_engine import PlannerSnapshot, stable_schedule_id
 
@@ -53,12 +54,17 @@ from .surgery_engine import PlannerSnapshot, stable_schedule_id
 def _backend_load(backend, record_id: str, default):
     if backend is None:
         return default
+    if isinstance(backend, SharedSurgeryStore):
+        return backend.load(record_id, default)
     return BackendJsonStore(backend, "surgery-planner", record_id).load(default)
 
 
 def _backend_save(backend, record_id: str, payload) -> None:
     if backend is None:
         raise RuntimeError("Surgery Planner requires the ProgTrack backend.")
+    if isinstance(backend, SharedSurgeryStore):
+        backend.save(record_id, payload)
+        return
     BackendJsonStore(backend, "surgery-planner", record_id).save(payload)
 
 
@@ -381,6 +387,12 @@ class GanttWidget(QDialog):
         """
         super().__init__(parent)
         self.backend = getattr(parent, "backend", None)
+        if getattr(getattr(self.backend, "adapter", None), "dialect", "") == "postgresql":
+            session = getattr(getattr(parent, "master_track", None), "session_context", None)
+            self.backend = SharedSurgeryStore(
+                self.backend, lambda: session, parent._hold_shared_animal_lease,
+                parent._release_shared_animal_lease,
+            )
         
         # Initialize instance variables
         self.planned = []  # List of scheduled events

@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Shared repositories for normalized and plugin-owned records."""
 
 from __future__ import annotations
@@ -7,7 +9,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
-from .errors import ConflictError, ImmutableIdentityError, LockConflictError
+from .errors import ConflictError, ImmutableIdentityError, LockConflictError, PermissionDeniedError
 from .json_codec import dumps, loads
 
 
@@ -26,6 +28,11 @@ def _placeholder(adapter: Any) -> str:
 def _json_placeholder(adapter: Any) -> str:
     mark = _placeholder(adapter)
     return mark if adapter.dialect == "sqlite" else f"{mark}::jsonb"
+
+
+def _read_json_payload(adapter: Any, value: Any, default: Any = None) -> Any:
+    """Psycopg decodes JSONB values, while SQLite returns stored JSON text."""
+    return value if adapter.dialect == "postgresql" else loads(value, default)
 
 
 def _execute(connection: Any, sql: str, params: tuple[Any, ...] = ()) -> Any:
@@ -47,10 +54,20 @@ def _fetchall(connection: Any, sql: str, params: tuple[Any, ...] = ()) -> list[A
 
 
 class DomainRecordRepository:
-    def __init__(self, adapter: Any):
+    def __init__(self, adapter: Any, authorize=None, *, authorize_write=None, authorize_read=None):
         self.adapter = adapter
+        self.authorize = authorize
+        self.authorize_write = authorize_write
+        self.authorize_read = authorize_read
+
+    def _require_access(self, namespace: str):
+        if self.authorize is not None:
+            self.authorize(namespace)
 
     def get(self, namespace: str, record_id: str, default: Any = None) -> Any:
+        self._require_access(namespace)
+        if self.authorize_read is not None:
+            self.authorize_read(namespace, record_id)
         mark = _placeholder(self.adapter)
         with self.adapter.transaction() as connection:
             row = _fetchone(
@@ -62,12 +79,15 @@ class DomainRecordRepository:
         if row is None:
             return default
         value = row["payload_json"] if isinstance(row, dict) else row[0]
-        return value if isinstance(value, (dict, list)) else loads(value, default)
+        return _read_json_payload(self.adapter, value, default)
 
     def get_with_revision(
         self, namespace: str, record_id: str, default: Any = None
     ) -> tuple[Any, int]:
         """Return a record and its optimistic-lock revision in one read."""
+        self._require_access(namespace)
+        if self.authorize_read is not None:
+            self.authorize_read(namespace, record_id)
         mark = _placeholder(self.adapter)
         with self.adapter.transaction() as connection:
             row = _fetchone(
@@ -80,10 +100,36 @@ class DomainRecordRepository:
             return default, 0
         value = row["payload_json"] if isinstance(row, dict) else row[0]
         revision = int(row["revision"] if isinstance(row, dict) else row[1])
-        payload = value if isinstance(value, (dict, list)) else loads(value, default)
-        return payload, revision
+        return _read_json_payload(self.adapter, value, default), revision
+
+    def revisions(self, namespace: str, record_ids: tuple[str, ...], *, lock=False) -> dict[str, int]:
+        """Read revision hints without transferring record payloads."""
+        self._require_access(namespace)
+        if not record_ids:
+            return {}
+        if self.authorize_read is not None:
+            for record_id in record_ids:
+                self.authorize_read(namespace, record_id)
+        mark = _placeholder(self.adapter)
+        marks = ",".join([mark] * len(record_ids))
+        lock_clause = " FOR UPDATE" if lock and self.adapter.dialect == "postgresql" else ""
+        with self.adapter.transaction() as connection:
+            rows = _fetchall(
+                connection,
+                f"SELECT record_id,revision FROM domain_records WHERE namespace={mark} "
+                f"AND record_id IN ({marks}) ORDER BY record_id{lock_clause}",
+                (namespace, *record_ids),
+            )
+        result = dict.fromkeys(record_ids, 0)
+        for row in rows:
+            record_id, revision = (row["record_id"], row["revision"]) if isinstance(row, dict) else row
+            result[record_id] = int(revision)
+        return result
 
     def list(self, namespace: str) -> dict[str, Any]:
+        self._require_access(namespace)
+        if self.authorize_read is not None:
+            self.authorize_read(namespace, None)
         mark = _placeholder(self.adapter)
         with self.adapter.transaction() as connection:
             rows = _fetchall(
@@ -96,9 +142,7 @@ class DomainRecordRepository:
         for row in rows:
             record_id = row["record_id"] if isinstance(row, dict) else row[0]
             payload = row["payload_json"] if isinstance(row, dict) else row[1]
-            result[str(record_id)] = (
-                payload if isinstance(payload, (dict, list)) else loads(payload)
-            )
+            result[str(record_id)] = _read_json_payload(self.adapter, payload)
         return result
 
     def namespace_names(self) -> list[str]:
@@ -123,42 +167,40 @@ class DomainRecordRepository:
         *,
         expected_revision: int | None = None,
     ) -> int:
-        mark = _placeholder(self.adapter)
-        json_mark = _json_placeholder(self.adapter)
-        serialized = dumps(payload)
-        timestamp = now_text()
+        self._require_access(namespace)
         with self.adapter.transaction(write=True) as connection:
+            return self._put(
+                connection,
+                namespace, record_id, dumps(payload), expected_revision, now_text(),
+            )
+
+    def _put(self, connection, namespace, record_id, serialized, expected, timestamp) -> int:
+        if self.authorize_write is not None:
+            self.authorize_write(namespace, record_id)
+        mark = _placeholder(self.adapter)
+        payload = _json_placeholder(self.adapter)
+        if expected is not None and expected != 0:
             row = _fetchone(
                 connection,
-                f"SELECT revision FROM domain_records "
-                f"WHERE namespace={mark} AND record_id={mark}"
-                + (" FOR UPDATE" if self.adapter.dialect != "sqlite" else ""),
-                (namespace, record_id),
+                f"UPDATE domain_records SET payload_json={payload},revision=revision+1,updated_at={mark} "
+                f"WHERE namespace={mark} AND record_id={mark} AND revision={mark} RETURNING revision",
+                (serialized, timestamp, namespace, record_id, expected),
             )
-            if row is None:
-                if expected_revision not in (None, 0):
-                    raise ConflictError("Record does not exist at expected revision.")
-                _execute(
-                    connection,
-                    f"INSERT INTO domain_records("
-                    "namespace,record_id,payload_json,revision,created_at,updated_at"
-                    f") VALUES({mark},{mark},{json_mark},1,{mark},{mark})",
-                    (namespace, record_id, serialized, timestamp, timestamp),
-                )
-                return 1
-            revision = int(row["revision"] if isinstance(row, dict) else row[0])
-            if expected_revision is not None and expected_revision != revision:
-                raise ConflictError(
-                    f"Stale revision {expected_revision}; current revision is {revision}."
-                )
-            next_revision = revision + 1
-            _execute(
+        else:
+            on_conflict = "DO NOTHING" if expected == 0 else (
+                "DO UPDATE SET payload_json=excluded.payload_json,"
+                "revision=domain_records.revision+1,updated_at=excluded.updated_at"
+            )
+            row = _fetchone(
                 connection,
-                f"UPDATE domain_records SET payload_json={json_mark},revision={mark},"
-                f"updated_at={mark} WHERE namespace={mark} AND record_id={mark}",
-                (serialized, next_revision, timestamp, namespace, record_id),
+                "INSERT INTO domain_records(namespace,record_id,payload_json,revision,created_at,updated_at) "
+                f"VALUES({mark},{mark},{payload},1,{mark},{mark}) "
+                f"ON CONFLICT(namespace,record_id) {on_conflict} RETURNING revision",
+                (namespace, record_id, serialized, timestamp, timestamp),
             )
-            return next_revision
+        if row is None:
+            raise ConflictError(f"Stale revision {expected} for {namespace}/{record_id}.")
+        return int(row["revision"] if isinstance(row, dict) else row[0])
 
     def put_many(
         self,
@@ -169,8 +211,8 @@ class DomainRecordRepository:
     ) -> dict[tuple[str, str], int]:
         """Replace several domain records in one adapter transaction.
 
-        All optimistic-lock checks happen before the first write.  The
-        adapter transaction then commits the complete batch together; a
+        Each optimistic-lock check is part of its SQL write. The
+        adapter transaction commits the complete batch together; a
         conflict or write error rolls the batch back instead of leaving a
         partially updated coordinated configuration.
         """
@@ -179,11 +221,10 @@ class DomainRecordRepository:
         if not batch:
             return {}
         expected = expected_revisions or {}
-        mark = _placeholder(self.adapter)
-        json_mark = _json_placeholder(self.adapter)
         prepared: list[tuple[str, str, str]] = []
         seen: set[tuple[str, str]] = set()
         for namespace, record_id, payload in batch:
+            self._require_access(namespace)
             key = (str(namespace), str(record_id))
             if key in seen:
                 raise ValueError(f"Duplicate domain record in batch: {key!r}")
@@ -193,47 +234,11 @@ class DomainRecordRepository:
         timestamp = now_text()
         revisions: dict[tuple[str, str], int] = {}
         with self.adapter.transaction(write=True) as connection:
-            current: dict[tuple[str, str], int] = {}
-            for namespace, record_id, _serialized in sorted(prepared):
-                row = _fetchone(
-                    connection,
-                    f"SELECT revision FROM domain_records "
-                    f"WHERE namespace={mark} AND record_id={mark}"
-                    + (" FOR UPDATE" if self.adapter.dialect != "sqlite" else ""),
-                    (namespace, record_id),
+            for namespace, record_id, serialized in sorted(prepared):
+                key = namespace, record_id
+                revisions[key] = self._put(
+                    connection, namespace, record_id, serialized, expected.get(key), timestamp
                 )
-                revision = 0 if row is None else int(
-                    row["revision"] if isinstance(row, dict) else row[0]
-                )
-                current[(namespace, record_id)] = revision
-                expected_revision = expected.get((namespace, record_id))
-                if expected_revision is not None and expected_revision != revision:
-                    raise ConflictError(
-                        f"Stale revision {expected_revision} for "
-                        f"{namespace}/{record_id}; current revision is {revision}."
-                    )
-
-            for namespace, record_id, serialized in prepared:
-                previous = current[(namespace, record_id)]
-                next_revision = previous + 1
-                if previous == 0:
-                    _execute(
-                        connection,
-                        f"INSERT INTO domain_records("
-                        "namespace,record_id,payload_json,revision,created_at,updated_at"
-                        f") VALUES({mark},{mark},{json_mark},1,{mark},{mark})",
-                        (namespace, record_id, serialized, timestamp, timestamp),
-                    )
-                    next_revision = 1
-                else:
-                    _execute(
-                        connection,
-                        f"UPDATE domain_records SET payload_json={json_mark},"
-                        f"revision={mark},updated_at={mark} "
-                        f"WHERE namespace={mark} AND record_id={mark}",
-                        (serialized, next_revision, timestamp, namespace, record_id),
-                    )
-                revisions[(namespace, record_id)] = next_revision
             for event in events:
                 AuditRepository(self.adapter)._append_in_transaction(connection, **event)
         return revisions
@@ -245,6 +250,9 @@ class DomainRecordRepository:
         )
 
     def delete(self, namespace: str, record_id: str) -> bool:
+        self._require_access(namespace)
+        if self.authorize_write is not None:
+            self.authorize_write(namespace, record_id)
         mark = _placeholder(self.adapter)
         with self.adapter.transaction(write=True) as connection:
             cursor = _execute(
@@ -257,21 +265,25 @@ class DomainRecordRepository:
 
 
 class LeaseRepository:
-    def __init__(self, adapter: Any):
+    def __init__(self, adapter: Any, authenticated_sessions=None):
         self.adapter = adapter
+        self.authenticated_sessions = authenticated_sessions
 
     def acquire(
         self,
         entity_type: str,
         entity_id: str,
         *,
-        owner_login: str,
-        owner_display: str,
-        ttl_seconds: int = 120,
+        owner_login: str = "",
+        owner_display: str = "",
+        ttl_seconds: int | None = None,
+        session=None,
     ) -> dict[str, str]:
+        if self.adapter.dialect == "postgresql":
+            return self._acquire_shared(entity_type, entity_id, session, ttl_seconds)
         token = str(uuid.uuid4())
         acquired = now_utc()
-        expires = acquired + timedelta(seconds=max(15, ttl_seconds))
+        expires = acquired + timedelta(seconds=max(15, ttl_seconds if ttl_seconds is not None else 120))
         mark = _placeholder(self.adapter)
         with self.adapter.transaction(write=True) as connection:
             row = _fetchone(
@@ -320,6 +332,70 @@ class LeaseRepository:
             "expires_at": expires.isoformat(),
         }
 
+    def _acquire_shared(self, entity_type, entity_id, session, ttl_seconds):
+        if self.authenticated_sessions is None:
+            raise PermissionDeniedError("Shared lease acquisition requires an authenticated session.")
+        with self.adapter.transaction(write=True) as connection:
+            account = self.authenticated_sessions.require(connection, session)
+            if entity_type == "animal":
+                allowed = self.authenticated_sessions.effective_permissions(connection, account)
+                self.authenticated_sessions.require_visible_animal(connection, account, allowed, entity_id)
+            elif entity_type == "project":
+                allowed = self.authenticated_sessions.effective_permissions(connection, account)
+                self.authenticated_sessions.require_visible_project(connection, account, allowed, entity_id)
+            elif entity_type == "housing" and entity_id == "cage":
+                allowed = self.authenticated_sessions.effective_permissions(connection, account)
+                if "*" not in allowed and not {"cage.manage_rooms_buildings", "cage.edit"} & allowed:
+                    raise PermissionDeniedError("This account cannot edit housing structures.")
+            elif entity_type == "housing" and entity_id == "inspections":
+                allowed = self.authenticated_sessions.effective_permissions(connection, account)
+                if "*" not in allowed and "cage.record_inspection" not in allowed:
+                    raise PermissionDeniedError("This account cannot record housing inspections.")
+            elif entity_type == "surgery" and entity_id in {"schedule", "draft-schedule", "settings", "block-days"}:
+                allowed = self.authenticated_sessions.effective_permissions(connection, account)
+                if "*" not in allowed and "op_scheduler.use" not in allowed:
+                    raise PermissionDeniedError("This account cannot edit surgery plans.")
+            else:
+                raise PermissionDeniedError("No Shared edit scope is defined for this entity.")
+            username = account["username"]
+            display = str(account.get("display_name") or username)
+            result = _fetchone(connection, """
+                INSERT INTO entity_leases(entity_type,entity_id,owner_login,owner_display,
+                    token,owner_session_id,acquired_at,heartbeat_at,expires_at)
+                VALUES(%s,%s,%s,%s,%s,%s,clock_timestamp(),clock_timestamp(),
+                    clock_timestamp() + %s * interval '1 second')
+                ON CONFLICT(entity_type,entity_id) DO UPDATE
+                SET owner_login=excluded.owner_login, owner_display=excluded.owner_display,
+                    owner_session_id=excluded.owner_session_id,
+                    token=CASE WHEN entity_leases.expires_at > clock_timestamp()
+                        THEN entity_leases.token ELSE excluded.token END,
+                    acquired_at=CASE WHEN entity_leases.expires_at > clock_timestamp()
+                        THEN entity_leases.acquired_at ELSE clock_timestamp() END,
+                    heartbeat_at=clock_timestamp(),
+                    expires_at=clock_timestamp() + %s * interval '1 second'
+                WHERE entity_leases.expires_at <= clock_timestamp()
+                    OR entity_leases.owner_session_id=excluded.owner_session_id
+                RETURNING token,owner_login,owner_display,expires_at
+            """, (entity_type, entity_id, username, display, str(uuid.uuid4()), session.session_id,
+                  self._ttl(ttl_seconds), self._ttl(ttl_seconds)))
+            if result is not None:
+                return {key: str(value) for key, value in result.items()}
+            owner = _fetchone(connection, """
+                SELECT owner_login,owner_display,expires_at FROM entity_leases
+                WHERE entity_type=%s AND entity_id=%s
+            """, (entity_type, entity_id))
+            display = str(owner["owner_display"] or owner["owner_login"]) if owner else ""
+            raise LockConflictError(
+                f"{entity_type} {entity_id} has an active edit lease.",
+                owner=display, expires_at=str(owner["expires_at"]) if owner else "",
+            )
+
+    @staticmethod
+    def _ttl(seconds):
+        from .session_timing import lease_timeout_seconds
+
+        return lease_timeout_seconds() if seconds is None else max(15, min(int(seconds), 600))
+
     def release(
         self,
         entity_type: str,
@@ -327,7 +403,18 @@ class LeaseRepository:
         token: str,
         *,
         force: bool = False,
+        session=None,
     ) -> bool:
+        if self.adapter.dialect == "postgresql":
+            if force or self.authenticated_sessions is None:
+                raise PermissionDeniedError("Shared lease release requires the owning session.")
+            with self.adapter.transaction(write=True) as connection:
+                self.authenticated_sessions.require(connection, session)
+                cursor = _execute(connection, """
+                    DELETE FROM entity_leases WHERE entity_type=%s AND entity_id=%s
+                    AND token=%s AND owner_session_id=%s AND expires_at>clock_timestamp()
+                """, (entity_type, entity_id, token, session.session_id))
+                return cursor.rowcount == 1
         mark = _placeholder(self.adapter)
         with self.adapter.transaction(write=True) as connection:
             if force:
@@ -345,7 +432,13 @@ class LeaseRepository:
                 )
             return int(cursor.rowcount or 0) > 0
 
-    def heartbeat(self, token: str, *, ttl_seconds: int = 120) -> bool:
+    def heartbeat(self, token: str, *, ttl_seconds: int = 120, session=None) -> bool:
+        if self.adapter.dialect == "postgresql":
+            if self.authenticated_sessions is None:
+                raise PermissionDeniedError("Shared lease renewal requires the owning session.")
+            with self.adapter.transaction(write=True) as connection:
+                self.authenticated_sessions.require(connection, session)
+                return token in self.renew_tokens(connection, session, (token,), ttl_seconds)
         now = now_utc()
         expires = now + timedelta(seconds=max(15, ttl_seconds))
         mark = _placeholder(self.adapter)
@@ -353,12 +446,66 @@ class LeaseRepository:
             cursor = _execute(
                 connection,
                 f"UPDATE entity_leases SET heartbeat_at={mark},expires_at={mark} "
-                f"WHERE token={mark}",
-                (now.isoformat(), expires.isoformat(), token),
+                f"WHERE token={mark} AND expires_at>{mark}",
+                (now.isoformat(), expires.isoformat(), token, now.isoformat()),
             )
             return int(cursor.rowcount or 0) > 0
 
-    def active(self) -> list[dict[str, Any]]:
+    def renew_tokens(self, connection, session, tokens, ttl_seconds=None):
+        """Renew the authenticated client's lease set in one server request."""
+        rows = _fetchall(connection, """
+            UPDATE entity_leases SET heartbeat_at=clock_timestamp(),
+                expires_at=clock_timestamp() + %s * interval '1 second'
+            WHERE owner_session_id=%s AND token=ANY(%s) AND expires_at>clock_timestamp()
+            RETURNING token
+        """, (self._ttl(ttl_seconds), session.session_id, list(tokens)))
+        return {row["token"] for row in rows}
+
+    def require_shared_lease(self, connection, session, entity_type, entity_id, token):
+        row = _fetchone(connection, """
+            SELECT entity_id FROM entity_leases WHERE entity_type=%s AND entity_id=%s
+            AND token=%s AND owner_session_id=%s AND expires_at>clock_timestamp() FOR SHARE
+        """, (entity_type, entity_id, token, session.session_id))
+        if row is None:
+            raise LockConflictError("A current edit lease is required.")
+
+    def shared_snapshot(self, connection, context, account):
+        allowed = self.authenticated_sessions.effective_permissions(connection, account)
+        unrestricted, visible_projects = self.authenticated_sessions.animal_scope(connection, account, allowed)
+        unit_id = self.authenticated_sessions.active_unit(connection, account)
+        return _fetchall(connection, """
+            SELECT l.entity_type,l.entity_id,l.owner_login,l.owner_display,l.owner_session_id,
+                l.acquired_at,l.heartbeat_at,l.expires_at
+            FROM entity_leases l
+            LEFT JOIN animals a ON l.entity_type='animal' AND a.ipid=l.entity_id
+            WHERE l.expires_at>clock_timestamp() AND l.owner_session_id IS NOT NULL
+              AND (l.owner_session_id=%s
+                   OR (l.entity_type='animal' AND a.ipid IS NOT NULL
+                       AND (%s OR btrim(a.record_json->>'project')=ANY(%s))
+                       AND COALESCE(NULLIF(lower(btrim(a.record_json->>'organization_unit_id')), ''),
+                                    NULLIF(lower(btrim(a.record_json->>'organizational_unit_id')), ''),
+                                    NULLIF(lower(btrim(a.record_json->>'workgroup_id')), ''), '') IN ('', %s))
+                   OR (l.entity_type='project' AND %s AND EXISTS (
+                       SELECT 1 FROM domain_records p
+                       CROSS JOIN LATERAL jsonb_each(p.payload_json::jsonb->'projects') j
+                       WHERE p.namespace='projects' AND p.record_id='catalog'
+                         AND j.value->>'project_id'=l.entity_id AND (%s OR j.key=ANY(%s))))
+                   OR (l.entity_type='housing' AND l.entity_id IN ('cage','inspections') AND %s)
+                   OR (l.entity_type='surgery' AND %s))
+            ORDER BY l.entity_type,l.entity_id
+        """, (
+            context.session_id, unrestricted, sorted(visible_projects), unit_id,
+            bool({"*", "project.view"} & allowed), unrestricted, sorted(visible_projects),
+            bool({"*", "cage.view"} & allowed), bool({"*", "op_scheduler.view"} & allowed),
+        ))
+
+    def active(self, *, session=None) -> list[dict[str, Any]]:
+        if self.adapter.dialect == "postgresql":
+            if self.authenticated_sessions is None:
+                raise PermissionDeniedError("Shared lease status requires an authenticated session.")
+            with self.adapter.transaction() as connection:
+                account = self.authenticated_sessions.require(connection, session)
+                return self.shared_snapshot(connection, session, account)
         now = now_text()
         mark = _placeholder(self.adapter)
         with self.adapter.transaction(write=True) as connection:
@@ -384,7 +531,28 @@ class LeaseRepository:
         reason: str,
         audit: "AuditRepository",
         actor_login: str,
+        session=None,
     ) -> bool:
+        if self.adapter.dialect == "postgresql":
+            if self.authenticated_sessions is None:
+                raise PermissionDeniedError("Force-release requires an authenticated Lord.")
+            if not str(reason).strip():
+                raise ValueError("A force-release reason is required.")
+            with self.adapter.transaction(write=True) as connection:
+                account = self.authenticated_sessions.require(connection, session)
+                if account["role"] != "lord":
+                    raise PermissionDeniedError("Force-release requires an authenticated Lord.")
+                cursor = _execute(connection, """
+                    DELETE FROM entity_leases WHERE entity_type=%s AND entity_id=%s
+                """, (entity_type, entity_id))
+                if cursor.rowcount != 1:
+                    return False
+                audit._append_in_transaction(
+                    connection, actor_login=account["username"], category="lock",
+                    action="force_release", entity_type=entity_type, entity_id=entity_id,
+                    payload={"reason": str(reason).strip()},
+                )
+                return True
         if str(actor_role).casefold() != "lord":
             raise PermissionError("Only Lord may force-release entity locks.")
         if not str(reason).strip():
@@ -492,14 +660,10 @@ class AuditRepository:
                     for index, field in enumerate(fields)
                 }
 
-            payload_raw = values.get("payload_json")
-            if isinstance(payload_raw, (dict, list)):
-                payload = payload_raw
-            else:
-                try:
-                    payload = loads(payload_raw, {})
-                except (TypeError, ValueError):
-                    payload = {}
+            try:
+                payload = _read_json_payload(self.adapter, values.get("payload_json"), {})
+            except (TypeError, ValueError):
+                payload = {}
 
             occurred_at = values.get("occurred_at")
             if isinstance(occurred_at, datetime):

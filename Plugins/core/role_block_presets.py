@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Installation-wide custom role-dialog block presets.
 
 The Role Builder stores custom block recipes independently from individual
@@ -9,7 +11,6 @@ name; the preset body lives in this registry.
 from __future__ import annotations
 
 from copy import deepcopy
-from pathlib import Path
 from typing import Any, Dict, Iterable, List
 import re
 import uuid
@@ -18,16 +19,11 @@ from Plugins.core.animal_roles import normalize_block_list
 
 
 SCHEMA_VERSION = 2
-DEFAULT_FILENAME = "role_block_presets.json"
 RESERVED_PRESET_NAMES = {
     "custom",
     "new preset",
     "new role",
 }
-
-
-def role_block_presets_path(app_base_dir: Path | str) -> Path:
-    return Path(app_base_dir) / "Plugins" / "core" / DEFAULT_FILENAME
 
 
 def normalized_preset_name(name: Any) -> str:
@@ -250,60 +246,16 @@ class RoleBlockPresetRegistry:
         *,
         experimental_blocks: Iterable[Dict[str, Any]] | None = None,
         event_definitions: Iterable[Dict[str, Any]] | None = None,
-        expected_revision: int | None = None,
+        session,
+        expected_revision: int,
     ) -> int:
-        normalized: List[Dict[str, Any]] = []
-        seen = set()
-        for raw in presets:
-            if not isinstance(raw, dict):
-                continue
-            preset = normalize_preset(raw)
-            name_key = preset["name"].casefold()
-            if not valid_preset_name(preset["name"]):
-                raise ValueError(f"Invalid custom preset name: {preset['name']!r}")
-            if name_key in seen:
-                raise ValueError(f"Custom preset names must be unique: {preset['name']!r}")
-            seen.add(name_key)
-            normalized.append(preset)
-
-        blocks_source = self._experimental_blocks if experimental_blocks is None else experimental_blocks
-        events_source = self._event_definitions if event_definitions is None else event_definitions
-        blocks: List[Dict[str, Any]] = []
-        block_ids = set()
-        for raw in blocks_source or []:
-            if not isinstance(raw, dict):
-                continue
-            item = normalize_experimental_block(raw)
-            if not item["name"] or item["id"] in block_ids:
-                continue
-            block_ids.add(item["id"])
-            blocks.append(item)
-        events: List[Dict[str, Any]] = []
-        event_ids = set()
-        for raw in events_source or []:
-            if not isinstance(raw, dict):
-                continue
-            item = normalize_event_definition(raw)
-            if item["event_type"] in event_ids:
-                continue
-            event_ids.add(item["event_type"])
-            events.append(item)
-        normalized.sort(key=lambda preset: preset["name"].casefold())
-        blocks.sort(key=lambda item: item["name"].casefold())
-        events.sort(key=lambda item: item["event_type"].casefold())
-        payload = {
-            "schema_version": SCHEMA_VERSION,
-            "presets": normalized,
-            "experimental_blocks": blocks,
-            "event_definitions": events,
-        }
-        revision = self.backend.records.put(
-            "configuration", "role-block-presets", payload,
-            expected_revision=expected_revision,
+        payload = self.prepare_payload(
+            presets, experimental_blocks=experimental_blocks, event_definitions=event_definitions,
         )
-        self._presets = normalized
-        self._experimental_blocks = blocks
-        self._event_definitions = events
+        revision = self.backend.core_configuration.save_roles(
+            session, {"role-block-presets": payload}, {"role-block-presets": expected_revision},
+        )["role-block-presets"]
+        self.apply_payload(payload)
         return revision
 
     def payload(self) -> Dict[str, Any]:

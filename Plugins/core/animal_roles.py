@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Configurable animal role registry for ProgTrack."""
 
 from __future__ import annotations
@@ -807,10 +809,8 @@ def normalize_role_definition(raw: Dict[str, Any], *, default_order: int = 1000)
 class AnimalRoleRegistry:
     """Load and save configurable roles in the backend configuration record.
 
-    Role definitions are mutable facility configuration.  They deliberately
-    have no JSON-file fallback: the bundled ``animal_roles.json`` is consumed
-    once as a static bootstrap catalog by the application and the resulting
-    configuration is thereafter owned by the backend.
+    The registry projects backend data in memory and sends writes through the
+    authenticated Core configuration service.
     """
 
     def __init__(self, backend: Any, *, initial_payload: Optional[Dict[str, Any]] = None):
@@ -818,6 +818,10 @@ class AnimalRoleRegistry:
             raise RuntimeError("AnimalRoleRegistry requires a configured backend.")
         self.backend = backend
         self._roles: List[Dict[str, Any]] = self._read_roles(initial_payload)
+
+    @staticmethod
+    def empty_payload() -> dict:
+        return {"roles": [], "deleted_builtin_values": sorted(_BUILTIN_VALUES)}
 
     def reload(self) -> None:
         self._roles = self._read_roles()
@@ -1014,31 +1018,12 @@ class AnimalRoleRegistry:
         """Apply an already committed role payload to this in-memory registry."""
         self._roles = self._read_roles(payload if isinstance(payload, dict) else {})
 
-    def save_roles(self, roles: Iterable[Dict[str, Any]]) -> None:
-        role_list = list(roles)
-        # Validate before normalization/merging so malformed values are never
-        # silently replaced and duplicate orders never overwrite user intent.
-        validate_role_orders(role_list)
-        for role in role_list:
-            if isinstance(role, dict):
-                validate_role_visual_configuration(role)
-        provided_values = {
-            canonical_role_value(role.get("value") or "")
-            for role in role_list
-            if isinstance(role, dict) and str(role.get("value") or "")
-        }
-        deleted_builtin_values = sorted(_BUILTIN_VALUES - provided_values)
-        normalized = self._merge_with_defaults(
-            role_list,
-            deleted_builtin_values=deleted_builtin_values,
+    def save_roles(self, roles: Iterable[Dict[str, Any]], *, session, expected_revision: int) -> None:
+        payload = self.prepare_payload(roles)
+        self.backend.core_configuration.save_roles(
+            session, {"animal-roles": payload}, {"animal-roles": expected_revision},
         )
-        payload = {
-            "schema_version": SCHEMA_VERSION,
-            "deleted_builtin_values": deleted_builtin_values,
-            "roles": normalized,
-        }
-        self.backend.records.put("configuration", "animal-roles", payload)
-        self._roles = normalized
+        self.apply_payload(payload)
 
     def payload(self) -> Dict[str, Any]:
         """Return the normalized backend payload for callers that need it."""
@@ -1053,7 +1038,7 @@ class AnimalRoleRegistry:
                 "configuration", "animal-roles", default=None
             )
         if not isinstance(payload, dict):
-            return self._merge_with_defaults([])
+            return []
         raw_roles = payload.get("roles", []) if isinstance(payload, dict) else []
         if not isinstance(raw_roles, list):
             raw_roles = []

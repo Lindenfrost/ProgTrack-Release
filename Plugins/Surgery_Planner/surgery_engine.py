@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: see plugin manifest.
 """Pure deterministic scheduling primitives for Surgery Planner."""
 from __future__ import annotations
 

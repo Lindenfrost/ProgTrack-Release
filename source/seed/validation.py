@@ -512,6 +512,11 @@ def _validate_existing(core: dict[str, Any], records: dict[tuple[str, str], Any]
         ):
             errors.append(f"Mouse birth event must not be present: {ipid}")
     for (namespace, record_id), payload in sorted(records.items()):
+        if namespace == "configuration" and record_id in {
+            f"user-message-overrides:{locale}" for locale in ("de", "en", "it", "ru")
+        }:
+            # Display labels are plain text, including literals such as "Test".
+            continue
         for path in removed_animal_reference_paths(payload):
             errors.append(
                 "removed animal reference remains: "

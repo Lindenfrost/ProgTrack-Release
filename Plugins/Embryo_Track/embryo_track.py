@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Embryo Track gestation-day prediction tools.
@@ -97,8 +97,12 @@ class EmbryoTrackerWidget(QDialog):
     def __init__(self, messages: Optional[dict] = None, parent=None):
         super().__init__(parent)
         self.messages = messages or {}
+        backend = getattr(parent, "backend", None)
+        self._shared_reference_backend = backend if getattr(getattr(backend, "adapter", None), "dialect", "") == "postgresql" else None
+        self._reference_session = getattr(getattr(parent, "master_track", None), "session_context", None)
+        self._reference_revision = 0
         self._reference_store = BackendJsonStore(
-            getattr(parent, "backend", None),
+            backend,
             "embryo-track",
             "cranimetry-reference",
         )
@@ -275,13 +279,17 @@ class EmbryoTrackerWidget(QDialog):
     def _load_reference_data(self):
         """Load the authoritative reference record from the shared backend."""
         try:
-            stored = self._reference_store.load(None)
+            shared = getattr(self, "_shared_reference_backend", None)
+            if shared is not None:
+                stored, self._reference_revision = shared.load_shared_embryo_reference(self._reference_session)
+            else:
+                stored = self._reference_store.load(None)
             if stored is None:
                 packaged = self._load_packaged_reference_data()
                 self.reference_data = packaged or self._empty_reference_data()
                 if packaged:
                     self._build_prediction_models()
-                    if self._has_baseline_model(self.prediction_models.get(2, {})):
+                    if shared is None and self._has_baseline_model(self.prediction_models.get(2, {})):
                         self._reference_store.save(self.reference_data)
                         logger.info("Bootstrapped Embryo Track reference data into the backend")
                 else:
@@ -783,7 +791,13 @@ class EmbryoTrackerWidget(QDialog):
             # Persist only after validation and confirmation. BackendJsonStore
             # delegates to the backend record transaction.
             try:
-                self._reference_store.save(self.reference_data)
+                shared = getattr(self, "_shared_reference_backend", None)
+                if shared is not None:
+                    self._reference_revision = shared.save_shared_embryo_reference(
+                        self._reference_session, self.reference_data, self._reference_revision,
+                    )
+                else:
+                    self._reference_store.save(self.reference_data)
             except Exception as save_error:
                 self.reference_data = old_reference_data
                 self.prediction_models = old_prediction_models

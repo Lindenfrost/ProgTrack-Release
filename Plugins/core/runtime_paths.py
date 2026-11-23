@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Deployment-profile aware runtime paths for ProgTrack.
 
 Packaged application resources remain below ``application_root`` and are
@@ -14,7 +16,7 @@ import os
 import platform
 import socket
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any, Mapping
@@ -38,14 +40,23 @@ class RuntimePaths:
     cache_root: Path
     state_root: Path
     database_path: Path | None
-    managed_root: Path
-    managed_documents: Path
-    managed_config_assets: Path
+    managed_root: Path | None
+    managed_documents: Path | None
+    managed_config_assets: Path | None
     logs: Path
     runtime: Path
     exports: Path
     preferences: Path
     profile_file: Path
+    configured_managed_root: str | None = None
+
+    def with_shared_managed_root(self, value: str) -> RuntimePaths:
+        path = _shared_managed_path(value)
+        return replace(
+            self, configured_managed_root=value, managed_root=path,
+            managed_documents=path / "documents" if path is not None else None,
+            managed_config_assets=path / "config-assets" if path is not None else None,
+        )
 
     def create_mutable_roots(self) -> None:
         roots = {
@@ -53,14 +64,13 @@ class RuntimePaths:
             self.config_root,
             self.cache_root,
             self.state_root,
-            self.managed_root,
-            self.managed_documents,
-            self.managed_config_assets,
             self.logs,
             self.runtime,
             self.exports,
             self.preferences,
         }
+        if self.profile is BackendProfile.STANDALONE_SQLITE:
+            roots.update((self.managed_root, self.managed_documents, self.managed_config_assets))
         if self.database_path is not None:
             roots.add(self.database_path.parent)
         for path in roots:
@@ -75,9 +85,9 @@ class RuntimePaths:
             "cache_root": str(self.cache_root),
             "state_root": str(self.state_root),
             "database_path": str(self.database_path) if self.database_path else None,
-            "managed_root": str(self.managed_root),
-            "managed_documents": str(self.managed_documents),
-            "managed_config_assets": str(self.managed_config_assets),
+            "managed_root": str(self.managed_root) if self.managed_root is not None else None,
+            "managed_documents": str(self.managed_documents) if self.managed_documents is not None else None,
+            "managed_config_assets": str(self.managed_config_assets) if self.managed_config_assets is not None else None,
             "logs": str(self.logs),
             "runtime": str(self.runtime),
             "exports": str(self.exports),
@@ -148,6 +158,18 @@ def _profile_value(
         ) from exc
 
 
+def _shared_managed_path(value: str) -> Path | None:
+    if not value.strip() or any(ord(char) < 32 for char in value):
+        return None
+    if value.startswith("~") and value[1:2] not in {"", "/", "\\"}:
+        return None
+    try:
+        path = Path(value).expanduser()
+    except (OSError, RuntimeError, ValueError):
+        return None
+    return path if path.is_absolute() and ".." not in path.parts else None
+
+
 def resolve_runtime_paths(
     application_root: str | Path,
     *,
@@ -180,14 +202,23 @@ def resolve_runtime_paths(
     profile_config = _load_profile_file(profile_file)
     profile = _profile_value(env, profile_config)
 
-    managed_override = env.get("PROGTRACK_MANAGED_ROOT") or profile_config.get(
-        "managed_root"
-    )
-    managed_root = (
-        Path(str(managed_override)).expanduser()
-        if managed_override
-        else data_root / "managed"
-    )
+    managed_root = data_root / "managed"
+    configured_managed_root = None
+    if profile is BackendProfile.SHARED_POSTGRESQL:
+        postgres = profile_config.get("postgresql")
+        postgres = postgres if isinstance(postgres, dict) else {}
+        for configuration, key in (
+            (env, "PROGTRACK_MANAGED_ROOT"), (profile_config, "managed_root"), (postgres, "managed_root"),
+        ):
+            if key in configuration:
+                value = configuration[key]
+                configured_managed_root = value if isinstance(value, str) else ""
+                managed_root = _shared_managed_path(configured_managed_root)
+                break
+    else:
+        managed_override = env.get("PROGTRACK_MANAGED_ROOT") or profile_config.get("managed_root")
+        if managed_override:
+            managed_root = Path(str(managed_override)).expanduser()
 
     database_path: Path | None = None
     if profile is BackendProfile.STANDALONE_SQLITE:
@@ -210,13 +241,14 @@ def resolve_runtime_paths(
         state_root=state_root,
         database_path=database_path,
         managed_root=managed_root,
-        managed_documents=managed_root / "documents",
-        managed_config_assets=managed_root / "config-assets",
+        managed_documents=managed_root / "documents" if managed_root is not None else None,
+        managed_config_assets=managed_root / "config-assets" if managed_root is not None else None,
         logs=state_root / "logs",
         runtime=state_root / "runtime",
         exports=data_root / "exports",
         preferences=config_root / "preferences",
         profile_file=profile_file,
+        configured_managed_root=configured_managed_root,
     )
     if create:
         paths.create_mutable_roots()

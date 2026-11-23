@@ -1,130 +1,15 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.3 or newer.
 """Shared Phase-1 identity and lifecycle convention helpers."""
 
 from __future__ import annotations
 
 import copy
-import json
-import os
 import re
-import tempfile
 from datetime import date
-from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
 
-from Plugins.core.resource_catalogs import (
-    CATALOG_FILES,
-    read_catalog,
-    read_genotypes,
-    resources_path,
-)
-
-
-DEFAULT_CONVENTIONS: Dict[str, Any] = {
-    "animal_id_pattern": "{species}_{year2}_{sequence:04d}_{sex}_{name}_{origin}",
-    "animal_id_components": ["species", "year_short", "count_year", "sex", "name", "origin"],
-    "yearly_sequences": {},
-    "absolute_sequence": 0,
-    "experiment_exit_reasons": [
-        "§4 Abs. 3 TierSchG – Organentnahme",
-        "§7 Abs. 2 TierSchG – Abbruchkriterien erfüllt",
-        "§7 Abs. 2 TierSchG – geplantes Versuchsende erreicht",
-        "§7 Abs. 2 TierSchG – im Versuch verstorben",
-        "§7 Abs. 2 TierSchG – tierärztliche Indikation",
-        "Totgeburt",
-    ],
-    "death_causes": [],
-    "departure_reasons": ["Abgabe", "Verlegung", "Sonstiges"],
-    "handover_recipients": [],
-}
-
-
-def conventions_path(app_root: Path) -> Path:
-    return app_root / "Plugins" / "core" / "identity_lifecycle_conventions.json"
-
-
-def load_conventions(path: Path) -> Dict[str, Any]:
-    data = dict(DEFAULT_CONVENTIONS)
-    if path.is_file():
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(raw, dict):
-                data.update(raw)
-        except (OSError, ValueError, TypeError):
-            pass
-    for key in (
-        "experiment_exit_reasons",
-        "death_causes",
-        "departure_reasons",
-        "handover_recipients",
-    ):
-        if not isinstance(data.get(key), list):
-            data[key] = list(DEFAULT_CONVENTIONS[key])
-    if not isinstance(data.get("yearly_sequences"), dict):
-        data["yearly_sequences"] = {}
-    if not isinstance(data.get("animal_id_components"), list):
-        data["animal_id_components"] = list(DEFAULT_CONVENTIONS["animal_id_components"])
-    aliases = {"year": "year_short", "count": "count_year"}
-    data["animal_id_components"] = [
-        aliases.get(str(value), str(value)) for value in data["animal_id_components"]
-    ]
-    if "origin" not in data["animal_id_components"]:
-        data["animal_id_components"].append("origin")
-    data["animal_id_pattern"] = pattern_from_components(
-        data["animal_id_components"]
-    )
-    # Existing installations used one free-text default. Seed the new controlled
-    # catalogue once, without retaining compatibility UI or migration logic.
-    legacy_origin = str(data.get("default_offspring_origin") or "").strip()
-
-    app_root = Path(path).parents[2]
-    for key in CATALOG_FILES:
-        catalog_path = resources_path(app_root) / CATALOG_FILES[key]
-        if key != "species" and catalog_path.is_file():
-            data[key] = read_catalog(app_root, key)
-    data["species"] = read_catalog(app_root, "species")
-    if not data.get("animal_origins") and legacy_origin:
-        data["animal_origins"] = [legacy_origin]
-    data["genotypes"] = read_genotypes(app_root)
-    return data
-
-
-def save_conventions(path: Path, conventions: Mapping[str, Any]) -> None:
-    """Persist convention settings while keeping catalogs in text resources.
-
-    Catalog-backed values are written through ``resource_catalogs`` and are
-    intentionally omitted from the JSON settings file.  The helper is used by
-    configuration tooling/tests; runtime domain data still belongs in the
-    configured backend.
-    """
-    path = Path(path)
-    payload = dict(conventions or {})
-    app_root = path.parents[2]
-    catalog_keys = set(CATALOG_FILES) | {"genotypes"}
-    for key in CATALOG_FILES:
-        if key in payload:
-            from Plugins.core.resource_catalogs import write_catalog
-
-            write_catalog(app_root, key, payload.pop(key) or [])
-    if "genotypes" in payload:
-        from Plugins.core.resource_catalogs import write_genotypes
-
-        write_genotypes(app_root, payload.pop("genotypes") or {})
-    payload = {key: value for key, value in payload.items() if key not in catalog_keys}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(
-        prefix=path.stem + "_", suffix=".tmp", dir=path.parent
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
-            handle.write("\n")
-        os.replace(temporary, path)
-    except Exception:
-        try:
-            os.unlink(temporary)
-        except OSError:
-            pass
-        raise
+DEFAULT_ANIMAL_ID_PATTERN = "{species}_{year2}_{sequence:04d}_{sex}_{name}_{origin}"
 
 
 ID_COMPONENT_PATTERNS = {
@@ -240,9 +125,9 @@ def render_animal_id(
         "absolute_sequence": int(absolute_sequence if absolute_sequence is not None else sequence),
     }
     try:
-        return str(pattern or DEFAULT_CONVENTIONS["animal_id_pattern"]).format(**values)
+        return str(pattern or DEFAULT_ANIMAL_ID_PATTERN).format(**values)
     except (KeyError, ValueError, IndexError):
-        return DEFAULT_CONVENTIONS["animal_id_pattern"].format(**values)
+        return DEFAULT_ANIMAL_ID_PATTERN.format(**values)
 
 
 def next_generated_id(

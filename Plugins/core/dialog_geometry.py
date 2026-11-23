@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.2 or newer.
 """Shared geometry guard for resizable ProgTrack dialogs.
 
 Dialogs are allowed to be resized, but their title/header and primary actions

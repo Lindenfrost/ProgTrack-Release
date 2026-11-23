@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Lord-managed backend profile configuration without persisted secrets."""
 
 from __future__ import annotations
@@ -6,13 +8,15 @@ import ctypes
 import hashlib
 import json
 import os
+import sys
 import platform
 import re
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping, Protocol
 
-from .runtime_paths import BackendProfile, RuntimePaths, validate_standalone_sqlite_path
+from .runtime_paths import BackendProfile, RuntimePaths, _linux_roots, _windows_roots, validate_standalone_sqlite_path
 
 
 class BackendConfigurationPermissionError(PermissionError):
@@ -71,6 +75,21 @@ class WindowsCredentialStore:
                 return ""
             raw = ctypes.string_at(credential.CredentialBlob, size)
             return raw.decode("utf-16-le")
+        finally:
+            ctypes.windll.advapi32.CredFree(pointer)
+
+    def generation(self, target: str) -> int:
+        """Credential Manager last-write identity, without copying its blob."""
+        if not self.available():
+            return 0
+        pointer = ctypes.POINTER(self._CREDENTIALW)()
+        if not ctypes.windll.advapi32.CredReadW(
+            str(target), self.CRED_TYPE_GENERIC, 0, ctypes.byref(pointer)
+        ):
+            return 0
+        try:
+            entry = pointer.contents
+            return (entry.LastWrittenHigh << 32) | entry.LastWrittenLow
         finally:
             ctypes.windll.advapi32.CredFree(pointer)
 
@@ -172,11 +191,9 @@ class BackendConfigurationService:
             client_cert_file=str(raw.get("client_cert_file") or ""),
             client_key_file=str(raw.get("client_key_file") or ""),
             connect_timeout=int(raw.get("connect_timeout") or 10),
-            managed_root=str(
-                raw.get("managed_root")
-                or self.load_document().get("managed_root")
-                or self.paths.managed_root
-            ),
+            managed_root=str(raw.get(
+                "managed_root", self.load_document().get("managed_root", self.paths.managed_root)
+            ) or ""),
             pool_min=int(raw.get("pool_min") or 1),
             pool_max=int(raw.get("pool_max") or 4),
         )
@@ -190,6 +207,18 @@ class BackendConfigurationService:
 
     def read_client_key_passphrase(self) -> str:
         return self.credential_store.read(self.client_key_passphrase_target())
+
+    def catalog_cache_path(self) -> Path:
+        # Portable installations can share their release directory. Catalog
+        # visibility is per OS user and belongs under local application cache.
+        roots = _windows_roots(self.environ) if platform.system() == "Windows" else _linux_roots(self.environ)
+        profile_key = self.credential_target.rsplit("/", 1)[1]
+        return roots[2] / "database-catalogs" / f"{profile_key}.json"
+
+    def catalog_credential_generation(self) -> tuple:
+        version = self.load_document().get("credential_generation", "legacy")
+        generation = getattr(self.credential_store, "generation", lambda _target: 0)
+        return version, generation(self.credential_target), generation(self.client_key_passphrase_target())
 
     @staticmethod
     def _validate_certificate_file(value: str, label: str) -> str:
@@ -239,7 +268,7 @@ class BackendConfigurationService:
             raise BackendConfigurationValidationError(str(exc)) from exc
 
     def validate_postgresql(
-        self, settings: PostgreSQLSettings
+        self, settings: PostgreSQLSettings, *, validate_storage=True
     ) -> PostgreSQLSettings:
         if not settings.host.strip():
             raise BackendConfigurationValidationError("PostgreSQL host is required.")
@@ -281,11 +310,15 @@ class BackendConfigurationService:
             raise BackendConfigurationValidationError(
                 "Pool sizes must satisfy 1 <= minimum <= maximum <= 64."
             )
-        managed = Path(settings.managed_root).expanduser()
-        if not managed.is_absolute():
-            raise BackendConfigurationValidationError(
-                "Managed document storage must be an absolute path."
-            )
+        if validate_storage:
+            try:
+                managed = Path(settings.managed_root).expanduser()
+            except (OSError, RuntimeError, ValueError):
+                raise BackendConfigurationValidationError("Managed document storage path is invalid.") from None
+            if not managed.is_absolute():
+                raise BackendConfigurationValidationError(
+                    "Managed document storage must be an absolute path."
+                )
         return settings
 
     def connection_dsn(
@@ -300,7 +333,7 @@ class BackendConfigurationService:
             override = str(self.environ.get("PROGTRACK_POSTGRES_DSN") or "").strip()
             if override:
                 return override
-        validated = self.validate_postgresql(settings)
+        validated = self.validate_postgresql(settings, validate_storage=False)
         try:
             from psycopg.conninfo import make_conninfo
         except ImportError as exc:
@@ -336,6 +369,36 @@ class BackendConfigurationService:
             allow_environment=True,
         )
 
+    def storage_secret_target(self) -> str:
+        return self.credential_target + "/managed-storage-password"
+
+    def read_storage_password(self) -> str:
+        return self.credential_store.read(self.storage_secret_target())
+
+    def saved_storage_username(self) -> str:
+        storage = self.load_document().get("storage", {})
+        return str(storage.get("username") or "") if isinstance(storage, dict) else ""
+
+    def storage_credentials(self, *, runtime_dsn=None, username=None, password=None):
+        """Use ordinary connection identity only, independently per field."""
+        from .backend.managed_storage import resolve_storage_credentials
+
+        return resolve_storage_credentials(
+            self.effective_postgres_dsn() if runtime_dsn is None else runtime_dsn,
+            username=self.saved_storage_username() if username is None else username,
+            password=self.read_storage_password() if password is None else password,
+        )
+
+    def check_storage(self, root, *, runtime_dsn=None, username=None, password=None, writable=False):
+        from .backend.managed_storage import _unc_share, require_storage_access
+
+        credentials = None
+        if sys.platform == "win32" and _unc_share(str(root)):
+            credentials = self.storage_credentials(runtime_dsn=runtime_dsn, username=username, password=password)
+        mount_anchor = self.environ.get("PROGTRACK_STORAGE_MOUNT_ANCHOR") if sys.platform != "win32" else None
+        return require_storage_access(root, credentials=credentials, writable=writable,
+                                      mount_anchor=Path(mount_anchor) if mount_anchor else None)
+
     def effective_pool_sizes(self) -> tuple[int, int]:
         settings = self.saved_postgresql()
         return (
@@ -343,37 +406,43 @@ class BackendConfigurationService:
             int(self.environ.get("PROGTRACK_POSTGRES_POOL_MAX") or settings.pool_max),
         )
 
-    def test_connection(
-        self,
-        settings: PostgreSQLSettings,
-        *,
-        password: str,
-        client_key_passphrase: str = "",
-        authorized: bool,
-    ) -> None:
-        self.require_lord(authorized)
-        dsn = self.connection_dsn(
-            settings,
+    def save_disconnected_shared(self, *, postgresql, password, client_key_passphrase):
+        """Save this client's Shared target during recovery, without contacting it."""
+        saved = self.load_document().get("profile", self.paths.profile.value)
+        if self.paths.profile is not BackendProfile.SHARED_POSTGRESQL or saved != self.paths.profile.value:
+            raise BackendConfigurationPermissionError("Only a Shared profile can be corrected here.")
+        same_endpoint, same_client_key = self.recovery_secret_identity(postgresql)
+        if not same_endpoint and not password and self.read_password():
+            raise BackendConfigurationValidationError("Enter a new password for the corrected PostgreSQL target.")
+        previous = self.saved_postgresql()
+        postgresql = replace(postgresql, managed_root=previous.managed_root if same_endpoint else "")
+        return self._save_profile(
+            profile=BackendProfile.SHARED_POSTGRESQL,
+            sqlite_filename="",
+            postgresql=postgresql,
             password=password,
             client_key_passphrase=client_key_passphrase,
-            allow_environment=False,
+            storage_username=None if same_endpoint else "",
+            storage_password=None if same_endpoint else "",
+            clear_client_key_passphrase=not same_client_key and not client_key_passphrase,
+            validate_storage=False,
         )
-        try:
-            import psycopg
-            with psycopg.connect(dsn) as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT 1")
-                    cursor.fetchone()
-        except ImportError as exc:
-            raise BackendConfigurationValidationError(
-                "Psycopg 3 is not installed."
-            ) from exc
-        except Exception as exc:
-            raise BackendConfigurationValidationError(
-                "PostgreSQL connection failed. Check server, credentials, TLS, and network."
-            ) from exc
 
-    def save(
+    def recovery_secret_identity(self, staged):
+        """Match credential scope to the saved endpoint and its TLS identity."""
+        saved = self.saved_postgresql()
+        endpoint_fields = ("host", "port", "database", "user", "sslmode", "server_name", "ca_file")
+        same_endpoint = all(getattr(staged, field) == getattr(saved, field) for field in endpoint_fields)
+        same_client_key = same_endpoint and (
+            staged.client_cert_file == saved.client_cert_file and staged.client_key_file == saved.client_key_file
+        )
+        return same_endpoint, same_client_key
+
+    def save(self, *, authorized: bool, **settings) -> dict[str, Any]:
+        self.require_lord(authorized)
+        return self._save_profile(**settings)
+
+    def _save_profile(
         self,
         *,
         profile: BackendProfile,
@@ -382,9 +451,11 @@ class BackendConfigurationService:
         postgresql: PostgreSQLSettings,
         password: str,
         client_key_passphrase: str = "",
-        authorized: bool,
+        storage_username: str | None = None,
+        storage_password: str | None = None,
+        clear_client_key_passphrase: bool = False,
+        validate_storage: bool = True,
     ) -> dict[str, Any]:
-        self.require_lord(authorized)
         previous = self.load_document()
         if profile is BackendProfile.STANDALONE_SQLITE:
             sqlite_path = self.validate_sqlite_location(
@@ -400,6 +471,8 @@ class BackendConfigurationService:
                 )
             )
 
+        secret_changes = {}
+        storage_user = self.saved_storage_username()
         pg_document = previous.get("postgresql", {})
         if not isinstance(pg_document, dict):
             pg_document = {}
@@ -407,20 +480,25 @@ class BackendConfigurationService:
             previous.get("managed_root") or self.paths.managed_root
         )
         if profile is BackendProfile.SHARED_POSTGRESQL:
-            pg = self.validate_postgresql(postgresql)
+            pg = self.validate_postgresql(postgresql, validate_storage=validate_storage)
             if password:
-                self.credential_store.write(self.credential_target, password)
+                secret_changes[self.credential_target] = password
             elif not self.read_password() and not str(
                 self.environ.get("PROGTRACK_POSTGRES_DSN") or ""
             ).strip():
                 raise BackendConfigurationValidationError(
                     "A PostgreSQL password or deployment DSN override is required."
                 )
-            managed_root = str(Path(pg.managed_root).expanduser())
+            managed_root = str(Path(pg.managed_root).expanduser()) if validate_storage else pg.managed_root
             if client_key_passphrase:
-                self.credential_store.write(
-                    self.client_key_passphrase_target(), client_key_passphrase
-                )
+                secret_changes[self.client_key_passphrase_target()] = client_key_passphrase
+            elif clear_client_key_passphrase and self.read_client_key_passphrase():
+                secret_changes[self.client_key_passphrase_target()] = ""
+            if sys.platform == "win32":
+                if storage_username is not None:
+                    storage_user = storage_username.strip()
+                if storage_password is not None:
+                    secret_changes[self.storage_secret_target()] = storage_password
             pg_document = {
                 "host": pg.host.strip(),
                 "port": int(pg.port),
@@ -441,14 +519,51 @@ class BackendConfigurationService:
             "sqlite_path": str(sqlite_path),
             "managed_root": managed_root,
             "postgresql": pg_document,
+            "storage": {"username": storage_user},
+            "credential_generation": (
+                uuid.uuid4().hex if profile is BackendProfile.SHARED_POSTGRESQL and (password or client_key_passphrase)
+                else previous.get("credential_generation", "legacy")
+            ),
         }
         self.paths.profile_file.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.paths.profile_file.with_suffix(".json.tmp")
-        temporary.write_text(
-            json.dumps(document, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        os.replace(temporary, self.paths.profile_file)
+        changed = []
+        try:
+            previous_secrets = {
+                target: self.credential_store.read(target) for target in secret_changes
+            }
+            temporary.write_text(
+                json.dumps(document, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            for target, value in secret_changes.items():
+                changed.append(target)
+                if value:
+                    self.credential_store.write(target, value)
+                else:
+                    self.credential_store.delete(target)
+            os.replace(temporary, self.paths.profile_file)
+        except Exception:
+            restored = True
+            for target in reversed(changed):
+                try:
+                    value = previous_secrets[target]
+                    if value:
+                        self.credential_store.write(target, value)
+                    else:
+                        self.credential_store.delete(target)
+                except Exception:
+                    restored = False
+            if not restored:
+                raise BackendConfigurationValidationError(
+                    "Could not save the backend settings or restore the previous credentials."
+                ) from None
+            raise BackendConfigurationValidationError("Could not save the backend settings.") from None
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
         return document
 
 

@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.1 or newer.
 """Installation-wide, human-editable identity/lifecycle resource catalogs."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Versioned shared schema.
 
 The initial schema keeps domain records inspectable and adapter-neutral while
@@ -5,7 +7,46 @@ the application UI is cut over incrementally. Animal identity and measurement
 records are normalized; plugin-owned records use stable typed namespaces.
 """
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
+BACKEND_CONTRACT = 1
+# Stable per-database namespace for the migration owner and compatibility gate.
+SCHEMA_LOCK = (942637, 1)
+SQLITE_ADD_LEASE_OWNER_SESSION = "ALTER TABLE entity_leases ADD COLUMN owner_session_id TEXT"
+
+DOCUMENT_OPERATION_MIGRATION = """
+    ALTER TABLE managed_files ADD COLUMN revision BIGINT NOT NULL DEFAULT 1 CHECK (revision > 0);
+    CREATE TABLE document_operations (
+        operation_id TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL,
+        operation_kind TEXT NOT NULL CHECK (operation_kind IN ('create','replace','retire')),
+        actor_login TEXT NOT NULL,
+        request_sha256 TEXT NOT NULL,
+        intent_json TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('prepared','committed','abandoned')),
+        result_json TEXT NOT NULL DEFAULT '',
+        retired_path TEXT,
+        retired_sha256 TEXT,
+        retired_byte_size BIGINT,
+        cleanup_pending INTEGER NOT NULL DEFAULT 0 CHECK (cleanup_pending IN (0,1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX idx_document_operations_pending
+        ON document_operations(document_id) WHERE state = 'prepared';
+    CREATE TABLE document_publish_attempts (
+        attempt_id TEXT PRIMARY KEY,
+        operation_id TEXT NOT NULL REFERENCES document_operations(operation_id),
+        category TEXT NOT NULL,
+        staging_path TEXT NOT NULL UNIQUE,
+        final_path TEXT NOT NULL UNIQUE,
+        verified_sha256 TEXT,
+        verified_byte_size BIGINT,
+        created_at TEXT NOT NULL,
+        CHECK ((verified_sha256 IS NULL AND verified_byte_size IS NULL)
+            OR (verified_sha256 IS NOT NULL AND verified_byte_size IS NOT NULL AND verified_byte_size >= 0))
+    );
+    CREATE INDEX idx_document_publish_attempts_operation ON document_publish_attempts(operation_id);
+"""
 
 SQLITE_MIGRATIONS = {
     1: """
@@ -137,6 +178,24 @@ SQLITE_MIGRATIONS = {
     WHERE json_type(payload_json, '$.typ') IS NOT NULL
       AND json_type(payload_json, '$.event_type') IS NOT NULL;
     """,
+    3: """
+    CREATE TABLE IF NOT EXISTS active_sessions (
+        username_key TEXT PRIMARY KEY NOT NULL,
+        username TEXT NOT NULL,
+        session_id TEXT NOT NULL UNIQUE,
+        token_hash TEXT NOT NULL,
+        generation INTEGER NOT NULL DEFAULT 1 CHECK (generation > 0),
+        client_type TEXT NOT NULL,
+        client_context TEXT NOT NULL DEFAULT '{}',
+        issued_at TEXT NOT NULL,
+        heartbeat_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_entity_leases_owner_session
+        ON entity_leases(owner_session_id);
+    """,
+    4: DOCUMENT_OPERATION_MIGRATION,
 }
 
 
@@ -271,4 +330,23 @@ POSTGRESQL_MIGRATIONS = {
     WHERE payload_json ? 'typ'
       AND payload_json ? 'event_type';
     """,
+    3: """
+    CREATE TABLE IF NOT EXISTS active_sessions (
+        username_key TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        session_id TEXT NOT NULL UNIQUE,
+        token_hash TEXT NOT NULL,
+        generation BIGINT NOT NULL DEFAULT 1 CHECK (generation > 0),
+        client_type TEXT NOT NULL,
+        client_context JSONB NOT NULL DEFAULT '{}'::jsonb,
+        issued_at TIMESTAMPTZ NOT NULL,
+        heartbeat_at TIMESTAMPTZ NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        revoked_at TIMESTAMPTZ
+    );
+    ALTER TABLE entity_leases ADD COLUMN IF NOT EXISTS owner_session_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_entity_leases_owner_session
+        ON entity_leases(owner_session_id);
+    """,
+    4: DOCUMENT_OPERATION_MIGRATION,
 }

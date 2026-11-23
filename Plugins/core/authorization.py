@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Authorization, trusted-local mode, and canonical organizational units.
 
 This module is deliberately independent from Qt and plugin UI code. When the
@@ -170,6 +172,15 @@ class CanonicalUnitService:
         self, units, previous, revision, *, actor, action, unit_id, payload,
     ) -> int:
         """CAS catalogue + changed assignments + audit in ONE transaction."""
+        master = getattr(self.authorization, "master_track", None)
+        context = getattr(master, "session_context", None)
+        backend_commands = getattr(self.backend, "account_commands", None)
+        shared = getattr(getattr(self.backend, "adapter", None), "dialect", "") == "postgresql"
+        if backend_commands is not None and (context is not None or shared):
+            next_revision, result = backend_commands.replace_units(context, units.values(), revision, action=action)
+            if result.actor_revoked:
+                master.notify_account_change(context)
+            return next_revision
         catalogue = self._payload(units.values())
         records = [(self.namespace, self.record_id, catalogue)]
         expected = {(self.namespace, self.record_id): revision}
@@ -290,6 +301,8 @@ class CanonicalUnitService:
         label = str(display_name or "").strip()
         if not label:
             raise ValueError("The organizational unit name cannot be empty.")
+        if label == current.display_name:
+            return current
         unit = OrganizationUnit(
             unit_id=key,
             display_name=label,
@@ -314,6 +327,8 @@ class CanonicalUnitService:
         current = units.get(key)
         if current is None:
             raise ValueError("Unknown organizational unit.")
+        if current.archived == bool(archived) and current.active == (not bool(archived)):
+            return current
         unit = OrganizationUnit(
             unit_id=key,
             display_name=current.display_name,

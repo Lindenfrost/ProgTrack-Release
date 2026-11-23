@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Network Track backend-backed team chat.
@@ -191,6 +191,7 @@ class NetworkTrackWidget(QMainWindow):
         self.messages = messages or {}
         self.app = app
         backend = getattr(app or parent, "backend", None)
+        self._shared_backend = backend if getattr(getattr(backend, "adapter", None), "dialect", "") == "postgresql" else None
         self._settings_store = BackendJsonStore(
             backend, "configuration", "network-track"
         )
@@ -259,8 +260,24 @@ class NetworkTrackWidget(QMainWindow):
             logger.error(f"Error saving settings: {e}")
 
     def _chat_lines(self) -> list[str]:
+        initial = getattr(self.app, "_shared_initial_plugins", None)
+        if initial is not None:
+            return initial["chat"]
+        if self._shared_backend is not None:
+            session = self._shared_session()
+            return self._shared_backend.load_shared_chat(session) if session is not None else []
         payload = self._chat_store.load([])
         return [str(line) for line in payload] if isinstance(payload, list) else []
+
+    def _shared_session(self):
+        return getattr(getattr(self.app, "master_track", None), "session_context", None)
+
+    def invalidate_shared_session(self):
+        if self._shared_backend is not None:
+            self.chat_table.setRowCount(0)
+            self.message_input.clear()
+            self.last_line_count = 0
+            self.hide()
 
     def _save_chat_lines(self, lines: list[str]) -> None:
         self._chat_store.save([str(line).rstrip("\n") for line in lines][-1000:])
@@ -427,6 +444,8 @@ class NetworkTrackWidget(QMainWindow):
     def _can_send(self) -> bool:
         """Return True if the current user has permission to send messages."""
         mt = getattr(self.app, 'master_track', None)
+        if self._shared_backend is not None and self._shared_session() is None:
+            return False
         if mt is None:
             return True
         disabled = getattr(self.app, '_disabled_plugins', set())
@@ -673,7 +692,8 @@ class NetworkTrackWidget(QMainWindow):
         if not new_text or new_text == current_text:
             return
         edit_ts = datetime.now().strftime("%H:%M")
-        self._replace_message_in_log(ts, author, current_text, new_text, edit_ts)
+        if not self._replace_message_in_log(ts, author, current_text, new_text, edit_ts):
+            return
         html_message = self._parse_message_with_icons(
             new_text + f' [edited {edit_ts}]'
         )
@@ -681,9 +701,14 @@ class NetworkTrackWidget(QMainWindow):
 
     def _replace_message_in_log(self, ts: str, author: str,
                                  old_text: str, new_text: str,
-                                 edit_ts: str = "") -> None:
+                                 edit_ts: str = "") -> bool:
         """Rewrite the chat log file replacing one matching line."""
         try:
+            if self._shared_backend is not None:
+                self._shared_backend.save_shared_chat_message(
+                    self._shared_session(), new_text, original=f"{ts}\t{author}\t{old_text}",
+                )
+                return True
             lines = self._chat_lines()
             suffix = f" [edited {edit_ts}]" if edit_ts else " [edited]"
             new_line = f"{ts}\t{author}\t{new_text}{suffix}"
@@ -693,8 +718,10 @@ class NetworkTrackWidget(QMainWindow):
                     lines[i] = new_line
                     break
             self._save_chat_lines(lines)
+            return True
         except Exception as exc:
             logger.error("Failed to rewrite chat log for edit: %s", exc)
+            return False
 
     def _check_for_updates(self):
         """Check if the chat log file has been updated."""
@@ -768,9 +795,12 @@ class NetworkTrackWidget(QMainWindow):
             
             # Format: timestamp\tname\tmessage
             chat_line = f"{timestamp}\t{name}\t{message}"
-            lines = self._chat_lines()
-            lines.append(chat_line)
-            self._save_chat_lines(lines)
+            if self._shared_backend is not None:
+                chat_line = self._shared_backend.save_shared_chat_message(self._shared_session(), message)
+            else:
+                lines = self._chat_lines()
+                lines.append(chat_line)
+                self._save_chat_lines(lines)
             
             # Clear message input
             self.message_input.clear()
@@ -799,6 +829,8 @@ class NetworkTrackWidget(QMainWindow):
     def refresh_master_name(self) -> None:
         """Re-apply Master_Track name state (call after login/logout)."""
         self._apply_master_name_state()
+        if self._shared_backend is not None and self._shared_session() is not None:
+            self._load_chat_log()
 
     def _show_settings(self):
         """Show settings dialog."""

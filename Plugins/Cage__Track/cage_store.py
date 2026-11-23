@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Cage Track persistence layer for backend housing records.
@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 import uuid
+from copy import deepcopy
+from contextlib import ExitStack
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
@@ -21,19 +23,40 @@ UNASSIGNED_CAGE_ID = "cage_unassigned"
 class CageStore:
     """Owns Cage Track storage in backend housing records."""
 
-    def __init__(self, plugin_dir: str, backend: Any):
+    def __init__(self, plugin_dir: str, backend: Any, app: Any = None):
         self.plugin_dir = plugin_dir
         self.backend_store = BackendJsonStore(backend, "housing", "cage")
         self.inspection_store = BackendJsonStore(
             backend, "housing", "inspections"
         )
         self._data: Optional[Dict[str, Any]] = None
+        self.app = app
+        self._shared_snapshot = None
+        self._inspection_revision = 0
+        self._inspection_session = None
+
+    def _shared(self):
+        helper = getattr(self.app, "_uses_shared_leases", None)
+        return bool(callable(helper) and helper())
+
+    def _session(self):
+        return getattr(getattr(self.app, "master_track", None), "session_context", None)
+
+    def invalidate_session(self):
+        self.invalidate_housing_snapshot()
+        self._inspection_revision = 0
+        self._inspection_session = None
+
+    def invalidate_housing_snapshot(self):
+        self._data = None
+        self._shared_snapshot = None
 
     # ------------------------------------------------------------------
     # Defaults
     # ------------------------------------------------------------------
 
-    def _default_data(self) -> Dict[str, Any]:
+    @staticmethod
+    def _default_data() -> Dict[str, Any]:
         return {
             "version": "1.0",
             "structures": {
@@ -110,10 +133,34 @@ class CageStore:
     # ------------------------------------------------------------------
 
     def load_data(self) -> Dict[str, Any]:
-        if self._data is not None:
-            return self._data
+        if self._shared():
+            from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+            from Plugins.core.backend.shared_housing import load_shared_housing
 
-        raw = self.backend_store.load(self._default_data())
+            context = self._session()
+            if self._shared_snapshot is not None and self._shared_snapshot[0] == context and self._data is not None:
+                return self._data
+            self.invalidate_session()
+            if context is None:
+                return self._default_data()
+            try:
+                initial = getattr(self.app, "_shared_initial_plugins", None)
+                if initial is not None:
+                    if initial["cages"] is None:
+                        return self._default_data()
+                    raw, revision = initial["cages"]
+                else:
+                    raw, revision = load_shared_housing(self.backend_store.backend, context, self._default_data())
+            except SessionRevokedError:
+                self.app.master_track.handle_session_revoked()
+                return self._default_data()
+            except PermissionDeniedError:
+                return self._default_data()
+            self._shared_snapshot = context, deepcopy(raw), revision
+        elif self._data is not None:
+            return self._data
+        else:
+            raw = self.backend_store.load(self._default_data())
         if not isinstance(raw, dict):
             raw = self._default_data()
 
@@ -172,7 +219,72 @@ class CageStore:
 
     def save_data(self) -> None:
         data = self.load_data()
+        if self._shared():
+            from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+            from Plugins.core.backend.shared_housing import affected_housing_animals, save_shared_housing
+
+            context = self._session()
+            if self._shared_snapshot is None:
+                return
+            session, original, revision = self._shared_snapshot
+            if session != context:
+                raise PermissionDeniedError("Reload the housing catalogue after signing in.")
+            try:
+                with ExitStack() as releases:
+                    leases = {}
+                    for ipid in sorted(affected_housing_animals(original, data)):
+                        owner = object()
+                        leases[ipid] = self.app._hold_shared_animal_lease(ipid, owner, verify=True)
+                        releases.callback(self.app._release_shared_animal_lease, ipid, owner)
+                    structure_token = ""
+                    if any(original.get(key) != data.get(key) for key in ("structures", "project_colors")):
+                        backend = self.backend_store.backend
+                        structure_token = backend.leases.acquire("housing", "cage", session=session)["token"]
+                        releases.callback(self._release_structure_lease, structure_token, session)
+                    new_revision = save_shared_housing(
+                        self.backend_store.backend, session, original, data, revision, leases, self._default_data(),
+                        structure_token,
+                    )
+            except SessionRevokedError:
+                self.app.master_track.handle_session_revoked()
+                raise
+            except Exception:
+                self.invalidate_session()
+                raise
+            self._shared_snapshot = session, deepcopy(data), new_revision
+            return
         self.backend_store.save(data)
+
+    def _release_structure_lease(self, token, session):
+        try:
+            self.backend_store.backend.leases.release("housing", "cage", token, session=session)
+        except Exception:
+            pass
+
+    def load_inspections(self):
+        if self._shared():
+            from Plugins.core.backend.shared_housing import load_shared_inspections
+
+            session = self._session()
+            if session is None:
+                return []
+            data, self._inspection_revision = load_shared_inspections(self.inspection_store.backend, session)
+            self._inspection_session = session
+            return data.get("records", [])
+        return self.inspection_store.load({"records": []}).get("records", [])
+
+    def save_inspections(self, records):
+        if self._shared():
+            from Plugins.core.backend.errors import PermissionDeniedError
+            from Plugins.core.backend.shared_housing import save_shared_inspections
+
+            if self._inspection_session is None or self._inspection_session != self._session():
+                raise PermissionDeniedError("Reload inspections after signing in.")
+            self._inspection_revision = save_shared_inspections(
+                self.inspection_store.backend, self._inspection_session, records, self._inspection_revision,
+            )
+        else:
+            self.inspection_store.save({"records": records})
 
     # ------------------------------------------------------------------
     # Structure CRUD
@@ -485,8 +597,14 @@ class CageStore:
         note: Optional[str] = None,
     ) -> Dict[str, Any]:
         data = self.load_data()
+        entry = self._create_occupant_in_data(data, name, occ_type, cage_id, note)
+        self.save_data()
+        return entry
+
+    @classmethod
+    def _create_occupant_in_data(cls, data, name, occ_type, cage_id, note=None):
         occupants = data["occupants"]
-        now = self._now_iso()
+        now = cls._now_iso()
         target_cage = cage_id or UNASSIGNED_CAGE_ID
         entry = {
             "occupant_id": name.strip(),
@@ -515,7 +633,6 @@ class CageStore:
             "cage_mates_snapshot": mates,
         })
 
-        self.save_data()
         return entry
 
     def get_occupant(self, occupant_id: str) -> Optional[Dict[str, Any]]:
@@ -528,8 +645,9 @@ class CageStore:
             return occ.get("cage_id")
         return None
 
+    @classmethod
     def _move_occupant_in_data(
-        self,
+        cls,
         data: Dict[str, Any],
         occupant_id: str,
         cage_id: str,
@@ -544,7 +662,7 @@ class CageStore:
             return False
 
         target_cage = cage_id or UNASSIGNED_CAGE_ID
-        event_date = self._event_date_iso(moved_at)
+        event_date = cls._event_date_iso(moved_at)
         history = data["movement_history"].setdefault(key, [])
         old_cage = occupants[key].get("cage_id") or UNASSIGNED_CAGE_ID
         open_entries = [

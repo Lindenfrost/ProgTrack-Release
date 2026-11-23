@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Central ordered schema-revision registry for optional plugins."""
 
 from __future__ import annotations
@@ -5,7 +7,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from .repositories import _execute, _fetchone, _placeholder, now_text
+from .errors import BackendSchemaError
+from .repositories import _fetchone, _placeholder
 
 
 class SchemaRegistry:
@@ -29,35 +32,13 @@ class SchemaRegistry:
         component: str,
         revisions: Mapping[int, Mapping[str, str]],
     ) -> int:
-        """Apply adapter-specific, ordered, idempotent component revisions."""
+        """Require an installed revision from the central deployment registry."""
+        from .migration import PLUGIN_MIGRATIONS
+
+        registration = PLUGIN_MIGRATIONS.get(component)
+        if registration is None or revisions != registration[1]:
+            raise BackendSchemaError(f"Schema migrations for {component} must be registered centrally.")
         current = self.current_revision(component)
-        for revision in sorted(revisions):
-            if revision <= current:
-                continue
-            sql = str(revisions[revision].get(self.adapter.dialect, "")).strip()
-            if not sql:
-                raise ValueError(
-                    f"{component} revision {revision} has no "
-                    f"{self.adapter.dialect} implementation."
-                )
-            mark = _placeholder(self.adapter)
-            with self.adapter.transaction(write=True) as connection:
-                _execute(connection, sql)
-                if self.adapter.dialect == "sqlite":
-                    _execute(
-                        connection,
-                        "INSERT INTO schema_revisions(component,revision,applied_at) "
-                        "VALUES(?,?,?) ON CONFLICT(component) DO UPDATE SET "
-                        "revision=excluded.revision,applied_at=excluded.applied_at",
-                        (component, revision, now_text()),
-                    )
-                else:
-                    _execute(
-                        connection,
-                        "INSERT INTO schema_revisions(component,revision,applied_at) "
-                        "VALUES(%s,%s,%s) ON CONFLICT(component) DO UPDATE SET "
-                        "revision=EXCLUDED.revision,applied_at=EXCLUDED.applied_at",
-                        (component, revision, now_text()),
-                    )
-            current = revision
+        if current != max(revisions):
+            raise BackendSchemaError(f"Schema for {component} requires administrative migration.")
         return current

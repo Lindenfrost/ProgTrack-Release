@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.3 or newer.
 """Lossless interactive measurement input (#268), not spreadsheet import policy."""
 
 import math

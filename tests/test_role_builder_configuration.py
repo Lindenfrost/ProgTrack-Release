@@ -30,29 +30,31 @@ from Plugins.core.animal_roles import (
     role_color_for_record,
 )
 from Plugins.core.ui_icons import canonical_icon_value, resolve_icon_path
+from Plugins.core.backend.facade import ProgTrackBackend
+from tests.test_current_backend_runtime import runtime_paths
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class MemoryRecords:
-    def __init__(self):
-        self.values = {}
-        self.put_count = 0
-
-    def get(self, namespace, key, default=None):
-        return copy.deepcopy(self.values.get((namespace, key), default))
-
-    def put(self, namespace, key, value, **_kwargs):
-        self.values[(namespace, key)] = copy.deepcopy(value)
-        self.put_count += 1
-        return self.put_count
-
-
 class RoleRegistryContractTest(unittest.TestCase):
     def setUp(self):
-        self.records = MemoryRecords()
-        self.backend = SimpleNamespace(records=self.records)
-        self.registry = AnimalRoleRegistry(self.backend, initial_payload={"roles": []})
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.backend = ProgTrackBackend(
+            runtime_paths(Path(temporary.name)), acquire_process_lock=False,
+        )
+        self.addCleanup(self.backend.close)
+        self.session = self.backend.authenticated_sessions.create_first_account(
+            "role-test-admin", "Role-test-only-246!",
+        )
+        self.backend.core_configuration.setup(self.session)
+        self.registry = AnimalRoleRegistry(self.backend)
+
+    def role_revision(self):
+        return self.backend.records.get_with_revision("configuration", "animal-roles")[1]
+
+    def save_roles(self, registry, roles):
+        registry.save_roles(roles, session=self.session, expected_revision=self.role_revision())
 
     def test_explicit_integer_order_accepts_9990_and_rejects_lossy_values(self):
         self.assertEqual(parse_role_order("9990"), 9990)
@@ -64,17 +66,17 @@ class RoleRegistryContractTest(unittest.TestCase):
 
     def test_malformed_and_duplicate_order_never_reach_backend(self):
         roles = self.registry.roles()
-        baseline_puts = self.records.put_count
+        baseline_puts = self.role_revision()
         roles[0]["order"] = "not-an-integer"
         with self.assertRaises(RoleOrderValidationError):
-            self.registry.save_roles(roles)
-        self.assertEqual(self.records.put_count, baseline_puts)
+            self.save_roles(self.registry, roles)
+        self.assertEqual(self.role_revision(), baseline_puts)
 
         roles = self.registry.roles()
         roles[1]["order"] = roles[0]["order"]
         with self.assertRaises(RoleOrderValidationError):
-            self.registry.save_roles(roles)
-        self.assertEqual(self.records.put_count, baseline_puts)
+            self.save_roles(self.registry, roles)
+        self.assertEqual(self.role_revision(), baseline_puts)
 
     def test_manager_configuration_persists_and_reopens_exclusive_representation_and_colors(self):
         custom = self.registry.make_custom_role("Facility cohort", "role.partner")
@@ -89,7 +91,7 @@ class RoleRegistryContractTest(unittest.TestCase):
                 "unknown": "#6B6B6B",
             },
         })
-        self.registry.save_roles(self.registry.roles() + [custom])
+        self.save_roles(self.registry, self.registry.roles() + [custom])
 
         reopened = AnimalRoleRegistry(self.backend)
         saved = reopened.get_by_value(custom["value"])
@@ -111,7 +113,7 @@ class RoleRegistryContractTest(unittest.TestCase):
             saved if role["value"] == saved["value"] else role
             for role in reopened.roles()
         ]
-        reopened.save_roles(roles)
+        self.save_roles(reopened, roles)
         icon_reopen = AnimalRoleRegistry(self.backend).get_by_value(custom["value"])
         self.assertEqual(icon_reopen["representation_mode"], REPRESENTATION_ICON)
         self.assertEqual(icon_reopen["icon"], "role.partner")
@@ -125,7 +127,7 @@ class RoleRegistryContractTest(unittest.TestCase):
             "female": "#A13F72",
             "unknown": "#6B6B6B",
         }
-        self.registry.save_roles(self.registry.roles() + [custom])
+        self.save_roles(self.registry, self.registry.roles() + [custom])
         record = {"rolle": custom["value"], "sex": "female"}
         app = SimpleNamespace(animal_role_registry=self.registry)
         expected = role_color_for_record(record, self.registry)
@@ -179,7 +181,7 @@ class RoleBuilderOffscreenTest(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
         spec = importlib.util.spec_from_file_location(
-            "progtrack_role_builder_test", ROOT / "ProgTrack.v.0.2.3.py"
+            "progtrack_role_builder_test", ROOT / "ProgTrack.v.0.3.0.py"
         )
         cls.module = importlib.util.module_from_spec(spec)
         assert spec.loader is not None

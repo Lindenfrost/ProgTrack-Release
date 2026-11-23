@@ -15,6 +15,7 @@ import traceback
 import tempfile
 import unittest
 from collections import Counter
+from contextlib import nullcontext
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -40,10 +41,11 @@ from matplotlib._pylab_helpers import Gcf
 from Plugins.core.measurement_input import MeasurementValidator, parse_measurement, format_measurement
 from Plugins.core.role_block_presets import RoleBlockPresetRegistry, normalize_event_definition
 from Plugins.core.backend import ProgTrackBackend
+from Plugins.core.backend.core_configuration import read_seed_configuration
 from tests.test_current_backend_runtime import runtime_paths
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location('progtrack_phase023_repairs', ROOT / 'ProgTrack.v.0.2.3.py')
+SPEC = importlib.util.spec_from_file_location('progtrack_phase023_repairs', ROOT / 'ProgTrack.v.0.3.0.py')
 MAIN = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MAIN)
 
@@ -58,6 +60,13 @@ class Records:
     def put(self, namespace, key, value, **kwargs):
         self.data[namespace, key] = copy.deepcopy(value)
         return 1
+
+
+def put_configuration_fixture(backend, record_id, payload):
+    """Install isolated domain fixtures without changing the command under test."""
+    scope = getattr(backend, "_allow_core_configuration_writes", nullcontext)
+    with scope():
+        return backend.records.put("configuration", record_id, payload)
 
 
 class CoreRepairTests(unittest.TestCase):
@@ -415,7 +424,7 @@ class CoreRepairTests(unittest.TestCase):
         # Use the production shared configuration, not a fabricated destination row.
         definition = normalize_event_definition(dict(name='Test Clinical', event_type='test_clinical',
             kind='counting', mirror_in_medical_history=True))
-        app.backend.records.put('configuration', 'role-block-presets', {'event_definitions': [definition]})
+        put_configuration_fixture(app.backend, 'role-block-presets', {'event_definitions': [definition]})
         cases = [('_dlg_offspring', MAIN.Role.OFFSPRING.value),
                  ('_dlg_zuchttier', MAIN.Role.ZUCHTTIER.value),
                  ('_dlg_versuchstier', MAIN.Role.EXPERIMENTAL.value),
@@ -527,7 +536,7 @@ class CoreRepairTests(unittest.TestCase):
         app = self._307_sqlite_host(population=2)
         definition = normalize_event_definition(dict(name='Test Clinical', event_type='test_clinical',
             kind='counting', mirror_in_medical_history=True))
-        app.backend.records.put('configuration', 'role-block-presets', {'event_definitions': [definition]})
+        put_configuration_fixture(app.backend, 'role-block-presets', {'event_definitions': [definition]})
         actor = CurrentBackendRuntimeTests._321_actor()
         for stage in ('original', 'correction', 'deletion'):
             snapshot = app.backend.load_core_data()
@@ -587,7 +596,7 @@ class CoreRepairTests(unittest.TestCase):
                 catalog = json.loads((ROOT / f'lang/messages_{language}.json').read_text(
                     encoding='utf-8'), object_pairs_hook=unique_keys)
                 self.assertEqual(catalog[key], expected)
-                app.backend.records.put('configuration', f'user-message-overrides:{language}',
+                put_configuration_fixture(app.backend, f'user-message-overrides:{language}',
                                         {'role.experimental': 'Test-Role 2Q'})
                 stored = copy.deepcopy(app.backend.records.data)
                 app.lang = language
@@ -607,7 +616,7 @@ class CoreRepairTests(unittest.TestCase):
         definition = normalize_event_definition({
             'event_type': 'custom_audit_event', 'block_id': 'custom_audit_event',
             'name': 'Test-Event 2Q', 'kind': 'counting', 'active': True})
-        app.backend.records.put('configuration', 'role-block-presets', {'event_definitions': [definition]})
+        put_configuration_fixture(app.backend, 'role-block-presets', {'event_definitions': [definition]})
         animal = self.record('custom_role')
         animal['events'] = [{'event_id': 'stable-319', 'event_type': 'custom_audit_event',
                              'datum': datetime(2026, 1, 1), 'recorded_role': 'custom_role'}]
@@ -2544,9 +2553,12 @@ class CoreRepairTests(unittest.TestCase):
         app = self.host()
         app.backend = ProgTrackBackend(
             runtime_paths(root, application_root=ROOT if seeded else root),
-            acquire_process_lock=False)
+            acquire_process_lock=False,
+            choose_demo_seed=lambda: seeded)
         self.addCleanup(app.backend.close)
         if not seeded:
+            for record_id, payload in read_seed_configuration(ROOT).items():
+                put_configuration_fixture(app.backend, record_id, payload)
             app.backend.records.put('security', 'users', [{
                 'username': 'tester', 'role': 'user', 'jobs': ['manager'],
                 'unit_id': 'unit-a', 'permissions': {'granted': [], 'revoked': []},
@@ -2728,7 +2740,7 @@ class CoreRepairTests(unittest.TestCase):
     def test_306_save_reads_definitions_once_preserves_historical_snapshots(self):
         app = self._307_sqlite_host()
         definition = normalize_event_definition({'event_type': 'custom_test', 'name': 'Test', 'active': False})
-        app.backend.records.put('configuration', 'role-block-presets', {'event_definitions': [definition]})
+        put_configuration_fixture(app.backend, 'role-block-presets', {'event_definitions': [definition]})
         keys = list(app.animals)
         historical = {'label': 'Original label', 'revision': 7, 'color': '#123456'}
         app.animals[keys[0]]['events'] = [
@@ -2809,16 +2821,13 @@ class CoreRepairTests(unittest.TestCase):
                 trace('failed diagnostic')  # Technical log failure is harmless.
 
     def _306_conventions(self):
-        from Plugins.core.animal_roles import AnimalRoleRegistry
-        from Plugins.core.identity_conventions import DEFAULT_CONVENTIONS
-        app = self._307_sqlite_host()
-        app.animal_role_registry = AnimalRoleRegistry(app.backend)
-        app._load_identity_conventions = lambda: copy.deepcopy(DEFAULT_CONVENTIONS)
+        app = self._307_sqlite_host(seeded=True)
+        app.master_track.session_context = app.backend.authenticated_sessions.login("Admin", "123456")
+        app._publish_core_configuration(app.backend.core_configuration.snapshot(), redraw=False)
         app._can_configure_animal_roles = lambda: True
         app._can_manage_institution_settings = lambda: False
         app._can_manage_institution_branding = lambda: False
-        app._save_role_label_overrides = lambda *_a: None
-        app._merge_user_messages = lambda: None
+        app._merge_user_messages = lambda *_a: None
         return app
 
     def test_306_conventions_noop_all_tabs_and_style_only_have_no_shared_writes(self):
@@ -2862,7 +2871,7 @@ class CoreRepairTests(unittest.TestCase):
         editor = next(iter(dlg._lifecycle_catalog_edits.values()))
         editor.set_values(editor.values() + ['test-entry'])
         with patch.object(app, '_save_identity_conventions', wraps=app._save_identity_conventions) as identity, \
-             patch.object(app.backend.records, 'put_many', wraps=app.backend.records.put_many) as roles:
+             patch.object(app.backend.core_configuration, 'save_roles', wraps=app.backend.core_configuration.save_roles) as roles:
             dlg.accept()
             app._apply_accepted_conventions(dlg)
             identity.assert_called_once()
@@ -2876,7 +2885,7 @@ class CoreRepairTests(unittest.TestCase):
                 if concurrent:
                     key = ('configuration', 'role-block-presets')
                     payload = app.backend.records.get(*key, default={})
-                    app.backend.records.put(*key, payload)
+                    put_configuration_fixture(app.backend, key[1], payload)
                     prior = copy.deepcopy(app.animal_role_registry.roles())
                 dlg.accept()
                 self.assertIsNotNone(dlg.get_role_definitions())
@@ -3916,7 +3925,8 @@ class CoreRepairTests(unittest.TestCase):
         registry = RoleBlockPresetRegistry(backend)
         definition = {'name': 'Count', 'event_type': 'count', 'kind': 'counting',
                       'render_mode': 'symbol', 'marker': 'D', 'color': '#123456'}
-        registry.save_presets([], event_definitions=[definition])
+        put_configuration_fixture(backend, "role-block-presets",
+                                  registry.prepare_payload([], event_definitions=[definition]))
         reloaded = RoleBlockPresetRegistry(backend).event_definitions()[0]
         self.assertEqual(reloaded['kind'], 'counting')
         self.assertEqual(reloaded['limit_block'], '')
@@ -4075,16 +4085,16 @@ class CoreRepairTests(unittest.TestCase):
         if conventions:
             # Real configuration CAS/registry and real Conventions acceptance;
             # no live backend, user style file, identity settings or seed writes.
-            from Plugins.core.animal_roles import AnimalRoleRegistry
-            from Plugins.core.identity_conventions import DEFAULT_CONVENTIONS
             temporary = tempfile.TemporaryDirectory()
             self.addCleanup(temporary.cleanup)
             root = Path(temporary.name)
             app.backend = ProgTrackBackend(
-                runtime_paths(root, application_root=root), acquire_process_lock=False)
+                runtime_paths(root), acquire_process_lock=False)
             self.addCleanup(app.backend.close)
-            app.animal_role_registry = AnimalRoleRegistry(app.backend)
-            app._load_identity_conventions = lambda: copy.deepcopy(DEFAULT_CONVENTIONS)
+            app.master_track.session_context = app.backend.authenticated_sessions.create_first_account(
+                "core-test-admin", "Core-246-test-only!")
+            app.backend.core_configuration.setup(app.master_track.session_context)
+            app._publish_core_configuration(app.backend.core_configuration.snapshot(), redraw=False)
             app._save_identity_conventions = lambda *_args: None
             app._can_manage_institution_settings = lambda: False
             app._can_manage_institution_branding = lambda: False
@@ -4311,7 +4321,7 @@ class CoreRepairTests(unittest.TestCase):
         app._plot_x_viewport = None
         definition = {'name': 'Count', 'event_type': 'count', 'kind': 'counting',
                       'render_mode': event_mode, 'marker': 'D', 'color': '#123456'}
-        app.backend.records.put('configuration', 'role-block-presets', {
+        put_configuration_fixture(app.backend, 'role-block-presets', {
             'event_definitions': [normalize_event_definition(definition)]})
         record = self.record('custom_role')
         record['events'] = [{'datum': datetime(2026, 1, 1), 'event_type': 'count'}]
@@ -4403,7 +4413,7 @@ class CoreRepairTests(unittest.TestCase):
         app = self.event_control_host('line', measured=True, category=7)
         payload = app.backend.records.get('configuration', 'role-block-presets')
         payload['event_definitions'][0]['active'] = False
-        app.backend.records.put('configuration', 'role-block-presets', payload)
+        put_configuration_fixture(app.backend, 'role-block-presets', payload)
         app._role_dialog_blocks = lambda *_a, **_k: ['weight']
         app.animals['Subject']['events'][0]['custom_event_snapshot'] = {
             'name': 'Retired Count', 'render_mode': 'line', 'color': '#123456'}
@@ -4523,7 +4533,7 @@ class CoreRepairTests(unittest.TestCase):
         definition = normalize_event_definition({
             'name': 'Custom reading', 'event_type': 'custom_reading', 'kind': kind,
             'render_mode': mode, 'marker': 'D', 'color': '#123456'})
-        app.backend.records.put('configuration', 'role-block-presets', {'event_definitions': [definition]})
+        put_configuration_fixture(app.backend, 'role-block-presets', {'event_definitions': [definition]})
         app._role_dialog_blocks = lambda *_a, **_k: ['weight', 'custom_reading']
         app.animals['Subject']['events'] = [{'event_id': 'E1', 'event_type': 'custom_reading',
             'datum': datetime(2026, 1, 1), 'recorded_role': 'custom_role'}]
@@ -4610,7 +4620,7 @@ class CoreRepairTests(unittest.TestCase):
             'kind': 'limiting', 'render_mode': 'symbol', 'marker': 'D'})
         payload = app.backend.records.get('configuration', 'role-block-presets')
         payload['event_definitions'].append(definition)
-        app.backend.records.put('configuration', 'role-block-presets', payload)
+        put_configuration_fixture(app.backend, 'role-block-presets', payload)
         app._role_dialog_blocks = lambda *_a, **_k: ['weight', 'custom_reading', 'limit']
         app.animals['Subject']['experimental_limits'][definition['block_id']] = 3
         app.animals['Subject']['events'].append({'event_id': 'E2', 'event_type': 'limit',
@@ -4632,7 +4642,7 @@ class CoreRepairTests(unittest.TestCase):
         ]
         payload = app.backend.records.get('configuration', 'role-block-presets')
         payload['event_definitions'].extend(definitions)
-        app.backend.records.put('configuration', 'role-block-presets', payload)
+        put_configuration_fixture(app.backend, 'role-block-presets', payload)
         app._role_dialog_blocks = lambda *_a, **_k: [
             'weight', 'custom_reading', 'limit', 'third'
         ]
@@ -4731,7 +4741,7 @@ class CoreRepairTests(unittest.TestCase):
             'kind': 'counting', 'render_mode': 'symbol', 'marker': 's', 'color': '#abcdef'})
         payload = app.backend.records.get('configuration', 'role-block-presets')
         payload['event_definitions'].append(definition)
-        app.backend.records.put('configuration', 'role-block-presets', payload)
+        put_configuration_fixture(app.backend, 'role-block-presets', payload)
         app._role_dialog_blocks = lambda *_a, **_k: ['weight', 'custom_reading', 'limit']
         app.animals['Subject']['events'] = [
             {'event_id': 'E1', 'event_type': 'custom_reading', 'datum': datetime(2026, 1, 1),
@@ -4786,7 +4796,7 @@ class CoreRepairTests(unittest.TestCase):
                     payload['event_definitions'][0]['active'] = False
                 else:
                     app._role_dialog_blocks = lambda *_a, **_k: ['weight']
-                app.backend.records.put('configuration', 'role-block-presets', payload)
+                put_configuration_fixture(app.backend, 'role-block-presets', payload)
                 before = copy.deepcopy(app.animals['Subject'])
                 app._plot_selected()
                 self.assert_296_hover(app, app.ev_lines[0])
@@ -5044,7 +5054,7 @@ class CoreRepairTests(unittest.TestCase):
         payload['event_definitions'].append(normalize_event_definition({
             'name': 'Second limiting event', 'event_type': 'second_limit',
             'kind': 'limiting', 'render_mode': 'line', 'color': '#ab3456'}))
-        app.backend.records.put('configuration', 'role-block-presets', payload)
+        put_configuration_fixture(app.backend, 'role-block-presets', payload)
         app._role_dialog_blocks = lambda *_a, **_k: ['weight', 'custom_reading', 'second_limit']
         app.animals['Subject']['events'] = [
             {'event_id': f'line-{i}', 'event_type': 'custom_reading' if i % 2 else 'second_limit',
@@ -5635,7 +5645,7 @@ class CoreRepairTests(unittest.TestCase):
         second = copy.deepcopy(payload['event_definitions'][0])
         second.update(event_type='custom_second', name='Second')
         payload['event_definitions'].append(second)
-        app.backend.records.put('configuration', 'role-block-presets', payload)
+        put_configuration_fixture(app.backend, 'role-block-presets', payload)
         app._role_dialog_blocks = lambda *_a, **_k: ['weight', second['block_id']]
         grouped = copy.deepcopy(candidate)
         grouped['events'].append({'event_type': 'custom_second', 'datum': datetime(2025, 2, 5)})
@@ -5645,7 +5655,7 @@ class CoreRepairTests(unittest.TestCase):
         app._role_dialog_blocks = lambda *_a, **_k: ['custom_reading']
         payload = app.backend.records.get('configuration', 'role-block-presets')
         payload['event_definitions'][0]['active'] = False
-        app.backend.records.put('configuration', 'role-block-presets', payload)
+        put_configuration_fixture(app.backend, 'role-block-presets', payload)
         self.assertEqual(app._event_save_limit_overruns(previous, candidate), [])
         # Existing ID date/role/scalar changes alone are never additions.
         candidate = copy.deepcopy(previous)
@@ -5670,7 +5680,7 @@ class CoreRepairTests(unittest.TestCase):
                 app._role_dialog_blocks = lambda *_a, **_k: ['weight', 'custom.audit_event']
                 app._retain_selection_after_animal_save = lambda *_a, **_k: None
                 app._run_post_persistence_sync = lambda *_a, **_k: None
-                app.backend.records.put('configuration', 'role-block-presets', {'event_definitions': [{
+                put_configuration_fixture(app.backend, 'role-block-presets', {'event_definitions': [{
                     'event_type': 'custom.audit_event', 'block_id': 'custom.audit_event',
                     'name': 'Test-Limit', 'kind': 'limiting', 'default_maximum': 1, 'active': True}]})
                 record = self.record(role)
@@ -5754,7 +5764,7 @@ class CoreRepairTests(unittest.TestCase):
             with self.subTest(editor=method, permitted=permitted, coerced=coerced):
                 app = self.host()
                 app._role_dialog_blocks = lambda *_a, **_k: ['weight', 'health_flags', 'project_severity', 'measurement']
-                app.backend.records.put('configuration', 'role-block-presets', {'event_definitions': [{
+                put_configuration_fixture(app.backend, 'role-block-presets', {'event_definitions': [{
                     'event_type': 'measurement', 'block_id': 'measurement', 'kind': 'counting',
                     'name': 'Measurement', 'active': True}]})
                 app._is_projects_track_active = lambda: True
@@ -5839,7 +5849,7 @@ class CoreRepairTests(unittest.TestCase):
                 for count in (0, 1):
                     with self.subTest(active=active, attached=attached, count=count):
                         definition['active'] = active
-                        app.backend.records.put('configuration', 'role-block-presets',
+                        put_configuration_fixture(app.backend, 'role-block-presets',
                                                 {'event_definitions': [definition]})
                         app._role_dialog_blocks = lambda *_a, **_k: (
                             ['custom.limit.block'] if attached else ['weight'])
@@ -5854,7 +5864,7 @@ class CoreRepairTests(unittest.TestCase):
                                          0 if applicable else None)
         # The same block may be attached by canonical event type, not just ID.
         definition['active'] = True
-        app.backend.records.put('configuration', 'role-block-presets',
+        put_configuration_fixture(app.backend, 'role-block-presets',
                                 {'event_definitions': [definition]})
         app._role_dialog_blocks = lambda *_a, **_k: ['custom.limit']
         record['events'] = []
@@ -5864,7 +5874,7 @@ class CoreRepairTests(unittest.TestCase):
         definition['default_maximum'] = None
         record['experimental_limits'] = {}
         record['max_custom_limit'] = None
-        app.backend.records.put('configuration', 'role-block-presets',
+        put_configuration_fixture(app.backend, 'role-block-presets',
                                 {'event_definitions': [definition]})
         self.assertEqual(app._custom_event_statistics(record), [])
         self.assertIsNone(app._get_report_event_max('custom.limit', record))
@@ -5901,7 +5911,7 @@ class CoreRepairTests(unittest.TestCase):
         definition = {'name': 'Test-Limit', 'event_type': 'custom.limit',
                       'block_id': 'custom.block', 'max_field': 'max_custom',
                       'kind': 'limiting', 'active': True, 'default_maximum': 8}
-        app.backend.records.put('configuration', 'role-block-presets',
+        put_configuration_fixture(app.backend, 'role-block-presets',
                                 {'event_definitions': [definition]})
         app._role_dialog_blocks = lambda role, *_a, **_k: (
             ['custom.block'] if role == 'custom_role' else ['weight'])
@@ -5945,7 +5955,7 @@ class CoreRepairTests(unittest.TestCase):
             scoped=True, active_period=current_period_id(record))
         self.assertEqual(contexts[id(record['events'][-1])][1], 1)
         definition['kind'] = 'counting'
-        app.backend.records.put('configuration', 'role-block-presets',
+        put_configuration_fixture(app.backend, 'role-block-presets',
                                 {'event_definitions': [definition]})
         self.assertEqual(app._custom_event_statistics(record), ['Test-Limit: 1'])
         self.assertIsNone(app._get_report_event_max('custom.limit', record))
@@ -5997,7 +6007,7 @@ class CoreRepairTests(unittest.TestCase):
                 app._run_post_persistence_sync = lambda *_a, **_k: None
                 app._save_persistence = MAIN.ProgTrackApp._save_persistence.__get__(app)
                 app._show_message_raw = lambda *_a, **_k: MAIN.QMessageBox.StandardButton.Yes
-                app.backend.records.put('configuration', 'role-block-presets', {
+                put_configuration_fixture(app.backend, 'role-block-presets', {
                     'event_definitions': [{'event_type': 'custom.audit_event',
                         'block_id': 'custom.audit_event', 'kind': 'counting',
                         'name': 'Test-Event', 'active': True}]})
@@ -6194,6 +6204,7 @@ class CoreRepairTests(unittest.TestCase):
 
     def test_247_female_editor_keeps_distinct_same_day_same_type_events_and_ids(self):
         from Plugins.core.backend import ProgTrackBackend
+        from Plugins.core.backend.project_identity import create_project
         from Plugins.core.project_periods import (
             current_event_counts,
             ensure_project_periods,
@@ -6217,12 +6228,16 @@ class CoreRepairTests(unittest.TestCase):
                 app, MAIN.ProgTrackApp
             )
 
+            former_project = create_project(backend, "Former Project", "test-editor")
+            current_project = create_project(backend, "Current Project", "test-editor")
             record = self.record(MAIN.Role.SPENDER.value)
             record.update({
                 "project": "Current Project",
+                "project_id": current_project["project_id"],
                 "project_entry_date": "01.02.2025",
                 "project_history": [{
                     "project": "Former Project",
+                    "project_id": former_project["project_id"],
                     "entry_date": "01.01.2025",
                     "leave_date": "01.02.2025",
                 }],

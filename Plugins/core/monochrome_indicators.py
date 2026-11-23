@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.3 or newer.
 """High-contrast checkbox and radio indicators for the ProgTrack runtime.
 
 The active Qt platform style remains responsible for indicator geometry,

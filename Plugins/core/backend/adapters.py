@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Database adapter implementations with one transaction contract."""
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from ..runtime_paths import (
     validate_standalone_sqlite_path,
 )
 from .errors import BackendConfigurationError, StandaloneLockError
-from .schema import POSTGRESQL_MIGRATIONS, SQLITE_MIGRATIONS
+from .migration import migrate_core_schema, require_shared_schema, require_shared_transaction
 
 
 def utc_now() -> str:
@@ -234,23 +236,7 @@ class SQLiteAdapter:
                 connection.close()
 
     def migrate(self) -> None:
-        with self._mutex:
-            connection = self._connect()
-            try:
-                for revision in sorted(SQLITE_MIGRATIONS):
-                    connection.executescript(SQLITE_MIGRATIONS[revision])
-                    connection.execute(
-                        """
-                        INSERT INTO schema_revisions(component, revision, applied_at)
-                        VALUES('core', ?, ?)
-                        ON CONFLICT(component) DO UPDATE
-                        SET revision=excluded.revision, applied_at=excluded.applied_at
-                        """,
-                        (revision, utc_now()),
-                    )
-                connection.commit()
-            finally:
-                connection.close()
+        migrate_core_schema(self)
 
     @staticmethod
     def row_to_dict(row: Any) -> dict[str, Any]:
@@ -272,29 +258,50 @@ class PostgreSQLAdapter:
                 "PROGTRACK_POSTGRES_DSN is required for shared_postgresql."
             )
         try:
+            from psycopg import OperationalError, ProgrammingError, connect
+            from psycopg.conninfo import conninfo_to_dict
             from psycopg.rows import dict_row
-            from psycopg_pool import ConnectionPool
+            from psycopg_pool import ConnectionPool, PoolTimeout
         except ImportError as exc:
             raise BackendConfigurationError(
                 "Shared PostgreSQL requires Psycopg 3 and psycopg_pool."
             ) from exc
         self._dict_row = dict_row
+        try:
+            options = conninfo_to_dict(dsn)
+            connect_timeout = max(2, min(int(options.get("connect_timeout") or 10), 15))
+        except (ValueError, TypeError, ProgrammingError):
+            raise BackendConfigurationError("The configured PostgreSQL connection settings are invalid.") from None
+        try:
+            with connect(dsn, connect_timeout=connect_timeout):
+                pass
+        except OperationalError:
+            from .errors import BackendUnavailableError
+
+            raise BackendUnavailableError("Cannot connect to the configured Shared PostgreSQL backend.") from None
         self.pool = ConnectionPool(
             conninfo=dsn,
             min_size=min_size,
             max_size=max_size,
-            kwargs={"autocommit": False, "row_factory": dict_row},
+            kwargs={"autocommit": False, "row_factory": dict_row, "connect_timeout": connect_timeout},
+            timeout=15,
+            check=ConnectionPool.check_connection,
             open=False,
         )
         try:
             self.pool.open(wait=True, timeout=15)
-        except Exception as exc:
+        except (PoolTimeout, OperationalError):
+            from .errors import BackendUnavailableError
+
             self.pool.close()
-            raise BackendConfigurationError(
+            raise BackendUnavailableError(
                 "Cannot connect to the configured Shared PostgreSQL backend. "
                 "Check the server address, database, credentials, TLS policy, "
                 "and network availability."
-            ) from exc
+            ) from None
+        except BaseException:
+            self.pool.close()
+            raise
 
     def close(self) -> None:
         self.pool.close()
@@ -332,29 +339,40 @@ class PostgreSQLAdapter:
                 )
 
     @contextmanager
-    def transaction(self, *, write: bool = False) -> Iterator[Any]:
+    def transaction(self, *, write: bool = False, snapshot: bool = False) -> Iterator[Any]:
+        with self._schema_transaction(write=write) as connection:
+            if snapshot:
+                connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                connection.execute("SET LOCAL statement_timeout = '15s'")
+            require_shared_transaction(connection, self)
+            yield connection
+
+    @contextmanager
+    def _schema_transaction(self, *, write: bool = False) -> Iterator[Any]:
         del write
-        with self.pool.connection() as connection:
-            try:
+        from psycopg import OperationalError
+        from psycopg_pool import PoolTimeout
+
+        from .errors import BackendUnavailableError
+
+        try:
+            with self.pool.connection() as connection:
                 with connection.transaction():
                     yield connection
-            except Exception:
+        except PoolTimeout:
+            raise BackendUnavailableError("Cannot connect to the configured Shared PostgreSQL backend.") from None
+        except OperationalError as error:
+            state = error.sqlstate
+            if state and not state.startswith("08") and state not in {"57P01", "57P02", "57P03"}:
                 raise
+            raise BackendUnavailableError("Cannot connect to the configured Shared PostgreSQL backend.") from None
 
     def migrate(self) -> None:
-        with self.transaction(write=True) as connection:
-            with connection.cursor() as cursor:
-                for revision in sorted(POSTGRESQL_MIGRATIONS):
-                    cursor.execute(POSTGRESQL_MIGRATIONS[revision])
-                    cursor.execute(
-                        """
-                        INSERT INTO schema_revisions(component, revision, applied_at)
-                        VALUES('core', %s, %s)
-                        ON CONFLICT(component) DO UPDATE
-                        SET revision=EXCLUDED.revision, applied_at=EXCLUDED.applied_at
-                        """,
-                        (revision, utc_now()),
-                    )
+        """Explicit initialization for a new Shared database."""
+        migrate_core_schema(self)
+
+    def require_current_schema(self) -> None:
+        require_shared_schema(self)
 
     @staticmethod
     def row_to_dict(row: Any) -> dict[str, Any]:

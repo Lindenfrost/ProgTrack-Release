@@ -1,8 +1,8 @@
 # ProgTrack version inventory and release patch map
 
 Status: active release-control document
-Audit date: 2026-09-02
-Repository: `Q:\GitHub\ProgTrack-Release`
+Audit date: 2026-11-21
+Repository: `Q:\GitHub\ProgTrack-Phase3-work` for the 0.3.0 candidate
 Audit scope: tracked ProgTrack source, data, documentation, manifests and
 launcher sources. The bundled `_internal/` tree is deliberately excluded: it
 contains third-party runtime material and its package versions are not
@@ -13,11 +13,11 @@ ProgTrack versions.
 For a release/version-bump pass, change only the value on the next line first:
 
 ```text
-TARGET_VERSION = "0.2.3"
+TARGET_VERSION = "0.3.0"
 ```
 
 The value is the current ProgTrack application/release version. The tables below
-are the patch manifest: apply only rows whose policy is `PATCH_CURRENT` or
+are the patch manifest: apply current-version substitutions only to rows whose policy is `PATCH_CURRENT` or
 `PATCH_FILENAME_AND_REFERENCES`. Do not perform a global replacement of
 `0.2.1`, `0.2.2`, or another number.
 
@@ -27,6 +27,59 @@ future release pass before applying the manifest. The active payload filename
 must be discovered from the repository root (there must be exactly one file
 matching `ProgTrack.v.*.py`); it is never inferred from a hard-coded previous
 version in this document.
+
+## ProgTrack 0.3.0 candidate inventory
+
+The reviewed paths, platform membership, owners, effective compatibility floors
+and sources are recorded in [release_inventory.json](../release_inventory.json).
+Both packagers ship this inventory at the payload root. Technical Phase 2A
+evidence, unchanged artwork, legal notices, data shapes and third-party parts
+are represented in this file without modifying their contents. A null minimum
+for raw artwork records a reviewed asset with no ProgTrack host API dependency.
+The launcher,
+the bundled CPython runtime and the application each retain their own versions.
+
+### Effective plugin compatibility floors
+
+| Plugin directory | Minimum ProgTrack | Compatibility evidence |
+| --- | --- | --- |
+| Animal_Reports | 0.2.3 | Both report entry and index import Core project_periods. It exists in v0.2.3 and is absent from v0.2.1 and v0.2.2. |
+| Cage__Track | 0.3.0 | Housing and inspection mutations depend on session-bound animal and structure leases. 8ab9ed7 has a PostgreSQL profile but no _uses_shared_leases hook, so its guarded branch would fall through to legacy reads and writes on Shared. |
+| Embryo_Track | 0.3.0 | PostgreSQL loads and updates the reference through load_shared_embryo_reference and save_shared_embryo_reference, which are absent in 8ab9ed7. |
+| Flow_Track | 0.3.0 | The transfer editor uses shared_flow.flow_record_animals on both profiles. Shared reads and writes also require authenticated lease commands. |
+| Heritage_Track | 0.3.0 | The PostgreSQL dialect selects SharedHeritageStore and passes an authenticated session to the Core snapshot reader. The previous backend provides neither interface. |
+| Master_Track | 0.3.0 | First account creation, login, account commands, and the client heartbeat depend on authenticated_sessions, account_commands and the session error types. |
+| Medi_Track | 0.3.0 | Module import requires Core document_messages. Managed documents require revision-aware publish, retry, read and retirement APIs on both profiles. |
+| Network_Track | 0.3.0 | Its PostgreSQL path calls load_shared_chat and save_shared_chat_message. Those commands are absent in the earlier PostgreSQL-capable host. |
+| PdG_converter | 0.3.0 | Its PostgreSQL path uses authenticated load_shared_pdg_model and save_shared_pdg_model with a Core animal lease. |
+| Projects_Track | 0.3.0 | Module import requires Core document_messages. Shared editing and managed document operations use the Phase 3 service contracts. |
+| Sample_Track | 0.3.0 | Module import requires sample_species_abbreviation from shared_samples. Shared editing requires the corresponding command and lease APIs. |
+| Steroid_track | 0.2.1 | The feature gate entry only returns the host, and its implementation is unchanged from v0.2.1. |
+| Surgery_Planner | 0.3.0 | Module import requires SharedSurgeryStore from shared_surgery. Shared edits also consume authenticated animal leases. |
+
+Guarded optional hooks are evaluated against both supported profiles. A fallback
+that would bypass the new Shared write contract cannot support an older minimum.
+
+### Core and platform contracts
+
+- Phase 3 backend modules and clients require the 0.3.0 host contract. This
+  includes request transactions, sessions and leases, compatibility gates,
+  backend administration, managed documents, disconnected startup and Core
+  configuration. Database schema revision 4 and backend contract generation 1
+  remain storage identifiers.
+- Unchanged Core helpers retain the earliest verified matching released source
+  among v0.2.1, v0.2.2 and v0.2.3. The dialog-section UI helper still uses the
+  v0.2.2 interface, and the current identity helper no longer carries local
+  path-based persistence. The application plugin manager's default identifies
+  the active payload and its prior API is available from v0.2.3.
+- The main script retains the Launcher 0.2.1 minimum. The Windows packager's
+  default selects the 0.3.0 application script. Its launcher remains 0.2.1, and
+  its FileVersion and ProductVersion are launcher-owned. The Linux launcher
+  and archive version remain 0.3.0. The Linux packager discovers the application
+  version from the sole payload filename. The bundled CPython is 3.13.
+- The remaining 0.2.3 product references in README release history and the
+  Heritage plugin's version are intentional. The release inventory also
+  retains audited historical paths and independently versioned artifacts.
 
 ## Classification rules
 
@@ -61,10 +114,10 @@ that baseline is historical evidence, not a future patch input.
 | `lang/messages_it.json` | line 2 `app.title` | `PATCH_CURRENT`; Italian UI title. |
 | `lang/messages_ru.json` | line 2 `app.title` | `PATCH_CURRENT`; Russian UI title. |
 | `README.md` | lines 1, 8, 20, 124, 134, 151, 156, 161, 176, 350, 482 | `PATCH_CURRENT`; current heading, badge, release description, payload filename, launcher example, platform text, package table and troubleshooting. Keep line 565's 0.2.2 release-history row unchanged. |
-| `manual/ProgTrack_User_Guide - en.html` | line 5 HTML comment `ProgTrack release version: 0.2.3` | `PATCH_CURRENT`; English user-guide release marker. |
-| `manual/ProgTrack_User_Guide - de.html` | line 5 HTML comment `ProgTrack release version: 0.2.3` | `PATCH_CURRENT`; German user-guide release marker. |
-| `manual/ProgTrack_User_Guide - it.html` | line 5 HTML comment `ProgTrack release version: 0.2.3` | `PATCH_CURRENT`; Italian user-guide release marker. |
-| `manual/ProgTrack_User_Guide - ru.html` | line 5 HTML comment `ProgTrack release version: 0.2.3` | `PATCH_CURRENT`; Russian user-guide release marker. |
+| `manual/ProgTrack_User_Guide - en.html` | line 5 HTML comment `ProgTrack release version: 0.3.0` | `PATCH_CURRENT`; English user-guide release marker. |
+| `manual/ProgTrack_User_Guide - de.html` | line 5 HTML comment `ProgTrack release version: 0.3.0` | `PATCH_CURRENT`; German user-guide release marker. |
+| `manual/ProgTrack_User_Guide - it.html` | line 5 HTML comment `ProgTrack release version: 0.3.0` | `PATCH_CURRENT`; Italian user-guide release marker. |
+| `manual/ProgTrack_User_Guide - ru.html` | line 5 HTML comment `ProgTrack release version: 0.3.0` | `PATCH_CURRENT`; Russian user-guide release marker. |
 | `ruff.toml` | line 17 filename key | `PATCH_FILENAME_AND_REFERENCES`; keep lint exceptions attached to the renamed payload. |
 
 ### Active source/plugin headers
@@ -185,9 +238,9 @@ the same filename substitution to any checked-out local tests.
 | `Plugins/Sample_Track/manifest.json` lines 4 and 17 (`version`, `min_progtrack_version`) | `KEEP_PLUGIN_VERSION` / `KEEP_MINIMUM`; plugin release and application compatibility floor. |
 | `Plugins/Steroid_track/manifest.json` lines 4 and 12 (`version`, `min_progtrack_version`) | `KEEP_PLUGIN_VERSION` / `KEEP_MINIMUM`; plugin release and application compatibility floor. |
 | `Plugins/Surgery_Planner/manifest.json` lines 4 and 16 (`version`, `min_progtrack_version`) | `KEEP_PLUGIN_VERSION` / `KEEP_MINIMUM`; plugin release and application compatibility floor. |
-| Source-header `Required ProgTrack/Launcher version` values in the 51 active files listed above | `KEEP_MINIMUM`; compatibility floors, not current-release labels. |
+| Source-header `Required ProgTrack/Launcher version` values in the candidate inventory | `KEEP_MINIMUM`; compatibility floors, not current-release labels. |
 | `source/build_sample_seed.py` lines 1, 470, 1853, 2358, 2459; `Resources/Seed/integrity_report.json` line 17; `Resources/Seed/SCENARIO_COVERAGE.md` line 1 | `KEEP_SEED_OR_SCHEMA`; seed package/integrity metadata remains 0.2.1 until the seed contract is deliberately revised. |
-| `Plugins/core/backend/schema.py` (`SCHEMA_VERSION = 1`), `Plugins/core/animal_roles.py` (`SCHEMA_VERSION = 2`), `Plugins/core/role_block_presets.py` (`SCHEMA_VERSION = 2`), and model/store `1.0.0` values | `KEEP_SEED_OR_SCHEMA`; data/schema/model versions are not product versions. |
+| `Plugins/core/backend/schema.py` (schema revision 4), `Plugins/core/animal_roles.py` (`SCHEMA_VERSION = 2`), `Plugins/core/role_block_presets.py` (`SCHEMA_VERSION = 2`), and model/store `1.0.0` values | `KEEP_SEED_OR_SCHEMA`; data/schema/model versions are not product versions. |
 | `icons/ui/manifest.json` line 2 (`version: 2`) | `KEEP_SEED_OR_SCHEMA`; UI-icon manifest schema version, not the ProgTrack application version. |
 | `Plugins/Embryo_Track/__init__.py`, `Plugins/Flow_Track/__init__.py`, `Plugins/Network_Track/__init__.py` line 10 (`__version__ = "1.0.0"`) and `Plugins/Projects_Track/ProjectsTrack_plugin.py` line 311 (`version = "1.0.0"`) | `KEEP_PLUGIN_VERSION`; plugin implementation versions. |
 | `Plugins/Surgery_Planner/surgery_planner.py` lines 181 and 1240 (`surgery_planner_plugin_v1.0.0`) | `KEEP_PLUGIN_VERSION`; persisted creator/audit identifier, not the application release. |
@@ -200,10 +253,10 @@ the same filename substitution to any checked-out local tests.
 | `source/launcher/windows/launcher.py` | lines 6 and 23 (`ProgTrack Launcher 0.2.1`, `LAUNCHER_VERSION`); `LAUNCHER_EXCLUDED_TEST`, launcher version. |
 | `source/launcher/windows/launcher_version_info.txt` | lines 20 and 24 (`FileVersion 0.2.1.0`, `ProductVersion 0.2.1`); `LAUNCHER_EXCLUDED_TEST`, Windows executable metadata. |
 | `source/launcher/windows/LAUNCHER_VERSIONS.md` | lines 3, 9–10 and older entries; `KEEP_HISTORICAL`/`LAUNCHER_EXCLUDED_TEST`, launcher release history. |
-| `source/launcher/windows/package_release.ps1` | line 2 (`$Version = "0.2.2"`); `LAUNCHER_EXCLUDED_TEST`, build default for the application payload. Update with the payload in a full launcher build. |
+| `source/launcher/windows/package_release.ps1` | `$Version = "0.3.0"`; current packaging input selecting the application payload. Keep launcher version metadata separate. |
 | `source/launcher/windows/build_launcher_small.bat`, `source/launcher/windows/launcher_small.spec` | pinned third-party build/runtime versions only; `LAUNCHER_EXCLUDED_TEST`, not ProgTrack product versions. |
 | `source/launcher/linux/launcher.py` | line 22 (`LAUNCHER_VERSION = "0.3.0"`); `LAUNCHER_EXCLUDED_TEST`, Linux launcher version. |
-| `source/launcher/linux/package_linux_release.py` | lines 25 (`VERSION = "0.3.0"`), 28 (`APPLICATION_PAYLOAD_VERSION = "0.2.2"`), 29 (derived payload filename); `LAUNCHER_EXCLUDED_TEST`, Linux artifact and payload build inputs. |
+| `source/launcher/linux/package_linux_release.py` | `VERSION = "0.3.0"` is launcher/archive-owned. `_application_payload` discovers the application payload filename and version. |
 | `source/launcher/linux/linux_runtime_manifest.json` and `source/launcher/linux/requirements-linux-bundled.txt` | dependency/runtime pins; `LAUNCHER_EXCLUDED_TEST`, third-party versions rather than ProgTrack versions. |
 | `source/launcher/linux/README.md`, `source/launcher/linux/progtrack.desktop`, and `source/launcher/linux/release/` metadata | generic launcher/package labels or generated artifact metadata; `LAUNCHER_EXCLUDED_TEST` and generated-output exclusion. |
 | `THIRD_PARTY_NOTICES.md` lines 11–43 and `third_party_licenses/*` | dependency/license versions and legal-license revisions; third-party metadata, not ProgTrack product versions. Preserve unless the bundled dependency set changes. |
@@ -230,7 +283,8 @@ values therefore require no release bump.
    before editing.
 3. Perform only the replacements in `PATCH_CURRENT` and
    `PATCH_FILENAME_AND_REFERENCES`. Rename the main script with Git and update
-   its references. Leave `_internal/` and every launcher source untouched for
+   its references. Update the packagers' application payload selections and defaults when required.
+   Leave `_internal/` and launcher-owned code, binaries, versions, and legal metadata untouched for
    this application-only test.
 4. Run `git diff --check`, parse all JSON manifests/info files, and compile the
    renamed Python payload and changed modules in memory (without creating
@@ -238,7 +292,7 @@ values therefore require no release bump.
 5. Re-scan for the previous active payload name and verify that any remaining
    occurrence is explained by a `KEEP_*` or `LAUNCHER_EXCLUDED_TEST` row.
    Verify the renamed payload is the only active `ProgTrack.v.*.py` file and
-   that launcher source files have no diff.
+   that launcher changes are limited to the application payload selections and defaults.
 6. Run focused application/plugin tests that cover the changed version
    contract, then inspect the final diff and status. Do not publish or push as
    part of this controlled test unless explicitly requested.

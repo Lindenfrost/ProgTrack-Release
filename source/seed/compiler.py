@@ -126,8 +126,9 @@ def compile_to(output_dir: Path, *, check: bool = False) -> dict[str, Any]:
         backend = ProgTrackBackend(paths, acquire_process_lock=False, bootstrap_seed=False)
         package = staging / "progtrack_seed.ptdb"
         try:
-            for (namespace, record_id), payload in sorted(bundle.domains.items()):
-                backend.records.put(namespace, record_id, payload)
+            with backend._allow_core_configuration_writes():
+                for (namespace, record_id), payload in sorted(bundle.domains.items()):
+                    backend.records.put(namespace, record_id, payload)
             backend.save_core_data(bundle.core)
             backend.interchange.export_package(package, package_id=SEED_PACKAGE_ID, created_at=SEED_CREATED)
             preview = backend.interchange.preview(package)

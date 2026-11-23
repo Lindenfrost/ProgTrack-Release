@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.2 or newer.
 """Shared compact collapsible sections used by New/Edit Animal dialogs.
 
 The section deliberately keeps the icon button and title label in separate
@@ -97,6 +99,10 @@ class AnimalDialogSection(QFrame):
 
     def content_widget(self) -> QWidget:
         return self._content
+
+    def toggle_button(self) -> QPushButton:
+        """The header's keyboard focus target for callers arranging tab order."""
+        return self._toggle
 
     def is_expanded(self) -> bool:
         return bool(self._toggle.isChecked())

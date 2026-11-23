@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.1 or newer.
 """Canonical Project Track lifecycle states and guarded transitions."""
 
 from __future__ import annotations

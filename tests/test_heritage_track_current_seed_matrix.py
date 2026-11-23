@@ -155,7 +155,8 @@ class CurrentSeedHeritageMatrixTest(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tempdir.cleanup)
         self.backend = ProgTrackBackend(
-            runtime_paths(Path(self.tempdir.name)), acquire_process_lock=False
+            runtime_paths(Path(self.tempdir.name)), acquire_process_lock=False,
+            choose_demo_seed=lambda: True,
         )
         self.addCleanup(self.backend.close)
         snapshot = self.backend.load_core_data()

@@ -271,7 +271,7 @@ def test_indicators_render_monochrome_at_two_times_device_pixel_ratio():
 
 
 def test_application_entrypoint_installs_style_before_window_and_warning_is_not_indicator_color():
-    main_source = (_REPO_ROOT / "ProgTrack.v.0.2.3.py").read_text(encoding="utf-8")
+    main_source = (_REPO_ROOT / "ProgTrack.v.0.3.0.py").read_text(encoding="utf-8")
     assert main_source.index("install_monochrome_indicator_style(app)") < main_source.index(
         "win = ProgTrackApp()", main_source.index("if __name__ == '__main__':")
     )

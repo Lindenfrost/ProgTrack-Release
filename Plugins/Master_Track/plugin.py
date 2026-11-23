@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.1-log-menu or newer.
 # Module: Master Track core plugin logic.
@@ -12,6 +12,8 @@ import os
 from datetime import date, datetime
 from typing import Any, Dict, Optional
 
+from Plugins.core.backend.errors import BackendError, ConflictError, SessionRevokedError
+
 from .auth import UserDB
 from .permissions import (
     ROLE_GUEST,
@@ -20,6 +22,7 @@ from .permissions import (
     ROLE_USER,
     JOB_ANIMAL_WELFARE,
     JOB_BUNDLES,
+    DEFAULT_JOB_BUNDLES,
     ALL_PERMISSIONS,
     PERM_MASTER_VIEW_USERS,
     PERM_MASTER_CREATE_USERS,
@@ -46,11 +49,14 @@ class MasterTrackPlugin:
     def __init__(self, app: Any):
         self.app = app
         self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        self.user_db = UserDB(self.plugin_dir, app.backend)
-        self.session_mgr = SessionManager(self.plugin_dir, app.backend)
+        self.user_db = UserDB(self.plugin_dir, app.backend, session=lambda: self.session_context,
+                              on_mutation=self.notify_account_change)
+        self.session_mgr = SessionManager(self.plugin_dir, app.backend, session=lambda: self.session_context)
 
         self._current_username: Optional[str] = None
         self._current_role: str = ROLE_GUEST
+        self.session_context = None
+        self._heartbeat = None
 
         # Settings (timeout etc.)
         self._settings = self._load_settings()
@@ -77,21 +83,14 @@ class MasterTrackPlugin:
         )
         return value if isinstance(value, dict) else {"timeout_minutes": 30}
 
-    def _save_settings(self) -> None:
-        try:
-            self.app.backend.records.put(
-                "configuration", "master-track", self._settings
-            )
-        except Exception as exc:
-            logger.error("Failed to save Master_Track settings: %s", exc)
-
-    def _load_job_bundles(self) -> None:
+    def _load_job_bundles(self, raw=None) -> None:
         """Load custom job bundle overrides from the backend."""
         try:
-            raw = self.app.backend.records.get(
-                "configuration", "job-bundles", default={}
-            )
+            if raw is None:
+                raw = self.app.backend.records.get("configuration", "job-bundles", default={})
             if isinstance(raw, dict):
+                JOB_BUNDLES.clear()
+                JOB_BUNDLES.update({key: set(value) for key, value in DEFAULT_JOB_BUNDLES.items()})
                 known_permissions = set(ALL_PERMISSIONS)
                 for job_name, perms in raw.items():
                     if isinstance(perms, list):
@@ -106,23 +105,40 @@ class MasterTrackPlugin:
         except Exception as exc:
             logger.error("Failed to load Master Track job bundles from backend: %s", exc)
 
-    def save_job_bundles(self) -> None:
-        """Persist current job bundles through the backend."""
-        try:
-            known_permissions = set(ALL_PERMISSIONS)
-            cleaned = {
-                str(k): (set(v) & known_permissions)
-                for k, v in JOB_BUNDLES.items()
-                if isinstance(v, (set, list, tuple))
-            }
-            JOB_BUNDLES.clear()
-            JOB_BUNDLES.update(cleaned)
-            serializable = {k: sorted(v) for k, v in cleaned.items()}
-            self.app.backend.records.put(
-                "configuration", "job-bundles", serializable
-            )
-        except Exception as exc:
-            logger.error("Failed to save Master Track job bundles to backend: %s", exc)
+    def job_policy_revision(self):
+        return getattr(self, "_job_policy_revision", None)
+
+    def refresh_job_policy(self):
+        jobs, settings, revision = self.app.backend.account_commands.job_policy_snapshot(self.session_context)
+        self._load_job_bundles(jobs)
+        self._settings = settings
+        self._job_policy_revision = revision
+        return revision
+
+    def change_job_policy(self, name, *, action, permissions=(), timeout=None, expected=None):
+        if expected is None:
+            raise ConflictError("The job policy is unavailable. Reopen the editor before saving.")
+        context = self.session_context
+        result = self.app.backend.account_commands.change_job(
+            context, name, action=action, permissions=permissions, timeout=timeout, expected=expected,
+        )
+        self.user_db.finish_mutation(context, result)
+        self._job_policy_revision = None
+        if not result.actor_revoked:
+            try:
+                self.refresh_job_policy()
+            except Exception:
+                logger.warning("Job policy saved but the editor could not reload its current revision.")
+        return result
+
+    def notify_account_change(self, context):
+        from PyQt6.QtCore import QTimer
+
+        def notify():
+            if context is not None and context == self.session_context:
+                self.handle_session_revoked("user_account_changed")
+
+        QTimer.singleShot(0, notify)
 
     # ------------------------------------------------------------------
     # Public API
@@ -173,17 +189,6 @@ class MasterTrackPlugin:
         if not isinstance(values, dict):
             return max(1, int(self._timeout_minutes))
         return max(1, int(values.get(job_name, self._timeout_minutes)))
-
-    def set_job_timeout(self, job_name: str, minutes: int) -> None:
-        values = self._settings.setdefault("job_timeouts", {})
-        values[str(job_name)] = max(1, int(minutes))
-        self._save_settings()
-
-    def delete_job_timeout(self, job_name: str) -> None:
-        values = self._settings.get("job_timeouts", {})
-        if isinstance(values, dict) and str(job_name) in values:
-            del values[str(job_name)]
-            self._save_settings()
 
     def _resolve_effective_timeout(self, jobs: Any) -> int:
         configured = [self.get_job_timeout(str(job)) for job in (jobs or [])]
@@ -299,6 +304,10 @@ class MasterTrackPlugin:
         })
 
     def mark_project_visibility_dirty(self, usernames) -> None:
+        if getattr(getattr(self.app.backend, "adapter", None), "dialect", "") == "postgresql":
+            # Shared project authorization derives from the canonical allocation
+            # on every protected read. Another user's UI prefs are private.
+            return
         if isinstance(usernames, str):
             usernames = [usernames]
         for username in usernames or []:
@@ -328,53 +337,89 @@ class MasterTrackPlugin:
 
     def startup(self) -> None:
         """Run on app startup: show first-start wizard or login dialog."""
+        if not self.login_interactive(save_session=False):
+            self._set_guest()
+
+    def _prompt_authentication(self):
         from .dialogs import CreateLordDialog, LoginDialog
 
         messages = self.app.messages
+        service = self.app.backend.authenticated_sessions
+        if service.first_account_available():
+            setup = CreateLordDialog(self.app, messages, self.user_db)
+            if setup.exec():
+                return setup.session_context
+            if not setup.completed_elsewhere:
+                return None
+        login = LoginDialog(self.app, messages, self.user_db)
+        return login.session_context if login.exec() else None
 
-        self.user_db.load()
-
-        if not self.user_db.lord_exists():
-            dlg = CreateLordDialog(self.app, messages, self.user_db)
-            if dlg.exec():
-                self._login_as(dlg.created_user)
-                self._start_idle_timer()
-            else:
+    def _login_as(self, username: str, *, session_context=None) -> None:
+        backend = getattr(self.app, "backend", None)
+        if session_context is not None or getattr(getattr(backend, "adapter", None), "dialect", "") == "postgresql":
+            try:
+                with backend.adapter.transaction() as connection:
+                    user = backend.authenticated_sessions.require(connection, session_context, allow_password_change=True)
+            except SessionRevokedError:
                 self._set_guest()
+                return
+            username = user["username"]
         else:
-            dlg = LoginDialog(self.app, messages, self.user_db)
-            if dlg.exec():
-                self._login_as(dlg.logged_in_user)
-                self._start_idle_timer()
-            else:
-                self._set_guest()
-
-    def _login_as(self, username: str) -> None:
-        user = self.user_db.get_user(username)
+            user = self.user_db.get_user(username)
         if not user:
             self._set_guest()
             return
-        invalidate = getattr(getattr(self, "app", None), "_prepare_actor_transition", None)
-        if callable(invalidate):
-            invalidate()
-        self._current_username = username
-        self._current_role = user["role"]
-        self._effective_timeout_minutes = self._resolve_effective_timeout(user.get("jobs", []))
-        logger.info("Logged in as %s (role=%s)", username, self._current_role)
+        self.adopt_initial_session(session_context, user)
 
         # forced password change
         if user.get("must_change_password"):
             from .dialogs import ChangePasswordDialog
             dlg = ChangePasswordDialog(self.app, self.app.messages,
-                                       self.user_db, username, forced=True)
+                                       self.user_db, username, forced=True, session=session_context)
             dlg.exec()
+            if session_context is not None:
+                if dlg.password_changed:
+                    self.handle_session_revoked("user_account_changed")
+                else:
+                    self._end_authenticated_session()
+                    self._set_guest()
+                return
 
-        self.audit("login", username)
+        if session_context is None:
+            self.audit("login", username)
+        else:
+            self.start_authenticated_heartbeat()
 
-    def _set_guest(self) -> None:
+    def adopt_initial_session(self, session_context, user) -> None:
+        """Bind an already verified actor, without starting connected timers."""
+        username = user["username"]
         invalidate = getattr(getattr(self, "app", None), "_prepare_actor_transition", None)
         if callable(invalidate):
             invalidate()
+        self.session_context = session_context
+        self._current_username = username
+        self._current_role = user["role"]
+        if session_context is not None:
+            self._settings = self._load_settings()
+            self._load_job_bundles()
+        self._effective_timeout_minutes = self._resolve_effective_timeout(user.get("jobs", []))
+        logger.info("Logged in as %s (role=%s)", username, self._current_role)
+
+    def start_authenticated_heartbeat(self) -> None:
+        from .client_heartbeat import ClientHeartbeat
+
+        if self._heartbeat is None:
+            self._heartbeat = ClientHeartbeat(self)
+        self._heartbeat.start()
+
+    def _set_guest(self) -> None:
+        heartbeat = getattr(self, "_heartbeat", None)
+        if heartbeat is not None:
+            heartbeat.stop()
+        invalidate = getattr(getattr(self, "app", None), "_prepare_actor_transition", None)
+        if callable(invalidate):
+            invalidate()
+        self.session_context = None
         self._current_username = None
         self._current_role = ROLE_GUEST
         logger.info("Running in Guest (read-only) mode")
@@ -386,21 +431,42 @@ class MasterTrackPlugin:
             if save_session:
                 self.save_session()
             self.audit("logout", self._current_username)
+        self._end_authenticated_session()
         self._set_guest()
 
-    def login_interactive(self, *, save_session: bool = True) -> bool:
-        """Show login dialog interactively (e.g. from Ctrl+L). Returns True on success."""
-        from .dialogs import LoginDialog
+    def _end_authenticated_session(self) -> None:
+        context = getattr(self, "session_context", None)
+        if context is not None:
+            try:
+                self.app.backend.authenticated_sessions.logout(context)
+            except SessionRevokedError:
+                pass
+            except Exception:
+                logger.warning("The backend could not confirm logout.")
 
+    def handle_session_revoked(self, reason="") -> None:
+        if self.session_context is None:
+            return
+        self._stop_idle_timer()
+        self.session_context = None
+        callback = getattr(self.app, "_on_authenticated_session_revoked", None)
+        if callable(callback):
+            callback(reason=reason)
+        else:
+            self._set_guest()
+
+    def login_interactive(self, *, save_session: bool = True) -> bool:
+        """Prompt for authentication and adopt the committed session."""
         if self.is_logged_in and save_session:
             self.save_session()
 
-        dlg = LoginDialog(self.app, self.app.messages, self.user_db)
-        if dlg.exec() and dlg.logged_in_user:
-            self._login_as(dlg.logged_in_user)
-            self._start_idle_timer()
-            return True
-        return False
+        session = self._prompt_authentication()
+        if session is None:
+            return False
+        self._end_authenticated_session()
+        self._login_as(session.username, session_context=session)
+        self._start_idle_timer()
+        return self.is_logged_in
 
     # ------------------------------------------------------------------
     # Inactivity timeout
@@ -513,16 +579,19 @@ class MasterTrackPlugin:
         """Load the current user's session data (or defaults for Guest)."""
         if not self._current_username:
             return SessionManager._defaults("guest")
-        return self.session_mgr.load(self._current_username)
+        try:
+            return self.session_mgr.load(self._current_username)
+        except SessionRevokedError:
+            return SessionManager._defaults("guest")
 
     def save_session(self, extra: Optional[Dict[str, Any]] = None) -> None:
         """Persist the current user's session state."""
         if not self._current_username:
             return
-        data = self.session_mgr.load(self._current_username)
-        if extra:
-            data.update(extra)
-        self.session_mgr.save(self._current_username, data)
+        try:
+            self.session_mgr.update(self._current_username, extra or {})
+        except SessionRevokedError:
+            return
 
     # ------------------------------------------------------------------
     # Audit log
@@ -574,7 +643,16 @@ class MasterTrackPlugin:
         if not self.can(PERM_MASTER_MANAGE_JOB_BUNDLES):
             return
         from .dialogs import EditJobsDialog
-        dlg = EditJobsDialog(self.app, self.app.messages, self)
+        try:
+            dlg = EditJobsDialog(self.app, self.app.messages, self)
+        except SessionRevokedError as error:
+            self.handle_session_revoked(error.reason)
+            return
+        except BackendError as error:
+            from PyQt6.QtWidgets import QMessageBox
+
+            QMessageBox.warning(self.app, self.app.messages.get("master_track.error.title", "Error"), str(error))
+            return
         dlg.exec()
 
     def show_logs(self) -> None:
@@ -638,5 +716,6 @@ class MasterTrackPlugin:
             return
         from .dialogs import ChangePasswordDialog
         dlg = ChangePasswordDialog(self.app, self.app.messages,
-                                   self.user_db, self._current_username)
-        dlg.exec()
+                                   self.user_db, self._current_username, session=self.session_context)
+        if dlg.exec() and dlg.password_changed:
+            self.handle_session_revoked("user_account_changed")

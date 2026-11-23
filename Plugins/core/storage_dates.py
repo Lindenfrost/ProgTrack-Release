@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.3 or newer.
 """Lossless date views at the storage/UI boundary (#316).
 
 The source spelling is an encoding detail, not an extra persisted field.

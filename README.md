@@ -1,11 +1,12 @@
-# ProgTrack 0.2.3
+<!-- Part of: ProgTrack 0.3.0. Required ProgTrack version: 0.3.0 or newer. -->
+# ProgTrack 0.3.0
 
 <p align="center">
   <img src="icons/Splash.png" alt="ProgTrack splash" width="520">
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.2.3-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.3.0-blue">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-lightgrey">
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-portable%20Python-green">
   <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue">
@@ -17,7 +18,7 @@ reproductive events, medical history, cage placement, pedigree data, sample
 tracking, projects, reports, and planning tools in one inspectable Windows
 bundle.
 
-Version 0.2.3 is a backend-based maintenance release built for a complete, traceable
+Version 0.3.0 is a backend-based maintenance release built for a complete, traceable
 animal workflow. The application uses one service contract for every module and
 offers a tiny local SQLite profile for one workstation or testing, plus a shared
 PostgreSQL profile for networked facilities. The same animal identities, history,
@@ -125,7 +126,7 @@ account is `123456`; change these passwords before any sensitive or shared use.
 
 ### Application payload
 
-- `ProgTrack.v.0.2.3.py` — editable main application script;
+- `ProgTrack.v.0.3.0.py` — editable main application script;
 - `Plugins/` — the core and optional plugin modules;
 - `icons/` — splash, file-type, job, language, and UI assets;
 - `lang/` — English, German, Italian, and Russian message catalogs;
@@ -135,7 +136,7 @@ account is `123456`; change these passwords before any sensitive or shared use.
 
 ### Portable runtime
 
-- `Launcher.exe` — neutral portable launcher for the current `0.2.3` application payload;
+- `Launcher.exe` — neutral portable launcher for the current `0.3.0` application payload;
 - `_internal/` — the bundled Python/Qt runtime and native libraries;
 - `third_party_licenses/`, `THIRD_PARTY_NOTICES.md`, and `LICENSE`.
 
@@ -152,17 +153,17 @@ account is `123456`; change these passwords before any sensitive or shared use.
 To select a script explicitly:
 
 ```text
-Launcher.exe --script ProgTrack.v.0.2.3.py
+Launcher.exe --script ProgTrack.v.0.3.0.py
 ```
 
 ## Platform support and release artifacts
 
-The 0.2.3 release includes a native Windows portable package. Its `Launcher.exe`,
+The 0.3.0 release includes a native Windows portable package. Its `Launcher.exe`,
 Windows Qt/Python runtime, and bundled native libraries must be kept together;
 this ZIP is not a native Linux package and is not supported through Wine.
 
 The release also includes the separate Linux archive
-`ProgTrack-0.3.0-linux-x86_64.tar.gz`, carrying the same 0.2.3 application
+`ProgTrack-0.3.0-linux-x86_64.tar.gz`, carrying the same 0.3.0 application
 payload and backend contracts with a pinned CPython runtime, Qt/PyQt6,
 scientific/PDF/XLSX dependencies, bundled fonts, and the Psycopg binary client.
 It is published for evaluation; native Linux Mint 22.3 x86_64 acceptance
@@ -177,7 +178,7 @@ incompatible `.dll`/`.pyd` and `.so` runtimes in one package.
 | --- | --- |
 | `Launcher.exe` | Portable Windows launcher. |
 | `_internal/` | Bundled Python, Qt, Psycopg/libpq, and third-party libraries. |
-| `ProgTrack.v.0.2.3.py` | Main application payload. |
+| `ProgTrack.v.0.3.0.py` | Main application payload. |
 | `Plugins/` | Core services and plugin modules. |
 | `icons/ui/` | Canonical UI SVG registry and manifest used by the application. |
 | `icons/` | Splash, file-type, language, and other non-UI assets. |
@@ -358,7 +359,7 @@ across selected animals.
 
 Plugins are loaded from `Plugins/` at startup. Some are tabs, some are dialogs,
 and some provide feature gates or backend services.
-The Version column below is taken from each shipped plugin's `manifest.json`; the current `0.2.3` application payload is required for this release. Plugin manifest versions remain independently declared compatibility metadata. The table is a release inventory, not a promise that a future roadmap feature is already enabled.
+The Version column below is taken from each shipped plugin's `manifest.json`; the current `0.3.0` application payload is required for this release. Plugin manifest versions remain independently declared compatibility metadata. The table is a release inventory, not a promise that a future roadmap feature is already enabled.
 
 
 | Plugin | Version | Kind | Purpose |
@@ -524,7 +525,7 @@ force-release an entity lock, and it requires an audited reason.
 
 Check the launcher/runtime logs below the configured runtime state directory,
 or use `Master Track -> Open tech logs` when logged in as Lord or Master.
-Confirm that `Launcher.exe`, `_internal/`, `ProgTrack.v.0.2.3.py`, `Plugins/`,
+Confirm that `Launcher.exe`, `_internal/`, `ProgTrack.v.0.3.0.py`, `Plugins/`,
 `icons/`, `lang/`, `manual/`, and `Resources/` remain together. A partial copy
 usually causes missing Qt, SciPy, Excel, PDF, or PostgreSQL-library errors.
 

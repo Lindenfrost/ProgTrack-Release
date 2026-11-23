@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.3 or newer.
 """Canonical project-membership periods and per-animal scoped usage.
 
 Project display names are not identities.  This module gives every assignment

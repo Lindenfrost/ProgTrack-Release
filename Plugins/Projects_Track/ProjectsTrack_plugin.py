@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: Projects Track sidebar-filter plugin implementation.
@@ -139,25 +139,52 @@ class _SidebarToggleButton(QPushButton):
 
 
 class HistoryStore:
-    def __init__(self, plugin_dir: str, backend):
+    def __init__(self, plugin_dir: str, backend, app=None):
         # ``plugin_dir`` is retained for constructor compatibility.  History
         # is stored exclusively in the shared backend.
         self._store = BackendJsonStore(backend, "projects", "history")
+        self._app = app
         self._data: dict = {"version": 1, "projects": {}}
         self._load()
 
     def _load(self):
-        d = self._store.load({"version": 1, "projects": {}})
+        default = {"version": 1, "projects": {}}
+        initial = getattr(self._app, "_shared_initial_plugins", None)
+        if initial is not None:
+            d = initial["project_history"]
+        elif self._shared():
+            from Plugins.core.backend.errors import PermissionDeniedError, SessionRevokedError
+            from Plugins.core.backend.shared_projects import load_shared_project_history
+
+            master = getattr(self._app, "master_track", None)
+            session = getattr(master, "session_context", None)
+            d = default
+            if session is not None:
+                try:
+                    d = load_shared_project_history(self._store.backend, session)
+                except SessionRevokedError:
+                    master.handle_session_revoked()
+                except PermissionDeniedError:
+                    pass
+        else:
+            d = self._store.load(default)
         if isinstance(d, dict):
             self._data = d
             self._data.setdefault("version", 1)
             self._data.setdefault("projects", {})
 
     def _save(self):
+        if self._shared():
+            self._load()
+            return
         try:
             self._store.save(self._data)
         except Exception as exc:
             logging.warning("HistoryStore: backend save failed: %s", exc)
+
+    def _shared(self):
+        uses_shared = getattr(self._app, "_uses_shared_leases", None)
+        return bool(callable(uses_shared) and uses_shared())
 
     def _proj(self, name: str) -> dict:
         p = self._data["projects"]
@@ -178,6 +205,9 @@ class HistoryStore:
         return str(record.get("ipid") or record.get("name") or "").strip()
 
     def record_added(self, project: str, animal: str):
+        if self._shared():
+            self._load()
+            return
         animal = (animal or "").strip()
         if not animal:
             return
@@ -205,6 +235,9 @@ class HistoryStore:
 
     def record_removed(self, project: str, animal: str, severity: str = None,
                        previous_in_experiment: bool = None):
+        if self._shared():
+            self._load()
+            return
         animal = (animal or "").strip()
         for r in self._proj(project)["animals"]:
             if self._animal_key(r) == animal and r.get("status") == "active":
@@ -223,6 +256,9 @@ class HistoryStore:
     def record_experiment_status(self, project: str, animal: str,
                                  had_in_experiment: bool,
                                  severity: str = None) -> None:
+        if self._shared():
+            self._load()
+            return
         project = (project or '').strip()
         animal = (animal or '').strip()
         if not project or not animal or not had_in_experiment:
@@ -345,7 +381,7 @@ class ProjectsTrackPlugin:
         self._project_ui_refresh_pending = False
 
         # History store for project membership tracking
-        self._history = HistoryStore("", app.backend)
+        self._history = HistoryStore("", app.backend, app)
 
         # Load cached projects, species, and last session state
         self._load_projects()
@@ -403,6 +439,14 @@ class ProjectsTrackPlugin:
     
     def _load_projects(self, force_discovery: bool = False):
         """Load projects from cache or discover from animals, and restore session state."""
+        initial = getattr(self.app, "_shared_initial_projection", None)
+        if initial is not None:
+            self.all_projects = sorted({
+                project.strip()
+                for record in initial["animals"].values()
+                if isinstance(project := record.get("project"), str) and project.strip()
+            }, key=str.lower)
+            return
         current_context = self._cache_context()
         try:
             cached = self._cache_store().load({})
@@ -472,6 +516,8 @@ class ProjectsTrackPlugin:
     
     def _save_cache(self):
         """Save current project list to cache file, preserving existing session-state keys."""
+        if getattr(self.app, "_shared_publishing", False):
+            return
         try:
             existing = self._cache_store().load({})
             existing['projects'] = self.all_projects
@@ -486,6 +532,8 @@ class ProjectsTrackPlugin:
 
     def _save_session_state(self) -> None:
         """Persist active project and species selections to the cache file."""
+        if getattr(self.app, "_shared_publishing", False):
+            return
         try:
             cached = self._cache_store().load({})
             cached['active_project'] = self.current_project
@@ -689,7 +737,8 @@ class ProjectsTrackPlugin:
 
     def _project_lifecycle_status(self, project_name: str) -> str:
         try:
-            catalog = BackendJsonStore(
+            reader = getattr(self.app, "_load_project_catalog_snapshot", None)
+            catalog = reader() if callable(reader) else BackendJsonStore(
                 self.app.backend, "projects", "catalog"
             ).load({"projects": {}})
             record = (catalog.get("projects") or {}).get(project_name, {})
@@ -764,6 +813,8 @@ class ProjectsTrackPlugin:
 
     def on_user_login(self) -> None:
         """Reload per-user sidebar toggle state after login/logout."""
+        if self._history._shared():
+            self._history._load()
         self._sidebar_visible = self._load_sidebar_visibility()
         if self._proj_content_w:
             self._proj_content_w.setVisible(self._sidebar_visible)
@@ -1085,7 +1136,7 @@ class ProjectsTrackPlugin:
         is_new_project = project not in self.all_projects
         pt_w = getattr(self.app, 'project_track_widget', None)
         # If this is a new project created via animal dialog, initialize its metadata
-        if is_new_project:
+        if is_new_project and not self._history._shared():
             from datetime import datetime
             sig = ''
             mt = getattr(self.app, 'master_track', None)

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: see release metadata.
 # Module: Heritage Track persistence layer.
@@ -35,8 +35,12 @@ class HeritageStore:
 
     POSITION_CACHE_LIMIT = 1000
 
-    def __init__(self, plugin_dir: str, backend: Any):
+    def __init__(self, plugin_dir: str, backend: Any, *, session=None):
         self.backend_store = BackendJsonStore(backend, "heritage", "graph")
+        if getattr(getattr(backend, "adapter", None), "dialect", "") == "postgresql":
+            from Plugins.core.backend.shared_heritage import SharedHeritageStore
+
+            self.backend_store = SharedHeritageStore(backend, session or (lambda: None))
         self._data: Optional[Dict[str, Any]] = None
         self._pending_animal_save = False
         self._pending_settings_save = False
@@ -51,6 +55,15 @@ class HeritageStore:
         # This prevents opening/resizing a graph (or an unrelated settings
         # save) from silently rewriting backend data.
         self._invalid_node_positions: Dict[str, Any] = {}
+
+    def reset_read_scope(self) -> None:
+        self._data = None
+        self._committed_snapshot = None
+        self._genotype_colors_cache = None
+        self._pending_animal_save = False
+        self._pending_settings_save = False
+        self._backend_revision = 0
+        self._invalid_node_positions.clear()
 
     def _default_settings(self) -> Dict[str, Any]:
         return {
@@ -332,11 +345,11 @@ class HeritageStore:
         encoded = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
-    def load(self) -> Dict[str, Any]:
+    def load(self, *, initial=None) -> Dict[str, Any]:
         if self._data is not None:
             return self._data
 
-        raw, revision = self.backend_store.load_with_revision(None)
+        raw, revision = self.backend_store.load_with_revision(None) if initial is None else initial
         if raw is None:
             # Do not create a backend record merely because a read/render occurred.
             self._data = self._default_data()

@@ -18,8 +18,25 @@
       "path": "fixtures/event-identities.json"
     },
     "animal-roles": {
-      "root": "repository",
-      "path": "Plugins/core/animal_roles.json"
+      "path": "core_configuration/animal_roles.json"
+    },
+    "role-block-presets": {
+      "path": "core_configuration/role_block_presets.json"
+    },
+    "identity-lifecycle-conventions": {
+      "path": "core_configuration/identity_lifecycle_conventions.json"
+    },
+    "user-message-overrides:de": {
+      "path": "core_configuration/messages_de.json"
+    },
+    "user-message-overrides:en": {
+      "path": "core_configuration/messages_en.json"
+    },
+    "user-message-overrides:it": {
+      "path": "core_configuration/messages_it.json"
+    },
+    "user-message-overrides:ru": {
+      "path": "core_configuration/messages_ru.json"
     },
     "craniometry": {
       "root": "repository",

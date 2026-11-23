@@ -14,6 +14,15 @@ from Plugins.core.animal_relationships import resolve_animal_reference
 from Plugins.core.animal_roles import SCHEMA_VERSION as ROLE_SCHEMA_VERSION, canonical_role_value, normalize_role_definition
 from Plugins.core.experimental_limits import KNOWN_LIMIT_FIELDS, default_experimental_limits, synchronize_experimental_limits
 from Plugins.core.identity_conventions import render_animal_id
+from Plugins.core.role_block_presets import (
+    SCHEMA_VERSION as PRESET_SCHEMA_VERSION,
+    normalize_event_definition,
+    normalize_experimental_block,
+    normalize_preset,
+)
+from Plugins.core.backend.core_configuration import (
+    ANIMAL_ROLES, IDENTITY_CONVENTIONS, PRESETS, MESSAGE_LOCALES, validate_payload,
+)
 from .config import *
 
 
@@ -92,9 +101,35 @@ def seeded_animal_role_configuration() -> dict[str, Any]:
     ]
     return {
         "schema_version": ROLE_SCHEMA_VERSION,
-        "deleted_builtin_values": [],
+        "deleted_builtin_values": list(raw.get("deleted_builtin_values", [])),
         "roles": normalized,
     }
+
+
+def seeded_core_configuration() -> dict[tuple[str, str], dict[str, Any]]:
+    presets = load_input(PRESETS)
+    payloads = {
+        ANIMAL_ROLES: seeded_animal_role_configuration(),
+        PRESETS: {
+            "schema_version": PRESET_SCHEMA_VERSION,
+            "presets": [normalize_preset(item) for item in presets["presets"]],
+            "experimental_blocks": [
+                normalize_experimental_block(item)
+                for item in presets.get("experimental_blocks", [])
+            ],
+            "event_definitions": [
+                normalize_event_definition(item)
+                for item in presets.get("event_definitions", [])
+            ],
+        },
+        IDENTITY_CONVENTIONS: load_input(IDENTITY_CONVENTIONS),
+    }
+    for locale in MESSAGE_LOCALES:
+        key = f"user-message-overrides:{locale}"
+        payloads[key] = load_input(key)
+    for key, payload in payloads.items():
+        validate_payload(key, payload)
+    return {("configuration", key): payload for key, payload in payloads.items()}
 
 
 def canonical_project_name(value: Any) -> str:

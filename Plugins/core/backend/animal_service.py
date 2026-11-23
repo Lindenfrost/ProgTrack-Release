@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.3.0 or newer.
 """Animal and measurement services shared by both backend profiles."""
 
 from __future__ import annotations
@@ -262,6 +264,8 @@ class AnimalService:
         *,
         expected_parentage_revision: str | None = None,
         clinical_context: Mapping[str, Any] | None = None,
+        affected_ipids: set[str] | None = None,
+        include_settings: bool = True,
     ) -> CoreSaveReceipt:
         active = snapshot.get("animals", {})
         archived = snapshot.get("archived_animals", snapshot.get("archived", {}))
@@ -331,7 +335,10 @@ class AnimalService:
                 existing_events.setdefault(owner_ipid, {})[event_id] = data
                 event_owners[event_id] = owner_ipid
             incoming_ids = set(combined)
-            for ipid in set(existing) - incoming_ids:
+            removed_ipids = set(existing) - incoming_ids
+            if affected_ipids is not None:
+                removed_ipids &= affected_ipids
+            for ipid in removed_ipids:
                 if clinical is not None:
                     clinical.authorize('core.delete_animals')
                     for event in existing_events.get(ipid, {}).values():
@@ -353,6 +360,9 @@ class AnimalService:
             project_timestamp = server_timestamp(self.adapter, connection)
             prepared = {}
             for key, (incoming, archived_flag) in combined.items():
+                if affected_ipids is not None and key not in affected_ipids:
+                    prepared[key] = (incoming, archived_flag)
+                    continue
                 incoming = deepcopy(dict(incoming))
                 prior_raw = existing.get(key, {}).get('record_json')
                 prior = prior_raw if isinstance(prior_raw, Mapping) else loads(prior_raw or '{}', {})
@@ -364,6 +374,8 @@ class AnimalService:
                 prepared[key] = (incoming, archived_flag)
             combined = prepared
             for key, (incoming, _) in combined.items():
+                if affected_ipids is not None and key not in affected_ipids:
+                    continue
                 prior_raw = existing.get(key, {}).get('record_json')
                 prior = prior_raw if isinstance(prior_raw, Mapping) else loads(prior_raw or '{}', {})
                 mode = incoming.get('parentage_mode')
@@ -379,6 +391,8 @@ class AnimalService:
             if dumps(catalog) != catalog_before:
                 write_catalog(self.adapter, connection, catalog, catalog_revision)
             for ipid, (source_record, archived_flag) in combined.items():
+                if affected_ipids is not None and ipid not in affected_ipids:
+                    continue
                 # Only this top-level mapping is mutated below; the nested
                 # measurements/events are detached with pop() and otherwise
                 # treated as read-only. A full deepcopy made every save copy
@@ -751,6 +765,8 @@ class AnimalService:
                         audit_after[section][ipid] = deepcopy(accepted)
             if clinical is not None:
                 clinical.flush()
+            if not include_settings:
+                return CoreSaveReceipt(acknowledged, audit_before, audit_after)
             settings = dumps(snapshot.get("settings", {}))
             settings_row = _fetchone(
                 connection,

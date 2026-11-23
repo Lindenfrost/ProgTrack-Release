@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: 0.2.2 or newer.
 """Semantic SVG UI icon registry with exact text fallbacks.
 
 The packaged artwork stays vector-only.  UI masters use a fixed black outline

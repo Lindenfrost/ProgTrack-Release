@@ -16,6 +16,7 @@ import os
 import re
 import shutil
 import stat
+import struct
 import tarfile
 import tempfile
 import urllib.request
@@ -38,7 +39,7 @@ PAYLOAD_FILES = (
     "README.md",
     "LICENSE",
     "LICENSE_NOTICE.md",
-    "THIRD_PARTY_NOTICES.md",
+    "release_inventory.json",
     "Username + 123456 password.png",
     "info.json",
     "info_de.json",
@@ -56,6 +57,37 @@ PAYLOAD_DIRECTORIES = (
 )
 MANIFEST_PATH = Path(__file__).with_name("linux_runtime_manifest.json")
 FONT_LICENSE_NOTICE = Path(__file__).with_name("fonts") / "LICENSE_NOTICE.md"
+SITE_PACKAGES = "runtime/lib/python3.13/site-packages"
+NATIVE_DEPENDENCIES = {
+    "libcom_err": "e2fsprogs com_err",
+    "libcrypt": "crypt",
+    "libcrypto": "OpenSSL 3.5.4",
+    "libgssapi_krb5": "MIT Kerberos GSSAPI",
+    "libk5crypto": "MIT Kerberos crypto",
+    "libkeyutils": "Linux keyutils",
+    "libkrb5": "MIT Kerberos",
+    "libkrb5support": "MIT Kerberos support",
+    "liblber": "OpenLDAP BER",
+    "libldap": "OpenLDAP",
+    "libpcre": "PCRE",
+    "libpq": "PostgreSQL libpq",
+    "libsasl2": "Cyrus SASL",
+    "libselinux": "SELinux",
+    "libssl": "OpenSSL 3.5.4",
+}
+NATIVE_LICENSES = {
+    "libcrypto": "LICENSE_OPENSSL.txt",
+    "libssl": "LICENSE_OPENSSL.txt",
+    "libpq": "LICENSE_POSTGRESQL.txt",
+}
+COMMON_LICENSES = {
+    "LICENSE_COMPUTER_MODERN_BAKOMA.txt",
+    "LICENSE_REPORTLAB_BITSTREAM_VERA.txt",
+    "LICENSE_REPORTLAB_DARKGARDEN.txt",
+    "LICENSE_REPORTLAB_DARKGARDEN_GPL.txt",
+    "LICENSE_SQLITE.txt",
+    *NATIVE_LICENSES.values(),
+}
 
 
 def _repo_root() -> Path:
@@ -166,7 +198,8 @@ def _extract_python(archive: Path, destination: Path) -> None:
         target.chmod(link_target.stat().st_mode & 0o777)
 
 
-def _extract_wheel(wheel: Path, site_packages: Path) -> None:
+def _extract_wheel(wheel: Path, site_packages: Path) -> list[str]:
+    members = []
     with zipfile.ZipFile(wheel) as archive:
         for info in archive.infolist():
             target = _safe_member_path(site_packages, info.filename)
@@ -176,20 +209,49 @@ def _extract_wheel(wheel: Path, site_packages: Path) -> None:
             target.parent.mkdir(parents=True, exist_ok=True)
             with archive.open(info) as source, target.open("wb") as output:
                 shutil.copyfileobj(source, output)
-            if target.suffix == ".so" or ".so." in target.name:
-                target.chmod(0o755)
+            members.append(info.filename)
+    return members
 
 
-def _prepare_runtime(stage: Path, archive: Path, wheels: list[Path], manifest: dict) -> None:
+def _prepare_runtime(stage: Path, archive: Path, wheels: list[Path], manifest: dict) -> tuple[dict, dict]:
     extraction = stage.parent / "python-extracted"
     _extract_python(archive, extraction)
     python_root = extraction / "python"
     runtime = stage / "runtime"
     shutil.copytree(python_root, runtime)
-    site_packages = runtime / "lib" / "python3.13" / "site-packages"
+    site_packages = stage / SITE_PACKAGES
     site_packages.mkdir(parents=True, exist_ok=True)
-    for wheel in wheels:
-        _extract_wheel(wheel, site_packages)
+    owners = {}
+    components = {
+        "CPython": {
+            "version": manifest["python"]["version"],
+            "input_sha256": manifest["python"]["sha256"],
+            "license_files": ["runtime/lib/python3.13/LICENSE.txt"],
+        },
+        "SQLite": {
+            "version": "requires runtime probe",
+            "license_files": ["third_party_licenses/LICENSE_SQLITE.txt"],
+        },
+    }
+    for wheel, pin in zip(wheels, manifest["wheels"], strict=True):
+        name = pin["name"]
+        licenses = []
+        for member in _extract_wheel(wheel, site_packages):
+            relative = f"{SITE_PACKAGES}/{member}"
+            if relative in owners:
+                raise RuntimeError(f"Multiple wheel owners for {relative}")
+            owners[relative] = name
+            if ".dist-info/" in member and Path(member).name.lower().startswith(("licen", "copying")):
+                licenses.append(relative)
+        if name == "PyQt6":
+            licenses.append("LICENSE")
+        if not licenses:
+            raise RuntimeError(f"Wheel has no recorded license file: {wheel.name}")
+        components[name] = {
+            "version": pin["version"],
+            "input_sha256": pin["sha256"],
+            "license_files": sorted(licenses),
+        }
     # The standalone interpreter ships pip and its cross-platform distlib
     # helpers.  The release is intentionally not user-extensible at runtime;
     # removing them also prevents Windows helper executables from leaking into
@@ -207,12 +269,6 @@ def _prepare_runtime(stage: Path, archive: Path, wheels: list[Path], manifest: d
         if path.is_file() and path.suffix.lower() in {".exe", ".dll", ".pyd"}:
             path.unlink()
             continue
-        if path.is_file() and (path.suffix == ".so" or ".so." in path.name):
-            path.chmod(0o755)
-    for executable in ("python", "python3", "python3.13"):
-        path = runtime / "bin" / executable
-        if path.exists():
-            path.chmod(0o755)
     font_source = site_packages / "matplotlib" / "mpl-data" / "fonts" / "ttf"
     font_target = stage / "fonts" / "matplotlib"
     if font_source.exists():
@@ -236,6 +292,7 @@ def _prepare_runtime(stage: Path, archive: Path, wheels: list[Path], manifest: d
     (runtime / "runtime_metadata.json").write_text(
         json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
+    return components, owners
 
 
 def _copy_tree(source: Path, destination: Path) -> None:
@@ -268,6 +325,9 @@ def _copy_payload(archive_root: Path, stage: Path) -> None:
         _copy_tree(archive_root / relative, stage / relative)
     for relative in PAYLOAD_DIRECTORIES:
         _copy_tree(archive_root / relative, stage / relative)
+    for license_file in (stage / "third_party_licenses").iterdir():
+        if license_file.name not in COMMON_LICENSES:
+            license_file.unlink()
     for relative in LINUX_FILES:
         _copy_tree(archive_root / "source" / "launcher" / "linux" / relative, stage / "launcher" / relative)
 
@@ -296,11 +356,29 @@ def _commit_epoch(repo: Path, commit: str) -> int:
     return int(result.stdout.strip())
 
 
-def _set_modes(stage: Path) -> None:
-    for relative in ("launcher/ProgTrack", "launcher/launcher.py", "runtime/bin/python", "runtime/bin/python3", "runtime/bin/python3.13"):
-        path = stage / relative
-        if path.exists():
-            path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+def _archive_mode(relative: str, *, directory: bool, native: bool) -> int:
+    executable = (
+        relative in {"launcher/ProgTrack", "launcher/launcher.py"}
+        or relative.startswith("runtime/bin/")
+        or native
+    )
+    return 0o755 if directory or executable else 0o644
+
+
+def _elf_abi(path: Path) -> dict | None:
+    with path.open("rb") as handle:
+        header = handle.read(20)
+    if not header.startswith(b"\x7fELF"):
+        return None
+    if len(header) != 20 or header[4:6] != b"\x02\x01" or struct.unpack_from("<H", header, 18)[0] != 62:
+        raise RuntimeError(f"Expected little-endian x86_64 ELF: {path}")
+    extension = re.search(r"\.(cpython-(\d+)[^.]*|abi3)\.so$", path.name)
+    abi = None
+    if extension:
+        abi = f"cp{extension[2]}" if extension[2] else "abi3"
+        if abi not in {PYTHON_TAG, "abi3"}:
+            raise RuntimeError(f"Unexpected Python extension ABI {abi}: {path}")
+    return {"format": "ELF64", "machine": ARCH, "python_abi": abi}
 
 
 def _write_metadata(stage: Path, commit: str, epoch: int, manifest: dict) -> None:
@@ -328,12 +406,55 @@ def _write_metadata(stage: Path, commit: str, epoch: int, manifest: dict) -> Non
     (stage / "release_metadata.json").write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def _write_inventory(stage: Path, commit: str, epoch: int, manifest: dict) -> None:
+def _write_inventory(stage: Path, commit: str, epoch: int, components: dict, owners: dict) -> set[str]:
     files = []
+    native_files = set()
+    license_review = set()
     for path in sorted(p for p in stage.rglob("*") if p.is_file()):
         relative = path.relative_to(stage).as_posix()
-        files.append({"path": relative, "sha256": _sha256(path), "mode": oct(stat.S_IMODE(path.stat().st_mode))})
+        native = _elf_abi(path) if relative.startswith("runtime/") else None
+        record = {
+            "path": relative,
+            "bytes": path.stat().st_size,
+            "sha256": _sha256(path),
+            "mode": oct(_archive_mode(relative, directory=False, native=native is not None)),
+        }
+        owner = owners.get(relative)
+        if relative.startswith("fonts/matplotlib/"):
+            owner = "matplotlib"
+        elif relative.startswith("runtime/") and relative != "runtime/runtime_metadata.json":
+            owner = owner or "CPython"
+        if owner:
+            record["owner"] = owner
+        if native:
+            native_files.add(relative)
+            record["native"] = native
+            record["license_files"] = components[owner]["license_files"]
+            if ".libs/" in relative:
+                native["library"] = re.split(r"-[0-9a-f]{8}(?:-|\.so)", path.name)[0]
+            if owner == "psycopg-binary" and native.get("library"):
+                library = native["library"]
+                native["component"] = NATIVE_DEPENDENCIES.get(library, library)
+                library_license = NATIVE_LICENSES.get(library)
+                if library_license:
+                    record["license_files"] = [f"third_party_licenses/{library_license}"]
+                else:
+                    record["license_files"] = []
+                    license_review.add(native["component"])
+            if path.name.startswith("_sqlite3."):
+                native["linked_component"] = "SQLite"
+                record["license_files"] += components["SQLite"]["license_files"]
+        files.append(record)
+    for entry in files:
+        for license_file in entry.get("license_files", []):
+            if not (stage / license_file).is_file():
+                raise RuntimeError(f"Missing native license file: {license_file}")
+    for name, component in components.items():
+        for license_file in component["license_files"]:
+            if not (stage / license_file).is_file():
+                raise RuntimeError(f"Missing {name} license file: {license_file}")
     inventory = {
+        "schema": "progtrack-linux-component-inventory/2",
         "source_commit": commit,
         "source_date_epoch": epoch,
         "platform": f"linux-{ARCH}",
@@ -341,11 +462,56 @@ def _write_inventory(stage: Path, commit: str, epoch: int, manifest: dict) -> No
         "python_abi": PYTHON_TAG,
         "glibc_baseline": "manylinux_2_28",
         "native_runtime_bundled": True,
-        "postgresql_client": "psycopg-binary 3.3.4; libpq/OpenSSL bundled in wheel",
-        "external_prerequisites": ["Linux kernel and graphical session", "glibc compatible with manylinux_2_28"],
+        "postgresql_client": "psycopg-binary; libpq/OpenSSL bundled in wheel",
+        "external_prerequisites": [
+            "Linux x86_64, glibc 2.28 or newer, and a graphical session",
+            "System C++ runtime, graphics, X11/XCB or Wayland, font and other Qt dependencies",
+            "Confirm actual loaded libraries and active Qt plugins on clean Linux Mint 22.3",
+        ],
+        "components": components,
+        "native_licenses_requiring_reconciliation": sorted(license_review),
         "files": files,
     }
     (stage / "linux_component_inventory.json").write_text(json.dumps(inventory, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return native_files
+
+
+def _write_notices(stage: Path, components: dict) -> None:
+    notice = [
+        "# Linux third-party notices", "",
+        "This archive contains the CPython runtime, SQLite through CPython, and "
+        "the distributions listed below. The shipped license files are linked by "
+        "archive path. The file hashes and ELF ownership records are in "
+        "`linux_component_inventory.json`.", "",
+        "| Component | Version | Shipped license files |",
+        "| --- | --- | --- |",
+    ]
+    for name, component in components.items():
+        links = ", ".join(f"[`{path}`]({path})" for path in component["license_files"])
+        notice.append(f"| {name} | {component['version']} | {links} |")
+    notice.extend([
+        "", "## Native dependencies", "",
+        "ProgTrack uses the bundled Psycopg binary implementation. The wheel includes "
+        "PostgreSQL libpq and OpenSSL 3.5.4 as well as the native libraries listed below. "
+        "Native runtime version and connection checks require Linux execution.", "",
+        *(
+            f"- {component} ({library})"
+            + (f" [License notice](third_party_licenses/{NATIVE_LICENSES[library]})"
+               if library in NATIVE_LICENSES else " — upstream license file reconciliation pending")
+            for library, component in sorted(NATIVE_DEPENDENCIES.items())
+        ),
+        "", "The CPython, Qt, Pillow and scientific artifacts also include native code. "
+        "The component inventory identifies the exact shipped binaries and their distributor "
+        "license files. Redistribution review for transitive native components and Qt "
+        "third-party code remains pending.", "",
+        "Matplotlib fonts are also shipped under `fonts/matplotlib/`. "
+        "See [font notices](fonts/LICENSE_NOTICE.md) and the "
+        "[BaKoMa notice](third_party_licenses/LICENSE_COMPUTER_MODERN_BAKOMA.txt).", "",
+        "ReportLab includes [Bitstream Vera](third_party_licenses/LICENSE_REPORTLAB_BITSTREAM_VERA.txt) "
+        "and [DarkGarden](third_party_licenses/LICENSE_REPORTLAB_DARKGARDEN.txt) "
+        "fonts with [GPL terms for DarkGarden](third_party_licenses/LICENSE_REPORTLAB_DARKGARDEN_GPL.txt).", "",
+    ])
+    (stage / "THIRD_PARTY_NOTICES.md").write_text("\n".join(notice), encoding="utf-8")
 
 
 def _validate_stage(stage: Path) -> None:
@@ -377,13 +543,14 @@ def _validate_stage(stage: Path) -> None:
         "Resources/Seed/progtrack_seed.ptdb",
         "icons/ui/manifest.json",
         "release_metadata.json",
+        "release_inventory.json",
         "linux_component_inventory.json",
     ):
         if not (stage / required).exists():
             raise RuntimeError(f"Linux package is missing {required}")
 
 
-def _write_tar(stage: Path, archive: Path, epoch: int) -> None:
+def _write_tar(stage: Path, archive: Path, epoch: int, native_files: set[str]) -> None:
     import gzip
     root_name = archive.name.removesuffix(".tar.gz")
     with archive.open("wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", mtime=epoch) as gz, tarfile.open(fileobj=gz, mode="w") as tar:
@@ -393,11 +560,8 @@ def _write_tar(stage: Path, archive: Path, epoch: int) -> None:
             info.uid = info.gid = 0
             info.uname = info.gname = ""
             info.mtime = epoch
+            info.mode = _archive_mode(relative, directory=path.is_dir(), native=relative in native_files)
             if path.is_file():
-                if relative in {"launcher/ProgTrack", "launcher/launcher.py"} or relative.startswith("runtime/bin/"):
-                    info.mode = 0o755
-                elif relative.startswith("launcher/"):
-                    info.mode = 0o644
                 with path.open("rb") as handle:
                     tar.addfile(info, handle)
             else:
@@ -426,12 +590,12 @@ def build(output: Path, commit: str | None, python_archive: Path | None, wheelho
         stage.mkdir()
         _safe_extract_archive(repo, resolved, archive_root)
         _copy_payload(archive_root, stage)
-        _prepare_runtime(stage, archive_path, wheel_paths, manifest)
-        _set_modes(stage)
+        components, owners = _prepare_runtime(stage, archive_path, wheel_paths, manifest)
         _write_metadata(stage, resolved, epoch, manifest)
-        _write_inventory(stage, resolved, epoch, manifest)
+        _write_notices(stage, components)
+        native_files = _write_inventory(stage, resolved, epoch, components, owners)
         _validate_stage(stage)
-        _write_tar(stage, archive, epoch)
+        _write_tar(stage, archive, epoch, native_files)
     digest = _sha256(archive)
     checksum.write_text(f"{digest}  {archive.name}\n", encoding="utf-8")
     return {"archive": str(archive), "sha256": digest, "bytes": archive.stat().st_size, "source_commit": resolved, "source_date_epoch": epoch, "native_runtime_bundled": True}

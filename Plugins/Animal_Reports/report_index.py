@@ -1,3 +1,5 @@
+# Part of: ProgTrack 0.3.0
+# Required ProgTrack version: see plugin manifest.
 """Fast, revision-aware indexes used by the monthly Reports view."""
 
 from __future__ import annotations

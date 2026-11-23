@@ -66,7 +66,7 @@ class ArchivedSelectionBoundaryTest(unittest.TestCase):
     def setUpClass(cls):
         cls.qt_app = QApplication.instance() or QApplication([])
         spec = importlib.util.spec_from_file_location(
-            "progtrack_issue_174", ROOT / "ProgTrack.v.0.2.3.py"
+            "progtrack_issue_174", ROOT / "ProgTrack.v.0.3.0.py"
         )
         cls.module = importlib.util.module_from_spec(spec)
         assert spec.loader is not None

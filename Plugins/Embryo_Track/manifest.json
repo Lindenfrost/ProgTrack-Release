@@ -16,7 +16,7 @@
     "cranimetry_reference.json",
     "Example_Craniometry.csv"
   ],
-  "min_progtrack_version": "0.2.1",
+  "min_progtrack_version": "0.3.0",
   "menu_location": "Tools",
   "icon": "progtrack_icon.ico",
   "optional": true,

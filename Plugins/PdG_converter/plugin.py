@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 Dimitri L. Lindenwald and Deutsches Primatenzentrum GmbH
-# Part of: ProgTrack 0.2.3
+# Part of: ProgTrack 0.3.0
 # Required ProgTrack version: see plugin manifest.
 # Required Launcher version: 0.1.0 RC or newer.
 # Module: PdG Converter plugin integration.
@@ -72,6 +72,14 @@ class PdGConverterPlugin:
         Returns:
             Dict with model parameters or None if not found
         """
+        if getattr(getattr(self.app.backend, "adapter", None), "dialect", "") == "postgresql":
+            from Plugins.core.backend.errors import PermissionDeniedError
+
+            session = getattr(getattr(self.app, "master_track", None), "session_context", None)
+            try:
+                return self.app.backend.load_shared_pdg_model(session, self.app._lease_ipid(animal_name))
+            except PermissionDeniedError:
+                return None
         all_models = self._models_store.load({})
         return all_models.get(animal_name) if isinstance(all_models, dict) else None
     
@@ -82,6 +90,16 @@ class PdGConverterPlugin:
             animal_name: Name of the animal
             params: Model parameters dict
         """
+        if getattr(getattr(self.app.backend, "adapter", None), "dialect", "") == "postgresql":
+            session = getattr(getattr(self.app, "master_track", None), "session_context", None)
+            ipid = self.app._lease_ipid(animal_name)
+            owner = object()
+            token = self.app._hold_shared_animal_lease(ipid, owner)
+            try:
+                self.app.backend.save_shared_pdg_model(session, ipid, token, params)
+            finally:
+                self.app._release_shared_animal_lease(ipid, owner)
+            return
         all_models = self._models_store.load({})
         
         if params is None:

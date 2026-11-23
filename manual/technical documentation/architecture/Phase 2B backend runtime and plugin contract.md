@@ -1,3 +1,4 @@
+<!-- Part of: ProgTrack 0.3.0. Required ProgTrack version: 0.3.0 or newer. -->
 # Phase 2B backend, runtime, and plugin contract
 
 ## Deployment profiles
@@ -82,9 +83,12 @@ No compatibility layer, schema change or data migration is required.
 The canonical ZIP interchange contains a manifest, checksummed JSONL records,
 and managed payloads. Import validates paths and hashes and initializes an
 empty backend through services. The configured backend remains the only
-operational source. `Resources/Seed/progtrack_seed.ptdb` is the single
-deterministic, fictional initialization source for both profiles; it is loaded
-only when core data and backend record namespaces are both empty.
+operational source. On first creation of a Standalone SQLite database,
+ProgTrack offers to install `Resources/Seed/progtrack_seed.ptdb` into that
+database. Choose No or close the prompt to begin with an empty database.
+The choice is stored in that database and opening it later does not prompt
+again. Shared PostgreSQL never loads bundled demo data during startup or
+reconnection. The administrative import and restore workflows are separate.
 
 ## Entity leases
 

@@ -85,7 +85,7 @@ class Issue250InstitutionUnitsTest(unittest.TestCase):
         cls.qt_app = QApplication.instance() or QApplication([])
         # Load the real application adapter without depending on locally
         # ignored test modules. Mocking question() hid the original failure.
-        source = Path(__file__).resolve().parents[1] / 'ProgTrack.v.0.2.3.py'
+        source = Path(__file__).resolve().parents[1] / 'ProgTrack.v.0.3.0.py'
         spec = importlib.util.spec_from_file_location('progtrack_issue250', source)
         cls.main = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.main)
