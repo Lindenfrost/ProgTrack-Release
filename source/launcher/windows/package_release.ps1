@@ -2,18 +2,19 @@ param(
     [string]$Version = "0.3.0",
     [string]$Commit = "HEAD",
     [string]$RuntimeDirectory = (Join-Path $PSScriptRoot "dist\ProgTrack_small"),
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot "release")
+    [string]$OutputDirectory = (Join-Path $PSScriptRoot "..\..\..\..\Release Packages")
 )
 
 $ErrorActionPreference = "Stop"
 
 $repository = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $runtime = (Resolve-Path $RuntimeDirectory).Path
+$buildRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "release"))
 $outputRoot = [IO.Path]::GetFullPath($OutputDirectory)
 $releaseName = "ProgTrack-$Version"
-$stagingRoot = [IO.Path]::GetFullPath((Join-Path $outputRoot "staging"))
+$stagingRoot = [IO.Path]::GetFullPath((Join-Path $buildRoot "staging"))
 $packageRoot = [IO.Path]::GetFullPath((Join-Path $stagingRoot $releaseName))
-$payloadArchive = [IO.Path]::GetFullPath((Join-Path $outputRoot "payload.zip"))
+$payloadArchive = [IO.Path]::GetFullPath((Join-Path $buildRoot "payload.zip"))
 $releaseArchive = [IO.Path]::GetFullPath((Join-Path $outputRoot "$releaseName.zip"))
 $checksumPath = "$releaseArchive.sha256"
 
@@ -28,7 +29,7 @@ function Assert-ChildPath {
 
 function Remove-GeneratedPath {
     param([string]$Path)
-    Assert-ChildPath -Path $Path -Parent $outputRoot
+    Assert-ChildPath -Path $Path -Parent $buildRoot
     if (Test-Path -LiteralPath $Path) {
         Remove-Item -LiteralPath $Path -Recurse -Force
     }
@@ -73,9 +74,13 @@ if ($extensionAbis.Count -ne 1 -or $extensionAbis[0] -ne $runtimeAbi) {
 }
 
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
 Remove-GeneratedPath -Path $stagingRoot
 Remove-GeneratedPath -Path $payloadArchive
-Remove-GeneratedPath -Path $releaseArchive
+if (Test-Path -LiteralPath $releaseArchive) {
+    Assert-ChildPath -Path $releaseArchive -Parent $outputRoot
+    Remove-Item -LiteralPath $releaseArchive -Force
+}
 if (Test-Path -LiteralPath $checksumPath) {
     Assert-ChildPath -Path $checksumPath -Parent $outputRoot
     Remove-Item -LiteralPath $checksumPath -Force

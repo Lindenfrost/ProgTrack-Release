@@ -604,7 +604,7 @@ def build(output: Path, commit: str | None, python_archive: Path | None, wheelho
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build the self-contained ProgTrack Linux tar.gz")
     parser.add_argument("--commit", default=None)
-    parser.add_argument("--output", default=str(_repo_root() / "source" / "launcher" / "linux" / "release"))
+    parser.add_argument("--output", default=str(_repo_root().parent / "Release Packages"))
     parser.add_argument("--python-archive", type=Path, default=None)
     parser.add_argument("--wheelhouse", type=Path, default=None)
     args = parser.parse_args()

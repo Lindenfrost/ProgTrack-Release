@@ -570,6 +570,14 @@ interchange contracts are versioned below
 Launcher build sources are in source/ and are not part of the compact release
 ZIP. Each platform has one self-contained source tree: `source/launcher/windows/`
 and `source/launcher/linux/`.
+
+Final Windows and Linux release archives, including the complete application
+payload and intended seed, are stored in `Q:\GitHub\Release Packages`. Test
+the exact archives from that folder and publish those same files as release
+artifacts. Keep staging, extracted packages, payload archives, and build
+intermediates in the platform build directories or temporary storage; the
+release-package folder contains only final archives and checksum sidecars.
+
 The application-version inventory and semantic patch map is maintained at
 `source/versionsinfo.md`; it distinguishes current product markers from
 minimum compatibility, plugin/schema, historical, third-party, and
