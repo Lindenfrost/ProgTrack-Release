@@ -9,10 +9,21 @@ Pytest's terminal reporter and remains visible during captured runs.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import sys
 import time
 
 import pytest
+
+# Release-package acceptance tests must import the unpacked candidate payload,
+# not silently fall back to the checkout from which pytest was started.
+_candidate_package_root = os.environ.get("PROGTRACK_TEST_PACKAGE_ROOT")
+if _candidate_package_root:
+    _candidate_path = Path(_candidate_package_root).resolve()
+    if str(_candidate_path) in sys.path:
+        sys.path.remove(str(_candidate_path))
+    sys.path.insert(0, str(_candidate_path))
 
 _heritage_terminal = None
 _retest_journal = None
@@ -68,6 +79,24 @@ def pytest_collection_modifyitems(items) -> None:
             item.add_marker(pytest.mark.phase4_heritage)
         if (module_name == "test_phase023_core_repair_regressions.py"
                 and item.name == "test_309_effective_status_uses_authorized_checkbox_or_coerced_result"):
+            item.add_marker(pytest.mark.isolated_qt)
+        if (module_name == "test_phase023_core_repair_regressions.py"
+                and item.name == "test_268_seven_editors_reject_invalid_rows_without_saving"):
+            item.add_marker(pytest.mark.isolated_qt)
+        if (module_name == "test_phase023_core_repair_regressions.py"
+                and item.name == "test_247_deletion_all_editors_first_middle_last_and_empty_sqlite"):
+            item.add_marker(pytest.mark.isolated_qt)
+        if (module_name == "test_phase023_core_repair_regressions.py"
+                and item.name == "test_315_real_new_event_save_all_five_adapters_and_experimental_offspring"):
+            item.add_marker(pytest.mark.isolated_qt)
+        if (module_name == "test_phase023_core_repair_regressions.py"
+                and item.name == "test_319_builtin_event_buttons_and_headers_remain_localized"):
+            item.add_marker(pytest.mark.isolated_qt)
+        if (module_name == "test_phase023_core_repair_regressions.py"
+                and item.name == "test_318_new_invalid_missing_birth_cancel_denied_create_and_read_only_stay_safe"):
+            item.add_marker(pytest.mark.isolated_qt)
+        if (module_name == "test_phase023_core_repair_regressions.py"
+                and item.name == "test_309_five_editors_decline_retry_accept_sqlite"):
             item.add_marker(pytest.mark.isolated_qt)
         if module_name == "test_ui_svg_palette_contrast.py":
             item.add_marker(pytest.mark.isolated_qt)

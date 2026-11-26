@@ -199,6 +199,54 @@ class PostgreSQLAdministrationService:
             ) from exc
         return psycopg.connect(self._dsn(database, operation), autocommit=autocommit)
 
+    def _connect_runtime(self, database: str, *, password: str | None = None):
+        """Open a target connection with the configured runtime identity.
+
+        Database administration credentials prove owner authority; they are
+        deliberately not used for schema compatibility checks, which require
+        the same read privileges as the application runtime.
+        """
+        try:
+            import psycopg
+        except ImportError as exc:  # pragma: no cover - dependency environment
+            raise BackendConfigurationError(
+                "PostgreSQL administration requires Psycopg 3."
+            ) from exc
+        runtime_password = password
+        if runtime_password is None:
+            runtime_password = self._discovery_password or self.configuration.read_password()
+        target = replace(self.settings, database=database)
+        dsn = self.configuration.connection_dsn(
+            target,
+            password=runtime_password,
+            client_key_passphrase=self._client_key_passphrase,
+            allow_environment=False,
+        )
+        return psycopg.connect(dsn)
+
+    @staticmethod
+    def _check_runtime_target(cursor, database: str, expected_oid: int) -> None:
+        cursor.execute(
+            "SELECT current_database(), oid FROM pg_database "
+            "WHERE datname=current_database()"
+        )
+        if cursor.fetchone() != (database, expected_oid):
+            raise ConflictError("The PostgreSQL target changed during compatibility verification.")
+
+    def _verify_runtime_compatibility(
+        self, database: str, expected_oid: int, *, password: str | None = None,
+    ) -> None:
+        with self._connect_runtime(database, password=password) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SET TRANSACTION READ ONLY")
+                self._check_runtime_target(cursor, database, expected_oid)
+            if self._compatible(connection) is not True:
+                raise BackendAdminError(
+                    "runtime_schema",
+                    "The configured runtime account cannot read a compatible ProgTrack database. "
+                    "Check its database CONNECT, schema USAGE, and table SELECT privileges.",
+                )
+
     @contextmanager
     def authorize(self, action: str, database: str, *, login: str, password: str):
         """Authenticate the entered credentials and confine them to this command."""
@@ -460,36 +508,40 @@ class PostgreSQLAdministrationService:
                 cursor.execute("SELECT session_user, current_user, current_database()")
                 if cursor.fetchone() != (login, login, database) or not target or not target[1] or target[2] or not target[3]:
                     raise BackendAdminError("privilege", "The backend administrator does not own the requested database.")
-                if cls._compatible(connection) is not True:
-                    raise ValidationError("The selected PostgreSQL database is not available for ProgTrack.")
-            with psycopg.connect(runtime_dsn) as connection, connection.cursor() as cursor:
-                cursor.execute("SET TRANSACTION READ ONLY")
-                cursor.execute("SELECT oid FROM pg_database WHERE datname=current_database()")
-                if cursor.fetchone() != (target[0],) or cls._compatible(connection) is not True:
-                    raise ValidationError("The configured runtime credentials cannot use this ProgTrack database.")
+                with psycopg.connect(runtime_dsn) as runtime, runtime.cursor() as cursor:
+                    cursor.execute("SET TRANSACTION READ ONLY")
+                    cls._check_runtime_target(cursor, database, target[0])
+                    if cls._compatible(runtime) is not True:
+                        raise ValidationError("The configured runtime credentials cannot use this ProgTrack database.")
         except (BackendError, BackendConfigurationValidationError):
             raise
         except psycopg.Error:
             raise BackendConfigurationError("Could not verify the PostgreSQL credentials and target.") from None
 
-    def test_connection(self, *, operation=None, for_save=False) -> None:
+    def test_connection(
+        self, *, operation=None, for_save=False, runtime_password: str | None = None,
+    ) -> None:
         action = "save" if for_save else "test"
         self._consume(operation, action, self.settings.database)
         if for_save:
             with self._connect(operation.database, operation=operation) as connection, connection.cursor() as cursor:
                 cursor.execute("SET TRANSACTION READ ONLY")
-                self._check_current_target(cursor, operation)
-                if self._compatible(connection) is not True:
-                    raise ValidationError("The selected PostgreSQL database is not available for ProgTrack.")
+                target = self._check_current_target(cursor, operation)
+                self._verify_runtime_compatibility(
+                    operation.database, target[0], password=runtime_password,
+                )
 
-    def switch_database(self, name: str, *, operation=None) -> PostgreSQLSettings:
+    def switch_database(
+        self, name: str, *, operation=None, runtime_password: str | None = None,
+    ) -> PostgreSQLSettings:
         database = self.validate_database_name(name)
         self._consume(operation, "select", database)
         with self._connect(database, operation=operation) as connection, connection.cursor() as cursor:
             cursor.execute("SET TRANSACTION READ ONLY")
-            self._check_current_target(cursor, operation)
-            if self._compatible(connection) is not True:
-                raise ValidationError("The selected PostgreSQL database is not available for ProgTrack.")
+            target = self._check_current_target(cursor, operation)
+            self._verify_runtime_compatibility(
+                database, target[0], password=runtime_password,
+            )
         return replace(self.settings, database=database)
 
     def archive_database(self, name: str, *, archived: bool | None = None, operation=None) -> None:

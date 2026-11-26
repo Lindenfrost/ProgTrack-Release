@@ -105,7 +105,9 @@ class Block3Tests(unittest.TestCase):
 
     def test_style_transitions_are_wired_to_login_and_logout(self):
         source = MAIN.read_text(encoding="utf-8")
-        login = source.index("    def _do_master_login(self):")
+        # Login accepts the Qt signal's checked argument and a required-login
+        # flag in the current startup/authentication contract.
+        login = source.index("    def _do_master_login(")
         logout = source.index("    def _do_master_logout(self):")
         self.assertIn("self._reload_user_style_settings()", source[login:login + 5000])
         self.assertIn("self._reload_user_style_settings()", source[logout:logout + 4000])

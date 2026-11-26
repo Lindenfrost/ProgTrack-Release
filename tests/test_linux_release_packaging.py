@@ -8,21 +8,34 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tarfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
-ARTIFACT = ROOT / "source" / "launcher" / "linux" / "release" / "ProgTrack-0.3.0-linux-x86_64.tar.gz"
-CHECKSUM = ARTIFACT.with_name(ARTIFACT.name + ".sha256")
+pytestmark = pytest.mark.release_package
+
+_artifact_setting = os.environ.get("PROGTRACK_TEST_LINUX_PACKAGE")
+ARTIFACT = Path(_artifact_setting).resolve() if _artifact_setting else None
+CHECKSUM = ARTIFACT.with_name(ARTIFACT.name + ".sha256") if ARTIFACT else None
 
 
 class LinuxReleasePackagingContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        if ARTIFACT is None:
+            raise unittest.SkipTest(
+                "set PROGTRACK_TEST_LINUX_PACKAGE to the assembled 0.3.0 candidate; "
+                "source-local build artifacts are not accepted"
+            )
         if not ARTIFACT.is_file():
-            raise unittest.SkipTest("build the local Linux artifact before running this contract test")
+            raise FileNotFoundError(f"Configured Linux package candidate does not exist: {ARTIFACT}")
+        if CHECKSUM is None or not CHECKSUM.is_file():
+            raise FileNotFoundError(f"Candidate SHA-256 sidecar is missing: {CHECKSUM}")
 
     def test_checksum_and_manifest_are_self_consistent(self) -> None:
         digest = hashlib.sha256(ARTIFACT.read_bytes()).hexdigest()
@@ -33,7 +46,7 @@ class LinuxReleasePackagingContractTest(unittest.TestCase):
             metadata = json.loads(archive.extractfile(root).read())
         self.assertEqual(metadata["artifact"], ARTIFACT.name)
         self.assertEqual(metadata["artifact_version"], "0.3.0")
-        self.assertEqual(metadata["application_payload_version"], "0.2.1")
+        self.assertEqual(metadata["application_payload_version"], "0.3.0")
         self.assertTrue(metadata["native_runtime_bundled"])
         self.assertEqual(metadata["python_abi"], "cp313")
         self.assertIn("Psycopg binary", metadata["runtime_mode"])
@@ -43,7 +56,7 @@ class LinuxReleasePackagingContractTest(unittest.TestCase):
             "launcher/ProgTrack",
             "launcher/launcher.py",
             "launcher/progtrack.desktop",
-            "ProgTrack.v.0.2.1.py",
+            "ProgTrack.v.0.3.0.py",
             "Resources/Seed/progtrack_seed.ptdb",
             "icons/ui/manifest.json",
             "launcher/requirements-linux-bundled.txt",

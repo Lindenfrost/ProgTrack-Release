@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 import subprocess
 import sys
@@ -41,15 +42,18 @@ class WindowsLauncherCopyright299Test(unittest.TestCase):
         command = (
             "$v=[System.Diagnostics.FileVersionInfo]::GetVersionInfo("
             "$env:PROGTRACK_TEST_WINDOWS_LAUNCHER).LegalCopyright; "
-            "[Console]::Out.Write($v)"
+            "[Console]::Out.Write([Convert]::ToBase64String("
+            "[Text.Encoding]::UTF8.GetBytes($v)))"
         )
         result = subprocess.run(
             ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
             check=True,
             capture_output=True,
             text=True,
+            encoding="ascii",
         )
-        self.assertEqual(result.stdout.strip(), EXPECTED_COPYRIGHT)
+        actual = base64.b64decode(result.stdout.strip(), validate=True).decode("utf-8")
+        self.assertEqual(actual, EXPECTED_COPYRIGHT)
 
 
 if __name__ == "__main__":

@@ -118,6 +118,7 @@
   "backend.admin.error.initiator": "Сеанс ProgTrack с ролью Lord больше не действителен.",
   "backend.admin.error.separate": "Введите данные отдельной учётной записи администратора сервера.",
   "backend.admin.error.privilege": "У этой роли PostgreSQL нет прав для выполнения операции.",
+  "backend.admin.error.runtime_schema": "Настроенная учётная запись ProgTrack не может читать эту совместимую базу данных. Проверьте права CONNECT, USAGE для схемы и SELECT для таблиц.",
   "backend.admin.error.initialization": "PostgreSQL создал базу данных, но не смог инициализировать схему. Проверьте целевую базу перед повторной попыткой.",
   "backend.admin.error.encrypted_key": "Зашифрованный ключ клиента требует защищённой передачи пароля в pg_dump или pg_restore. На этом компьютере такой способ недоступен.",
   "backend.admin.error.audit_failed": "Не удалось записать результат в журнал аудита. Проверьте целевую базу перед повторной попыткой.",

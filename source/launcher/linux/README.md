@@ -9,7 +9,10 @@ By default, the assembler writes only the final tarball and its SHA-256 sidecar
 to `Q:\GitHub\Release Packages`; build intermediates remain in temporary
 storage. Test and publish the same final archive from that folder.
 
-The pinned target is Linux Mint 22.3 x86_64 (manylinux_2_28/glibc-compatible).
+The Phase 3 native acceptance target is the designated Ubuntu x86_64 test
+workstation. Record its exact Ubuntu release, kernel, architecture, and glibc
+version; passing there does not certify every Ubuntu release. The archive uses
+a manylinux_2_28-compatible runtime baseline.
 The bundle includes CPython 3.13.15, PyQt6/Qt6, the plotting/scientific/PDF/XLSX
 stack, Matplotlib fonts, and Psycopg's binary PostgreSQL client with libpq/TLS
 libraries. It contains no Windows `.exe`, `.dll`, or `.pyd` runtime. The POSIX

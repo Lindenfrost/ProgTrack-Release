@@ -51,12 +51,17 @@ class PostgresFixture:
                 self.row = None
                 if sql == "SELECT session_user, current_user":
                     self.row = (options["user"], options["user"])
+                elif sql == "SELECT session_user, current_user, current_database()":
+                    self.row = (options["user"], options["user"], options["dbname"])
                 elif sql.startswith("SELECT session_user"):
                     self.row = (options["user"], options["user"], fixture.can_create)
                 elif sql.startswith("SELECT pg_try_advisory_lock"):
                     self.row = (True,)
                 elif sql.startswith("SELECT pg_try_advisory_xact_lock_shared"):
                     self.row = (True,)
+                elif sql.startswith("SELECT current_database(), oid FROM pg_database"):
+                    database = options["dbname"]
+                    self.row = (database, fixture.databases[database][0])
                 elif sql.startswith("SELECT count(*) FROM managed_files"):
                     self.row = (0,)
                 elif sql.startswith("SELECT document_id,category"):
@@ -88,7 +93,13 @@ class PostgresFixture:
             def fetchall(self):
                 return self.rows
 
-        return nullcontext(SimpleNamespace(cursor=lambda: nullcontext(Cursor()), autocommit=kwargs.get("autocommit", False)))
+        connection = SimpleNamespace(
+            cursor=lambda: nullcontext(Cursor()),
+            autocommit=kwargs.get("autocommit", False),
+            user=options["user"],
+            database=options["dbname"],
+        )
+        return nullcontext(connection)
 
 
 @pytest.fixture
@@ -152,13 +163,119 @@ def test_exact_scope_single_use_real_identity_and_secret_free_audit(state):
     with authorize(state.admin, "save", "active") as another:
         state.admin.test_connection(operation=another, for_save=True)
     assert op.correlation_id != another.correlation_id
-    assert all(opts["password"] == "fixture-dba-secret" for opts, _ in state.server.sessions)
+    assert [(opts["user"], opts["password"]) for opts, _ in state.server.sessions] == [
+        ("fixture_dba", "fixture-dba-secret"),
+        ("fixture_dba", "fixture-dba-secret"),
+        ("runtime", "runtime-secret"),
+        ("fixture_dba", "fixture-dba-secret"),
+        ("fixture_dba", "fixture-dba-secret"),
+        ("runtime", "runtime-secret"),
+    ]
     for call in state.audit.call_args_list:
         action, login, data = call.args
         assert action.startswith("database_") and login == "fixture_dba"
         assert data["backend_admin"] == login and data["initiating_application_user"] == "ProgTrackLord"
         assert data["result"] == "success" and data["database"] in state.server.databases
         assert "secret" not in repr(call)
+
+
+@pytest.mark.parametrize("action", ["select", "save"])
+def test_schema_compatibility_uses_runtime_role_not_database_owner(state, monkeypatch, action):
+    compatibility_roles = []
+
+    def runtime_only_compatibility(connection):
+        compatibility_roles.append(connection.user)
+        return connection.user == "runtime"
+
+    monkeypatch.setattr(state.admin, "_compatible", runtime_only_compatibility)
+    if action == "select":
+        with authorize(state.admin, "select", "selected") as op:
+            result = state.admin.switch_database(
+                "selected", operation=op, runtime_password="runtime-secret",
+            )
+        assert result.database == "selected"
+    else:
+        with authorize(state.admin, "save", "active") as op:
+            state.admin.test_connection(
+                operation=op, for_save=True, runtime_password="runtime-secret",
+            )
+
+    assert compatibility_roles == ["runtime"]
+    assert any(
+        options["user"] == "fixture_dba" and options["password"] == "fixture-dba-secret"
+        for options, _ in state.server.sessions
+    )
+    assert any(
+        options["user"] == "runtime" and options["password"] == "runtime-secret"
+        for options, _ in state.server.sessions
+    )
+
+
+def test_runtime_compatibility_rejects_a_replaced_database_oid(state, monkeypatch):
+    original_connect = state.server.connect
+
+    def replace_target_before_runtime_probe(dsn, **kwargs):
+        options = conninfo_to_dict(dsn)
+        if options["user"] == "runtime" and options["dbname"] == "selected":
+            state.server.databases["selected"] = (11, True)
+        return original_connect(dsn, **kwargs)
+
+    monkeypatch.setattr("psycopg.connect", replace_target_before_runtime_probe)
+    with authorize(state.admin, "select", "selected") as op:
+        with pytest.raises(ConflictError, match="target changed"):
+            state.admin.switch_database(
+                "selected", operation=op, runtime_password="runtime-secret",
+            )
+
+
+def test_runtime_compatibility_failure_is_actionable_and_read_only(state, monkeypatch):
+    compatibility_roles = []
+
+    def incompatible(connection):
+        compatibility_roles.append(connection.user)
+        return False
+
+    monkeypatch.setattr(state.admin, "_compatible", incompatible)
+    with authorize(state.admin, "select", "selected") as op:
+        with pytest.raises(BackendAdminError) as caught:
+            state.admin.switch_database(
+                "selected", operation=op, runtime_password="runtime-secret",
+            )
+
+    assert caught.value.reason == "runtime_schema"
+    assert "CONNECT, schema USAGE, and table SELECT" in str(caught.value)
+    assert compatibility_roles == ["runtime"]
+    assert all(
+        sql.startswith(("SELECT", "SET TRANSACTION READ ONLY"))
+        for _, _, sql, _ in state.server.sql
+    )
+
+
+def test_prelogin_recovery_compatibility_uses_runtime_role(state, monkeypatch):
+    from psycopg.conninfo import make_conninfo
+    from Plugins.core.runtime_paths import BackendProfile
+
+    settings = state.settings
+    configuration = SimpleNamespace(
+        paths=SimpleNamespace(profile=BackendProfile.SHARED_POSTGRESQL),
+        saved_postgresql=lambda: settings,
+        connection_dsn=lambda requested, *, password, **_kwargs: make_conninfo(
+            host="fixture-host", dbname=requested.database,
+            user=requested.user, password=password,
+        ),
+    )
+    compatibility_roles = []
+
+    def runtime_only_compatibility(connection):
+        compatibility_roles.append(connection.user)
+        return connection.user == "runtime"
+
+    monkeypatch.setattr(PostgreSQLAdministrationService, "_compatible", staticmethod(runtime_only_compatibility))
+    PostgreSQLAdministrationService.test_recovery_target(
+        configuration, settings, login="fixture_dba", password="fixture-dba-secret",
+        runtime_password="runtime-secret", client_key_passphrase="",
+    )
+    assert compatibility_roles == ["runtime"]
 
 
 def test_auth_failure_privilege_failure_and_revoked_initiator_abort_before_action(state):
@@ -440,8 +557,14 @@ def test_qt_refresh_cancel_repeated_test_and_save_use_separate_credentials(state
         assert len(dialogs) == count and dialogs[-1].password.text() == ""
         wait_for_storage()
     assert storage_probe.call_count == 3
-    assert len(state.server.sessions) == before + 4
-    assert all(opts["password"] == "fixture-dba-secret" for opts, _ in state.server.sessions[before:])
+    assert len(state.server.sessions) == before + 5
+    assert [(opts["user"], opts["password"]) for opts, _ in state.server.sessions[before:]] == [
+        ("fixture_dba", "fixture-dba-secret"),
+        ("fixture_dba", "fixture-dba-secret"),
+        ("fixture_dba", "fixture-dba-secret"),
+        ("fixture_dba", "fixture-dba-secret"),
+        ("runtime", "runtime-secret"),
+    ]
     assert state.config.read_password() == "runtime-secret"
     assert "fixture-dba-secret" not in state.config.paths.profile_file.read_text(encoding="utf-8")
     dialog.close()
@@ -453,6 +576,7 @@ def test_qt_each_management_handler_passes_exact_selected_target(state, qtapp, m
     dialog = BackendConfigurationDialog(state.config, {}, authorized=True, validate_admin_initiator=state.identity)
     dialog.pg_host.setText("fixture-host")
     dialog.pg_user.setText("runtime")
+    dialog.pg_password.setText("runtime-secret")
     dialog.pg_managed_root.setText(state.settings.managed_root)
     dialog.show()
     refresh_catalog(dialog)
@@ -495,4 +619,39 @@ def test_qt_each_management_handler_passes_exact_selected_target(state, qtapp, m
     dialog._create_pg_database()
     assert [call.args[1:] for call in invoked.call_args_list] == [(action, "selected") for action in
                                                                     ("archive", "backup", "restore", "delete", "transfer", "create")]
+    dialog.close()
+
+
+def test_qt_failed_runtime_compatibility_keeps_selected_database_unchanged(state, qtapp, monkeypatch):
+    from Plugins.core.backend_configuration_dialog import BackendAdminAuthorizationDialog
+
+    dialog = BackendConfigurationDialog(state.config, {}, authorized=True, validate_admin_initiator=state.identity)
+    dialog.pg_host.setText("fixture-host")
+    dialog.pg_user.setText("runtime")
+    dialog.pg_password.setText("runtime-secret")
+    dialog.pg_managed_root.setText(state.settings.managed_root)
+    dialog.postgres_radio.setChecked(True)
+    dialog.show()
+    refresh_catalog(dialog)
+    dialog._selected_pg_database = lambda: "selected"
+    initial_database = dialog.pg_database.currentData()
+    messages = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: messages.append(args[-1]))
+    monkeypatch.setattr(
+        PostgreSQLAdministrationService,
+        "_compatible",
+        staticmethod(lambda _connection: False),
+    )
+
+    def authorize_admin(prompt):
+        prompt.login.setText("fixture_dba")
+        prompt.password.setText("fixture-dba-secret")
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(BackendAdminAuthorizationDialog, "exec", authorize_admin)
+    dialog._use_selected_pg_database()
+
+    assert dialog.pg_database.currentData() == initial_database
+    assert len(messages) == 1
+    assert "CONNECT, schema USAGE, and table SELECT" in messages[0]
     dialog.close()

@@ -118,6 +118,7 @@
   "backend.admin.error.initiator": "Die ProgTrack-Sitzung mit der Rolle Lord ist nicht mehr gültig.",
   "backend.admin.error.separate": "Geben Sie die Zugangsdaten eines separaten Backend-Administratorkontos ein.",
   "backend.admin.error.privilege": "Dieser PostgreSQL-Rolle fehlt die erforderliche Berechtigung für den Vorgang.",
+  "backend.admin.error.runtime_schema": "Das konfigurierte ProgTrack-Laufzeitkonto kann diese kompatible Datenbank nicht lesen. Prüfen Sie die Berechtigungen CONNECT, USAGE für das Schema und SELECT für die Tabellen.",
   "backend.admin.error.initialization": "PostgreSQL hat die Datenbank erstellt, konnte aber das Schema nicht initialisieren. Prüfen Sie das Ziel vor einem erneuten Versuch.",
   "backend.admin.error.encrypted_key": "Verschlüsselte Clientschlüssel erfordern eine geschützte Übergabe des Passworts an pg_dump oder pg_restore. Auf diesem Rechner ist das nicht möglich.",
   "backend.admin.error.audit_failed": "Das Ergebnis konnte nicht im Auditprotokoll aufgezeichnet werden. Prüfen Sie das Ziel vor einem erneuten Versuch.",

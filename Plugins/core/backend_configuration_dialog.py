@@ -967,7 +967,12 @@ class BackendConfigurationDialog(QDialog):
         selected = self._selected_pg_database()
         if self.pg_database.findData(selected) < 0:
             return
-        success, settings = self._admin_action("select", selected, lambda service, op: service.switch_database(selected, operation=op))
+        success, settings = self._admin_action(
+            "select", selected,
+            lambda service, op: service.switch_database(
+                selected, operation=op, runtime_password=self._password(),
+            ),
+        )
         if success:
             self.pg_database.setCurrentIndex(self.pg_database.findData(settings.database))
 
@@ -1365,7 +1370,10 @@ class BackendConfigurationDialog(QDialog):
                 return
             pg = self.postgresql_settings()
             success, _ = self._admin_action(
-                "save", pg.database, lambda service, op: service.test_connection(operation=op, for_save=True),
+                "save", pg.database,
+                lambda service, op: service.test_connection(
+                    operation=op, for_save=True, runtime_password=self._password(),
+                ),
             )
             if success:
                 self._check_staged_storage(lambda: self._persist_profile(BackendProfile.SHARED_POSTGRESQL, pg))

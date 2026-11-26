@@ -266,6 +266,12 @@ class CoreRepairTests(unittest.TestCase):
         login('test-1')
         login('test-2', invalid=True)
         login('test-2')
+        required_login_calls = []
+        # The timeout contract under test is session revocation and audit. The
+        # real required-login dialog is covered by the interactive-login cases
+        # above; intercept it here so the offscreen test cannot block forever
+        # on the modal prompt that follows idle logout.
+        app._do_master_login = lambda _checked=False, *, required=False: required_login_calls.append(required)
         # Assert configured minute-to-ms behavior before compressing only the
         # test timers. Production timeouts/security settings are not changed.
         master._effective_timeout_minutes = 1
@@ -294,6 +300,7 @@ class CoreRepairTests(unittest.TestCase):
         self.assertEqual(app.selected_animals, [])
         self.assertFalse(master._idle_timer.isActive())
         self.assertFalse(master._warning_timer.isActive())
+        self.assertEqual(required_login_calls, [True])
         log = Path(master.audit_logs_dir()) / datetime.now().strftime('audit_%Y-%m.log')
         text = log.read_text(encoding='utf-8')
         self.assertIn('[test-2] [timeout]', text)
@@ -2966,7 +2973,17 @@ class CoreRepairTests(unittest.TestCase):
         master = app.master_track
         records = app.backend.records
         metrics = []
-        def run(label, action):
+        required_login_calls = []
+        def logout_to_required_login():
+            # Logout clears the outgoing selection and requests mandatory
+            # authentication; it does not republish a list while the required
+            # login prompt is pending. The dialog itself is covered elsewhere.
+            with patch.object(
+                    app, '_do_master_login',
+                    side_effect=lambda _checked=False, *, required=False:
+                    required_login_calls.append(required)):
+                app._do_master_logout()
+        def run(label, action, *, expected_counts=1, expected_rows=1, expected_plots=1):
             executed = Counter()
             sql = Counter()
             connect = app.backend.adapter._connect
@@ -3003,15 +3020,18 @@ class CoreRepairTests(unittest.TestCase):
                             'catalogue_reads': queries['projects', 'catalog'],
                             'user_reads': queries['security', 'users']})
             metrics[-1]['sql'] = dict(sql)
-            self.assertEqual(executed, {'counts': 1, 'rows': 1})
-            self.assertEqual(plots.call_count, 1)
+            self.assertEqual(executed, Counter(counts=expected_counts, rows=expected_rows))
+            self.assertEqual(plots.call_count, expected_plots)
             self.assertLessEqual(queries['projects', 'catalog'], 2)
             self.assertEqual(app.selected_animals, [])
             self.assertFalse(app.chk_events.signalsBlocked())
             print('ISSUE_306_SESSION_ROW ' + json.dumps(metrics[-1]), flush=True)
             return sessions.call_count
         for repetition in range(2):
-            self.assertEqual(run('logout-' + str(repetition + 1), app._do_master_logout), 1)
+            self.assertEqual(run(
+                'logout-' + str(repetition + 1), logout_to_required_login,
+                expected_counts=0, expected_rows=0, expected_plots=0), 1)
+            self.assertEqual(required_login_calls, [True] * (repetition + 1))
             self.assertFalse(master.is_logged_in)
             with patch.object(master, 'login_interactive', side_effect=lambda **_kwargs:
                               (master._login_as('Manager') or True)):
@@ -4878,8 +4898,8 @@ class CoreRepairTests(unittest.TestCase):
             for i, typ in enumerate(('birth', 'embryo_transfer', 'surgery'))]
         return app
 
-    def _303_until_first_ui(self, app, username, disabled=False):
-        """Execute real startup authentication ordering up to UI construction."""
+    def _303_until_first_ui(self, app, username, disabled=False, *, expect_ui=True):
+        """Execute startup authentication and optionally stop at UI construction."""
         class FirstUI(Exception):
             pass
         app.has_master_track = True
@@ -4896,8 +4916,14 @@ class CoreRepairTests(unittest.TestCase):
         app._load_settings()  # Exactly the real pre-authentication initial load.
         with patch.object(MAIN.QTimer, 'singleShot'), \
              patch.object(MAIN, 'QMenuBar', side_effect=FirstUI):
-            with self.assertRaises(FirstUI):
+            if expect_ui:
+                with self.assertRaises(FirstUI):
+                    app._init_application_state()
+            else:
                 app._init_application_state()
+                self.assertTrue(app._startup_authentication_cancelled)
+                self.assertFalse(app.master_track.is_logged_in)
+                self.assertNotIn('master_track', app._disabled_plugins)
 
     def _303_artist_colors(self, app):
         if not app.selected_animals:
@@ -4952,7 +4978,7 @@ class CoreRepairTests(unittest.TestCase):
             renderer._apply_shared_plot_viewport((day-2, day+4))
             renderer.current_figure.savefig(Path(directory) / 'first-render-user-colours.png')
 
-    def test_303_cold_guest_disabled_and_standalone_do_not_borrow_user_styles(self):
+    def test_303_unauthenticated_startup_is_gated_and_standalone_keeps_local_styles(self):
         with tempfile.TemporaryDirectory() as temporary:
             backend = ProgTrackBackend(runtime_paths(Path(temporary), application_root=Path(temporary)),
                                        acquire_process_lock=False)
@@ -4961,9 +4987,7 @@ class CoreRepairTests(unittest.TestCase):
                     with self.subTest(disabled=disabled):
                         app = self._303_plot_session_host(backend)
                         app._apply_style_settings({'custom_events': {'birth': {'color': '#123456'}}})
-                        self._303_until_first_ui(app, None, disabled)
-                        self.assertEqual(self._303_artist_colors(app),
-                                         [to_rgba('#ead700'), to_rgba('#2feade'), to_rgba('#0000ff')])
+                        self._303_until_first_ui(app, None, disabled, expect_ui=False)
                 app = self._303_plot_session_host(backend)
                 app.master_track = None
                 app._save_user_style_settings({'custom_events': {'birth': {'color': '#ff00ff'}}})
@@ -6973,6 +6997,17 @@ class CoreRepairTests(unittest.TestCase):
         for path in ('logout', 'login-success', 'login-cancelled'):
             with self.subTest(path=path):
                 app = self.host()
+                hide_calls = []
+                close_calls = []
+                # This test covers the actor-boundary selection contract, not
+                # Qt's native window manager. Record the logout hide request
+                # without invoking a real hide on this deliberately partial,
+                # never-shown QMainWindow test double.
+                app.hide = lambda: hide_calls.append(True)
+                # A required-login cancellation calls close(); do not route the
+                # partial harness through the real application closeEvent,
+                # which releases resources that this host never initialized.
+                app.close = lambda: close_calls.append(True)
                 app.selected_animals = ['Subject']
                 app._selected_heritage_only = ['Dummy']
                 app.lst.addItem('Subject')
@@ -6997,7 +7032,9 @@ class CoreRepairTests(unittest.TestCase):
                 expected = ['Subject'] if path == 'login-cancelled' else []
                 self.assertEqual(app.selected_animals, expected)
                 self.assertEqual(app._selected_heritage_only, ['Dummy'] if expected else [])
-                self.assertEqual(received, [] if expected else [[]])
+                self.assertEqual(received, [[]] if path == 'login-success' else [])
+                self.assertEqual(hide_calls, [True] if path == 'logout' else [])
+                self.assertEqual(close_calls, [True] if path == 'logout' else [])
 
     def test_273_project_heading_never_uses_origin_or_identity(self):
         record = {'name': 'Subject', 'origin': 'DPZ', 'ipid': 'DPZ:Subject', 'project': ''}

@@ -118,6 +118,7 @@
   "backend.admin.error.initiator": "La sessione ProgTrack con il ruolo Lord non è più valida.",
   "backend.admin.error.separate": "Inserisci le credenziali di un account amministratore del backend separato.",
   "backend.admin.error.privilege": "Questo ruolo PostgreSQL non dispone del privilegio richiesto per l’operazione.",
+  "backend.admin.error.runtime_schema": "L’account runtime configurato di ProgTrack non può leggere questo database compatibile. Verifica i privilegi CONNECT, USAGE sullo schema e SELECT sulle tabelle.",
   "backend.admin.error.initialization": "PostgreSQL ha creato il database, ma l’inizializzazione dello schema non è riuscita. Controlla il database prima di riprovare.",
   "backend.admin.error.encrypted_key": "Le chiavi client crittografate richiedono un sistema protetto per passare la password a pg_dump o pg_restore. Questo sistema non è disponibile su questo computer.",
   "backend.admin.error.audit_failed": "Non è stato possibile registrare l’esito nel registro di audit. Controlla il database prima di riprovare.",

@@ -166,11 +166,13 @@ The release also includes the separate Linux archive
 `ProgTrack-0.3.0-linux-x86_64.tar.gz`, carrying the same 0.3.0 application
 payload and backend contracts with a pinned CPython runtime, Qt/PyQt6,
 scientific/PDF/XLSX dependencies, bundled fonts, and the Psycopg binary client.
-It is published for evaluation; native Linux Mint 22.3 x86_64 acceptance
-(ELF/linker, GUI, PDF, SQLite, PostgreSQL/TLS, XDG, and clean-machine checks)
-remains open under issue #49. Linux is not declared natively supported until that
-gate passes. Windows and Linux artifacts remain separate rather than combining
-incompatible `.dll`/`.pyd` and `.so` runtimes in one package.
+It is prepared for evaluation; native acceptance on the designated Ubuntu
+x86_64 test workstation (ELF/linker, GUI, PDF, SQLite, PostgreSQL/TLS, XDG,
+and clean-machine checks) remains open under issue #49. Record that machine's
+exact Ubuntu release and system baseline. Linux is not declared natively
+supported until that gate passes. Windows and Linux artifacts remain separate
+rather than combining incompatible `.dll`/`.pyd` and `.so` runtimes in one
+package.
 
 ## Folder layout
 

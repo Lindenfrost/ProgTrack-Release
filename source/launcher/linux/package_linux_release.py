@@ -287,7 +287,7 @@ def _prepare_runtime(stage: Path, archive: Path, wheels: list[Path], manifest: d
         "python_abi": PYTHON_TAG,
         "wheels": [{"name": item["name"], "version": item["version"], "sha256": item["sha256"]} for item in manifest["wheels"]],
         "runtime_mode": "self-contained CPython, PyQt6, scientific stack, and Psycopg binary client",
-        "native_validation": "requires Linux Mint 22.3 x86_64 manual gate",
+        "native_validation": "requires designated Ubuntu x86_64 manual gate; record exact release, kernel, architecture, and glibc",
     }
     (runtime / "runtime_metadata.json").write_text(
         json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
@@ -395,7 +395,7 @@ def _write_metadata(stage: Path, commit: str, epoch: int, manifest: dict) -> Non
         "launcher": "launcher/ProgTrack",
         "runtime_mode": "self-contained CPython 3.13.15 / PyQt6 6.7.1 / Psycopg binary",
         "python_abi": PYTHON_TAG,
-        "glibc_baseline": "manylinux_2_28; Linux Mint 22.3 x86_64 acceptance target",
+        "glibc_baseline": "manylinux_2_28; designated Ubuntu x86_64 acceptance target",
         "native_runtime_bundled": True,
         "postgresql_client": "psycopg-binary 3.3.4 with bundled libpq/TLS libraries",
         "native_linux_validation": "required before public support claim",
@@ -466,7 +466,7 @@ def _write_inventory(stage: Path, commit: str, epoch: int, components: dict, own
         "external_prerequisites": [
             "Linux x86_64, glibc 2.28 or newer, and a graphical session",
             "System C++ runtime, graphics, X11/XCB or Wayland, font and other Qt dependencies",
-            "Confirm actual loaded libraries and active Qt plugins on clean Linux Mint 22.3",
+            "Confirm actual loaded libraries and active Qt plugins on the designated clean Ubuntu x86_64 workstation",
         ],
         "components": components,
         "native_licenses_requiring_reconciliation": sorted(license_review),

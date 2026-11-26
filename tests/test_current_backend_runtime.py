@@ -31,12 +31,13 @@ from Plugins.core.runtime_paths import BackendProfile, RuntimePaths
 
 
 ROOT = Path(__file__).resolve().parents[1]
+APP_ROOT = Path(os.environ.get("PROGTRACK_TEST_PACKAGE_ROOT", ROOT)).resolve()
 
 
 def runtime_paths(root: Path, *, application_root: Path | None = None) -> RuntimePaths:
     base = root / "runtime"
     paths = RuntimePaths(
-        application_root=application_root or ROOT,
+        application_root=application_root or APP_ROOT,
         profile=BackendProfile.STANDALONE_SQLITE,
         data_root=base / "data",
         config_root=base / "config",
@@ -870,7 +871,7 @@ class CurrentBackendRuntimeTests(unittest.TestCase):
             "Plugins/Projects_Track/projects_history.json",
         )
         for relative in retired:
-            self.assertFalse((ROOT / relative).exists(), relative)
+            self.assertFalse((APP_ROOT / relative).exists(), relative)
 
 
 if __name__ == "__main__":
