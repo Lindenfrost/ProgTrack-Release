@@ -4,11 +4,11 @@ Use this checklist for native, two-client, live-site, and human acceptance only.
 
 ## Candidate under test
 
-- Commit: 3ba2b416e8458ca27387c69cd64eaa842a3158f2
+- Commit: f4c4ac76c80bc22d30568765a9b9ca48aceff9c0
 - Windows: Q:\GitHub\Release Packages\ProgTrack-0.3.0.zip
-- Windows SHA-256: 092a51ab3c85902359d7347a617d64d4473b752df4c9badf8324ecd43cc53bc3
+- Windows SHA-256: 5ad7e1d51445bfe689459ba4e81ed8fd679bb8a230a1ff4f3651f1f1d238f95e
 - Linux: Q:\GitHub\Release Packages\ProgTrack-0.3.0-linux-x86_64.tar.gz
-- Linux SHA-256: 996abcfb5bcc79d7300b8abdb1425614fdf4723f2f645a3a37f2ddf7430cf342
+- Linux SHA-256: b546bf042ab5d00995f6e3625b38cc7c7921824741d68775fa32bc559e1dd658
 
 Before testing, recalculate both archive hashes and compare them with these values. If either archive changes, stop and replace the candidate identity above before continuing. Any unresolved Linux component or license entry keeps #49 and the release gate open, even if runtime tests pass. Manual results cannot close the remaining #50 implementation/integration work or automated acceptance criteria.
 
