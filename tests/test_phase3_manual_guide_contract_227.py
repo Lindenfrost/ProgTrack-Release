@@ -52,6 +52,26 @@ class TableRowExtractor(HTMLParser):
 
 
 class Phase3ManualGuideContract227Test(unittest.TestCase):
+    def test_each_guide_documents_the_smb_service_account_repair_sequence(self):
+        required_server_steps = (
+            "getent group progtrack",
+            "sudo useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --gid progtrack smb_app",
+            "sudo smbpasswd -a smb_app",
+            "sudo smbpasswd -e smb_app",
+            "sudo pdbedit -L -v -u smb_app",
+            "[U]",
+            "username map",
+            "psr-admin = smb_app",
+            "sudo testparm -s",
+            "sudo systemctl reload smbd",
+            "smbclient //127.0.0.1/progtrack-managed -U smb_app -c 'ls'",
+        )
+        for language, relative_path in GUIDES.items():
+            with self.subTest(language=language):
+                source = (ROOT / relative_path).read_text(encoding="utf-8")
+                for step in required_server_steps:
+                    self.assertIn(step, source, f"{language} guide omits Samba setup step: {step}")
+
     def test_each_localized_guide_has_account_table_and_ordered_client_steps(self):
         for language, relative_path in GUIDES.items():
             with self.subTest(language=language):

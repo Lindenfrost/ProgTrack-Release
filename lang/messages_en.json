@@ -125,7 +125,7 @@
   "backend.admin.transfer_summary": "Source: {source}\nTarget: {target}\nPreflight counts: {counts}\n\n",
   "backend.admin.transfer_source_failed": "The local SQLite source could not be read or the transfer package could not be verified.",
   "backend.demo_seed.title": "Example data",
-  "backend.demo_seed.prompt": "Install the example data in this new local database?",
+  "backend.demo_seed.prompt": "Install the sample data in the local database?",
   "backend.demo_seed.yes": "Yes, install",
   "backend.demo_seed.no": "No, start empty",
   "project.catalog.conflict": "The project catalog changed or could not be saved. Refresh and try again.",

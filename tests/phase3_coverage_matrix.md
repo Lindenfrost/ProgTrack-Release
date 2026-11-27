@@ -18,20 +18,21 @@ The latest Phase 3 default-suite result is recorded below. Heritage tests remain
 | #219 operation-scoped backend-admin authorization | `test_backend_admin_authorization_219.py` | 3A P3A-01/P3A-05/P3A-07: live installed-client workflow |
 | #220 one active session across clients | `test_phase3_sessions_220_232.py`; `test_current_backend_runtime.py` | 3A P3A-06: same-account session handoff between clients |
 | #226 client-local managed-storage settings and credentials | `test_backend_storage_dialog_226.py`; `test_managed_storage_provider_226.py` | 3A P3A-01/P3A-05/P3A-09: two clients using one IT-managed share |
-| #227 PostgreSQL/network setup guides | `test_phase3_manual_guide_contract_227.py` | 3A P3A-09: human review of meaning and localized UI labels |
+| #227 PostgreSQL/network setup guides | `test_phase3_manual_guide_contract_227.py` | 3A P3A-09/P3A-11: review localized manuals, client setup and the Linux Mint server walkthrough |
 | #228 unavailable managed-storage path | `test_managed_storage_provider_226.py`; `test_backend_storage_dialog_226.py` | 3A P3A-05/P3A-07/P3A-09: unavailable share while PostgreSQL remains reachable |
 | #229 unavailable Shared PostgreSQL and reconnect | `test_shared_disconnected_startup_229.py` | `Q:\GitHub\Issue Tracker\Tests\manual tests phase 3.md`, B8: native unavailable-server/reconnect check |
 | #230 managed-document transactions/interchange/reconciliation | `test_current_backend_runtime.py`; `test_phase3_postgresql_management.py`; `test_managed_storage_provider_226.py` | 3A P3A-07/P3A-09: real shared documents and client mount |
-| #231 compatibility checks and exclusive migrations | `test_phase3_schema_maintenance_231.py`; `test_backend_schema_bootstrap.py`; `test_phase3_postgresql_management.py` | — |
+| #231 compatibility checks and exclusive migrations | `test_phase3_schema_maintenance_231.py`; `test_backend_schema_bootstrap.py`; `test_phase3_postgresql_management.py` | 3A P3A-08: revision-3 upgrade and checksum-pinned 0.2.3 Windows-client rejection |
 | #232 account changes revoke the target's session | `test_phase3_sessions_220_232.py` | 3A P3A-06: installed-client session state |
 | #241 explicit local demo-seed consent; never seed Shared PostgreSQL | `test_phase3_demo_seed_consent.py`; `test_backend_schema_bootstrap.py`; `test_shared_disconnected_startup_229.py` | 3A P3A-01/P3A-05: clean local first start and newly created empty Shared database |
 | #246 backend-owned Core configuration | `test_current_backend_runtime.py::test_role_configuration_is_backend_owned`; `test_role_builder_configuration.py`; `test_identity_resource_catalogs.py` (text resources and pure ID helpers only) | — |
 | #299 Windows launcher copyright metadata | `test_launcher_windows_copyright_299.py`; `test_license_notice_coverage.py`; package mode reads `LegalCopyright` from the final archive's `Launcher.exe` | 3A P3A-02: Copyright field in the final package's Explorer Details view |
 | #325 test-suite reconciliation | This matrix, `conftest.py`, `pytest.ini`, and the complete default suite | 3A remains limited to native/site/human checks; it is not a second test-suite run |
 | #326 branded Reports PDF styling | `test_phase2b_branding_pdf_exports.py`; `test_phase2b_branding_positions.py` | 3A P3A-07: review branded PDF from the assembled clients |
-| #327 login-first gate and dump attribution | `test_issue_327_startup_auth_gate.py` | 3A P3A-01/P3A-10/P3A-11: fresh startup, outage behavior, and optional WinDbg attribution |
+| #327 login-first gate and dump attribution | `test_issue_327_startup_auth_gate.py` | 3A P3A-01/P3A-10; specialist dump attribution is in a separate checklist |
 | #331 select database with separate backend/runtime roles | `test_backend_admin_authorization_219.py`; `test_current_backend_runtime.py` | 3A P3A-01/P3A-05 step 1: progtrack_admin selects while progtrack_app remains the runtime account |
 
+| #337 Linux Mint server setup manual validation | Manual walkthrough of PostgreSQL/TLS/catalog-clock/Samba steps | 3A P3A-11: fresh Mint server and Windows client connection; not a Mint package test |
 ## Execution boundary
 
 - Standard command: `python -m pytest -q`. It runs all selected non-Heritage tests, including subprocess wrappers for Qt cases marked `isolated_qt`.

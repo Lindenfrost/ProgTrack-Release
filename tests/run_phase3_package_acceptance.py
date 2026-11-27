@@ -24,6 +24,7 @@ PACKAGES = Path(os.environ.get("PROGTRACK_RELEASE_PACKAGES_DIR", r"Q:\GitHub\Rel
 WINDOWS_NAME = "ProgTrack-0.3.0.zip"
 LINUX_NAME = "ProgTrack-0.3.0-linux-x86_64.tar.gz"
 BACKEND_TESTS = (
+    "tests/test_phase3_syntax_warnings.py",
     "tests/test_phase3_release_package_acceptance.py",
     "tests/test_current_backend_runtime.py",
     "tests/test_backend_schema_bootstrap.py",
@@ -124,7 +125,8 @@ def _run_package_tests(label: str, package_root: Path, extra_tests: tuple[str, .
     if linux_archive is not None:
         env["PROGTRACK_TEST_LINUX_PACKAGE"] = str(linux_archive)
     command = [
-        sys.executable, "-m", "pytest", "-o", "addopts=", "-q",
+        sys.executable, "-W", "error::SyntaxWarning", "-m", "pytest",
+        "-o", "addopts=", "-q",
         *BACKEND_TESTS, *extra_tests,
     ]
     print(f"\n[PACKAGE TESTS] {label}: {package_root}", flush=True)

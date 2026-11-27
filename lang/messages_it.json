@@ -125,7 +125,7 @@
   "backend.admin.transfer_summary": "Origine: {source}\nDestinazione: {target}\nConteggi: {counts}\n\n",
   "backend.admin.transfer_source_failed": "Impossibile leggere l’origine SQLite locale o verificare il pacchetto di trasferimento.",
   "backend.demo_seed.title": "Dati di esempio",
-  "backend.demo_seed.prompt": "Installare i dati di esempio in questo nuovo database locale?",
+  "backend.demo_seed.prompt": "Installare i dati di esempio nel database locale?",
   "backend.demo_seed.yes": "Sì, installa",
   "backend.demo_seed.no": "No, inizia senza dati",
   "project.catalog.conflict": "Il catalogo dei progetti è cambiato o non può essere salvato. Aggiornare e riprovare.",

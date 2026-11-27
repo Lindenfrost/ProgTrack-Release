@@ -125,7 +125,7 @@
   "backend.admin.transfer_summary": "Источник: {source}\nЦель: {target}\nКоличество записей: {counts}\n\n",
   "backend.admin.transfer_source_failed": "Не удалось прочитать локальную базу SQLite или проверить пакет переноса.",
   "backend.demo_seed.title": "Примеры данных",
-  "backend.demo_seed.prompt": "Установить примеры данных в эту новую локальную базу?",
+  "backend.demo_seed.prompt": "Установить демонстрационные данные в локальную базу данных?",
   "backend.demo_seed.yes": "Да, установить",
   "backend.demo_seed.no": "Нет, начать с пустой базы",
   "project.catalog.conflict": "Каталог проектов изменён или не может быть сохранён. Обновите его и повторите попытку.",

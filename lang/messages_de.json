@@ -125,7 +125,7 @@
   "backend.admin.transfer_summary": "Quelle: {source}\nZiel: {target}\nAnzahl je Datensatztyp: {counts}\n\n",
   "backend.admin.transfer_source_failed": "Die lokale SQLite-Quelle konnte nicht gelesen oder das Transferpaket nicht geprüft werden.",
   "backend.demo_seed.title": "Beispieldaten",
-  "backend.demo_seed.prompt": "Beispieldaten in dieser neuen lokalen Datenbank installieren?",
+  "backend.demo_seed.prompt": "Beispieldaten in der lokalen Datenbank installieren?",
   "backend.demo_seed.yes": "Ja, installieren",
   "backend.demo_seed.no": "Nein, leer starten",
   "project.catalog.conflict": "Der Projektkatalog wurde geändert oder konnte nicht gespeichert werden. Aktualisieren Sie die Ansicht und versuchen Sie es erneut.",

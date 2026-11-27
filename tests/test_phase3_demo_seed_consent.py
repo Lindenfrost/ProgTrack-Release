@@ -1,4 +1,6 @@
 """First-run demo consent and profile isolation."""
+import json
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -6,6 +8,20 @@ import pytest
 from Plugins.core.backend import ProgTrackBackend
 from Plugins.core.runtime_paths import BackendProfile
 from tests.test_current_backend_runtime import runtime_paths
+
+
+def test_first_run_demo_prompt_has_approved_text_in_every_catalog():
+    root = Path(__file__).resolve().parents[1]
+    expected = {
+        "de": "Beispieldaten in der lokalen Datenbank installieren?",
+        "en": "Install the sample data in the local database?",
+        "it": "Installare i dati di esempio nel database locale?",
+        "ru": "Установить демонстрационные данные в локальную базу данных?",
+    }
+    for locale, prompt in expected.items():
+        catalog_path = root / "lang" / f"messages_{locale}.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        assert catalog["backend.demo_seed.prompt"] == prompt, catalog_path
 
 
 @pytest.mark.parametrize("answer", [False, None])
