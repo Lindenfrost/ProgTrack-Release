@@ -4,15 +4,15 @@ Use this checklist for native, two-client, live-site, and human acceptance only.
 
 ## Candidate under test
 
-- Commit: f4c4ac76c80bc22d30568765a9b9ca48aceff9c0
+- Commit: b346cfee92e46a78823077dd9d2c2d86dc13596b
 - Windows: Q:\GitHub\Release Packages\ProgTrack-0.3.0.zip
-- Windows SHA-256: 5ad7e1d51445bfe689459ba4e81ed8fd679bb8a230a1ff4f3651f1f1d238f95e
+- Windows SHA-256: c09aa9e51bf89bd600086da2ec4b8fbc63071558eb8a7c99ae09b3e1eaf1e175
 - Linux: Q:\GitHub\Release Packages\ProgTrack-0.3.0-linux-x86_64.tar.gz
-- Linux SHA-256: b546bf042ab5d00995f6e3625b38cc7c7921824741d68775fa32bc559e1dd658
+- Linux SHA-256: e613d2e1f6ed4a540ab1f29f66a497c62045c824e959268fb0c52b7c1f18a3d2
 
 Before testing, recalculate both archive hashes and compare them with these values. If either archive changes, stop and replace the candidate identity above before continuing. Any unresolved Linux component or license entry keeps #49 and the release gate open, even if runtime tests pass. Manual results cannot close the remaining #50 implementation/integration work or automated acceptance criteria.
 
-Candidate documentation gate: the pinned archives contain the earlier four manuals. The current working-copy manuals add the verified `smb_app` provisioning and username-map repair procedure, but those additions are absent from both pinned archives. P3A-09 must record this as a package/manual mismatch and cannot pass #227 until replacement Windows and Linux packages include the updated manuals and this candidate block is repinned to their hashes. Other independent checks may still be performed against the pinned packages.
+Candidate documentation gate: both replacement archives were built from commit b346cfee92e46a78823077dd9d2c2d86dc13596b. They include the current four localized manuals, the verified smb_app provisioning/username-map repair procedure, and the #330 first-run wording. The package acceptance runner passed 59 tests and 4 subtests for each archive. Native Ubuntu execution, live-site checks, and this manual retest remain open.
 
 ## Manual source for fresh-client connection values
 
@@ -22,7 +22,7 @@ For each fresh-client workflow, compare every visible Backend dialog label and c
 
 The example server is PostgreSQL and Samba on Ubuntu at 172.16.9.77. Samba's [progtrack-managed] share is backed by /srv/progtrack-managed; ProgTrack uses its documents and config-assets child directories. An earlier audit found that `smb_app` was absent, UFW inactive, and Samba listening on IPv4/IPv6 ports 445 and 139; the tester now reports that `smb_app` exists. Verify its actual access in this test. Phase 3 checks whether the current LAN setup can connect and exchange files as `smb_app`; it does not wait for #332 to close and does not test SSH, VPN, IPv6, UFW, or denial from unapproved networks. Those server-hardening decisions remain in #332–#335 for milestone 0.4.9. PostgreSQL and SMB use separate credentials.
 
-The local demo-data prompt appears before a ProgTrack user has selected a language, so its locale comes from the operating-system locale (`QLocale.system()`); changing language after login does not test this prompt. Expected prompt text is: German `Beispieldaten in der lokalen Datenbank installieren?`; English `Install the sample data in the local database?`; Italian `Installare i dati di esempio nel database locale?`; Russian `Установить демонстрационные данные в локальную базу данных?`. The four source catalogs and an automated exact-text check now implement #330. The pinned candidate archives predate this change, so P3A-01 cannot pass the wording check until replacement archives are built and their hashes are repinned. On the replacement Windows package, compare the displayed wording with the operating-system locale before answering the prompt.
+The local demo-data prompt appears before a ProgTrack user has selected a language, so its locale comes from the operating-system locale (`QLocale.system()`); changing language after login does not test this prompt. Expected prompt text is: German `Beispieldaten in der lokalen Datenbank installieren?`; English `Install the sample data in the local database?`; Italian `Installare i dati di esempio nel database locale?`; Russian `Установить демонстрационные данные в локальную базу данных?`. The four source catalogs and an automated exact-text check implement #330. The rebuilt candidate archives include this wording. On the Windows candidate, compare the displayed text with the operating-system locale before answering.
 
 ## Prepare once
 

@@ -49,3 +49,13 @@ The latest Phase 3 default-suite result is recorded below. Heritage tests remain
 - The first full attempt exposed a native Qt access violation in test #318 when it ran inside the long-lived suite process. The test passes alone; it is now marked `isolated_qt` and covered by `test_phase3_qt_isolated_core_318_creation.py`. The rerun completed without native crash. This is test-process isolation, not a production-code fix.
 - The replacement Windows and Linux 0.3.0 archives each passed `tests/run_phase3_package_acceptance.py`: **58 tests and 4 subtests per archive**. Their source commit and SHA-256 values are recorded in Manual Retest 3A. Structural validation on Windows is not native Ubuntu acceptance.
 - The package runner compiles with `-W error::SyntaxWarning`; the previous invalid-escape warning is gone. Native Ubuntu, live PostgreSQL/TLS/two-client, and component/license checks remain external Phase 3 gates.
+
+
+## Rebuilt candidate packages — 2026-11-27
+
+- Source commit: b346cfee92e46a78823077dd9d2c2d86dc13596b.
+- Windows archive: ProgTrack-0.3.0.zip; SHA-256 c09aa9e51bf89bd600086da2ec4b8fbc63071558eb8a7c99ae09b3e1eaf1e175.
+- Linux archive: ProgTrack-0.3.0-linux-x86_64.tar.gz; SHA-256 e613d2e1f6ed4a540ab1f29f66a497c62045c824e959268fb0c52b7c1f18a3d2.
+- Package acceptance against these exact staged archives: Windows 59 passed, 4 subtests passed in 43.72 seconds; Linux 59 passed, 4 subtests passed in 76.18 seconds.
+- The archives were copied unchanged to Q:\GitHub\Release Packages and E:\Release Packages. These checks are structural/package checks on Windows, not native Ubuntu runtime acceptance.
+- Linux assembly emitted a Python DeprecationWarning for tarfile.extractall at package_linux_release.py:343. The archive completed and passed package acceptance; native Linux and manual checks remain open.
